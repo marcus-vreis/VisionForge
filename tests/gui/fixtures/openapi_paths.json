@@ -3114,11 +3114,13 @@
       "application/json": "SampleDatasetRequest"
     },
     "responses": {
+      "200": {
+        "application/json": "SampleDatasetResponse"
+      },
       "201": {
         "application/json": "SampleDatasetResponse"
       },
       "400": {},
-      "409": {},
       "422": {
         "application/json": "HTTPValidationError"
       },

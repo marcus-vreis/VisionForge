@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useT } from "../i18n/useT";
 import { Segmented, TextField } from "./controls";
+import { WhenToUse } from "./WhenToUse";
 import { importConfigFromYaml } from "../lib/yaml-config";
 import type { Dict } from "../i18n/pt";
 import type { ImportNotice } from "../hooks/usePendingImport";
@@ -246,6 +247,9 @@ export function StrategyCard({
         options={strategyOptions}
         hint={t.experimentHeader.hints[strategy]}
       />
+      <div style={{ marginTop: 12 }}>
+        <WhenToUse strategy={strategy} />
+      </div>
     </div>
   );
 }

@@ -23,7 +23,11 @@ No Histórico, **Selecionar** marca execuções para comparar ou excluir, e
 ## O que está registrado
 
 O detalhe abre pelas métricas e pelas curvas por época, seguidas dos gráficos
-gravados, das ações e dos testes do modelo. Abaixo ficam os blocos de
+gravados, das ações e dos testes do modelo. Logo abaixo das métricas, o bloco
+**E agora?** sugere no máximo dois próximos passos a partir do que a execução
+registrou (retomar um treino que não terminou, treinar por mais épocas quando a
+melhor foi a última, avaliar no split de teste, repetir com outras seeds); sem
+nada a sugerir, ele não aparece. Abaixo ficam os blocos de
 referência. Dataset (caminho, conteúdo e fingerprint) e configuração de treino
 começam abertos; a pasta da execução e o checkpoint, o ambiente (versões de
 Python, torch e das demais bibliotecas, GPU, commit do git) e o pipeline de

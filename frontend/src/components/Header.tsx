@@ -141,6 +141,11 @@ export function Header({
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
+        // Narrow screens: the tools drop under the brand instead of running
+        // off the right edge, where nothing could reach them.
+        flexWrap: "wrap",
+        rowGap: 12,
+        columnGap: 14,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -182,7 +187,10 @@ export function Header({
         </div>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+      <div
+        className="vf-app-header-tools"
+        style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}
+      >
         {taskColor && <TaskColorDot {...taskColor} />}
         <ColabConnection
           key={profileSlug ?? "default"}
@@ -244,6 +252,7 @@ export function Header({
           />
         )}
         <div
+          className="vf-app-header-clock"
           style={{
             fontFamily: "var(--font-mono)",
             fontSize: 11,

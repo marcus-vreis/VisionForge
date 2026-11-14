@@ -50,6 +50,7 @@ import {
   withLrMultiplier,
 } from "../lib/grid-axis";
 import { learningRatePlanRequest, rateIsPerModel } from "../lib/lr-plan";
+import { WhenToUse, type WhenToUseKey } from "./WhenToUse";
 import {
   MenuSelect,
   NumberField,
@@ -441,6 +442,16 @@ function WeightsPathField({
 }
 
 
+/** The "when to use" sentence of each entry of the block selector. */
+const WHEN_TO_USE: Record<string, WhenToUseKey | undefined> = {
+  classification: "simple",
+  cross_validation: "cv",
+  grid_search: "grid",
+  random_search: "random",
+  replicates: "replicates",
+  replicatedComparison: "replicatedComparison",
+};
+
 /** Block selector — the first card of the Estratégia step.
  *
  * Transfer learning is not offered here: it is a single run with a frozen
@@ -527,6 +538,7 @@ function BlockSelector({
           );
         })}
       </div>
+      {WHEN_TO_USE[value] && <WhenToUse strategy={WHEN_TO_USE[value]} />}
       {value === "cross_validation" && (
         <div
           style={{

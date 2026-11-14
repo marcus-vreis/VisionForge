@@ -124,7 +124,9 @@ class TestEndpoint:
 
         resp = client.post("/api/sample-dataset", json={"task": "classification"})
 
-        assert resp.status_code == 409
+        assert resp.status_code == 200
+        assert resp.json()["existed"] is True
+        assert Path(resp.json()["path"]) == mine.resolve()
         assert [p.name for p in mine.iterdir()] == ["notes.txt"]
 
     @pytest.mark.parametrize("task", TASKS)
@@ -156,7 +158,7 @@ class TestEndpoint:
 
 
 class TestEveryTask:
-    """The folder, the response and the 409 of each of the five tasks."""
+    """The folder, the response and the reuse of each of the five tasks."""
 
     @pytest.mark.parametrize(
         ("task", "folder"),
@@ -177,18 +179,23 @@ class TestEveryTask:
         assert body["task"] == task
 
     @pytest.mark.parametrize("task", TASKS)
-    def test_a_second_call_is_409_with_the_path_and_the_language_of_the_page(
+    def test_a_second_call_answers_200_with_the_folder_that_is_there(
         self, client: TestClient, task: str
     ) -> None:
         first = _build(client, task)
 
-        en = client.post("/api/sample-dataset", json={"task": task}, headers=EN)
-        pt = client.post("/api/sample-dataset", json={"task": task})
+        again = client.post("/api/sample-dataset", json={"task": task})
 
-        assert en.status_code == pt.status_code == 409
-        assert en.json()["path"] == pt.json()["path"] == first["path"]
-        assert "already exists" in en.json()["detail"]
-        assert "já existe" in pt.json()["detail"]
+        # Not an error: the caller asked for the sample and it is there to use.
+        assert first["existed"] is False
+        assert again.status_code == 200
+        body = again.json()
+        assert body["existed"] is True
+        assert body["path"] == first["path"]
+        assert body["task"] == task
+        # The folder was not read again, so nothing is claimed about its content.
+        assert body["classes"] == []
+        assert body["counts"] == {}
 
     @pytest.mark.parametrize("task", TASKS)
     def test_nothing_hidden_is_left_beside_the_folder(

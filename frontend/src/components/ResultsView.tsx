@@ -309,6 +309,7 @@ export function ResultsView({
                   <img
                     src={url}
                     alt={label}
+                    className="vf-saved-plot"
                     style={{ width: "100%", height: "auto", display: "block" }}
                   />
                   <div

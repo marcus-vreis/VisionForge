@@ -164,7 +164,7 @@ class TestTrainerProgressCallback:
     def test_event_order_start_epochs_end(
         self, binary_config: ExperimentConfig
     ) -> None:
-        """Callback events must arrive: start → epoch_end × N → end."""
+        """Callback events must arrive: start → (batch… → epoch_end) × N → end."""
         events: list[dict[str, Any]] = []
         Trainer(binary_config).fit(
             _Tiny(), _FakeData(), progress_callback=events.append
@@ -172,8 +172,15 @@ class TestTrainerProgressCallback:
         kinds = [e["event"] for e in events]
         assert kinds[0] == "start"
         assert kinds[-1] == "end"
-        middle = kinds[1:-1]
-        assert all(k == "epoch_end" for k in middle)
+        middle = events[1:-1]
+        assert all(e["event"] in {"batch", "epoch_end"} for e in middle)
+        # Each epoch_end follows its epoch's last batch, always reported (ADR-205).
+        for i, e in enumerate(middle):
+            if e["event"] == "epoch_end":
+                before = middle[i - 1]
+                assert before["event"] == "batch"
+                assert before["batch"] == before["total_batches"]
+                assert before["epoch"] == e["epoch"]
 
 
 # ── SSE endpoint tests ────────────────────────────────────────────────────────

@@ -15,6 +15,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- O detalhe de uma execução ganha o bloco **E agora?**, logo abaixo das métricas: no máximo duas sugestões, uma frase cada, com o botão que o painel já tinha para aquilo. As regras leem só o que a execução registrou: treino que não terminou (Retomar, quando dá), melhor época igual à última (treinar por mais épocas), nenhum resultado no split de teste (Testar) e treino único (repetir com outras seeds). Sem regra aplicável, o bloco não aparece (ADR-206).
+- Sob o seletor de estratégia, uma frase **Quando usar** diz em que situação cada estratégia serve (treino simples, K-fold, grid, random, sweep, réplicas, comparação de arquiteturas e comparação replicada), na classificação e nas outras tarefas. O Histórico vazio diz o que vai aparecer ali e oferece o guia do primeiro treino (ADR-206).
 - A tela de treino junta as abas "Como funciona" e "Código" em **Código ao vivo**: o treino em passos (dados, modelo, loss, época de treino, validação, teste e relatório), cada um com uma frase simples, e ao lado o código real do passo. Enquanto o treino roda, o passo em execução fica marcado e o código acompanha; clicar em outro passo pausa, e **voltar ao que está rodando** retoma. A posição vem dos eventos do treino, por passo e nunca por linha. As notas abrem com um clique na margem (ADR-204).
 - **Ver resultados**, ao fim de um treino, abre a execução no Histórico, que passa a ser a página de resultados: métricas no topo com a principal em destaque, curvas de treino e validação por época, gráficos gravados, ações agrupadas (Reusar, Baixar, Publicar, Usar o modelo) com ícone e a marca de cada serviço, e os blocos de referência recolhidos. Um job que o Histórico não consegue nomear continua abrindo a tela de resultados (ADR-201).
 - Os gráficos por época do treino ao vivo, da comparação entre execuções e do detalhe de uma execução usam o mesmo componente: grade, marcas nos eixos e um balão com o valor exato de cada linha na época sob o mouse, também por toque e pelas setas do teclado. As linhas ligam os pontos medidos, sem suavização. Valores abaixo de 5e-4 saem em notação exponencial (ADR-201).
@@ -182,11 +184,15 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Changed
 
+- `POST /api/sample-dataset` responde 200 com `existed: true` quando `datasets/exemplo-<tarefa>/` já existe e 201 quando cria a pasta. Antes respondia 409, que o navegador registrava como erro no console a cada clique em **usar dataset de exemplo** numa pasta já criada (ADR-206).
+- O último batch de cada época é sempre emitido no stream de eventos do treino, também em épocas mais curtas que o intervalo de progresso. Com isso a aba **Código ao vivo** marca a validação sozinha depois dele; antes mostrava treino e validação juntos, ou seguia em "treino" durante a validação (ADR-205).
 - Preprint do estudo de variância por seed: o trabalho relacionado ganha a literatura 2023-2026 (11 referências, cada uma conferida na fonte, com a URL e a data no `refs.bib` e em `LITERATURE_2023_2026.md`). Seguem pendentes a data e o DOI do depósito no Zenodo (#230).
 - Protocolo de usabilidade, antes do primeiro participante: o facilitador cronometra em segundos; "concluiu com ajuda" passa a ser 1 ou mais intervenções contadas, com a mesma definição no PROTOCOL, no RUNBOOK e no formulário; efeito de prática do quiz e facilitador-autor entram como limitações; as decisões que dependem do orientador ficam listadas (#229).
 
 ### Fixed
 
+- Em telas estreitas o cabeçalho quebra linha em vez de cortar idioma, tema, guia e perfil, que ficavam fora da tela; o relógio some abaixo de 1100 px. Na etapa Dados, o campo de pasta, **Escolher pasta** e as três subpastas cabem em 375 px, e no celular a dica de um campo ocupa a própria linha em vez de terminar em reticências.
+- No tema escuro, as miniaturas dos gráficos gravados (PNG de fundo branco) ficam atenuadas e voltam ao normal sob o mouse ou o foco. O arquivo e as cores não mudam.
 - A interface não mostra mais um perfil "padrão": o primeiro perfil aparece só pelo nome. A primeira entrada pede nome e pronome e nada mais; com um perfil só, entra direto; com mais de um, a escolha aparece em toda carga da página, com o último usado marcado (antes, uma vez por aba) (ADR-202).
 - Os valores extras de um campo no grid search têm a altura e a largura do campo original, e **+ valor** ocupa a linha inteira.
 - No Histórico em português, o estado da execução aparece como "concluído", "em andamento" ou "falhou", e as métricas como "Melhor época" e "Épocas treinadas".

@@ -384,7 +384,7 @@ class TestTorchvisionPath:
         )
         monkeypatch.setattr(dt_mod.training_loop, "BATCH_PROGRESS_INTERVAL_S", 0.0)
         cfg = _tv_config(tmp_path)
-        # A second training image: one batch alone is all epoch_end.
+        # A second training image: a middle batch besides the last one.
         train_images = tmp_path / "ds" / "images" / "train"
         Image.new("RGB", (32, 32), (90, 90, 90)).save(train_images / "b.jpg")
         (tmp_path / "ds" / "labels" / "train" / "b.txt").write_text(
@@ -394,7 +394,7 @@ class TestTorchvisionPath:
         DetectionTrainer(cfg).fit(progress_callback=events.append)
 
         batches = [(e["epoch"], e["batch"]) for e in events if e["event"] == "batch"]
-        assert batches == [(1, 1), (2, 1)]
+        assert batches == [(1, 1), (1, 2), (2, 1), (2, 2)]
         rates = [e["lr"] for e in events if e["event"] == "epoch_end"]
         assert rates == pytest.approx([0.005, 0.005])
 
@@ -410,7 +410,8 @@ class TestTorchvisionPath:
         )
 
         kinds = [e["event"] for e in events]
-        assert kinds == ["start", "epoch_end", "epoch_end", "end"]
+        # One training batch per epoch, always reported as its last (ADR-205).
+        assert kinds == ["start", "batch", "epoch_end", "batch", "epoch_end", "end"]
         assert result.total_epochs == 2
         assert result.model_path.exists()  # best.pt saved
 
@@ -873,8 +874,10 @@ def test_ultralytics_batches_are_counted_per_epoch() -> None:
     assert [(e["epoch"], e["batch"]) for e in events] == [
         (1, 1),
         (1, 2),
+        (1, 3),
         (2, 1),
         (2, 2),
+        (2, 3),
     ]
     assert all(e["total_batches"] == 3 and e["total_epochs"] == 5 for e in events)
 

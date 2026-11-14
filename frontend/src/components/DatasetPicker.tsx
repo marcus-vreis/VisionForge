@@ -222,8 +222,10 @@ export function DatasetPicker({
           marginBottom: 14,
         }}
       >
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 12 }}>
-          <div style={{ flex: 1 }}>
+        {/* The field may shrink and the button may drop under it: at phone
+            width the pair is wider than the card and the button was cut off. */}
+        <div style={{ display: "flex", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
+          <div style={{ flex: "1 1 220px", minWidth: 0 }}>
             <TextField
               label={t.datasetPicker.baseDir}
               value={baseDir}
@@ -275,7 +277,9 @@ export function DatasetPicker({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
+          // Three columns where they fit, fewer where they don't: a fixed
+          // three pushed "test" off a phone screen.
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
           gap: 18,
           marginBottom: 16,
         }}

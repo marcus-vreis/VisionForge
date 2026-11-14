@@ -558,6 +558,17 @@ html[data-run-active] *::after {
   .vf-action-groups > dd { margin-bottom: 12px; }
 }
 
+/* A recorded plot is a white PNG, the file a paper would use. On the dark theme
+   a wall of them glares, so the thumbnail is dimmed (--lt-flip is 1 on light,
+   where nothing changes) and comes back whole on hover or focus. Only
+   brightness: the colors and the file stay what the run wrote. */
+.vf-saved-plot {
+  filter: brightness(calc(0.84 + var(--lt-flip, 0) * 0.16));
+  transition: filter 120ms ease;
+}
+button:hover > .vf-saved-plot,
+button:focus-visible > .vf-saved-plot { filter: none; }
+
 /* A folded reference block of the run detail (dataset, disk, environment…). */
 .vf-detail-ref {
   background: rgb(var(--lt-ink, 255 255 255) / 0.02);
@@ -805,8 +816,25 @@ html[data-run-active] *::after {
 /* Phone width: the bar's three groups need more than the screen, so its tools
    go to icons, keeping one row and Treinar in view. Layout here is inline in
    the components, hence the !important. */
+@media (max-width: 1100px) {
+  /* Below this the header's tools no longer fit beside the brand. The clock is
+     the one thing there every screen already shows, so it gives up its place
+     first and the row holds down to a small laptop. */
+  .vf-app-header-clock { display: none; }
+}
 @media (max-width: 640px) {
   .vf-app-main { padding: 20px 12px !important; padding-bottom: max(96px, var(--vf-bar-clearance, 0px)) !important; }
+  /* The header's tools wrap under the brand (Header.tsx). */
+  .vf-app-header { padding: 16px 12px 0 !important; }
+  .vf-app-header-tools { gap: 8px !important; }
+  /* A field's hint is cut with an ellipsis and whole in its tooltip; a phone
+     has no hover, so here it wraps onto its own line under the label. */
+  .vf-field-label { flex-wrap: wrap; }
+  .vf-field-hint {
+    flex-basis: 100%;
+    margin-left: 0 !important;
+    white-space: normal !important;
+  }
   .vf-bottom-bar {
     left: 8px !important;
     right: 8px !important;

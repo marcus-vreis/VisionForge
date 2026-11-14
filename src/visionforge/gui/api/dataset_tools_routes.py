@@ -18,15 +18,13 @@ import contextlib
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, HTTPException, Response
 from loguru import logger
 
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.gui.api.datasets_routes import _IMAGE_EXTS, _remember_dataset_root
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST_TEXT,
-    CONFLICT_TEXT,
     SERVER_ERROR_TEXT,
     TAG_DATASETS,
     UNPROCESSABLE_TEXT,
@@ -52,6 +50,8 @@ _PREVIEW_CACHE_DIR = Path("outputs/preview_cache")
 # Where the guide's synthetic sample dataset is written (ADR-115). Datasets are
 # shared across profiles, so this is not under a profile folder.
 _SAMPLE_DATASETS_DIR = Path("datasets")
+
+_SAMPLE_REUSED_TEXT = "The folder was already there and is reused; nothing is written."
 
 # The key of a preprocessing step that names its filter.
 _KIND = "kind"
@@ -95,25 +95,28 @@ async def preview_preprocess(
     status_code=201,
     response_model=SampleDatasetResponse,
     responses={
+        200: {"model": SampleDatasetResponse, "description": _SAMPLE_REUSED_TEXT},
         400: {"description": BAD_REQUEST_TEXT},
-        409: {"description": CONFLICT_TEXT},
         500: {"description": SERVER_ERROR_TEXT},
     },
     tags=[TAG_DATASETS],
 )
 async def sample_dataset(
-    req: SampleDatasetRequest,
-) -> SampleDatasetResponse | JSONResponse:
+    req: SampleDatasetRequest, response: Response
+) -> SampleDatasetResponse:
     """Write the synthetic sample dataset of a task for the guide (ADR-115, ADR-117).
 
     Local and offline: the self-test builder draws tiny images with a
     deterministic seed. Every built-in task has one, in its own layout.
 
+    A folder that already holds files is not an error (ADR-206): the caller
+    asked for the sample and it is there, so the answer is 200 with
+    ``existed`` true and the path, and nothing is written. 201 means it was
+    created now.
+
     Raises:
-        HTTPException: 400 for an unknown task, 409 when
-            ``datasets/exemplo-<tarefa>/`` already holds files (the body carries
-            ``path`` so the guide can use that folder), 500 when the OS refuses
-            to write.
+        HTTPException: 400 for an unknown task, 500 when the OS refuses to
+            write.
     """
     try:
         built = await asyncio.to_thread(
@@ -122,10 +125,11 @@ async def sample_dataset(
     except SampleTaskError as exc:
         raise HTTPException(400, str(exc)) from exc
     except SampleDatasetExistsError as exc:
-        # `path` rides next to `detail` instead of inside it, so a client that
-        # only knows string details still shows a readable message.
-        return JSONResponse(
-            status_code=409, content={"detail": str(exc), "path": str(exc.path)}
+        response.status_code = 200
+        # The folder may hold the researcher's own files: it is not read, so
+        # nothing is said about its classes or counts.
+        return SampleDatasetResponse(
+            task=req.task, path=str(exc.path), classes=[], counts={}, existed=True
         )
     except OSError as exc:
         logger.warning("GUI: could not write the sample dataset: {}", exc)

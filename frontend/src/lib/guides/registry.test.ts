@@ -172,10 +172,10 @@ describe("the sample dataset action", () => {
     });
   });
 
-  it("reuses the folder that already exists when the server answers 409", async () => {
+  it("reuses the folder the server says was already there", async () => {
     vi.stubGlobal(
       "fetch",
-      reply(409, { detail: "already exists", path: "C:/work/datasets/exemplo-classificacao" }),
+      reply(200, { task: "classification", path: "C:/work/datasets/exemplo-classificacao", classes: [], targets: [], counts: {}, existed: true }),
     );
     const { context, paths } = ctx();
 
@@ -207,8 +207,13 @@ describe("the sample dataset action", () => {
     expect(paths).toEqual([]);
   });
 
-  it("does not mistake a 409 without a path for a reusable folder", async () => {
-    vi.stubGlobal("fetch", reply(409, { detail: "busy" }));
+  it("does not mistake a 409 for a reusable folder", async () => {
+    // The server no longer answers 409 for an existing folder (ADR-206): one
+    // that arrives is a refusal like any other.
+    vi.stubGlobal(
+      "fetch",
+      reply(409, { detail: "busy", path: "C:/work/datasets/exemplo-classificacao" }),
+    );
     const { context, paths } = ctx();
 
     const out = await action().run(context);

@@ -113,6 +113,23 @@ describe("runPosition: what the stream proves", () => {
     expect(where([start, batch(1, 4), epoch(1)]).steps).toEqual(["train", "validate"]);
   });
 
+  it("marks validation alone once the epoch's last batch is the newest word", () => {
+    // The trainer always reports the last batch (ADR-205); validation follows it.
+    expect(where([start, batch(1, 10)])).toEqual({ steps: ["validate"], pins: [] });
+    expect(where([start, epoch(1), batch(2, 10)]).steps).toEqual(["validate"]);
+    // A count past the total (a loader that grew) is still past training.
+    expect(where([start, batch(1, 11)]).steps).toEqual(["validate"]);
+    // The batch before it is still training.
+    expect(where([start, batch(1, 9)]).steps).toEqual(["train"]);
+    // Its epoch_end opens the next epoch, in flight again.
+    expect(where([start, batch(1, 10), epoch(1)]).steps).toEqual(["train", "validate"]);
+  });
+
+  it("moves to the test after the last batch of the last epoch only once that epoch ends", () => {
+    expect(where([start, epoch(1), epoch(2), batch(3, 10)]).steps).toEqual(["validate"]);
+    expect(where([start, epoch(1), epoch(2), batch(3, 10), epoch(3)]).steps).toEqual(["test"]);
+  });
+
   it("pins the function that walks the batches while an epoch is in flight", () => {
     expect(where([start, batch(1, 4)]).pins).toEqual(["train", "yolo_loop"]);
     expect(where([start]).pins).toEqual(["train", "yolo_loop"]);
@@ -213,6 +230,18 @@ describe("following the run", () => {
     const v = view(FOLLOWING, [start, epoch(1)], ULTRALYTICS_TOUR);
     expect(v.running).toEqual(["train", "validate"]);
     expect(v.section?.id).toBe("yolo_loop");
+  });
+
+  it("shows the validation code alone after the epoch's last batch", () => {
+    const v = view(FOLLOWING, [start, batch(1, 10)]);
+    expect(v.running).toEqual(["validate"]);
+    expect(v.step).toBe("validate");
+    expect(v.section?.id).toBe("validate");
+    expect(v.live).toBe(true);
+    // Ultralytics' validate step is the record of the epoch's metrics.
+    const yolo = view(FOLLOWING, [start, batch(1, 10)], ULTRALYTICS_TOUR);
+    expect(yolo.running).toEqual(["validate"]);
+    expect(yolo.section?.id).toBe("yolo_epoch");
   });
 
   it("pauses on a click and offers to resume while something runs", () => {

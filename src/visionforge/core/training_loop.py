@@ -303,9 +303,9 @@ def restore_training_state[Epoch](
     )
 
 
-# How long an epoch may run before the stream says how far into it the run is.
-# An epoch that ends sooner reports only its epoch_end, so short runs keep the
-# stream they always had and a long epoch stops looking frozen.
+# How long an epoch may run before the stream says how far into it the run is,
+# so a long epoch stops looking frozen. The epoch's last batch is reported
+# regardless (see BatchProgressReporter.batch_done).
 BATCH_PROGRESS_INTERVAL_S = 2.0
 
 
@@ -341,10 +341,17 @@ class BatchProgressReporter:
         self._last_report = self._clock()
 
     def batch_done(self, index: int, total: int) -> None:
-        """Report batch ``index`` (1-based) of ``total`` if enough time passed."""
+        """Report batch ``index`` (1-based) of ``total`` if enough time passed.
+
+        The epoch's last batch is always reported: validation starts after it,
+        and the "Código ao vivo" tab can only mark validation on its own once
+        the stream says training is over (ADR-205). Before it, an epoch shorter
+        than the interval showed training and validation as a group, and a
+        longer one kept saying "training" through the whole validation.
+        """
         now = self._clock()
-        # The last batch is left to epoch_end, which follows it.
-        if index >= total or now - self._last_report < self._interval_s:
+        last = index >= total
+        if not last and now - self._last_report < self._interval_s:
             return
         self._last_report = now
         self._callback(

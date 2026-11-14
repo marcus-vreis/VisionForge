@@ -91,8 +91,14 @@ class TestUltralyticsTrainsForReal:
 
         # The epoch callback is our only window into its loop; without it the
         # history and every streamed event would be empty.
-        assert [e["event"] for e in events][:2] == ["start", "epoch_end"]
+        kinds = [e["event"] for e in events]
+        assert [k for k in kinds if k != "batch"][:2] == ["start", "epoch_end"]
         assert events[-1]["event"] == "end"
+        # Its batch callback reports the epoch's last batch, right before
+        # epoch_end, where validation begins (ADR-205).
+        last_batch = events[kinds.index("epoch_end") - 1]
+        assert last_batch["event"] == "batch"
+        assert last_batch["batch"] == last_batch["total_batches"]
         assert len(result.history) == 1
 
         run_json = json.loads((result.run_dir / "run.json").read_text("utf-8"))

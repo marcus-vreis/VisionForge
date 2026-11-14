@@ -1493,6 +1493,17 @@ export const en: Dict = {
       status: "status",
     },
   },
+  nextSteps: {
+    title: "What next?",
+    unfinished: "This training did not finish; the numbers above may be incomplete.",
+    unfinishedResume: "This training did not finish. Resume it where it stopped.",
+    stillImproving:
+      "The best epoch was the last one: the model was still improving. Train for more epochs.",
+    untested: "There is no result on the test split yet. Evaluate on it before reporting a number.",
+    singleRun:
+      "One training does not show how much the result varies. Run replicates with other seeds before comparing.",
+    resume: "Resume",
+  },
   detectionPanel: {
     namePlaceholder: "detection_001",
     model: {
@@ -1734,7 +1745,9 @@ export const en: Dict = {
     errorTitle: "Error",
     loadFailed: "Failed to load run history.",
     emptyTitle: "No runs yet",
-    emptyHint: "Run your first experiment to see it here.",
+    emptyHint:
+      "Every run that finishes shows up here, with its metrics, its curves and the model to download or reuse.",
+    emptyGuide: "Do the first training with the guide",
     selectModeTip: "Selection mode — select the runs you want to delete or compare.",
     selectedTip: (n: number) =>
       `${n} selected — 🗑 deletes; ↔ compares (needs at least 2).`,
@@ -2484,6 +2497,24 @@ export const en: Dict = {
       replicates: "same config, N seeds → mean ± 95% CI",
       compare: "one run per architecture, same config → comparison table",
       replicatedComparison: "2 to 4 variants of one field, same seeds → paired test",
+    },
+  },
+  whenToUse: {
+    label: "When to use",
+    strategies: {
+      simple:
+        "For the first training on a dataset, or to get the config right before spending more time.",
+      cv: "With a small dataset, where a single validation split would give an unstable number.",
+      sweep:
+        "When you do not know yet which hyperparameters to use and want the search to try them for you.",
+      grid: "When there are few values to try and you want to see every combination.",
+      random:
+        "When the space is too large to try everything: it draws a fixed number of configurations.",
+      replicates:
+        "When the number goes into a report or a paper: it gives a mean and an interval, not a single run.",
+      compare: "When the question is which architecture suits this dataset best.",
+      replicatedComparison:
+        "When you want to state, with a statistical test, that one variant is better than another.",
     },
   },
   cvCard: {

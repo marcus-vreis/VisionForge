@@ -136,8 +136,8 @@ class TestFitAutoencoder:
         )
         batches = [(e["epoch"], e["batch"]) for e in events if e["event"] == "batch"]
         epochs = sorted({e["epoch"] for e in events if e["event"] == "epoch_end"})
-        # Batches 1 and 2 of 3 in every epoch; the 3rd is epoch_end's.
-        assert batches == [(ep, b) for ep in epochs for b in (1, 2)]
+        # Every batch of every epoch, the last one included (ADR-205).
+        assert batches == [(ep, b) for ep in epochs for b in (1, 2, 3)]
 
 
 class NaNAutoencoder(ConvAutoencoder):

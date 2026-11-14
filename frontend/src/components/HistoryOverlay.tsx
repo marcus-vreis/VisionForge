@@ -20,6 +20,7 @@ import { CompareRunsPanel } from "./CompareRunsPanel";
 import { MenuSelect } from "./controls";
 import { LeaderboardView } from "./LeaderboardView";
 import { RunDetailPanel } from "./RunDetailPanel";
+import { ActionButton } from "./ui/ActionButton";
 import type { RerunHandle } from "./RerunActions";
 
 interface HistoryOverlayProps {
@@ -38,6 +39,9 @@ interface HistoryOverlayProps {
   /** Called when `initialTarget` is still not listed after the last retry, so
    *  the caller can show what it has instead of an empty sheet. */
   onTargetMissing?: () => void;
+  /** Starts the "first training" guide: the empty History offers it, so the
+   *  sheet with nothing in it says how to put something there. */
+  onFirstTraining?: () => void;
 }
 
 // A job's run.json is written as it ends, so the list fetched right after can
@@ -794,6 +798,7 @@ export function HistoryOverlay({
   rerun,
   initialTarget,
   onTargetMissing,
+  onFirstTraining,
 }: HistoryOverlayProps) {
   const t = useT();
   const [runs, setRuns] = useState<RunSummary[]>([]);
@@ -1365,6 +1370,13 @@ export function HistoryOverlay({
               >
                 {t.history.emptyHint}
               </div>
+              {onFirstTraining && (
+                <div style={{ marginTop: 20 }}>
+                  <ActionButton onClick={onFirstTraining}>
+                    {t.history.emptyGuide}
+                  </ActionButton>
+                </div>
+              )}
             </div>
           )}
 
