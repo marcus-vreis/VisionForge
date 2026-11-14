@@ -151,7 +151,10 @@ def _drive_root_candidates(
 ) -> list[Path]:
     # The manual and registry roots first, then the defaults Drive for desktop
     # uses: mirror mode under the home folder, stream mode on its own letter.
-    roots = [Path(str(root)) for root in my_drive_roots(manual, mount_point)]
+    # ``my_drive_roots`` speaks Windows paths, whose text has backslashes: on
+    # Linux and macOS that text names one file, not a folder path. ``as_posix``
+    # is a path both read.
+    roots = [Path(root.as_posix()) for root in my_drive_roots(manual, mount_point)]
     roots.extend(home / name for name in MY_DRIVE_NAMES)
     for drive in drives:
         roots.extend(Path(drive) / name for name in MY_DRIVE_NAMES)
