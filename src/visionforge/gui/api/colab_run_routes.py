@@ -2,7 +2,10 @@
 
 ``POST /api/colab/experiment/run`` queues the job on the lane of the Google
 account the profile is logged into; ``POST /api/colab/drive/continue`` answers
-the Drive consent prompt of a job waiting for it. ``_execute_colab`` runs the job
+the Drive consent prompt of a job waiting for it. ``GET /api/colab/drive/folders``
+and ``POST /api/colab/drive/open`` let the panel pick the dataset folder inside
+this computer's "My Drive"; like the other routes that touch the local disk, they
+serve only this machine and its own page. ``_execute_colab`` runs the job
 off the event loop, imports the run it brings back and writes only its own job's
 state (ADR-185).
 
@@ -22,7 +25,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from loguru import logger
 from pydantic import ValidationError
@@ -35,12 +38,23 @@ from visionforge.gui.api.colab_connection import PINNED_VERSION as _COLAB_PIN
 from visionforge.gui.api.colab_connection import ColabCli, LoginFlows
 from visionforge.gui.api.colab_drive import (
     DriveConsent,
+    DriveFolderError,
+    DriveFolders,
     count_files,
+    find_my_drive_root,
+    list_drive_folders,
     my_drive_roots,
     remote_path,
 )
 from visionforge.gui.api.colab_jobs import ColabJobs
 from visionforge.gui.api.execution import _job_state
+from visionforge.gui.api.folder_opener import (
+    FolderOpenError,
+    is_loopback_host,
+    is_loopback_origin,
+    open_folder,
+    opener_available,
+)
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST_TEXT,
     NOT_FOUND_TEXT,
@@ -52,6 +66,8 @@ from visionforge.gui.api.profiles import Profile
 from visionforge.gui.api.run_queue import colab_lane
 from visionforge.gui.api.schemas import (
     ColabDriveContinueRequest,
+    ColabDriveFolders,
+    ColabDriveOpenRequest,
     ColabDriveSource,
     ColabRunRequest,
     RunResponse,
@@ -72,6 +88,17 @@ _COLAB_JOBS = ColabJobs()
 _DRIVE_CONSENTS: dict[str, DriveConsent] = {}
 # How long the Colab job thread waits for the loop to take one event.
 _COLAB_EVENT_TIMEOUT_S = 10.0
+# Why a folder of the Drive browser is refused: the HTTP status and the message.
+# The keys are spelled out so the catalog check finds each one in use.
+_FOLDER_REFUSAL = {
+    "outside": (400, "colab.drive_folder_outside"),
+    "missing": (404, "colab.drive_folder_missing"),
+    "unreadable": (409, "colab.drive_folder_unreadable"),
+}
+_OUTSIDE_TEXT = 'The folder is outside "My Drive"'
+_LOCAL_ONLY_TEXT = "Another machine, or a page of another site"
+_MISSING_TEXT = 'No "My Drive" here, or the folder does not exist'
+_UNREADABLE_TEXT = "The folder could not be read"
 
 
 def build_colab_run_router(resolve_profile: ProfileResolver) -> APIRouter:
@@ -121,7 +148,7 @@ def build_colab_run_router(resolve_profile: ProfileResolver) -> APIRouter:
         }
         if isinstance(req.source, ColabDriveSource):
             payload["source"] = await asyncio.to_thread(
-                _drive_source, req.config, req.source.my_drive_root
+                _drive_source, req.config, req.source.my_drive_root, req.source.path
             )
         return submission._submit_job(
             run_id,
@@ -153,19 +180,106 @@ def build_colab_run_router(resolve_profile: ProfileResolver) -> APIRouter:
             raise HTTPException(404, tr("colab.drive_not_waiting"))
         return {"sent": True}
 
+    @router.get(
+        "/colab/drive/folders",
+        responses={
+            400: {"description": _OUTSIDE_TEXT},
+            403: {"description": _LOCAL_ONLY_TEXT},
+            404: {"description": _MISSING_TEXT},
+            409: {"description": _UNREADABLE_TEXT},
+        },
+        tags=[TAG_COLAB],
+        dependencies=[Depends(_local_only)],
+    )
+    def colab_drive_folders(
+        rel: Annotated[str, Query(max_length=1024)] = "",
+        my_drive_root: Annotated[str | None, Query(max_length=1024)] = None,
+    ) -> ColabDriveFolders:
+        """The sub-folders of one folder in this computer's "My Drive" (ADR-164).
+
+        ``rel`` is the folder under the root, ``/``-separated; empty is the root.
+        With no "My Drive" found, ``root`` is None and nothing is listed.
+        """
+        root = find_my_drive_root(my_drive_root)
+        if root is None:
+            return ColabDriveFolders()
+        listing = _list_folder(root, rel)
+        return ColabDriveFolders(
+            root=str(root),
+            rel="/".join(listing.parts),
+            path=str(listing.path),
+            remote=listing.remote.as_posix(),
+            folders=listing.folders,
+            truncated=listing.truncated,
+            can_open=opener_available(),
+        )
+
+    @router.post(
+        "/colab/drive/open",
+        responses={
+            400: {"description": _OUTSIDE_TEXT},
+            403: {"description": _LOCAL_ONLY_TEXT},
+            404: {"description": _MISSING_TEXT},
+            409: {"description": _UNREADABLE_TEXT},
+            500: {"description": "The file manager could not be started"},
+        },
+        tags=[TAG_COLAB],
+        dependencies=[Depends(_local_only)],
+    )
+    def open_drive_folder(req: ColabDriveOpenRequest) -> dict[str, str]:
+        """Show a folder of "My Drive" in the file manager of this machine."""
+        root = find_my_drive_root(req.my_drive_root)
+        if root is None:
+            raise HTTPException(404, tr("colab.drive_no_root"))
+        listing = _list_folder(root, req.rel)
+        try:
+            open_folder(listing.path)
+        except FolderOpenError as exc:
+            raise HTTPException(500, tr("colab.drive_open_failed", error=exc)) from exc
+        return {"path": str(listing.path)}
+
     return router
 
 
-def _drive_source(config: dict[str, Any], my_drive_root: str | None) -> dict[str, Any]:
-    """The form's dataset folder as a path on the VM's mounted Drive (ADR-164).
+def _local_only(request: Request) -> None:
+    """Refuse another machine and a page of another site, as the reveal route does.
 
-    The local file count goes along: the VM compares it after copying, which
-    catches a folder Drive for desktop has not finished uploading.
+    The Drive browser reads folder names from this computer's disk and opens its
+    file manager, so it serves only a browser on the same machine and the app's
+    own page (a foreign ``Origin`` is a page of another site, CSRF).
+    """
+    origin = request.headers.get("origin")
+    if origin is not None and not is_loopback_origin(origin):
+        raise HTTPException(403, tr("colab.drive_foreign_origin"))
+    host = request.client.host if request.client else None
+    if not is_loopback_host(host):
+        raise HTTPException(403, tr("colab.drive_remote_client"))
+
+
+def _list_folder(root: Path, rel: str) -> DriveFolders:
+    """List one folder; a refused one is the HTTP error its reason calls for."""
+    try:
+        return list_drive_folders(root, rel)
+    except DriveFolderError as exc:
+        status, key = _FOLDER_REFUSAL[exc.reason]
+        raise HTTPException(status, tr(key, rel=rel)) from None
+
+
+def _drive_source(
+    config: dict[str, Any], my_drive_root: str | None, picked: str | None = None
+) -> dict[str, Any]:
+    """The dataset folder as a path on the VM's mounted Drive (ADR-164).
+
+    ``picked`` is the folder chosen in the panel's Drive browser; without one,
+    the form's ``data.base_dir`` is used. The local file count goes along: the
+    VM compares it after copying, which catches a folder Drive for desktop has
+    not finished uploading.
     """
     data = config.get("data")
     base_dir = data.get("base_dir") if isinstance(data, dict) else None
-    local = Path(str(base_dir or ""))
-    remote = remote_path(local, my_drive_roots(my_drive_root)) if base_dir else None
+    folder = picked.strip() if picked and picked.strip() else base_dir
+    local = Path(str(folder or ""))
+    remote = remote_path(local, my_drive_roots(my_drive_root)) if folder else None
     if remote is None:
         raise HTTPException(400, tr("colab.drive_not_in_drive", path=str(local)))
     files = count_files(local)

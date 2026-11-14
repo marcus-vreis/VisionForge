@@ -11,16 +11,23 @@ criam uma pasta nova ao lado dele.
 ## Explorar
 
 Escolha o tipo (**Classificação**, com pastas por classe, ou **Detecção**, no
-formato YOLO), aponte a pasta e clique em **Abrir**. O explorador é somente
-leitura: mostra quantas imagens há em cada divisão e em cada classe, e os
-tamanhos das imagens.
+formato YOLO), aponte a pasta e clique em **Abrir**. A janela mostra um
+resumo (imagens por divisão, número de classes, avisos) e o botão **Abrir
+laboratório**.
 
-![Aba Explorar com o dataset de exemplo](../images/vf-datasets-explorer.png)
+O laboratório abre o dataset em tela cheia, com um menu à esquerda e uma
+ferramenta por vez. **Visão geral** é somente leitura: totais, imagens por
+classe em barras divididas por divisão, uma galeria e os tamanhos das
+imagens. **Voltar** ou Esc devolve à janela.
+
+![Laboratório de datasets na Visão geral](../images/vf-datasets-explorer.png)
 
 Em pastas grandes a varredura pode ler uma amostra espaçada em vez de todas as
 imagens; a tela diz quando foi o caso.
 
-Com um dataset aberto, as ferramentas abaixo ficam disponíveis.
+As outras entradas do menu são as ferramentas abaixo. Na detecção, a janela
+tem ainda o atalho **Converter uma pasta COCO**, que abre o laboratório direto
+na importação, sem um dataset aberto.
 
 | Ferramenta | Use quando | O que cria |
 | --- | --- | --- |

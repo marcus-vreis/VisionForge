@@ -122,8 +122,13 @@ export const pt = {
       login_pending: "colab · aguardando código",
       connected: "colab · conectado",
     },
-    intro:
-      "Treinar no Google Colab usa a sua conta Google e a GPU que ela tiver. O VisionForge conversa com o Colab pela CLI oficial, instalada num ambiente só dela.",
+    intro: "Treine na GPU da sua conta Google.",
+    introMore:
+      "O VisionForge conversa com o Colab pela CLI oficial, instalada num ambiente só dela. O treino entra na mesma fila dos locais e o run volta para o Histórico ao terminar.",
+    howItWorks: "como funciona",
+    learnMore: "saiba mais",
+    sectionConnect: "Conexão",
+    sectionAccount: "Conta e uso",
     install: (version: string) => `instalar a CLI do Colab (v${version})`,
     installing: "Instalando a CLI do Colab… isso leva um ou dois minutos.",
     installFailed: "A instalação falhou:",
@@ -145,26 +150,45 @@ export const pt = {
     noRate: "Nenhum runtime ativo agora; as horas restantes dependem da GPU escolhida.",
     usageFailed: "Não foi possível ler o saldo.",
     loadFailed: "Não foi possível falar com o servidor.",
-    trainTitle: "Treinar este experimento no Colab",
-    trainSource: "Dataset na VM: URL de um zip, torchvision:cifar10 ou hf:dono/nome",
-    driveSource: "Usar a pasta do dataset do formulário, no Google Drive para desktop",
-    driveRoot: "Pasta \"Meu Drive\" deste computador (se não for achada sozinha)",
+    trainTitle: "Treinar no Colab",
+    trainSource: "Dataset: URL de zip, torchvision:nome ou hf:dono/nome",
+    driveSource: "Dataset no Google Drive",
+    driveRoot: "Pasta \"Meu Drive\" deste computador",
     driveRootPlaceholder: "G:\\Meu Drive",
-    driveExport: "Gravar o run também no Drive (MyDrive/VisionForge/runs)",
-    driveNote: "A VM monta o seu Drive e copia o dataset antes de treinar; o Google pede permissão a cada runtime.",
+    driveRootOther: "usar outra pasta \"Meu Drive\"",
+    driveExport: "Salvar o run também no Drive",
+    driveNote:
+      "A VM monta o seu Drive e copia a pasta antes de treinar; o Google pede permissão a cada runtime. Sem pasta escolhida, vale a pasta do dataset do formulário.",
+    driveChecking: "Procurando o Google Drive para desktop…",
+    driveFolder: "Pasta do dataset",
+    driveFolderPlaceholder: "vazio = pasta do formulário",
+    drivePick: "escolher pasta no Drive",
+    driveRemote: (path: string) => `No Colab: ${path}`,
+    driveBrowserLabel: "Pastas do Meu Drive",
+    driveHome: "Meu Drive",
+    driveLoading: "Lendo pastas…",
+    driveEmpty: "Nenhuma subpasta aqui.",
+    driveTruncated: (n: number) => `Mostrando só as primeiras ${n} pastas.`,
+    driveUse: "usar esta pasta",
+    driveOpen: "abrir pasta do Drive",
+    driveRetry: "procurar de novo",
+    driveMissingTitle: "Google Drive para desktop não encontrado",
+    driveStep1: "Instale e abra o Google Drive para desktop.",
+    driveStep2: "Coloque o dataset dentro de \"Meu Drive\".",
+    driveStep3: "Volte aqui e escolha a pasta.",
     sourcePlaceholder: "https://…/dataset.zip",
     badSource: "Use uma URL http(s) de um zip, torchvision:<nome> ou hf:<dono/nome>.",
     accelerator: "GPU",
     train: "treinar no Colab",
     trainNote:
-      "Entra na mesma fila dos treinos locais. A aba ao vivo acompanha; os arquivos treinados ficam na VM até a importação da próxima fase.",
+      "Entra na mesma fila dos treinos locais e a aba ao vivo acompanha. Com \"Salvar no Drive\", o run vai também para MyDrive/VisionForge/runs.",
     // The strategy step has Réplicas on (ADR-056): Colab trains one run.
     replicatesBlocked:
       "Réplicas roda só neste computador: o Colab treina uma execução por vez. Volte a estratégia para Treino simples para treinar no Colab.",
     // The same for the replicated comparison (ADR-193).
     comparisonBlocked:
       "A comparação replicada roda só neste computador: o Colab treina uma execução por vez. Volte a estratégia para Treino simples para treinar no Colab.",
-    sessionsTitle: "Runtimes ativos nesta conta",
+    sessionsTitle: "Runtimes ativos",
     sessionsNone: "Nenhum runtime ativo.",
     stopSession: "parar",
     sessionNotOurs: "aberto fora do VisionForge; pare em colab.research.google.com",
@@ -300,7 +324,7 @@ export const pt = {
   },
   mlflow: {
     label: "Exportar treinos para MLflow local",
-    hint: "Somente armazenamento local; requer o extra mlflow. Vale para próximos treinos.",
+    hint: "Grava só nesta máquina. Requer o extra mlflow.",
     saveFailed: "Falha ao salvar configuração MLflow.",
     warning: "Exportação MLflow não concluída",
     notInstalled: "O MLflow não está instalado neste computador. Instale o extra mlflow do VisionForge e repita a exportação.",
@@ -310,7 +334,7 @@ export const pt = {
   },
   wandb: {
     label: "Enviar treinos ao Weights & Biases",
-    hint: "Vai para um projeto privado da sua conta W&B: a config pública e as métricas de cada época. Dataset, caminhos, código, git e dados da máquina não saem daqui. Vale para os próximos treinos.",
+    hint: "Projeto privado na sua conta: config e métricas. Dataset, caminhos e código ficam aqui.",
     project: "Projeto",
     entity: "Usuário ou equipe (opcional)",
     entityHint: "Vazio usa o usuário dono da chave.",
@@ -334,7 +358,7 @@ export const pt = {
   },
   comet: {
     label: "Enviar treinos ao Comet",
-    hint: "Vai para um projeto privado da sua conta Comet: a config pública e as métricas de cada época. Dataset, caminhos, código, git, console e dados da máquina não saem daqui. Vale para os próximos treinos.",
+    hint: "Projeto privado na sua conta: config e métricas. Dataset, caminhos e código ficam aqui.",
     project: "Projeto",
     workspace: "Workspace (opcional)",
     workspaceHint: "Vazio usa o workspace padrão da chave.",
@@ -357,37 +381,33 @@ export const pt = {
     retrying: "Enviando…",
     retryFailed: "Falha ao repetir o envio ao Comet.",
   },
-  // The "Código" tab of the training sheet (components/CodeTour.tsx, ADR-173).
+  // The code of the "Como funciona" tab (components/training-code/, ADR-173):
+  // the run as steps, and the real code of the step that is running.
   codeTour: {
-    tab: "Código",
-    intro: "Este é o código real que treina o seu modelo, lido do VisionForge instalado: não é um resumo. Os trechos marcados são o caminho que as configurações deste treino seguem; os apagados são ramos que ele não usa.",
-    sectionsLabel: "Partes do treino",
-    sections: {
-      data: "Dados",
-      model: "Modelo",
-      loss: "Loss",
-      train: "Treino (uma época)",
-      validate: "Validação",
-      unet: "U-Net (forward)",
-      test: "Teste",
-      metrics: "Métricas",
-      coreset: "Banco de memória (PatchCore)",
-      score: "Nota de anomalia",
-      patch_score: "Vizinho mais próximo (PatchCore)",
-      threshold: "Limiar",
-      labels: "Rótulos YOLO",
-      collate: "Lote",
-      faster_rcnn: "Faster R-CNN",
-      ssd: "SSD",
-      retinanet: "RetinaNet",
-      map: "mAP (validação)",
-      metric: "AP por classe",
-      yolo_args: "Parâmetros do YOLO",
-      yolo_augment: "Augmentation (YOLO)",
-      yolo_fit: "Treino (VisionForge)",
-      yolo_epoch: "Época registrada",
-      yolo_loop: "Dentro do Ultralytics",
-    } as Record<string, string>,
+    stepsLabel: "Passos do treino",
+    // The steps of a run (lib/run-steps.ts), each with one short sentence.
+    steps: {
+      data: { title: "Dados", text: "Lê as imagens e as prepara para a rede." },
+      model: { title: "Modelo", text: "Monta a rede que vai aprender." },
+      loss: { title: "Loss", text: "Define como o erro de cada previsão é medido." },
+      train: { title: "Época de treino", text: "Passa por todos os lotes e ajusta os pesos." },
+      validate: { title: "Validação", text: "Mede o modelo em imagens que ele não treinou." },
+      test: { title: "Teste e relatório", text: "Mede o melhor modelo no teste e escreve o relatório." },
+    },
+    // PatchCore has no epochs and no gradient: its training and validation say so.
+    patchcoreSteps: {
+      train: { title: "Banco de memória", text: "Extrai características das imagens normais e guarda as típicas." },
+      validate: { title: "Pontuação", text: "Mede a distância de cada imagem ao banco." },
+    },
+    // Over the code of the step the run is in, while the tab follows the run.
+    live: "trecho em execução",
+    // The stream cannot tell these steps apart (lib/run-steps.ts).
+    liveGroup: (steps: string[]) =>
+      `em execução: ${steps.length > 1 ? `${steps.slice(0, -1).join(", ")} ou ${steps[steps.length - 1]}` : steps[0]} (o log não diz qual)`,
+    resume: "voltar ao que está rodando",
+    functionsLabel: "Funções deste passo",
+    granularity: "Marca o passo que está rodando, não a linha: o treino informa por época e por lote.",
+    noteToggle: (lines: string) => `Nota (${lines})`,
     library: (name: string, version: string, license: string) =>
       `Código do ${name} ${version}, como está instalado no seu ambiente, sob licença ${license}: não é código do VisionForge, só é mostrado aqui.`,
     notesResolved: (resolved: number, total: number) =>
@@ -399,12 +419,13 @@ export const pt = {
     loading: "Carregando o código…",
     failed: "Não foi possível carregar o código.",
     missing: "Ainda não há código comentado para esta tarefa.",
-    perEpoch: "O treino informa o progresso por época, não por linha: a marca mostra qual caminho o código segue, não a linha que está rodando agora.",
   },
   // Rascunho do bundle de uma execução no Zenodo (ZenodoExportPanel, ADR-174).
   zenodo: {
     title: "Rascunho no Zenodo",
     open: "Criar rascunho no Zenodo",
+    // The service's name on its closed button, beside its mark.
+    service: "Zenodo",
     intro: "O Zenodo arquiva o experimento e, quando você publica, gera um DOI para citar no artigo. Daqui sai só um rascunho: título, autores, licença e a publicação ficam com você, no site do Zenodo.",
     site: "Onde criar",
     production: "Zenodo (zenodo.org)",
@@ -434,6 +455,8 @@ export const pt = {
   github: {
     title: "Enviar ao GitHub",
     open: "Enviar relatório ao GitHub",
+    // The service's name on its closed button, beside its mark.
+    service: "GitHub",
     intro: "Guarda esta execução num repositório privado de experimentos, numa pasta própria: um README com as métricas, a tabela por época e os gráficos, mais o run.json. Os pesos não vão: eles ficam no Hugging Face Hub ou no Zenodo.",
     loading: "Montando os arquivos…",
     token: "Token do GitHub",
@@ -458,6 +481,8 @@ export const pt = {
   dvc: {
     title: "Versionar com DVC",
     open: "Versionar com DVC",
+    // The service's name on its closed button, beside its mark.
+    service: "DVC",
     intro: "Guarda esta execução num repositório git com DVC neste computador, numa pasta própria. README, run.json, gráficos e os arquivos que o DVC compara (params.yaml, metrics.json, history.csv e dvc.yaml) vão para o git; os pesos vão para o DVC. Depois, dvc metrics show, dvc params diff e dvc plots show comparam as execuções.",
     repo: "Pasta do repositório (caminho completo)",
     repoPlaceholder: "C:\\pesquisa\\experimentos",
@@ -494,7 +519,9 @@ export const pt = {
   hub: {
     checkpointWarning: "O checkpoint é enviado como foi gravado e pode conter metadados internos, caminhos e labels. Revise a origem do arquivo antes de enviar.",
     title: "Enviar ao Hugging Face Hub",
-    open: "Revisar envio ao Hub",
+    open: "Revisar envio ao Hugging Face Hub",
+    // The service's name on its closed button, beside its mark.
+    service: "Hugging Face Hub",
     loading: "Carregando prévia…",
     preview: "Arquivos a enviar",
     card: "Prévia do model card",
@@ -515,14 +542,11 @@ export const pt = {
   // Perfis de um servidor compartilhado (ADR-114): uma pasta de saída por pessoa.
   profile: {
     who: "Quem é você?",
-    defaultName: "Padrão (sem perfil)",
-    // O padrão com o nome dado na introdução (ADR-126).
-    defaultNamed: (name: string) => `${name} (padrão)`,
-    defaultShort: "Padrão",
+    // Um perfil antigo que nunca recebeu nome, ao lado de perfis com nome.
+    unnamed: "Sem nome",
     listLabel: "Perfis",
     create: "criar novo perfil",
     createTitle: "Novo perfil",
-    createLink: "criar perfil",
     nameLabel: "Nome do perfil",
     namePlaceholder: "ex.: Ana Souza",
     folder: (slug: string) => `pasta: outputs/profiles/${slug}`,
@@ -530,10 +554,11 @@ export const pt = {
     submit: "Criar ↵",
     creating: "Criando…",
     back: "← voltar",
-    notice:
-      "Perfis organizam o histórico de treinos; não protegem. Quem alcança este servidor pode escolher qualquer perfil.",
-    chip: "perfil",
-    chipTitle: "Trocar de perfil",
+    notice: "Perfis organizam o histórico; não protegem o acesso.",
+    menuTitle: "Perfil e integrações",
+    integrations: "Integrações",
+    integrationsNote: "valem para os próximos treinos",
+    switchProfile: "Trocar de perfil",
     exists: "Já existe um perfil com esse nome.",
     invalid:
       "Esse nome não vira uma pasta. Use ao menos uma letra (a-z) ou um número.",
@@ -548,6 +573,63 @@ export const pt = {
     tabGet: "Baixar",
     tabExplore: "Explorar",
     tabsLabel: "Ferramentas de dataset",
+  },
+  datasetLab: {
+    kicker: "// laboratório de datasets",
+    dialogLabel: (name: string) => `Laboratório de datasets: ${name}`,
+    back: "Voltar",
+    backTitle: "Fecha o laboratório e volta à escolha do dataset (Esc)",
+    sectionsLabel: "Ferramentas do laboratório",
+    sections: {
+      overview: "Visão geral",
+      resplit: "Refazer divisão",
+      incorporate: "Incorporar imagens",
+      merge: "Juntar datasets",
+      coco: "COCO",
+    },
+    typeClassification: "Classificação",
+    typeDetection: "Detecção (YOLO)",
+    noDataset: "Conversão de COCO",
+    noDatasetHint: "Nenhum dataset aberto: aqui só dá para converter uma pasta COCO.",
+    images: (n: number) => `${n} ${n === 1 ? "imagem" : "imagens"}`,
+    classes: (n: number) => `${n} ${n === 1 ? "classe" : "classes"}`,
+    boxes: (n: number) => `${n} ${n === 1 ? "caixa" : "caixas"}`,
+    openLab: "Abrir laboratório",
+    openLabHint: "Abre em tela cheia a visão geral e as ferramentas deste dataset.",
+    cocoEntry: "Converter uma pasta COCO",
+    cocoEntryHint: "Cria um dataset YOLO a partir de anotações COCO, sem abrir um dataset antes.",
+    summaryLabel: "Dataset escolhido",
+    noteMissing: (split: string) => `Pasta de ${split} não encontrada.`,
+    noteUnlabeled: (n: number) =>
+      n === 1 ? "1 imagem sem caixas." : `${n} imagens sem caixas.`,
+    cardTotal: "Imagens",
+    cardClasses: "Classes",
+    cardBoxes: "Caixas",
+    cardMissing: "pasta não encontrada",
+    cardUnlabeled: (n: number) => `${n} sem caixas`,
+    perClassTitle: "Imagens por classe",
+    boxesPerClassTitle: "Caixas por classe",
+    perClassHelp: "Cada barra soma as divisões; o número no fim é o total da classe.",
+    tableToggle: "Ver a tabela por classe e divisão",
+    segmentTitle: (split: string, n: number) => `${split}: ${n}`,
+    learnMore: "Saiba mais",
+    leadResplit:
+      "Junta treino e validação e redistribui pela proporção que você escolher; o teste fica como está, por padrão. Grava um dataset novo e o original não muda.",
+    leadIncorporate:
+      "Acrescenta uma pasta de imagens novas ao dataset e grava o resultado como um dataset novo; o original não muda.",
+    leadMerge:
+      "Junta o dataset aberto (A) com outro do mesmo tipo (B) num dataset novo; nenhum dos dois muda.",
+    leadCocoExport:
+      "Grava o dataset aberto no formato COCO, numa pasta nova ao lado dele; o original não muda.",
+    leadCocoImport:
+      "Converte uma pasta COCO num dataset YOLO de detecção, numa pasta nova ao lado dela. Só as caixas são importadas.",
+    cocoMode: "O que fazer",
+    cocoExportOnlyDetection: "Exportar para COCO vale só para datasets de detecção.",
+    groupLead:
+      "Imagens da mesma origem (mesmo paciente, mesma lâmina, mesmo vídeo) devem cair na mesma divisão: informe um CSV com as colunas path,group.",
+    groupMore: "Como montar o CSV",
+    mappingMore: "Como funciona o mapeamento",
+    resultTitle: "Resultado",
   },
   datasetExplorer: {
     intro:
@@ -687,7 +769,7 @@ export const pt = {
     done: (n: number, path: string) => `${n} imagens novas em ${path}`,
     linkedCopied: (linked: number, copied: number) =>
       `${linked} arquivos por hardlink, ${copied} copiados`,
-    openResult: "Abrir no explorador",
+    openResult: "Abrir no laboratório",
   },
   datasetMerge: {
     open: "Juntar com outro dataset",
@@ -767,7 +849,7 @@ export const pt = {
     done: (n: number, path: string) => `${n} imagens em ${path}`,
     linkedCopied: (linked: number, copied: number) =>
       `${linked} arquivos por hardlink, ${copied} copiados`,
-    openResult: "Abrir no explorador",
+    openResult: "Abrir no laboratório",
   },
   datasetResplit: {
     open: "Refazer divisão",
@@ -849,7 +931,7 @@ export const pt = {
       `${n} ${n === 1 ? "imagem" : "imagens"} em ${path}; ${moved} ${moved === 1 ? "mudou" : "mudaram"} de divisão`,
     linkedCopied: (linked: number, copied: number) =>
       `${linked} ${linked === 1 ? "arquivo" : "arquivos"} por hardlink, ${copied} ${copied === 1 ? "copiado" : "copiados"}`,
-    openResult: "Abrir no explorador",
+    openResult: "Abrir no laboratório",
   },
   datasetCoco: {
     exportOpen: "Exportar para COCO",
@@ -953,7 +1035,7 @@ export const pt = {
       `${images} ${images === 1 ? "imagem" : "imagens"}, ${boxes} ${boxes === 1 ? "caixa" : "caixas"} e ${classes} ${classes === 1 ? "classe" : "classes"} em ${path}`,
     linkedCopied: (linked: number, copied: number) =>
       `${linked} ${linked === 1 ? "arquivo" : "arquivos"} com hardlink, ${copied} copiados`,
-    openResult: "Abrir no explorador",
+    openResult: "Abrir no laboratório",
   },
   lightbox: {
     closeTitle: "Fechar (Esc)",
@@ -1281,10 +1363,10 @@ export const pt = {
     // Back to the form from History (#200): the config goes through the same
     // import as the YAML button, so its warnings are the same.
     rerun: {
-      load: "↺ carregar no formulário",
+      load: "Carregar no formulário",
       loadTitle:
         "Abre a aba da tarefa com a configuração deste run, pelo mesmo caminho do Importar YAML",
-      replicates: (n: number) => `⟳ repetir com ${n} seeds`,
+      replicates: (n: number) => `Repetir com ${n} seeds`,
       replicatesTitle: (seeds: string) =>
         `Abre a estratégia Réplicas com as seeds ${seeds}, diferentes das que este run usou`,
       customRemoved: (key: string) =>
@@ -1308,6 +1390,21 @@ export const pt = {
       fingerprint: "Fingerprint",
       noFingerprint: "sem fingerprint — run anterior a 26/07/2026",
     },
+    // The run detail's action groups and their buttons.
+    actions: {
+      reuse: "Reusar",
+      download: "Baixar",
+      publish: "Publicar",
+      useModel: "Usar o modelo",
+      bundle: "Bundle do experimento",
+      markdown: "Markdown",
+    },
+    environment: {
+      title: "Ambiente",
+    },
+    // Beside the status of a run a user stop cut short (ADR-111).
+    stoppedTag: "interrompido",
+    runStatus: { completed: "concluído", running: "em andamento", failed: "falhou" } as Record<string, string>,
     location: {
       title: "Localização no disco",
       runFolder: "Pasta do run",
@@ -1326,7 +1423,8 @@ export const pt = {
     },
     onnx: {
       title: "Exportar para ONNX",
-      open: "↗ exportar onnx",
+      open: "Exportar ONNX",
+      short: "Converte o checkpoint, compara com o PyTorch e mede a latência.",
       // `file` follows this text, in <code>.
       hint: "Converte o checkpoint para ONNX, valida diff numérico contra PyTorch e mede latência de inferência. O arquivo é salvo ao lado do checkpoint como",
       file: "best_model.onnx",
@@ -1352,7 +1450,8 @@ export const pt = {
     },
     batch: {
       title: "Inferência em lote (CSV)",
-      open: "+ inferência em lote",
+      open: "Inferência em lote",
+      short: "Roda o modelo numa pasta de imagens e grava um CSV.",
       folderPlaceholder: "ex: C:/datasets/inbox",
       recursive: "recursive (subpastas)",
       run: "▶ Rodar inferência",
@@ -1373,7 +1472,8 @@ export const pt = {
     },
     gradcam: {
       title: "Grad-CAM (explicabilidade)",
-      open: "🔥 Grad-CAM",
+      open: "Grad-CAM",
+      short: "Mapas de calor das regiões que mais pesaram na saída.",
       folderPlaceholder: "ex: C:/datasets/amostras",
       samples: "Nº de amostras (1–64)",
       run: "▶ Gerar Grad-CAM",
@@ -1398,18 +1498,20 @@ export const pt = {
         accuracy: "Acurácia",
         precision: "Precisão",
         best_val_loss: "Melhor val loss",
-        best_epoch: "Melhor epoch",
-        total_epochs: "Epochs treinados",
+        best_epoch: "Melhor época",
+        total_epochs: "Épocas treinadas",
       },
       // `name` is a metric label: "Acurácia (teste)", "F1 (teste)".
       onTestSet: (name: string) => `${name} (teste)`,
     },
     graphs: {
       title: "Gráficos (clique para expandir)",
+      curves: "Curvas por época",
+      curvesHint: "passe o mouse para ler o valor",
     },
     tests: {
       title: "Testes neste modelo",
-      open: "+ testar",
+      open: "Testar em outro dataset",
       empty: "Nenhum teste executado ainda neste modelo.",
       folder: "Pasta de teste",
       manifest: "Manifesto de teste (.csv)",
@@ -1715,7 +1817,7 @@ export const pt = {
   // The run-history sheet (components/HistoryOverlay.tsx). The status and the task
   // pill on each card are the backend's own values, shown as the server wrote them.
   history: {
-    eyebrow: "// training history",
+    eyebrow: "// histórico de treinos",
     title: "Treinamentos recentes",
     select: "✓ Selecionar",
     cancelSelect: "Cancelar seleção",
@@ -2829,7 +2931,7 @@ export const pt = {
       replicate:
         "Parar as réplicas? A réplica em andamento termina a época atual e nenhuma outra começa. A média e o intervalo usam só as réplicas concluídas; a réplica cortada fica de fora. Um conjunto interrompido não pode ser retomado.",
       phase:
-        "Parar o PatchCore? Se ainda estiver na extração de features, nada é guardado. Se já estiver montando o banco de memória, ele termina, é salvo e a pontuação é pulada — dá para pontuar depois em “+ testar” no Histórico.",
+        "Parar o PatchCore? Se ainda estiver na extração de features, nada é guardado. Se já estiver montando o banco de memória, ele termina, é salvo e a pontuação é pulada — dá para pontuar depois em “Testar em outro dataset” no Histórico.",
       vm: "Parar o treino no Colab? A VM é liberada na hora: a época em andamento se perde, e nada do que foi treinado lá volta para esta máquina por enquanto.",
     },
     // A researcher's own task. Never resumable from the History; and one that owns its
@@ -2884,13 +2986,21 @@ export const pt = {
     },
     stoppedPhaseLog: (bankKept: boolean): string =>
       bankKept
-        ? "interrompido · banco de memória salvo, sem pontuação (pontue depois em “+ testar”)"
+        ? "interrompido · banco de memória salvo, sem pontuação (pontue depois em “Testar em outro dataset”)"
         : "interrompido durante a extração · nada foi guardado",
     // The server says the run was not cut (`stopped: false`): the stop arrived too late
     // to change anything, or the run had ended on its own.
     stopTooLate: "> a parada não cortou nada: o treino terminou normalmente",
   },
   // The "Resultados" tab of the training sheet (components/LiveResults.tsx, ADR-160).
+  // Shared line chart (components/ui/LineChart).
+  chart: {
+    epoch: (n: number) => `Época ${n}`,
+    noValue: "—",
+    best: "melhor",
+    keyboardHint:
+      "Use as setas esquerda e direita para ver o valor de cada época; Home e End vão ao início e ao fim; Esc limpa.",
+  },
   liveResults: {
     tab: "Resultados",
     empty: "As curvas aparecem quando a primeira época terminar.",
@@ -2917,13 +3027,12 @@ export const pt = {
     epochsCol: "Épocas",
     bestCol: "Melhor",
   },
-  // The "Como funciona" tab of the training sheet (components/training-story/, ADR-118).
+  // The training sheet's tabs, and the run's figures and drawing on "Como funciona" (ADR-118).
   // Only the stage and the numbers are real; the caption says the motion is not.
   trainingStory: {
-    tab: "Como funciona",
+    tab: "Código ao vivo",
     logTab: "Log",
     tabsLabel: "Conteúdo da tela de treino",
-    stripLabel: "Estágios do treino",
     caption:
       "animação ilustrativa, em câmera lenta: só o estágio e os números são reais",
     figure: (family: string) => `Desenho ilustrativo de uma rede: ${family}`,
@@ -2938,39 +3047,6 @@ export const pt = {
       detector: "detector: backbone, neck e cabeças que dão caixas",
       autoencoder: "autoencoder: comprime e reconstrói",
       patchcore: "PatchCore: extrator, banco de memória e pontuação",
-    },
-    // The strip. The last slot says how the run ended.
-    stageNames: {
-      queued: "na fila",
-      preparing: "dados",
-      training: "treino",
-      testing: "teste",
-      done: "pronto",
-      interrupted: "interrompido",
-      failed: "falhou",
-    },
-    // One sentence per stage.
-    stages: {
-      queued: "Na fila: o treino começa sozinho quando a GPU ficar livre.",
-      preparing:
-        "Carregando os dados e montando o modelo; ainda não houve nenhuma época.",
-      training:
-        "O modelo vê os dados, erra, e o erro volta ajustando os pesos; ao fim de cada época, a validação mede o quanto ele aprendeu.",
-      testing:
-        "Treino terminado: o modelo é medido no conjunto de teste, que ele nunca viu, e o relatório é escrito.",
-      done: "Pronto: os resultados completos estão em “Ver resultados”.",
-      interrupted:
-        "Interrompido a pedido: o que já foi salvo continua disponível.",
-      failed: "O treino falhou: o detalhe do erro está no quadro acima e no log.",
-    },
-    // PatchCore has phases where the others have epochs.
-    phases: {
-      extractingFeatures:
-        "Uma rede já treinada lê as imagens normais e extrai suas características (features); nada é ajustado.",
-      buildingBank:
-        "As características mais representativas do que é normal são guardadas no banco de memória.",
-      scoring:
-        "Cada imagem de teste é comparada com o banco: quanto mais longe do que é normal, maior a nota de anomalia.",
     },
     numbers: {
       epoch: "época",
@@ -2995,15 +3071,6 @@ export const pt = {
       model: (index: number, total: number) => `modelo ${index}/${total}`,
       replicate: (index: number, total: number) => `réplica ${index}/${total}`,
     },
-    // A finished run can show its stages again, in slow motion (ADR-118).
-    replay: { button: "rever animação", playing: "revendo…" },
-    legend: {
-      forward: "dados e passagem direta",
-      backward: "gradiente voltando",
-      validation: "validação",
-      patchForward: "características guardadas",
-      patchScore: "pontuação",
-    },
   },
   // Side-by-side comparison of two or more runs (components/CompareRunsPanel.tsx).
   compareRuns: {
@@ -3027,7 +3094,7 @@ export const pt = {
     // validation score at the best epoch — all a detection run has.
     metrics: {
       best_val_loss: "Melhor val loss",
-      best_epoch: "Melhor epoch",
+      best_epoch: "Melhor época",
       total_epochs: "Total de epochs",
       test_accuracy: "Acurácia (teste)",
       test_f1: "F1 (teste)",
@@ -3245,7 +3312,7 @@ export const pt = {
           },
           watching: {
             title: "O que está acontecendo",
-            body: "A tela de treino mostra a época atual e, a cada época, a loss de treino e a de validação. Loss é o erro do modelo, e as duas devem cair. A de treino é medida durante a época, com o modelo ainda mudando; a de validação, ao fim dela, em imagens que ele não usou para aprender. A aba “Como funciona”, aberta ao lado do log, desenha o que o treino está fazendo, com os números ao vivo.",
+            body: "A tela de treino mostra a época atual e, a cada época, a loss de treino e a de validação. Loss é o erro do modelo, e as duas devem cair. A de treino é medida durante a época, com o modelo ainda mudando; a de validação, ao fim dela, em imagens que ele não usou para aprender. A aba “Código ao vivo”, aberta ao lado do log, mostra o passo em que o treino está e o código real desse passo, com os números ao vivo.",
           },
           result: {
             title: "O resultado",
@@ -3275,7 +3342,7 @@ export const pt = {
           },
           watching: {
             title: "O que está acontecendo",
-            body: "A tela de treino mostra a época atual e, a cada época, o mAP, a precisão, o recall e as losses da validação. A de caixa (box) mede onde o modelo põe a caixa; a de classe (cls), se ele acerta o que há nela. Nas primeiras épocas o mAP fica perto de zero e só sobe depois do aquecimento: é o esperado. A aba “Como funciona”, aberta ao lado do log, desenha o que o treino está fazendo, com os números ao vivo.",
+            body: "A tela de treino mostra a época atual e, a cada época, o mAP, a precisão, o recall e as losses da validação. A de caixa (box) mede onde o modelo põe a caixa; a de classe (cls), se ele acerta o que há nela. Nas primeiras épocas o mAP fica perto de zero e só sobe depois do aquecimento: é o esperado. A aba “Código ao vivo”, aberta ao lado do log, mostra o passo em que o treino está e o código real desse passo, com os números ao vivo.",
           },
           result: {
             title: "O resultado",
@@ -3305,7 +3372,7 @@ export const pt = {
           },
           watching: {
             title: "O que está acontecendo",
-            body: "A tela de treino mostra a época atual e, a cada época, a loss de treino e as métricas da validação: RMSE e MAE, o erro típico na unidade do alvo (menor é melhor), e R², que vale 1 para um modelo perfeito e 0 para um que sempre prevê a média. O R² oscila de uma época para outra, e o resultado fica com a melhor delas; nas primeiras ele pode ser negativo, porque o modelo ainda é pior que a média. A aba “Como funciona”, aberta ao lado do log, desenha o que o treino está fazendo, com os números ao vivo.",
+            body: "A tela de treino mostra a época atual e, a cada época, a loss de treino e as métricas da validação: RMSE e MAE, o erro típico na unidade do alvo (menor é melhor), e R², que vale 1 para um modelo perfeito e 0 para um que sempre prevê a média. O R² oscila de uma época para outra, e o resultado fica com a melhor delas; nas primeiras ele pode ser negativo, porque o modelo ainda é pior que a média. A aba “Código ao vivo”, aberta ao lado do log, mostra o passo em que o treino está e o código real desse passo, com os números ao vivo.",
           },
           result: {
             title: "O resultado",
@@ -3335,7 +3402,7 @@ export const pt = {
           },
           watching: {
             title: "O que está acontecendo",
-            body: "A tela de treino mostra a época atual e, a cada época, a loss e as métricas da validação: o mIoU (a sobreposição média entre a máscara prevista e a real, por classe), o Dice (parecido, mais generoso) e a acurácia por pixel. Como o fundo ocupa quase tudo, a acurácia por pixel é a mais otimista das três: confie no mIoU. A aba “Como funciona”, aberta ao lado do log, desenha o que o treino está fazendo, com os números ao vivo.",
+            body: "A tela de treino mostra a época atual e, a cada época, a loss e as métricas da validação: o mIoU (a sobreposição média entre a máscara prevista e a real, por classe), o Dice (parecido, mais generoso) e a acurácia por pixel. Como o fundo ocupa quase tudo, a acurácia por pixel é a mais otimista das três: confie no mIoU. A aba “Código ao vivo”, aberta ao lado do log, mostra o passo em que o treino está e o código real desse passo, com os números ao vivo.",
           },
           result: {
             title: "O resultado",
@@ -3365,7 +3432,7 @@ export const pt = {
           },
           watching: {
             title: "O que está acontecendo",
-            body: "A tela de treino mostra a época atual e, a cada época, a loss de reconstrução (o erro ao recriar uma imagem normal, que deve cair) e, medidos nas imagens de teste, o AUROC e o F1 de imagem. Com o PatchCore não há épocas: a tela mostra fases (extraindo features, montando o banco e pontuando), cada uma com o seu progresso. A aba “Como funciona”, aberta ao lado do log, desenha o que o treino está fazendo, com os números ao vivo.",
+            body: "A tela de treino mostra a época atual e, a cada época, a loss de reconstrução (o erro ao recriar uma imagem normal, que deve cair) e, medidos nas imagens de teste, o AUROC e o F1 de imagem. Com o PatchCore não há épocas: a tela mostra fases (extraindo features, montando o banco e pontuando), cada uma com o seu progresso. A aba “Código ao vivo”, aberta ao lado do log, mostra o passo em que o treino está e o código real desse passo, com os números ao vivo.",
           },
           result: {
             title: "O resultado",

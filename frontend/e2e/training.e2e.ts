@@ -22,9 +22,18 @@ test("trains one epoch on the sample dataset and finds the run in the history", 
   await expect(sheet.getByText(/^treinando · /)).toBeVisible();
   await expect(sheet.getByText("treino concluído", { exact: true })).toBeVisible({ timeout: 120_000 });
 
-  await sheet.getByRole("button", { name: "Fechar", exact: true }).click();
+  // "Ver resultados" opens the run's own page in the History, not a separate screen.
+  await sheet.getByRole("button", { name: /Ver resultados/ }).click();
+  const history = page.getByTestId("history-overlay");
+  await expect(history.getByRole("heading", { name: "e2e_vertical", exact: true })).toBeVisible({ timeout: 15_000 });
+  // Esc steps back one level at a time: the run, then the list.
+  await page.keyboard.press("Escape");
+  await expect(history.getByRole("heading", { name: "e2e_vertical", exact: true })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(history).toHaveCount(0);
+
   const card = await findInHistory(page, "e2e_vertical");
-  await expect(card.getByText(/^completed$/i)).toBeVisible();
+  await expect(card.getByText(/^(completed|concluído)$/i)).toBeVisible();
   await expect(card.getByText("1 epoch", { exact: true })).toBeVisible();
 });
 
@@ -72,7 +81,7 @@ test("rides out a few seconds without the server and still ends as completed", a
 
   await sheet.getByRole("button", { name: "Fechar", exact: true }).click();
   const card = await findInHistory(page, "e2e_offline");
-  await expect(card.getByText(/^completed$/i)).toBeVisible();
+  await expect(card.getByText(/^(completed|concluído)$/i)).toBeVisible();
 });
 
 test("queues a second browser's run and starts it after the active run stops", async ({ page, browser }) => {
@@ -101,7 +110,7 @@ test("queues a second browser's run and starts it after the active run stops", a
 
     await waiting.getByRole("button", { name: "Fechar", exact: true }).click();
     const card = await findInHistory(waitingPage, "e2e_queued");
-    await expect(card.getByText(/^completed$/i)).toBeVisible();
+    await expect(card.getByText(/^(completed|concluído)$/i)).toBeVisible();
     await expect(card.getByText("8 epochs", { exact: true })).toBeVisible();
   } finally {
     await waitingContext.close();

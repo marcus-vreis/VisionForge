@@ -1,28 +1,33 @@
 # Depois do treino
 
 Tudo o que se faz com uma execução pronta parte do **Histórico**, na barra de
-baixo. Clique numa execução para abrir o detalhe.
+baixo. Clique numa execução para abrir o detalhe; **Ver resultados**, ao fim
+de um treino, abre o mesmo detalhe.
 
 ![Detalhe de uma execução no Histórico](../images/vf-run-detail.png)
 
 ## Reabrir e repetir
 
+As ações ficam em grupos. **Reusar** e **Baixar**:
+
 | Botão | O que faz |
 | --- | --- |
 | **Carregar no formulário** | devolve a configuração da execução às etapas, para ajustar e treinar de novo |
 | **Repetir com 3 seeds** | monta [réplicas](estrategias.md#réplicas) da mesma configuração |
+| **Bundle do experimento** | baixa um ZIP verificável com `run.json` e os artefatos ([`../REPRODUCIBILITY.md`](../REPRODUCIBILITY.md)) |
 | **Markdown** | baixa o relatório da execução |
-| **Baixar bundle do experimento** | baixa um ZIP verificável com `run.json` e os artefatos ([`../REPRODUCIBILITY.md`](../REPRODUCIBILITY.md)) |
 
 No Histórico, **Selecionar** marca execuções para comparar ou excluir, e
 **Ranking** ordena as execuções de cada dataset por uma métrica.
 
 ## O que está registrado
 
-O detalhe mostra, nesta ordem: o dataset (caminho, conteúdo e fingerprint), a
-pasta da execução e o checkpoint, o ambiente (versões de Python, torch e das
-demais bibliotecas, GPU, commit do git), a configuração de treino, o pipeline
-de imagem aplicado e as métricas com os gráficos.
+O detalhe abre pelas métricas e pelas curvas por época, seguidas dos gráficos
+gravados, das ações e dos testes do modelo. Abaixo ficam os blocos de
+referência. Dataset (caminho, conteúdo e fingerprint) e configuração de treino
+começam abertos; a pasta da execução e o checkpoint, o ambiente (versões de
+Python, torch e das demais bibliotecas, GPU, commit do git) e o pipeline de
+imagem abrem com um clique.
 
 ## Usar o modelo
 
@@ -40,14 +45,15 @@ primeiro alvo na regressão e a classe 0 na segmentação.
 
 ## Publicar
 
-Os quatro botões abaixo das ações abrem um painel cada.
+Os quatro botões do grupo **Publicar**, cada um com a marca do serviço, abrem
+um painel cada.
 
-| Botão | Destino | Página |
+| Botão | O que faz | Página |
 | --- | --- | --- |
-| **Revisar envio ao Hub** | Hugging Face Hub | [Hugging Face Hub](hugging-face-hub.md) |
-| **Criar rascunho no Zenodo** | Zenodo | [Zenodo](zenodo.md) |
-| **Enviar relatório ao GitHub** | GitHub | [GitHub](github.md) |
-| **Versionar com DVC** | repositório git deste computador | [DVC](dvc.md) |
+| **Hugging Face Hub** | revisa e envia checkpoint, model card e métricas | [Hugging Face Hub](hugging-face-hub.md) |
+| **Zenodo** | cria um rascunho com o bundle | [Zenodo](zenodo.md) |
+| **GitHub** | envia o relatório a um repositório | [GitHub](github.md) |
+| **DVC** | versiona a execução num repositório git deste computador | [DVC](dvc.md) |
 
 Cada página diz o que é enviado e o que fica de fora. Os tokens que esses
 painéis pedem ficam salvos por perfil ([Tokens](tokens.md)).

@@ -1,7 +1,8 @@
 /** What the "Como funciona" tab says is happening, read off the event stream
- * (ADR-118).
+ * (ADR-118). The step whose code the tab shows is read from the same stage, in
+ * `run-steps.ts`.
  *
- * Only two things on that tab are real: the macro *stage* of the run and the
+ * Only two things the stage feeds are real: the macro *stage* of the run and the
  * *numbers* the trainer reported. Both come from here, from the same events the
  * log reads, and nothing is timed or invented. The particles that move across the
  * drawing are illustrative; they carry no information.
@@ -30,11 +31,12 @@ import type { MetricKind, StoryFamily, StorySpec } from "./story-family";
 import { phaseKey, type PhaseKey } from "./training-phase";
 
 /** The tabs of the training sheet: the log (the default), the live results and
- *  the story. */
-export type SheetTab = "log" | "results" | "story" | "code";
+ *  "Como funciona", where the run's steps and their real code are one tab (the
+ *  story and the "Código" tab of ADR-173, merged). */
+export type SheetTab = "log" | "results" | "story";
 
 /** The tabs in the order the sheet shows them. */
-export const SHEET_TABS: readonly SheetTab[] = ["log", "results", "story", "code"];
+export const SHEET_TABS: readonly SheetTab[] = ["log", "results", "story"];
 
 export type StoryStage =
   | "queued"
@@ -44,15 +46,6 @@ export type StoryStage =
   | "done"
   | "interrupted"
   | "failed";
-
-/** The stages in the order the strip on the tab shows them. The end states share
- *  the last slot. */
-export const STAGE_ORDER: readonly StoryStage[] = [
-  "preparing",
-  "training",
-  "testing",
-  "done",
-];
 
 type EpochEnd = Extract<TrainingEvent, { event: "epoch_end" }>;
 type PhaseEvent = Extract<TrainingEvent, { event: "phase" }>;

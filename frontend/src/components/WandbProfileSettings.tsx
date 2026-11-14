@@ -1,15 +1,14 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import {
   deleteWandbToken, fetchWandbToken, saveWandbToken, updateProfile,
   type HubTokenStatus, type WandbSettings,
 } from "../api/client";
 import { useT } from "../i18n/useT";
 import type { ProfileInfo } from "../lib/profile";
+import { TRACKER_FIELD as FIELD, TRACKER_HINT, TRACKER_LABEL } from "./trackerStyles";
+import { TrackerSwitch } from "./TrackerSwitch";
+import { WandbIcon } from "./ui/BrandIcons";
 
-const FIELD: CSSProperties = {
-  background: "var(--vf-panel)", color: "var(--vf-text)", padding: 6,
-  border: "1px solid var(--vf-panel-stroke)", borderRadius: 6, maxWidth: "100%",
-};
 const DEFAULTS: WandbSettings = { enabled: false, project: "visionforge", entity: "" };
 
 /** One profile's W&B export: on/off, private destination and API key (ADR-172). */
@@ -55,21 +54,21 @@ export function WandbProfileSettings({ profile, onSaved }: {
 
   const changed = project.trim() !== saved.project || entity.trim() !== saved.entity;
   return <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-    <label><input type="checkbox" checked={saved.enabled} disabled={busy}
-      onChange={(e) => void save({ enabled: e.target.checked })} /> {t.wandb.label}</label>
-    <div>{t.wandb.hint}</div>
+    <TrackerSwitch icon={<WandbIcon size={18} />} label={t.wandb.label} checked={saved.enabled}
+      disabled={busy} onChange={(enabled) => void save({ enabled })} />
+    <div style={TRACKER_HINT}>{t.wandb.hint}</div>
     {saved.enabled && <>
-      <label>{t.wandb.project} <input value={project} disabled={busy} style={FIELD}
+      <label style={TRACKER_LABEL}>{t.wandb.project} <input value={project} disabled={busy} style={FIELD}
         onChange={(e) => setProject(e.target.value)} /></label>
-      <label>{t.wandb.entity} <input value={entity} disabled={busy} style={FIELD}
+      <label style={TRACKER_LABEL}>{t.wandb.entity} <input value={entity} disabled={busy} style={FIELD}
         placeholder={t.wandb.entityHint} onChange={(e) => setEntity(e.target.value)} /></label>
-      <button type="button" disabled={busy || !changed || !project.trim()}
+      <button type="button" style={{ alignSelf: "flex-start" }} disabled={busy || !changed || !project.trim()}
         onClick={() => void save({ project: project.trim(), entity: entity.trim() })}>{t.wandb.saveTarget}</button>
       {keyStatus?.shared && <div role="alert">{t.wandb.shared}</div>}
       {keyStatus?.configured && <div>{t.wandb.configured}</div>}
-      <label>{t.wandb.token} <input type="password" autoComplete="new-password" value={token}
+      <label style={TRACKER_LABEL}>{t.wandb.token} <input type="password" autoComplete="new-password" value={token}
         disabled={busy} style={FIELD} onChange={(e) => setToken(e.target.value)} /></label>
-      <div>{t.wandb.tokenHint}</div>
+      <div style={TRACKER_HINT}>{t.wandb.tokenHint}</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button type="button" disabled={busy || !token.trim()}
           onClick={() => void credentials(false)}>{t.wandb.saveToken}</button>

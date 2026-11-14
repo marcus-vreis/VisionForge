@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { FolderOpen } from "lucide-react";
 import {
   incorporateApply,
   incorporateCancel,
@@ -29,10 +30,10 @@ import { runPicker } from "../lib/picker-feedback";
 import { errorMessage as message, useJobPolling } from "../lib/useJobPolling";
 import { useT } from "../i18n/useT";
 import { Segmented, TextField } from "./controls";
-import { button, card, ghostButton, mono, sectionLabel } from "./datasetExplorerStyles";
+import { danger, ghostButton, mono, sectionLabel, stepTitle, text } from "./datasetExplorerStyles";
+import { ActionRow, AnalyzeButton, ApplyButton, DataTable, LabStep, LabTool } from "./DatasetLabParts";
 import { Progress } from "./JobProgress";
-
-const danger = { ...mono, color: "var(--vf-danger, #f87171)" };
+import { ActionButton } from "./ui/ActionButton";
 
 const pollPreview = (id: string) => incorporateStatus<IncorporatePreview>(id);
 const pollApply = (id: string) => incorporateStatus<IncorporateResult>(id);
@@ -57,9 +58,9 @@ function PlanView({
       {preview.new_classes.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <div style={sectionLabel}>{t.newClassesTitle}</div>
-          <div style={mono}>{t.newClassesHelp}</div>
+          <div style={text}>{t.newClassesHelp}</div>
           {preview.new_classes.map((c) => (
-            <label key={c.name} style={{ ...mono, display: "flex", gap: 6, alignItems: "center" }}>
+            <label key={c.name} style={{ ...text, color: "var(--vf-text)", display: "flex", gap: 8, alignItems: "center" }}>
               <input
                 type="checkbox"
                 checked={accepted.includes(c.name)}
@@ -78,11 +79,11 @@ function PlanView({
             <span>{t.willSkip(plan.excluded_count)}</span>
           </div>
           {plan.added === 0 ? (
-            <div style={mono}>{t.nothingToAdd}</div>
+            <div style={text}>{t.nothingToAdd}</div>
           ) : (
             <>
               <div style={sectionLabel}>{t.addedPerClass}</div>
-              <table style={{ ...mono, borderCollapse: "collapse", width: "100%" }}>
+              <DataTable>
                 <thead>
                   <tr>
                     <th style={{ textAlign: "left" }}>{ex.classColumn}</th>
@@ -107,7 +108,7 @@ function PlanView({
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </DataTable>
             </>
           )}
           {plan.excluded_count > 0 && (
@@ -147,7 +148,7 @@ export function IncorporatePanel({
 }) {
   const t = useT().datasetIncorporate;
   const ex = useT().datasetExplorer;
-  const [expanded, setExpanded] = useState(false);
+  const lab = useT().datasetLab;
   const [sourceDir, setSourceDir] = useState("");
   const [pickNote, setPickNote] = useState<string | null>(null);
   const [previewJob, setPreviewJob] = useState<IncorporateJob<IncorporatePreview> | null>(null);
@@ -256,16 +257,6 @@ export function IncorporatePanel({
     setCustom(next);
   };
 
-  if (!expanded) {
-    return (
-      <div>
-        <button type="button" style={button} onClick={() => setExpanded(true)}>
-          {t.open}
-        </button>
-      </div>
-    );
-  }
-
   const destOk = isValidDestName(destName);
   const canApply =
     preview !== null && plan !== null && plan.added > 0 && body !== null && destOk && !applyRunning && !result;
@@ -274,19 +265,36 @@ export function IncorporatePanel({
     : jobPercent(applyJob?.done ?? 0, applyJob?.total ?? 0);
 
   return (
-    <div style={{ ...card, flexBasis: "100%" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={sectionLabel}>{t.open}</div>
-        <button type="button" style={ghostButton} onClick={() => setExpanded(false)}>
-          {t.close}
-        </button>
-      </div>
-      <div style={mono}>{t.intro}</div>
-
-      <div style={sectionLabel}>{t.sourceTitle}</div>
-      <div style={mono}>{form.task === "detection" ? t.sourceDetection : t.sourceClassification}</div>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 12 }}>
-        <div style={{ flex: 1 }}>
+    <LabTool title={t.open} lead={lab.leadIncorporate} more={t.intro}>
+      <LabStep title={t.sourceTitle}>
+        <div style={text}>{form.task === "detection" ? t.sourceDetection : t.sourceClassification}</div>
+        <ActionRow
+          actions={
+            <>
+              <button
+                type="button"
+                style={ghostButton}
+                onClick={() =>
+                  void runPicker(
+                    pickDatasetFolder,
+                    (path) => {
+                      setSourceDir(path);
+                      setPickNote(null);
+                    },
+                    { canceled: t.pickCancelled, failed: t.pickFailed },
+                  ).then(setPickNote)
+                }
+              >
+                {t.browse}
+              </button>
+              <AnalyzeButton
+                label={t.analyze}
+                disabled={sourceDir.trim() === "" || previewRunning || applyRunning}
+                onClick={() => void startPreview()}
+              />
+            </>
+          }
+        >
           <TextField
             label={t.sourceDir}
             value={sourceDir}
@@ -294,33 +302,9 @@ export function IncorporatePanel({
             placeholder={t.sourcePlaceholder}
             mono
           />
-        </div>
-        <button
-          type="button"
-          style={ghostButton}
-          onClick={() =>
-            void runPicker(
-              pickDatasetFolder,
-              (path) => {
-                setSourceDir(path);
-                setPickNote(null);
-              },
-              { canceled: t.pickCancelled, failed: t.pickFailed },
-            ).then(setPickNote)
-          }
-        >
-          {t.browse}
-        </button>
-        <button
-          type="button"
-          style={button}
-          disabled={sourceDir.trim() === "" || previewRunning || applyRunning}
-          onClick={() => void startPreview()}
-        >
-          {t.analyze}
-        </button>
-      </div>
-      {pickNote && <div style={mono}>{pickNote}</div>}
+        </ActionRow>
+        {pickNote && <div style={text}>{pickNote}</div>}
+      </LabStep>
 
       {(previewRunning || applyRunning) && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -342,72 +326,76 @@ export function IncorporatePanel({
           </div>
         </div>
       )}
-      {previewJob?.state === "cancelled" && <div style={mono}>{t.cancelled}</div>}
-      {applyJob?.state === "cancelled" && <div style={mono}>{t.cancelled}</div>}
+      {previewJob?.state === "cancelled" && <div style={text}>{t.cancelled}</div>}
+      {applyJob?.state === "cancelled" && <div style={text}>{t.cancelled}</div>}
       {previewJob?.state === "failed" && <div style={danger}>{t.failed(previewJob.error ?? "")}</div>}
       {applyJob?.state === "failed" && <div style={danger}>{t.failed(applyJob.error ?? "")}</div>}
       {error && <div style={danger}>{t.failed(error)}</div>}
 
       {preview && (
         <>
-          <div style={sectionLabel}>{t.previewTitle}</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 520 }}>
-            <Segmented
-              label={t.ratioTitle}
-              value={custom ? "custom" : "same"}
-              onChange={(v) => toggleCustom(v === "custom")}
-              options={[
-                {
-                  value: "same",
-                  label: plan
-                    ? t.ratioSame(ratioLabel(plan.ratios, preview.present))
-                    : t.ratioSame("…"),
-                },
-                { value: "custom", label: t.ratioCustom },
-              ]}
-            />
-            {custom && (
-              <div style={{ display: "flex", gap: 10 }}>
-                {SPLITS.filter((s) => preview.present[s]).map((s) => (
-                  <div key={s} style={{ flex: 1 }}>
-                    <TextField
-                      label={t.ratioPercent(ex.splitNames[s])}
-                      value={percents[s]}
-                      onChange={(v) => setPercents((p) => ({ ...p, [s]: v }))}
-                      mono
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-            {custom && customRatios(percents, preview.present) === null && (
-              <div style={danger}>{t.ratioInvalid}</div>
-            )}
-            {SPLITS.filter((s) => !preview.present[s]).map((s) => (
-              <div key={s} style={mono}>
-                {t.noSplit(ex.splitNames[s])}
-              </div>
-            ))}
-            <div style={{ width: 180 }}>
-              <TextField
-                label={t.seed}
-                value={seedText}
-                onChange={setSeedText}
-                hint={t.seedHint}
-                mono
-                error={parseSeed(seedText) === null ? t.seedInvalid : undefined}
+          <LabStep title={t.previewTitle}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 620 }}>
+              <Segmented
+                label={t.ratioTitle}
+                value={custom ? "custom" : "same"}
+                onChange={(v) => toggleCustom(v === "custom")}
+                options={[
+                  {
+                    value: "same",
+                    label: plan
+                      ? t.ratioSame(ratioLabel(plan.ratios, preview.present))
+                      : t.ratioSame("…"),
+                  },
+                  { value: "custom", label: t.ratioCustom },
+                ]}
               />
+              {custom && (
+                <div className="vf-lab-fields">
+                  {SPLITS.filter((s) => preview.present[s]).map((s) => (
+                    <div key={s}>
+                      <TextField
+                        label={t.ratioPercent(ex.splitNames[s])}
+                        value={percents[s]}
+                        onChange={(v) => setPercents((p) => ({ ...p, [s]: v }))}
+                        mono
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+              {custom && customRatios(percents, preview.present) === null && (
+                <div style={danger}>{t.ratioInvalid}</div>
+              )}
+              {SPLITS.filter((s) => !preview.present[s]).map((s) => (
+                <div key={s} style={text}>
+                  {t.noSplit(ex.splitNames[s])}
+                </div>
+              ))}
+              <div style={{ width: "100%", maxWidth: 420 }}>
+                <TextField
+                  label={t.seed}
+                  value={seedText}
+                  onChange={setSeedText}
+                  hint={t.seedHint}
+                  mono
+                  error={parseSeed(seedText) === null ? t.seedInvalid : undefined}
+                />
+              </div>
             </div>
-          </div>
-          <PlanView
-            plan={plan}
-            preview={preview}
-            accepted={accepted}
-            onToggle={(name) => setAccepted((a) => toggleClass(a, name))}
-          />
-          <div style={sectionLabel}>{t.destTitle}</div>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 12 }}>
-            <div style={{ flex: 1, maxWidth: 420 }}>
+            <PlanView
+              plan={plan}
+              preview={preview}
+              accepted={accepted}
+              onToggle={(name) => setAccepted((a) => toggleClass(a, name))}
+            />
+          </LabStep>
+          <LabStep title={t.destTitle}>
+            <ActionRow
+              actions={
+                <ApplyButton label={t.apply} disabled={!canApply} onClick={() => void startApply()} />
+              }
+            >
               <TextField
                 label={t.destName}
                 value={destName}
@@ -416,33 +404,23 @@ export function IncorporatePanel({
                 mono
                 error={destName !== "" && !destOk ? t.destInvalid : undefined}
               />
-            </div>
-            <button type="button" style={button} disabled={!canApply} onClick={() => void startApply()}>
-              {t.apply}
-            </button>
-          </div>
+            </ActionRow>
+          </LabStep>
         </>
       )}
 
       {result && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={sectionLabel}>{t.doneTitle}</div>
+        <div className="vf-lab-done">
+          <h3 style={{ ...stepTitle, margin: 0 }}>{t.doneTitle}</h3>
           <div style={mono}>{t.done(result.added, result.path)}</div>
           <div style={mono}>{t.linkedCopied(result.files_linked, result.files_copied)}</div>
           <div>
-            <button
-              type="button"
-              style={button}
-              onClick={() => {
-                onOpenResult(result.path);
-                setExpanded(false);
-              }}
-            >
+            <ActionButton icon={<FolderOpen />} onClick={() => onOpenResult(result.path)}>
               {t.openResult}
-            </button>
+            </ActionButton>
           </div>
         </div>
       )}
-    </div>
+    </LabTool>
   );
 }

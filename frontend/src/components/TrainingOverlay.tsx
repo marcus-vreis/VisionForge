@@ -27,12 +27,11 @@ import { LiveResults } from "./LiveResults";
 import { LazySurface } from "./ErrorBoundary";
 import type { CodeSettings } from "../api/client";
 
-// The drawing and the code tour are tabs the log does not need: each is its own
-// chunk, fetched the first time its tab opens (GUI-12).
-const TrainingStory = lazy(() =>
-  import("./training-story/TrainingStory").then((m) => ({ default: m.TrainingStory })),
+// "Como funciona" (the run's steps, its code and the drawing) is a tab the log
+// does not need: its own chunk, fetched the first time the tab opens (GUI-12).
+const TrainingCodeTab = lazy(() =>
+  import("./training-code/TrainingCodeTab").then((m) => ({ default: m.TrainingCodeTab })),
 );
-const CodeTour = lazy(() => import("./CodeTour").then((m) => ({ default: m.CodeTour })));
 
 interface TrainingOverlayProps {
   status: RunStatus;
@@ -63,7 +62,7 @@ interface TrainingOverlayProps {
   /** Which drawing the "Como funciona" tab shows, recorded when the run was
    *  submitted: the sheet outlives the form it came from (ADR-118). */
   story?: StorySpec;
-  /** What picks the branches in the "Código" tab; null when the run's settings are unknown. */
+  /** What picks the branches of the code on "Como funciona"; null when the run's settings are unknown. */
   codeSettings?: CodeSettings | null;
   /** The tab of the sheet that is open. The log is the default, and the guide can
    *  ask for the other one, so the choice lives in the page. */
@@ -439,7 +438,9 @@ export function TrainingOverlay({
       <div
         data-tour="training-sheet"
         style={{
-          width: "min(720px, 100%)",
+          // "Como funciona" puts the steps beside the code, and the code wants
+          // the width; the log and the results keep the narrow sheet.
+          width: tab === "story" ? "min(1080px, 100%)" : "min(720px, 100%)",
           background: "rgb(var(--lt-surface, 12 14 18) / 0.95)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 18,
@@ -692,7 +693,8 @@ export function TrainingOverlay({
           </div>
         )}
 
-        {/* Log, results and "Como funciona": the log is what the sheet opens on. */}
+        {/* Log, results and "Como funciona" (the steps and their code): the log
+            is what the sheet opens on. */}
         <div
           role="tablist"
           aria-label={t.trainingStory.tabsLabel}
@@ -735,9 +737,7 @@ export function TrainingOverlay({
                   ? t.trainingStory.logTab
                   : name === "results"
                     ? t.liveResults.tab
-                    : name === "code"
-                      ? t.codeTour.tab
-                      : t.trainingStory.tab}
+                    : t.trainingStory.tab}
               </button>
             );
           })}
@@ -754,29 +754,18 @@ export function TrainingOverlay({
           </div>
         )}
 
-        {tab === "code" && (
-          <div
-            role="tabpanel"
-            id="training-panel-code"
-            aria-labelledby="training-tab-code"
-            style={{ maxHeight: 520, overflowY: "auto" }}
-          >
-            <LazySurface>
-              <CodeTour taskKey={taskKey} settings={codeSettings} accent={taskAccent} />
-            </LazySurface>
-          </div>
-        )}
-
-        {/* The story is mounted only while it is the open tab, so its animations
-            stop with it; the log stays mounted (hidden), to keep what it holds. */}
+        {/* "Como funciona" is mounted only while it is the open tab, so its
+            drawing stops with it; the log stays mounted (hidden), to keep what
+            it holds. On a narrow window its columns stack, and the panel scrolls. */}
         {tab === "story" && (
           <div
             role="tabpanel"
             id="training-panel-story"
             aria-labelledby="training-tab-story"
+            style={{ maxHeight: "max(360px, calc(100vh - 260px))", overflowY: "auto" }}
           >
             <LazySurface>
-              <TrainingStory
+              <TrainingCodeTab
                 events={progressEvents}
                 status={status.status}
                 stopped={stopOutcomeNow === "stopped"}
@@ -786,8 +775,10 @@ export function TrainingOverlay({
                     : null
                 }
                 spec={story}
-                tabAccent={taskAccent}
+                accent={taskAccent}
                 sheetVisible={visible}
+                taskKey={taskKey}
+                settings={codeSettings}
               />
             </LazySurface>
           </div>

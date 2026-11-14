@@ -6,21 +6,15 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { LanguageContext } from "../../i18n/context";
-import { en } from "../../i18n/en";
-import { pt } from "../../i18n/pt";
 import type { StoryFamily, StoryTask } from "../../lib/story-family";
-import { storySpecFor } from "../../lib/story-family";
 import {
   activeFlows,
   type StoryMotion,
   type StoryPhase,
   type StoryStage,
 } from "../../lib/training-story";
-import type { TrainingEvent } from "../../types/run";
 import { StoryDrawing } from "./drawings";
 import { drawingFor } from "./layouts";
-import { TrainingStory } from "./TrainingStory";
 import {
   accentForStory,
   FAILED_COLOR,
@@ -393,180 +387,5 @@ describe("the colours of a drawing", () => {
       const accent = accentForStory(task, undefined);
       expect(draw("cnn", "training", "none", { accent })).toContain(accent);
     }
-  });
-});
-
-// ── The whole tab ────────────────────────────────────────────────────────────
-
-const inLanguage = (lang: "pt" | "en", node: React.ReactNode) =>
-  renderToStaticMarkup(
-    <LanguageContext.Provider
-      value={{
-        lang,
-        t: lang === "pt" ? pt : en,
-        locale: lang === "pt" ? "pt-BR" : "en-US",
-        setLang: () => {},
-      }}
-    >
-      {node}
-    </LanguageContext.Provider>,
-  );
-
-const epoch = (n: number, total: number): TrainingEvent => ({
-  event: "epoch_end",
-  epoch: n,
-  total_epochs: total,
-  train_loss: 0.5,
-  val_loss: 0.6,
-  val_accuracy: 0.8,
-});
-
-const tab = (
-  lang: "pt" | "en",
-  over: Partial<React.ComponentProps<typeof TrainingStory>> = {},
-) =>
-  inLanguage(
-    lang,
-    <TrainingStory
-      events={[{ event: "start", total_epochs: 4 }, epoch(2, 4)]}
-      status="running"
-      stopped={false}
-      unitKind={null}
-      spec={storySpecFor("classification", { model: { name: "resnet18" } })}
-      sheetVisible
-      {...over}
-    />,
-  );
-
-describe("the tab", () => {
-  it("shows the stage, one sentence, the numbers, the legend and the caption", () => {
-    const html = tab("pt");
-    expect(html).toContain('data-story-stage="training"');
-    expect(html).toContain(pt.trainingStory.stages.training);
-    expect(html).toContain(pt.trainingStory.numbers.epochOf(2, 4));
-    expect(html).toContain("0.5000");
-    expect(html).toContain("0.6000");
-    expect(html).toContain("0.8000");
-    expect(html).toContain(pt.trainingStory.numbers.metrics.accuracy);
-    for (const word of Object.values(pt.trainingStory.legend).slice(0, 3)) {
-      expect(html).toContain(word);
-    }
-    expect(html).toContain(pt.trainingStory.caption);
-    expect(pt.trainingStory.caption).toMatch(/ilustrativa, em câmera lenta/);
-    expect(en.trainingStory.caption).toMatch(/illustrative animation, slowed down/);
-  });
-
-  it("lights the current stage in the strip and says which it is", () => {
-    const html = tab("en");
-    expect(html).toContain('aria-current="step"');
-    expect(count(html, 'aria-current="step"')).toBe(1);
-    for (const name of [en.trainingStory.stageNames.preparing, en.trainingStory.stageNames.training, en.trainingStory.stageNames.testing]) {
-      expect(html).toContain(name);
-    }
-  });
-
-  it("follows the language", () => {
-    expect(tab("en")).toContain(en.trainingStory.stages.training);
-    expect(tab("en")).not.toContain(pt.trainingStory.stages.training);
-    expect(tab("pt")).not.toContain(en.trainingStory.stages.training);
-  });
-
-  it("says what each end looks like", () => {
-    const events = [{ event: "start", total_epochs: 4 } as TrainingEvent, epoch(4, 4), { event: "end", total_epochs: 4 } as TrainingEvent];
-    expect(tab("pt", { events, status: "completed" })).toContain(pt.trainingStory.stages.done);
-    expect(tab("pt", { events, status: "completed", stopped: true })).toContain(
-      pt.trainingStory.stages.interrupted,
-    );
-    expect(tab("pt", { events, status: "failed" })).toContain(pt.trainingStory.stages.failed);
-    expect(tab("pt", { events: [], status: "queued" })).toContain(pt.trainingStory.stages.queued);
-    expect(tab("pt", { events: [{ event: "start", total_epochs: 4 }] })).toContain(
-      pt.trainingStory.stages.preparing,
-    );
-    expect(tab("pt", { events: [{ event: "start", total_epochs: 4 }, epoch(4, 4)] })).toContain(
-      pt.trainingStory.stages.testing,
-    );
-  });
-
-  it("names the unit of a multi-unit job", () => {
-    const events: TrainingEvent[] = [
-      { event: "trial_start", trial_index: 1, total_trials: 5, overrides: {}, seed: 0 },
-      epoch(1, 4),
-    ];
-    expect(tab("pt", { events, unitKind: "fold" })).toContain("dobra 2/5");
-    expect(tab("en", { events, unitKind: "fold" })).toContain("fold 2/5");
-    expect(tab("en", { events, unitKind: "trial" })).toContain("trial 2/5");
-    expect(tab("en")).not.toContain("trial ");
-  });
-
-  it("does not show a number the trainer has not reported", () => {
-    const html = tab("en", { events: [{ event: "start", total_epochs: 4 }] });
-    expect(html).not.toContain(en.trainingStory.numbers.trainLoss);
-    expect(html).not.toContain(en.trainingStory.numbers.metrics.accuracy);
-    // The epoch is known to be 0 of 4.
-    expect(html).toContain(en.trainingStory.numbers.epochOf(0, 4));
-  });
-
-  it("shows PatchCore's phase and its progress where the others show an epoch", () => {
-    const spec = storySpecFor("anomaly", { model: { name: "patchcore" } });
-    const events: TrainingEvent[] = [
-      { event: "start", total_epochs: 1 },
-      { event: "phase", label: "montando o banco", done: 40, total: 100 },
-    ];
-    const html = tab("pt", { events, spec });
-    expect(html).toContain(pt.trainingStory.phases.buildingBank);
-    expect(html).toContain(`${pt.trainingOverlay.phases.buildingBank} · 40/100`);
-    expect(html).toContain(pt.trainingStory.numbers.phase);
-    expect(html).not.toContain(pt.trainingStory.numbers.epoch);
-    expect(html).not.toContain(pt.trainingStory.numbers.trainLoss);
-    // No gradient to explain.
-    expect(html).not.toContain(pt.trainingStory.legend.backward);
-    expect(html).toContain(pt.trainingStory.legend.patchScore);
-  });
-
-  it("draws the family of the run", () => {
-    const familyOf = (task: string, config: unknown) =>
-      tab("pt", { spec: storySpecFor(task, config) }).match(/data-family="([a-z_]+)"/)?.[1];
-    expect(familyOf("classification", { model: { name: "swin_t" } })).toBe("transformer");
-    expect(familyOf("segmentation", { model: { name: "unet" } })).toBe("encoder_decoder");
-    expect(familyOf("detection", { model: { name: "yolo11n" } })).toBe("detector");
-    expect(familyOf("anomaly", { model: { name: "autoencoder" } })).toBe("autoencoder");
-    expect(familyOf("anomaly", { model: { name: "patchcore" } })).toBe("patchcore");
-    expect(familyOf("custom", null)).toBe("cnn");
-  });
-
-  it("keeps the animation off a sheet that is minimized", () => {
-    expect(tab("pt", { sheetVisible: false })).not.toContain("animateMotion");
-  });
-});
-
-describe("the replay button", () => {
-  const finished: TrainingEvent[] = [
-    { event: "start", total_epochs: 4 },
-    epoch(4, 4),
-    { event: "end", total_epochs: 4 },
-  ];
-  const BUTTON = "data-story-replay";
-
-  it("shows up only when the run is done, in the language of the interface", () => {
-    const done = tab("pt", { events: finished, status: "completed" });
-    expect(done).toContain(BUTTON);
-    expect(done).toContain(pt.trainingStory.replay.button);
-    expect(tab("en", { events: finished, status: "completed" })).toContain(
-      en.trainingStory.replay.button,
-    );
-    expect(tab("pt")).not.toContain(BUTTON);
-    expect(tab("pt", { events: [], status: "queued" })).not.toContain(BUTTON);
-    expect(tab("pt", { events: finished, status: "failed" })).not.toContain(BUTTON);
-    expect(tab("pt", { events: finished, status: "completed", stopped: true })).not.toContain(BUTTON);
-  });
-
-  it("is absent for PatchCore, which has no tab drawing to replay", () => {
-    const spec = storySpecFor("anomaly", { model: { name: "patchcore" } });
-    const events: TrainingEvent[] = [
-      { event: "start", total_epochs: 1 },
-      { event: "phase", label: "pontuando", done: 100, total: 100 },
-      { event: "end", total_epochs: 1 },
-    ];
-    expect(tab("pt", { events, spec, status: "completed" })).not.toContain(BUTTON);
   });
 });

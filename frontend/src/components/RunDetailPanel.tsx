@@ -1,4 +1,15 @@
-import { lazy, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, lazy, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  Copy,
+  FileCode2,
+  FileText,
+  Flame,
+  FlaskConical,
+  FolderOpen,
+  Images,
+  Layers,
+  X,
+} from "lucide-react";
 import {
   ApiError,
   artifactUrl,
@@ -27,14 +38,26 @@ import { PREPROCESS_KIND_LABELS } from "../lib/preprocess-kinds";
 import { canOfferReveal, revealErrorText } from "../lib/reveal-folder";
 import { stdDdof } from "../lib/cv-std";
 import { STOPPED_COLOR, unitState } from "../lib/unit-status";
+import {
+  detailSections,
+  headlineMetricKey,
+  sectionStartsOpen,
+  type DetailSection,
+} from "../lib/run-detail-layout";
+import { runStatusLabel, statusColor } from "../lib/run-status-color";
+import { familyLabel, taskFamily } from "../lib/task-family";
 import type { MetricCI } from "../types/run";
 import { accentForTask } from "../lib/task-accent";
 import { useCustomAccents } from "../lib/custom-accents";
 import { useResolvedTheme } from "./training-story/use-viewing";
 import { Lightbox } from "./Lightbox";
 import { RunGroupDetail } from "./RunGroupDetail";
+import { RunCurves } from "./RunCurves";
+import { runTaskKey } from "../lib/compare-metrics";
+import { runCurveGroups } from "../lib/run-curves";
 import { RerunActions, type RerunHandle } from "./RerunActions";
 import { DownloadBundleButton } from "./DownloadBundleButton";
+import { ActionButton } from "./ui/ActionButton";
 
 import { MLflowExportStatus } from "./MLflowExportStatus";
 import { CometExportStatus } from "./CometExportStatus";
@@ -470,1000 +493,285 @@ export function RunDetailPanel({
     }
   };
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <MLflowExportStatus key={runId} runId={runId} tracking={detail?.tracking}
-        onUpdated={(tracking) => setDetail((previous) => previous ? { ...previous, tracking } : previous)} />
-      <WandbExportStatus key={`wandb:${runId}`} runId={runId} status={detail?.wandb}
-        onUpdated={(wandb) => setDetail((previous) => previous ? { ...previous, wandb } : previous)} />
-      <CometExportStatus key={`comet:${runId}`} runId={runId} status={detail?.comet}
-        onUpdated={(comet) => setDetail((previous) => previous ? { ...previous, comet } : previous)} />
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <button
-          type="button"
-          onClick={onBack}
-          style={{
-            padding: "6px 12px",
-            background: "rgb(var(--lt-ink, 255 255 255) / 0.04)",
-            border: "1px solid var(--vf-panel-stroke)",
-            borderRadius: 8,
-            color: "var(--vf-text-dim)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            letterSpacing: "0.10em",
-            textTransform: "uppercase",
-            cursor: "pointer",
-          }}
-        >
-          {t.runDetail.back}
-        </button>
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, color: "var(--vf-text)" }}>
-          {runId}
-        </div>
-        {detail?.resumable && (
-          <button
-            type="button"
-            onClick={() => void doResume()}
-            disabled={resuming}
-            title={
-              detail.configured_epochs
-                ? t.runDetail.resume.title(
-                    (detail.metrics?.["total_epochs"] as number) ?? 0,
-                    detail.configured_epochs,
-                  )
-                : t.runDetail.resume.titleNoTotal
-            }
-            style={{
-              marginLeft: "auto",
-              padding: "6px 12px",
-              background: "oklch(0.80 0.16 85 / 0.14)",
-              border: "1px solid oklch(0.80 0.16 85 / 0.45)",
-              borderRadius: 8,
-              color: "oklch(calc(0.90 - var(--lt-flip, 0) * 0.5) 0.15 85)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              letterSpacing: "0.10em",
-              textTransform: "uppercase",
-              cursor: resuming ? "wait" : "pointer",
-              opacity: resuming ? 0.6 : 1,
-            }}
-          >
-            {t.runDetail.resume.button}
-            {detail.configured_epochs
-              ? ` ${(detail.metrics?.["total_epochs"] as number) ?? 0}/${detail.configured_epochs}`
-              : ""}
-          </button>
-        )}
-        {detail && <DownloadBundleButton key={runId} runId={runId} />}
-        {/* A model card describes a trained model; a group has none. */}
-        {!detail?.group && (
-          <button
-            type="button"
-            onClick={() => void downloadRunMarkdown(runId)}
-            title={t.modelCard.title}
-            style={{
-              marginLeft: detail?.resumable ? 0 : "auto",
-              padding: "6px 12px",
-              background: "var(--accent-soft)",
-              border: "1px solid var(--accent-vf)",
-              borderRadius: 8,
-              color: "var(--vf-text)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              letterSpacing: "0.10em",
-              textTransform: "uppercase",
-              cursor: "pointer",
-            }}
-          >
-            {t.modelCard.button}
-          </button>
-        )}
-      </div>
+  const accent = accentForTask(task, theme, customAccents);
+  const headlineKey = detail ? headlineMetricKey(detail.task ?? task, detail.metrics) : null;
+  const restMetrics = detail
+    ? Object.fromEntries(Object.entries(detail.metrics).filter(([k]) => k !== headlineKey))
+    : {};
+  const statusDot = detail ? statusColor(detail.status) : "var(--vf-text-muted)";
+  const hasModelTools =
+    Boolean(detail?.artifacts.model) && (canExportOnnx || canBatchPredict || canGradcam);
 
-      {/* A group shows these with its own summary, below. */}
-      {detail && !detail.group && rerun && <RerunActions source={detail} handle={rerun} />}
-
-      {resumeMsg && (
-        <div
-          style={{
-            padding: "8px 12px",
-            borderRadius: 8,
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            background:
-              resumeMsg.kind === "error"
-                ? "oklch(0.704 0.191 22.216 / 0.10)"
-                : "rgb(var(--lt-ink, 255 255 255) / 0.04)",
-            border: "1px solid var(--vf-panel-stroke)",
-            color:
-              resumeMsg.kind === "error"
-                ? "oklch(calc(0.80 - var(--lt-flip, 0) * 0.3) 0.17 22)"
-                : "var(--vf-text-dim)",
-          }}
-        >
-          {resumeMsg.text}
-        </div>
-      )}
-
-      {loading && (
-        <div style={{ padding: 32, textAlign: "center", color: "var(--vf-text-muted)" }}>
-          {t.runDetail.loading}
-        </div>
-      )}
-
-      {error !== null && (
-        <div
-          style={{
-            padding: 14,
-            background: "oklch(0.704 0.191 22.216 / 0.10)",
-            border: "1px solid oklch(0.704 0.191 22.216 / 0.4)",
-            borderRadius: 10,
-            color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 12,
-          }}
-        >
-          {error || t.runDetail.loadFailed}
-        </div>
-      )}
-
-      {detail && (
-        <>
-          {!detail.group && (
-            <LazySurface>
-              <div className="vf-export-panels">
-              <HubExportPanel key={`${activeProfileSlug()}:${runId}`} runId={runId} />
-              <ZenodoExportPanel key={`zenodo:${activeProfileSlug()}:${runId}`} runId={runId} />
-              <GitHubExportPanel key={`github:${activeProfileSlug()}:${runId}`} runId={runId} />
-              <DvcExportPanel key={`dvc:${activeProfileSlug()}:${runId}`} runId={runId} />
-              </div>
-            </LazySurface>
-          )}
-          {/* A replicate group is a job, not a training: its numbers are the
-              report's (mean ± CI95, paired tests) and its seeds are runs of
-              their own (ADR-113). */}
-          {detail.group && (
-            <RunGroupDetail
-              group={detail.group}
-              accent={accentForTask(task, theme, customAccents)}
-              knownRunIds={knownRunIds}
-              onOpenRun={onOpenRun}
-              actions={rerun ? <RerunActions source={detail} handle={rerun} /> : undefined}
-            />
-          )}
-
-          {detail.group_id && onOpenRun && (
-            <Section title={t.runGroup.member.title}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 11,
-                  color: "var(--vf-text-dim)",
-                }}
-              >
-                <span style={{ wordBreak: "break-all" }}>
-                  {t.runGroup.member.body(detail.group_id)}
-                </span>
-                {(!knownRunIds || knownRunIds.has(detail.group_id)) && (
-                  <button
-                    type="button"
-                    onClick={() => onOpenRun(detail.group_id ?? "")}
-                    style={{
-                      padding: "6px 12px",
-                      background: "rgb(var(--lt-ink, 255 255 255) / 0.04)",
-                      border: `1px solid ${accentForTask(task, theme, customAccents)}`,
-                      borderRadius: 8,
-                      color: "var(--vf-text)",
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 11,
-                      letterSpacing: "0.10em",
-                      textTransform: "uppercase",
-                      cursor: "pointer",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {t.runGroup.member.open}
-                  </button>
-                )}
-              </div>
-            </Section>
-          )}
-
-          {detail.dataset && (
-            <Section title={t.runDetail.dataset.title}>
-              <KeyRow label={t.runDetail.dataset.name} value={detail.dataset.name} />
-              <PathRow label={t.runDetail.dataset.path} value={detail.dataset.root} />
-              {detail.dataset.digest ? (
-                <>
-                  <KeyRow
-                    label={t.runDetail.dataset.contents}
-                    value={t.runDetail.dataset.files(
-                      detail.dataset.n_files,
-                      formatBytes(detail.dataset.total_bytes, locale),
-                    )}
-                  />
-                  <KeyRow
-                    label={t.runDetail.dataset.fingerprint}
-                    value={`${detail.dataset.method} ${shortDigest(detail.dataset.digest)}`}
-                  />
-                </>
-              ) : (
-                // Saying nothing here would read as "no dataset"; the run has one,
-                // it just predates the fingerprint (ADR-061, 2026-07-26).
-                <KeyRow
-                  label={t.runDetail.dataset.fingerprint}
-                  value={t.runDetail.dataset.noFingerprint}
-                />
+  const renderSection = (section: DetailSection): ReactNode => {
+    if (!detail) return null;
+    switch (section) {
+      case "member":
+        return detail.group_id && onOpenRun ? (
+          <Section title={t.runGroup.member.title}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                fontFamily: "var(--font-mono)",
+                fontSize: 13,
+                color: "var(--vf-text-dim)",
+              }}
+            >
+              <span style={{ wordBreak: "break-all" }}>
+                {t.runGroup.member.body(detail.group_id)}
+              </span>
+              {(!knownRunIds || knownRunIds.has(detail.group_id)) && (
+                <ActionButton
+                  icon={<Layers />}
+                  onClick={() => onOpenRun(detail.group_id ?? "")}
+                  style={{ flexShrink: 0 }}
+                >
+                  {t.runGroup.member.open}
+                </ActionButton>
               )}
-            </Section>
-          )}
-
-          <Section title={t.runDetail.location.title}>
-            <PathRow
-              label={t.runDetail.location.runFolder}
-              value={detail.run_dir}
-              action={
-                canOfferReveal(detail) ? (
-                  <button
-                    type="button"
-                    onClick={() => void doReveal()}
-                    disabled={revealing}
-                    title={t.runDetail.reveal.title}
-                    style={{ ...PATH_ROW_BUTTON_STYLE, opacity: revealing ? 0.6 : 1 }}
-                  >
-                    {t.runDetail.reveal.button}
-                  </button>
-                ) : null
-              }
-            />
-            {revealMsg && (
-              <div
-                role={revealMsg.kind === "error" ? "alert" : "status"}
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 11,
-                  padding: "4px 0",
-                  color:
-                    revealMsg.kind === "error"
-                      ? "oklch(calc(0.80 - var(--lt-flip, 0) * 0.3) 0.17 22)"
-                      : "var(--vf-text-dim)",
-                }}
-              >
-                {revealMsg.text}
-              </div>
-            )}
-            {detail.artifacts.model && (
-              <PathRow label={t.runDetail.location.checkpoint} value={detail.artifacts.model} />
-            )}
-            {detail.device_used && (
-              <KeyRow label={t.runDetail.location.deviceUsed} value={detail.device_used} />
-            )}
-            {detail.environment &&
-              Object.entries(detail.environment).map(([k, v]) => (
-                <KeyRow key={k} label={t.runDetail.location.env(k)} value={v} />
-              ))}
+            </div>
           </Section>
+        ) : null;
 
-          <TrainingSection config={detail.config} />
+      // A replicate group is a job, not a training: its numbers are the
+      // report's (mean ± CI95, paired tests) and its seeds are runs of their
+      // own (ADR-113).
+      case "group":
+        return detail.group ? (
+          <RunGroupDetail
+            group={detail.group}
+            accent={accent}
+            knownRunIds={knownRunIds}
+            onOpenRun={onOpenRun}
+            actions={rerun ? <RerunActions source={detail} handle={rerun} /> : undefined}
+          />
+        ) : null;
 
-          <PipelineSection config={detail.config} />
-
-          {detail.artifacts.model && canExportOnnx && (
-            <Section
-              title={t.runDetail.onnx.title}
-              action={
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowExportForm((s) => !s);
-                    setExportMsg(null);
-                  }}
-                  style={{
-                    padding: "6px 12px",
-                    background: "var(--accent-soft)",
-                    border: "1px solid var(--accent-vf)",
-                    borderRadius: 8,
-                    color: "var(--vf-text)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 11,
-                    cursor: "pointer",
-                    letterSpacing: "0.10em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {showExportForm ? t.common.cancel : t.runDetail.onnx.open}
-                </button>
-              }
-            >
-              {showExportForm ? (
-                <div
-                  style={{
-                    padding: 14,
-                    border: "1px dashed var(--vf-panel-stroke)",
-                    borderRadius: 10,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 10,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(2, 1fr)",
-                      gap: 10,
-                    }}
-                  >
-                    <label style={exportLabelStyle}>
-                      <span>{t.runDetail.onnx.opsetVersion}</span>
-                      <input
-                        type="number"
-                        min={11}
-                        max={20}
-                        value={exportForm.opset_version}
-                        onChange={(e) =>
-                          setExportForm((f) => ({
-                            ...f,
-                            opset_version: parseInt(e.target.value, 10) || 17,
-                          }))
-                        }
-                        style={exportInputStyle}
-                      />
-                    </label>
-                    <label style={exportLabelStyle}>
-                      <span>{t.runDetail.onnx.benchmarkRuns}</span>
-                      <input
-                        type="number"
-                        min={5}
-                        value={exportForm.benchmark_runs}
-                        onChange={(e) =>
-                          setExportForm((f) => ({
-                            ...f,
-                            benchmark_runs: parseInt(e.target.value, 10) || 50,
-                          }))
-                        }
-                        disabled={!exportForm.benchmark}
-                        style={{
-                          ...exportInputStyle,
-                          opacity: exportForm.benchmark ? 1 : 0.4,
-                        }}
-                      />
-                    </label>
-                  </div>
-                  <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
-                    <ExportToggle
-                      label={t.runDetail.onnx.dynamicAxes}
-                      value={exportForm.dynamic_axes}
-                      onChange={(v) =>
-                        setExportForm((f) => ({ ...f, dynamic_axes: v }))
-                      }
-                    />
-                    <ExportToggle
-                      label={t.runDetail.onnx.validate}
-                      value={exportForm.validate}
-                      onChange={(v) =>
-                        setExportForm((f) => ({ ...f, validate: v }))
-                      }
-                    />
-                    <ExportToggle
-                      label={t.runDetail.onnx.benchmark}
-                      value={exportForm.benchmark}
-                      onChange={(v) =>
-                        setExportForm((f) => ({ ...f, benchmark: v }))
-                      }
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void runExport()}
-                    disabled={exporting}
-                    style={{
-                      padding: "12px 20px",
-                      background:
-                        "linear-gradient(180deg, var(--accent-soft) 0%, rgb(var(--lt-surface, 8 10 14) / 0.4) 100%)",
-                      border: "1px solid var(--accent-vf)",
-                      borderRadius: 10,
-                      color: "var(--vf-text)",
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      letterSpacing: "0.10em",
-                      textTransform: "uppercase",
-                      cursor: exporting ? "wait" : "pointer",
-                      opacity: exporting ? 0.6 : 1,
-                    }}
-                  >
-                    {exporting ? t.runDetail.onnx.running : t.runDetail.onnx.run}
-                  </button>
-                  {exportMsg && (
-                    <div
-                      style={{
-                        padding: "8px 12px",
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 11,
-                        borderRadius: 8,
-                        background:
-                          exportMsg.kind === "error"
-                            ? "oklch(0.704 0.191 22.216 / 0.10)"
-                            : exportMsg.kind === "success"
-                              ? "oklch(0.72 0.16 150 / 0.10)"
-                              : "rgb(var(--lt-ink, 255 255 255) / 0.04)",
-                        color:
-                          exportMsg.kind === "error"
-                            ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)"
-                            : exportMsg.kind === "success"
-                              ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)"
-                              : "var(--vf-text-dim)",
-                        wordBreak: "break-all",
-                      }}
-                    >
-                      {exportMsg.text}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 11,
-                    color: "var(--vf-text-muted)",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {t.runDetail.onnx.hint} <code>{t.runDetail.onnx.file}</code>.
-                </div>
-              )}
-              {exportResult && (
-                <ExportResultPanel result={exportResult} />
-              )}
-            </Section>
-          )}
-
-          {detail.artifacts.model && canBatchPredict && (
-            <Section
-              title={t.runDetail.batch.title}
-              action={
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowBatchForm((s) => !s);
-                    setBatchMsg(null);
-                  }}
-                  style={{
-                    padding: "6px 12px",
-                    background: "var(--accent-soft)",
-                    border: "1px solid var(--accent-vf)",
-                    borderRadius: 8,
-                    color: "var(--vf-text)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 11,
-                    cursor: "pointer",
-                    letterSpacing: "0.10em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {showBatchForm ? t.common.cancel : t.runDetail.batch.open}
-                </button>
-              }
-            >
-              {showBatchForm ? (
-                <div
-                  style={{
-                    padding: 14,
-                    border: "1px dashed var(--vf-panel-stroke)",
-                    borderRadius: 10,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 10,
-                  }}
-                >
-                  <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-                    <FormField
-                      label={t.runDetail.imageFolder}
-                      value={batchForm.input_dir}
-                      onChange={(v) =>
-                        setBatchForm((f) => ({ ...f, input_dir: v }))
-                      }
-                      placeholder={t.runDetail.batch.folderPlaceholder}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => void pickBatchFolder()}
-                      style={{
-                        padding: "10px 14px",
-                        background: "transparent",
-                        border: "1px solid var(--vf-panel-stroke)",
-                        borderRadius: 10,
-                        color: "var(--vf-text-dim)",
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 11,
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {t.runDetail.browse}
-                    </button>
-                  </div>
-                  <ExportToggle
-                    label={t.runDetail.batch.recursive}
-                    value={batchForm.recursive}
-                    onChange={(v) =>
-                      setBatchForm((f) => ({ ...f, recursive: v }))
-                    }
+      case "metrics":
+        return (
+          <>
+            <CrossValidationDetail metrics={detail.metrics} />
+            {/* A group's `metrics` are bookkeeping for the History list (the sum
+                of its seeds' epochs and the means); the group section above is
+                where they are shown, with their intervals. */}
+            {!detail.group && (
+              <Section title={t.runDetail.metrics.title}>
+                {headlineKey !== null && (
+                  <HeadlineMetric
+                    label={metricLabel(t, headlineKey)}
+                    value={detail.metrics[headlineKey]}
+                    ci={metricCi(detail.metric_cis, headlineKey)}
                   />
-                  <button
-                    type="button"
-                    onClick={() => void runBatch()}
-                    disabled={batchRunning}
-                    style={{
-                      padding: "12px 20px",
-                      background:
-                        "linear-gradient(180deg, var(--accent-soft) 0%, rgb(var(--lt-surface, 8 10 14) / 0.4) 100%)",
-                      border: "1px solid var(--accent-vf)",
-                      borderRadius: 10,
-                      color: "var(--vf-text)",
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      letterSpacing: "0.10em",
-                      textTransform: "uppercase",
-                      cursor: batchRunning ? "wait" : "pointer",
-                      opacity: batchRunning ? 0.6 : 1,
-                    }}
-                  >
-                    {batchRunning ? t.runDetail.batch.running : t.runDetail.batch.run}
-                  </button>
-                  {batchMsg && (
-                    <div
-                      style={{
-                        padding: "8px 12px",
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 11,
-                        borderRadius: 8,
-                        background:
-                          batchMsg.kind === "error"
-                            ? "oklch(0.704 0.191 22.216 / 0.10)"
-                            : batchMsg.kind === "success"
-                              ? "oklch(0.72 0.16 150 / 0.10)"
-                              : "rgb(var(--lt-ink, 255 255 255) / 0.04)",
-                        color:
-                          batchMsg.kind === "error"
-                            ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)"
-                            : batchMsg.kind === "success"
-                              ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)"
-                              : "var(--vf-text-dim)",
-                        wordBreak: "break-all",
-                      }}
-                    >
-                      {batchMsg.text}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 11,
-                    color: "var(--vf-text-muted)",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {t.runDetail.batch.hint}
-                </div>
-              )}
-              {batchResult && <BatchResultPanel result={batchResult} />}
-            </Section>
-          )}
+                )}
+                {(headlineKey === null || Object.keys(restMetrics).length > 0) && (
+                  <MetricsGrid metrics={restMetrics} metricCis={detail.metric_cis} />
+                )}
+              </Section>
+            )}
+          </>
+        );
 
-          {detail.artifacts.model && canGradcam && (
-            <Section
-              title={t.runDetail.gradcam.title}
-              action={
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowGradcamForm((s) => !s);
-                    setGradcamMsg(null);
-                  }}
-                  style={{
-                    padding: "6px 12px",
-                    background: "var(--accent-soft)",
-                    border: "1px solid var(--accent-vf)",
-                    borderRadius: 8,
-                    color: "var(--vf-text)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 11,
-                    cursor: "pointer",
-                    letterSpacing: "0.10em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {showGradcamForm ? t.common.cancel : t.runDetail.gradcam.open}
-                </button>
-              }
-            >
-              {showGradcamForm ? (
-                <div
-                  style={{
-                    padding: 14,
-                    border: "1px dashed var(--vf-panel-stroke)",
-                    borderRadius: 10,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 10,
-                  }}
-                >
-                  <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-                    <FormField
-                      label={t.runDetail.imageFolder}
-                      value={gradcamForm.input_dir}
-                      onChange={(v) =>
-                        setGradcamForm((f) => ({ ...f, input_dir: v }))
-                      }
-                      placeholder={t.runDetail.gradcam.folderPlaceholder}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => void pickGradcamFolder()}
-                      style={{
-                        padding: "10px 14px",
-                        background: "transparent",
-                        border: "1px solid var(--vf-panel-stroke)",
-                        borderRadius: 10,
-                        color: "var(--vf-text-dim)",
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 11,
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {t.runDetail.browse}
-                    </button>
-                  </div>
-                  <FormField
-                    label={t.runDetail.gradcam.samples}
-                    value={String(gradcamForm.num_samples)}
-                    onChange={(v) =>
-                      setGradcamForm((f) => ({
-                        ...f,
-                        num_samples: Math.max(1, Math.min(64, Number(v) || 1)),
-                      }))
-                    }
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void runGradcam()}
-                    disabled={gradcamRunning}
-                    style={{
-                      padding: "12px 20px",
-                      background:
-                        "linear-gradient(180deg, var(--accent-soft) 0%, rgb(var(--lt-surface, 8 10 14) / 0.4) 100%)",
-                      border: "1px solid var(--accent-vf)",
-                      borderRadius: 10,
-                      color: "var(--vf-text)",
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      letterSpacing: "0.10em",
-                      textTransform: "uppercase",
-                      cursor: gradcamRunning ? "wait" : "pointer",
-                      opacity: gradcamRunning ? 0.6 : 1,
-                    }}
-                  >
-                    {gradcamRunning ? t.runDetail.gradcam.running : t.runDetail.gradcam.run}
-                  </button>
-                  {gradcamMsg && (
-                    <div
-                      style={{
-                        padding: "8px 12px",
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 11,
-                        borderRadius: 8,
-                        background:
-                          gradcamMsg.kind === "error"
-                            ? "oklch(0.704 0.191 22.216 / 0.10)"
-                            : gradcamMsg.kind === "success"
-                              ? "oklch(0.72 0.16 150 / 0.10)"
-                              : "rgb(var(--lt-ink, 255 255 255) / 0.04)",
-                        color:
-                          gradcamMsg.kind === "error"
-                            ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)"
-                            : gradcamMsg.kind === "success"
-                              ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)"
-                              : "var(--vf-text-dim)",
-                        wordBreak: "break-all",
-                      }}
-                    >
-                      {gradcamMsg.text}
-                    </div>
-                  )}
-                  {gradcamResult && gradcamResult.items.length > 0 && (
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          "repeat(auto-fill, minmax(160px, 1fr))",
-                        gap: 10,
-                      }}
-                    >
-                      {gradcamResult.items.map((item) => {
-                        const url = artifactUrl(item.overlay);
-                        return (
-                          <button
-                            key={item.overlay}
-                            type="button"
-                            onClick={() =>
-                              setLightbox({ src: url, caption: item.source })
-                            }
-                            style={{
-                              background: "rgb(var(--lt-shade, 0 0 0) / 0.3)",
-                              // A wrong prediction is the one worth looking at,
-                              // so the border says so before the caption does.
-                              border:
-                                item.correct === false
-                                  ? "1px solid oklch(calc(0.74 - var(--lt-flip, 0) * 0.18) 0.18 22)"
-                                  : item.correct === true
-                                    ? "1px solid oklch(0.72 0.16 150)"
-                                    : "1px solid var(--vf-panel-stroke)",
-                              borderRadius: 10,
-                              padding: 0,
-                              overflow: "hidden",
-                              cursor: "zoom-in",
-                              display: "flex",
-                              flexDirection: "column",
-                            }}
-                          >
-                            <img
-                              src={url}
-                              alt={item.source}
-                              style={{ width: "100%", height: "auto", display: "block" }}
-                            />
-                            <div
-                              style={{
-                                padding: "6px 10px 8px",
-                                fontFamily: "var(--font-mono)",
-                                fontSize: 10,
-                                color: "var(--vf-text-dim)",
-                                textAlign: "left",
-                              }}
-                            >
-                              <GradCamCaption item={item} />
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 11,
-                    color: "var(--vf-text-muted)",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {t.runDetail.gradcam.hint}
-                </div>
-              )}
-            </Section>
-          )}
-
-          <CrossValidationDetail metrics={detail.metrics} />
-
-          {/* A group's `metrics` are bookkeeping for the History list (the sum of
-              its seeds' epochs and the means); the group section above is where
-              they are shown, with their intervals. */}
-          {!detail.group && (
-            <Section title={t.runDetail.metrics.title}>
-              <MetricsGrid metrics={detail.metrics} metricCis={detail.metric_cis} />
-            </Section>
-          )}
-
-          {detail.artifacts.graphics && detail.artifacts.graphics.length > 0 && (
-            <Section title={t.runDetail.graphs.title}>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-                  gap: 12,
-                }}
+      case "charts":
+        return (
+          <>
+            {runCurveGroups(runTaskKey(detail), detail.history, detail.metric_directions).length > 0 && (
+              <Section
+                title={t.runDetail.graphs.curves}
+                action={<span style={SECTION_HINT_STYLE}>{t.runDetail.graphs.curvesHint}</span>}
               >
-                {detail.artifacts.graphics.map((g) => {
-                  const filename = g.replace(/\\/g, "/").split("/").pop() ?? g;
-                  const label = graphLabels[filename] ?? filename;
-                  const url = artifactUrl(g);
-                  return (
-                    <button
-                      key={g}
-                      type="button"
-                      onClick={() => setLightbox({ src: url, caption: g })}
+                <RunCurves detail={detail} />
+              </Section>
+            )}
+            {detail.artifacts.graphics && detail.artifacts.graphics.length > 0 ? (
+          <Section title={t.runDetail.graphs.title}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                gap: 12,
+              }}
+            >
+              {detail.artifacts.graphics.map((g) => {
+                const filename = g.replace(/\\/g, "/").split("/").pop() ?? g;
+                const label = graphLabels[filename] ?? filename;
+                const url = artifactUrl(g);
+                return (
+                  <button
+                    key={g}
+                    type="button"
+                    // The full path is in the tooltip and the lightbox caption.
+                    title={g}
+                    onClick={() => setLightbox({ src: url, caption: g })}
+                    style={{
+                      background: "rgb(var(--lt-shade, 0 0 0) / 0.3)",
+                      border: "1px solid var(--vf-panel-stroke)",
+                      borderRadius: 10,
+                      padding: 0,
+                      overflow: "hidden",
+                      cursor: "zoom-in",
+                      display: "flex",
+                      flexDirection: "column",
+                      textAlign: "left",
+                      color: "inherit",
+                    }}
+                  >
+                    <img
+                      src={url}
+                      alt={label}
+                      style={{ width: "100%", height: "auto", display: "block" }}
+                    />
+                    <div
                       style={{
-                        background: "rgb(var(--lt-shade, 0 0 0) / 0.3)",
-                        border: "1px solid var(--vf-panel-stroke)",
-                        borderRadius: 10,
-                        padding: 0,
-                        overflow: "hidden",
-                        cursor: "zoom-in",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 6,
-                        textAlign: "left",
+                        padding: "8px 12px 10px",
+                        fontSize: 13,
+                        color: "var(--vf-text-dim)",
                       }}
                     >
-                      <img
-                        src={url}
-                        alt={label}
-                        style={{ width: "100%", height: "auto", display: "block" }}
-                      />
-                      <div
-                        style={{
-                          padding: "6px 10px 8px",
-                          fontFamily: "var(--font-mono)",
-                          fontSize: 11,
-                          color: "var(--vf-text-dim)",
+                      {label}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </Section>
+            ) : null}
+          </>
+        );
+
+      case "actions":
+        return (
+          <div
+            style={{
+              padding: "16px 18px",
+              background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
+              border: "1px solid var(--vf-panel-stroke)",
+              borderRadius: 12,
+            }}
+          >
+            <dl className="vf-action-groups" style={{ margin: 0 }}>
+              {/* A group shows these with its own summary, above. */}
+              {!detail.group && rerun && (
+                <>
+                  <dt>{t.runDetail.actions.reuse}</dt>
+                  <dd>
+                    <RerunActions source={detail} handle={rerun} />
+                  </dd>
+                </>
+              )}
+              <dt>{t.runDetail.actions.download}</dt>
+              <dd>
+                <DownloadBundleButton
+                  key={runId}
+                  runId={runId}
+                  label={t.runDetail.actions.bundle}
+                />
+                {/* A model card describes a trained model; a group has none. */}
+                {!detail.group && (
+                  <ActionButton
+                    icon={<FileText />}
+                    onClick={() => void downloadRunMarkdown(runId)}
+                    title={t.modelCard.title}
+                  >
+                    {t.runDetail.actions.markdown}
+                  </ActionButton>
+                )}
+              </dd>
+              {!detail.group && (
+                <>
+                  <dt>{t.runDetail.actions.publish}</dt>
+                  <dd>
+                    <LazySurface>
+                      <div className="vf-export-panels" style={{ width: "100%" }}>
+                        <HubExportPanel key={`${activeProfileSlug()}:${runId}`} runId={runId} />
+                        <ZenodoExportPanel key={`zenodo:${activeProfileSlug()}:${runId}`} runId={runId} />
+                        <GitHubExportPanel key={`github:${activeProfileSlug()}:${runId}`} runId={runId} />
+                        <DvcExportPanel key={`dvc:${activeProfileSlug()}:${runId}`} runId={runId} />
+                      </div>
+                    </LazySurface>
+                  </dd>
+                </>
+              )}
+              {hasModelTools && (
+                <>
+                  <dt>{t.runDetail.actions.useModel}</dt>
+                  <dd style={{ flexDirection: "column", gap: 12 }}>
+                    {canExportOnnx && (
+                      <ModelTool
+                        icon={<FileCode2 />}
+                        label={t.runDetail.onnx.open}
+                        short={t.runDetail.onnx.short}
+                        hint={`${t.runDetail.onnx.hint} ${t.runDetail.onnx.file}.`}
+                        open={showExportForm}
+                        onToggle={() => {
+                          setShowExportForm((s) => !s);
+                          setExportMsg(null);
+                        }}
+                        after={exportResult && <ExportResultPanel result={exportResult} />}
+                      >
+                        {onnxForm}
+                      </ModelTool>
+                    )}
+                    {canBatchPredict && (
+                      <ModelTool
+                        icon={<Images />}
+                        label={t.runDetail.batch.open}
+                        short={t.runDetail.batch.short}
+                        hint={t.runDetail.batch.hint}
+                        open={showBatchForm}
+                        onToggle={() => {
+                          setShowBatchForm((s) => !s);
+                          setBatchMsg(null);
+                        }}
+                        after={batchResult && <BatchResultPanel result={batchResult} />}
+                      >
+                        {batchFormView}
+                      </ModelTool>
+                    )}
+                    {canGradcam && (
+                      <ModelTool
+                        icon={<Flame />}
+                        label={t.runDetail.gradcam.open}
+                        short={t.runDetail.gradcam.short}
+                        hint={t.runDetail.gradcam.hint}
+                        open={showGradcamForm}
+                        onToggle={() => {
+                          setShowGradcamForm((s) => !s);
+                          setGradcamMsg(null);
                         }}
                       >
-                        {label}
-                        <div
-                          style={{
-                            fontSize: 9,
-                            color: "var(--vf-text-muted)",
-                            wordBreak: "break-all",
-                            marginTop: 2,
-                          }}
-                        >
-                          {g}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </Section>
-          )}
+                        {gradcamFormView}
+                      </ModelTool>
+                    )}
+                  </dd>
+                </>
+              )}
+            </dl>
+          </div>
+        );
 
-          {/* Testing needs a checkpoint, which a group does not have. */}
-          {!detail.group && (
+      // Testing needs a checkpoint, which a group does not have.
+      case "tests":
+        return detail.group ? null : (
           <Section
             title={t.runDetail.tests.title}
             action={
-              <button
-                type="button"
+              <ActionButton
+                icon={showTestForm ? <X /> : <FlaskConical />}
+                aria-expanded={showTestForm}
                 onClick={() => setShowTestForm((s) => !s)}
-                style={{
-                  padding: "6px 12px",
-                  background: "var(--accent-soft)",
-                  border: "1px solid var(--accent-vf)",
-                  borderRadius: 8,
-                  color: "var(--vf-text)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 11,
-                  cursor: "pointer",
-                  letterSpacing: "0.10em",
-                  textTransform: "uppercase",
-                }}
               >
                 {showTestForm ? t.common.cancel : t.runDetail.tests.open}
-              </button>
+              </ActionButton>
             }
           >
-            {showTestForm && (
-              <div
-                style={{
-                  padding: 14,
-                  border: "1px dashed var(--vf-panel-stroke)",
-                  borderRadius: 10,
-                  marginBottom: 12,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 10,
-                }}
-              >
-                <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-                  <FormField
-                    label={testFolderLabel(t, detail)}
-                    value={testForm.data_dir}
-                    onChange={(v) => setTestForm((f) => ({ ...f, data_dir: v }))}
-                    placeholder={
-                      task === "regression"
-                        ? t.runDetail.tests.manifestPlaceholder
-                        : t.runDetail.tests.folderPlaceholder
-                    }
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void pickFolder()}
-                    style={{
-                      padding: "10px 14px",
-                      background: "transparent",
-                      border: "1px solid var(--vf-panel-stroke)",
-                      borderRadius: 10,
-                      color: "var(--vf-text-dim)",
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 11,
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {t.runDetail.browse}
-                  </button>
-                </div>
-                <div
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 10,
-                    lineHeight: 1.7,
-                    color: "var(--vf-text-muted)",
-                  }}
-                >
-                  {testFolderHint(t, detail)}
-                </div>
-                <FormField
-                  label={t.runDetail.tests.label}
-                  value={testForm.label}
-                  onChange={(v) => setTestForm((f) => ({ ...f, label: v }))}
-                  placeholder={t.runDetail.tests.labelPlaceholder}
-                />
-                <button
-                  type="button"
-                  onClick={() => void runTest()}
-                  disabled={testing}
-                  style={{
-                    padding: "12px 20px",
-                    background:
-                      "linear-gradient(180deg, var(--accent-soft) 0%, rgb(var(--lt-surface, 8 10 14) / 0.4) 100%)",
-                    border: "1px solid var(--accent-vf)",
-                    borderRadius: 10,
-                    color: "var(--vf-text)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    letterSpacing: "0.10em",
-                    textTransform: "uppercase",
-                    cursor: testing ? "wait" : "pointer",
-                    opacity: testing ? 0.6 : 1,
-                  }}
-                >
-                  {testing ? t.runDetail.tests.running : t.runDetail.tests.run}
-                </button>
-                {testMsg && (
-                  <div
-                    style={{
-                      padding: "8px 12px",
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 11,
-                      borderRadius: 8,
-                      background:
-                        testMsg.kind === "error"
-                          ? "oklch(0.704 0.191 22.216 / 0.10)"
-                          : testMsg.kind === "success"
-                            ? "oklch(0.72 0.16 150 / 0.10)"
-                            : "rgb(var(--lt-ink, 255 255 255) / 0.04)",
-                      color:
-                        testMsg.kind === "error"
-                          ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)"
-                          : testMsg.kind === "success"
-                            ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)"
-                            : "var(--vf-text-dim)",
-                    }}
-                  >
-                    {testMsg.text}
-                  </div>
-                )}
-              </div>
-            )}
-
+            {showTestForm && testFormView}
             {detail.tests.length === 0 ? (
               <div
                 style={{
                   padding: 18,
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 11,
+                  fontSize: 13,
                   color: "var(--vf-text-muted)",
                   textAlign: "center",
                   border: "1px dashed var(--vf-panel-stroke)",
@@ -1480,9 +788,469 @@ export function RunDetailPanel({
               </div>
             )}
           </Section>
-          )}
-        </>
+        );
+
+      case "dataset":
+        return detail.dataset ? (
+          <RefSection title={t.runDetail.dataset.title} open={sectionStartsOpen("dataset")}>
+            <KeyRow label={t.runDetail.dataset.name} value={detail.dataset.name} />
+            <PathRow label={t.runDetail.dataset.path} value={detail.dataset.root} />
+            {detail.dataset.digest ? (
+              <>
+                <KeyRow
+                  label={t.runDetail.dataset.contents}
+                  value={t.runDetail.dataset.files(
+                    detail.dataset.n_files,
+                    formatBytes(detail.dataset.total_bytes, locale),
+                  )}
+                />
+                <KeyRow
+                  label={t.runDetail.dataset.fingerprint}
+                  value={`${detail.dataset.method} ${shortDigest(detail.dataset.digest)}`}
+                />
+              </>
+            ) : (
+              // Saying nothing here would read as "no dataset"; the run has one,
+              // it just predates the fingerprint (ADR-061, 2026-07-26).
+              <KeyRow
+                label={t.runDetail.dataset.fingerprint}
+                value={t.runDetail.dataset.noFingerprint}
+              />
+            )}
+          </RefSection>
+        ) : null;
+
+      case "location":
+        return (
+          <RefSection title={t.runDetail.location.title} open={sectionStartsOpen("location")}>
+            <PathRow
+              label={t.runDetail.location.runFolder}
+              value={detail.run_dir}
+              action={
+                canOfferReveal(detail) ? (
+                  <ActionButton
+                    size="sm"
+                    icon={<FolderOpen />}
+                    onClick={() => void doReveal()}
+                    disabled={revealing}
+                    title={t.runDetail.reveal.title}
+                  >
+                    {t.runDetail.reveal.button}
+                  </ActionButton>
+                ) : null
+              }
+            />
+            {revealMsg && (
+              <div
+                role={revealMsg.kind === "error" ? "alert" : "status"}
+                style={{
+                  fontSize: 13,
+                  padding: "4px 0",
+                  color:
+                    revealMsg.kind === "error"
+                      ? "oklch(calc(0.80 - var(--lt-flip, 0) * 0.3) 0.17 22)"
+                      : "var(--vf-text-dim)",
+                }}
+              >
+                {revealMsg.text}
+              </div>
+            )}
+            {detail.artifacts.model && (
+              <PathRow label={t.runDetail.location.checkpoint} value={detail.artifacts.model} />
+            )}
+          </RefSection>
+        );
+
+      case "environment":
+        return detail.device_used ||
+          (detail.environment && Object.keys(detail.environment).length > 0) ? (
+          <RefSection title={t.runDetail.environment.title} open={sectionStartsOpen("environment")}>
+            {detail.device_used && (
+              <KeyRow label={t.runDetail.location.deviceUsed} value={detail.device_used} />
+            )}
+            {detail.environment &&
+              Object.entries(detail.environment).map(([k, v]) => (
+                <KeyRow key={k} label={t.runDetail.location.env(k)} value={v} />
+              ))}
+          </RefSection>
+        ) : null;
+
+      case "training":
+        return <TrainingSection config={detail.config} />;
+
+      case "pipeline":
+        return <PipelineSection config={detail.config} />;
+    }
+  };
+
+  const onnxForm = (
+    <FormBox>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+        <label style={exportLabelStyle}>
+          <span>{t.runDetail.onnx.opsetVersion}</span>
+          <input
+            type="number"
+            min={11}
+            max={20}
+            value={exportForm.opset_version}
+            onChange={(e) =>
+              setExportForm((f) => ({
+                ...f,
+                opset_version: parseInt(e.target.value, 10) || 17,
+              }))
+            }
+            style={exportInputStyle}
+          />
+        </label>
+        <label style={exportLabelStyle}>
+          <span>{t.runDetail.onnx.benchmarkRuns}</span>
+          <input
+            type="number"
+            min={5}
+            value={exportForm.benchmark_runs}
+            onChange={(e) =>
+              setExportForm((f) => ({
+                ...f,
+                benchmark_runs: parseInt(e.target.value, 10) || 50,
+              }))
+            }
+            disabled={!exportForm.benchmark}
+            style={{ ...exportInputStyle, opacity: exportForm.benchmark ? 1 : 0.4 }}
+          />
+        </label>
+      </div>
+      <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
+        <ExportToggle
+          label={t.runDetail.onnx.dynamicAxes}
+          value={exportForm.dynamic_axes}
+          onChange={(v) => setExportForm((f) => ({ ...f, dynamic_axes: v }))}
+        />
+        <ExportToggle
+          label={t.runDetail.onnx.validate}
+          value={exportForm.validate}
+          onChange={(v) => setExportForm((f) => ({ ...f, validate: v }))}
+        />
+        <ExportToggle
+          label={t.runDetail.onnx.benchmark}
+          value={exportForm.benchmark}
+          onChange={(v) => setExportForm((f) => ({ ...f, benchmark: v }))}
+        />
+      </div>
+      <RunButton busy={exporting} onClick={() => void runExport()}>
+        {exporting ? t.runDetail.onnx.running : t.runDetail.onnx.run}
+      </RunButton>
+      {exportMsg && <ActionMessage message={exportMsg} breakAll />}
+    </FormBox>
+  );
+
+  const batchFormView = (
+    <FormBox>
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+        <FormField
+          label={t.runDetail.imageFolder}
+          value={batchForm.input_dir}
+          onChange={(v) => setBatchForm((f) => ({ ...f, input_dir: v }))}
+          placeholder={t.runDetail.batch.folderPlaceholder}
+        />
+        <BrowseButton onClick={() => void pickBatchFolder()} />
+      </div>
+      <ExportToggle
+        label={t.runDetail.batch.recursive}
+        value={batchForm.recursive}
+        onChange={(v) => setBatchForm((f) => ({ ...f, recursive: v }))}
+      />
+      <RunButton busy={batchRunning} onClick={() => void runBatch()}>
+        {batchRunning ? t.runDetail.batch.running : t.runDetail.batch.run}
+      </RunButton>
+      {batchMsg && <ActionMessage message={batchMsg} breakAll />}
+    </FormBox>
+  );
+
+  const gradcamFormView = (
+    <FormBox>
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+        <FormField
+          label={t.runDetail.imageFolder}
+          value={gradcamForm.input_dir}
+          onChange={(v) => setGradcamForm((f) => ({ ...f, input_dir: v }))}
+          placeholder={t.runDetail.gradcam.folderPlaceholder}
+        />
+        <BrowseButton onClick={() => void pickGradcamFolder()} />
+      </div>
+      <FormField
+        label={t.runDetail.gradcam.samples}
+        value={String(gradcamForm.num_samples)}
+        onChange={(v) =>
+          setGradcamForm((f) => ({
+            ...f,
+            num_samples: Math.max(1, Math.min(64, Number(v) || 1)),
+          }))
+        }
+      />
+      <RunButton busy={gradcamRunning} onClick={() => void runGradcam()}>
+        {gradcamRunning ? t.runDetail.gradcam.running : t.runDetail.gradcam.run}
+      </RunButton>
+      {gradcamMsg && <ActionMessage message={gradcamMsg} breakAll />}
+      {gradcamResult && gradcamResult.items.length > 0 && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+            gap: 10,
+          }}
+        >
+          {gradcamResult.items.map((item) => {
+            const url = artifactUrl(item.overlay);
+            return (
+              <button
+                key={item.overlay}
+                type="button"
+                onClick={() => setLightbox({ src: url, caption: item.source })}
+                style={{
+                  background: "rgb(var(--lt-shade, 0 0 0) / 0.3)",
+                  // A wrong prediction is the one worth looking at, so the
+                  // border says so before the caption does.
+                  border:
+                    item.correct === false
+                      ? "1px solid oklch(calc(0.74 - var(--lt-flip, 0) * 0.18) 0.18 22)"
+                      : item.correct === true
+                        ? "1px solid oklch(0.72 0.16 150)"
+                        : "1px solid var(--vf-panel-stroke)",
+                  borderRadius: 10,
+                  padding: 0,
+                  overflow: "hidden",
+                  cursor: "zoom-in",
+                  display: "flex",
+                  flexDirection: "column",
+                  color: "inherit",
+                }}
+              >
+                <img
+                  src={url}
+                  alt={item.source}
+                  style={{ width: "100%", height: "auto", display: "block" }}
+                />
+                <div
+                  style={{
+                    padding: "6px 10px 8px",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 13,
+                    color: "var(--vf-text-dim)",
+                    textAlign: "left",
+                  }}
+                >
+                  <GradCamCaption item={item} />
+                </div>
+              </button>
+            );
+          })}
+        </div>
       )}
+    </FormBox>
+  );
+
+  const testFormView = (
+    <FormBox style={{ marginBottom: 12 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+        <FormField
+          label={testFolderLabel(t, detail)}
+          value={testForm.data_dir}
+          onChange={(v) => setTestForm((f) => ({ ...f, data_dir: v }))}
+          placeholder={
+            task === "regression"
+              ? t.runDetail.tests.manifestPlaceholder
+              : t.runDetail.tests.folderPlaceholder
+          }
+        />
+        <BrowseButton onClick={() => void pickFolder()} />
+      </div>
+      <div style={{ fontSize: 13, lineHeight: 1.6, color: "var(--vf-text-muted)" }}>
+        {testFolderHint(t, detail)}
+      </div>
+      <FormField
+        label={t.runDetail.tests.label}
+        value={testForm.label}
+        onChange={(v) => setTestForm((f) => ({ ...f, label: v }))}
+        placeholder={t.runDetail.tests.labelPlaceholder}
+      />
+      <RunButton busy={testing} onClick={() => void runTest()}>
+        {testing ? t.runDetail.tests.running : t.runDetail.tests.run}
+      </RunButton>
+      {testMsg && <ActionMessage message={testMsg} />}
+    </FormBox>
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <header style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={onBack}
+            style={{
+              padding: "6px 12px",
+              background: "rgb(var(--lt-ink, 255 255 255) / 0.04)",
+              border: "1px solid var(--vf-panel-stroke)",
+              borderRadius: 8,
+              color: "var(--vf-text-dim)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              letterSpacing: "0.10em",
+              textTransform: "uppercase",
+              cursor: "pointer",
+            }}
+          >
+            {t.runDetail.back}
+          </button>
+          {detail?.resumable && (
+            <button
+              type="button"
+              onClick={() => void doResume()}
+              disabled={resuming}
+              title={
+                detail.configured_epochs
+                  ? t.runDetail.resume.title(
+                      (detail.metrics?.["total_epochs"] as number) ?? 0,
+                      detail.configured_epochs,
+                    )
+                  : t.runDetail.resume.titleNoTotal
+              }
+              style={{
+                marginLeft: "auto",
+                padding: "7px 14px",
+                background: "oklch(0.80 0.16 85 / 0.14)",
+                border: "1px solid oklch(0.80 0.16 85 / 0.45)",
+                borderRadius: 8,
+                color: "oklch(calc(0.90 - var(--lt-flip, 0) * 0.5) 0.15 85)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 12,
+                letterSpacing: "0.10em",
+                textTransform: "uppercase",
+                cursor: resuming ? "wait" : "pointer",
+                opacity: resuming ? 0.6 : 1,
+              }}
+            >
+              {t.runDetail.resume.button}
+              {detail.configured_epochs
+                ? ` ${(detail.metrics?.["total_epochs"] as number) ?? 0}/${detail.configured_epochs}`
+                : ""}
+            </button>
+          )}
+        </div>
+        <h2
+          style={{
+            margin: 0,
+            fontSize: 24,
+            fontWeight: 600,
+            letterSpacing: "-0.01em",
+            lineHeight: 1.2,
+            color: "var(--vf-text)",
+            overflowWrap: "anywhere",
+          }}
+        >
+          {detail?.experiment_name ?? runId}
+        </h2>
+        {detail && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              flexWrap: "wrap",
+              fontSize: 13,
+              color: "var(--vf-text-dim)",
+            }}
+          >
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: statusDot,
+                  boxShadow: `0 0 8px ${statusDot}`,
+                }}
+              />
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
+                  color: statusDot,
+                }}
+              >
+                {runStatusLabel(detail.status, t.runDetail.runStatus)}
+                {detail.stopped ? ` · ${t.runDetail.stoppedTag}` : ""}
+              </span>
+            </span>
+            <span aria-hidden="true">·</span>
+            <span
+              style={{
+                padding: "2px 9px",
+                border: `1px solid ${accent}`,
+                borderRadius: 999,
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                color: "var(--vf-text)",
+              }}
+            >
+              {familyLabel(t, taskFamily(detail.task ?? task))}
+            </span>
+            <span aria-hidden="true">·</span>
+            <time dateTime={detail.started_at}>{fmtWhen(detail.started_at, locale)}</time>
+          </div>
+        )}
+        {/* The folder name History lists the run by; selectable to copy. */}
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 13,
+            color: "var(--vf-text-muted)",
+            overflowWrap: "anywhere",
+          }}
+        >
+          {runId}
+        </div>
+      </header>
+
+      <MLflowExportStatus key={runId} runId={runId} tracking={detail?.tracking}
+        onUpdated={(tracking) => setDetail((previous) => previous ? { ...previous, tracking } : previous)} />
+      <WandbExportStatus key={`wandb:${runId}`} runId={runId} status={detail?.wandb}
+        onUpdated={(wandb) => setDetail((previous) => previous ? { ...previous, wandb } : previous)} />
+      <CometExportStatus key={`comet:${runId}`} runId={runId} status={detail?.comet}
+        onUpdated={(comet) => setDetail((previous) => previous ? { ...previous, comet } : previous)} />
+
+      {resumeMsg && <ActionMessage message={resumeMsg} />}
+
+      {loading && (
+        <div style={{ padding: 32, textAlign: "center", fontSize: 13, color: "var(--vf-text-muted)" }}>
+          {t.runDetail.loading}
+        </div>
+      )}
+
+      {error !== null && (
+        <div
+          style={{
+            padding: 14,
+            background: "oklch(0.704 0.191 22.216 / 0.10)",
+            border: "1px solid oklch(0.704 0.191 22.216 / 0.4)",
+            borderRadius: 10,
+            color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
+            fontSize: 13,
+          }}
+        >
+          {error || t.runDetail.loadFailed}
+        </div>
+      )}
+
+      {detail &&
+        detailSections(detail).map((section) => (
+          <Fragment key={section}>{renderSection(section)}</Fragment>
+        ))}
 
       {lightbox && (
         <Lightbox
@@ -1573,7 +1341,7 @@ function CrossValidationDetail({ metrics }: { metrics: Record<string, unknown> }
           style={{
             marginBottom: 12,
             fontFamily: "var(--font-mono)",
-            fontSize: 10,
+            fontSize: 13,
             color: "var(--vf-text-muted)",
           }}
         >
@@ -1595,7 +1363,7 @@ function CrossValidationDetail({ metrics }: { metrics: Record<string, unknown> }
             width: "100%",
             borderCollapse: "collapse",
             fontFamily: "var(--font-mono)",
-            fontSize: 11,
+            fontSize: 13,
           }}
         >
           <thead>
@@ -1676,8 +1444,8 @@ function CVAggregateCard({
     >
       <div
         style={{
-          fontSize: 9,
-          letterSpacing: "0.18em",
+          fontSize: 11,
+          letterSpacing: "0.16em",
           textTransform: "uppercase",
           color: "var(--vf-text-muted)",
           fontFamily: "var(--font-mono)",
@@ -1697,7 +1465,7 @@ function CVAggregateCard({
         {mean.toFixed(4)}
         <span
           style={{
-            fontSize: 12,
+            fontSize: 13,
             color: "var(--vf-text-muted)",
             marginLeft: 6,
             fontWeight: 400,
@@ -1715,7 +1483,7 @@ const cvThStyle: React.CSSProperties = {
   textAlign: "left",
   padding: "6px 8px",
   borderBottom: "1px solid var(--vf-panel-stroke)",
-  fontSize: 9,
+  fontSize: 11,
   letterSpacing: "0.14em",
   textTransform: "uppercase",
   color: "var(--vf-text-muted)",
@@ -1731,7 +1499,6 @@ const cvTdStyle: React.CSSProperties = {
 const cvTdLabelStyle: React.CSSProperties = {
   ...cvTdStyle,
   color: "var(--vf-text-muted)",
-  fontSize: 10,
 };
 
 
@@ -1741,9 +1508,19 @@ interface SectionProps {
   action?: React.ReactNode;
 }
 
+const SECTION_TITLE_STYLE: CSSProperties = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 11,
+  letterSpacing: "0.16em",
+  textTransform: "uppercase",
+  color: "var(--vf-text-muted)",
+};
+
+const SECTION_HINT_STYLE: CSSProperties = { fontSize: 12, color: "var(--vf-text-muted)" };
+
 function Section({ title, children, action }: SectionProps) {
   return (
-    <div
+    <section
       style={{
         padding: "14px 16px",
         background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
@@ -1756,36 +1533,267 @@ function Section({ title, children, action }: SectionProps) {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          marginBottom: 10,
+          gap: 12,
+          flexWrap: "wrap",
+          marginBottom: 12,
         }}
       >
-        <div
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            letterSpacing: "0.18em",
-            textTransform: "uppercase",
-            color: "var(--vf-text-muted)",
-          }}
-        >
-          {title}
-        </div>
+        <h3 style={{ ...SECTION_TITLE_STYLE, margin: 0, fontWeight: 500 }}>{title}</h3>
         {action}
       </div>
+      {children}
+    </section>
+  );
+}
+
+/** A reference block, folded or not by its first state; the reader's click wins after. */
+function RefSection({
+  title,
+  open,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <details className="vf-detail-ref" open={open}>
+      <summary>{title}</summary>
+      <div className="vf-detail-ref__body">{children}</div>
+    </details>
+  );
+}
+
+/** The number the run leads with, larger than the rest. */
+function HeadlineMetric({
+  label,
+  value,
+  ci,
+}: {
+  label: string;
+  value: unknown;
+  ci: MetricCI | null | undefined;
+}) {
+  const t = useT();
+  return (
+    <div
+      data-testid="run-detail-headline"
+      style={{
+        padding: "14px 16px",
+        marginBottom: 12,
+        borderRadius: 12,
+        border: "1px solid var(--accent-vf)",
+        background:
+          "linear-gradient(180deg, var(--accent-soft) 0%, rgb(var(--lt-surface, 12 14 18) / 0.4) 100%)",
+      }}
+    >
+      <div style={SECTION_TITLE_STYLE}>{label}</div>
+      <div
+        style={{
+          marginTop: 4,
+          fontFamily: "var(--font-mono)",
+          fontSize: 34,
+          fontWeight: 600,
+          lineHeight: 1.1,
+          color: "var(--vf-text)",
+        }}
+      >
+        {fmtMetric(value)}
+      </div>
+      {ci && (
+        <div
+          title={t.metrics.ciTooltip(Math.round(ci.confidence * 100), ci.n_resamples, ci.n_samples)}
+          style={{
+            marginTop: 4,
+            fontFamily: "var(--font-mono)",
+            fontSize: 13,
+            color: "var(--vf-text-dim)",
+            cursor: "help",
+          }}
+        >
+          {ci.ci_low.toFixed(4)} – {ci.ci_high.toFixed(4)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** One way to use the trained model: a button, one line on what it does, and
+ *  its form once opened. The full explanation stays in the line's tooltip. */
+function ModelTool({
+  icon,
+  label,
+  short,
+  hint,
+  open,
+  onToggle,
+  children,
+  after,
+}: {
+  icon: ReactNode;
+  label: string;
+  short: string;
+  hint: string;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+  after?: ReactNode;
+}) {
+  const t = useT();
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <ActionButton
+          icon={open ? <X /> : icon}
+          aria-expanded={open}
+          onClick={onToggle}
+          style={{ minWidth: 200 }}
+        >
+          {open ? t.common.cancel : label}
+        </ActionButton>
+        <span title={hint} style={{ fontSize: 13, lineHeight: 1.5, color: "var(--vf-text-muted)" }}>
+          {short}
+        </span>
+      </div>
+      {open && children}
+      {after}
+    </div>
+  );
+}
+
+/** The dashed box an opened action's form sits in. */
+function FormBox({ children, style }: { children: ReactNode; style?: CSSProperties }) {
+  return (
+    <div
+      style={{
+        padding: 14,
+        border: "1px dashed var(--vf-panel-stroke)",
+        borderRadius: 10,
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        ...style,
+      }}
+    >
       {children}
     </div>
   );
 }
 
-const PATH_ROW_BUTTON_STYLE: CSSProperties = {
-  padding: "4px 8px",
-  background: "rgb(var(--lt-ink, 255 255 255) / 0.04)",
-  border: "1px solid var(--vf-panel-stroke)",
-  borderRadius: 6,
-  color: "var(--vf-text-dim)",
+/** The button that runs an opened action: the one accent on the form. */
+function RunButton({
+  busy,
+  onClick,
+  children,
+}: {
+  busy: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      aria-busy={busy}
+      style={{
+        padding: "12px 20px",
+        background:
+          "linear-gradient(180deg, var(--accent-soft) 0%, rgb(var(--lt-surface, 8 10 14) / 0.4) 100%)",
+        border: "1px solid var(--accent-vf)",
+        borderRadius: 10,
+        color: "var(--vf-text)",
+        fontFamily: "var(--font-mono)",
+        fontSize: 12,
+        fontWeight: 600,
+        letterSpacing: "0.10em",
+        textTransform: "uppercase",
+        cursor: busy ? "wait" : "pointer",
+        opacity: busy ? 0.6 : 1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** The native folder picker's button beside a path field. */
+function BrowseButton({ onClick }: { onClick: () => void }) {
+  const t = useT();
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        minHeight: 36,
+        padding: "8px 14px",
+        background: "transparent",
+        border: "1px solid var(--vf-panel-stroke)",
+        borderRadius: 10,
+        color: "var(--vf-text-dim)",
+        fontSize: 13,
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {t.runDetail.browse}
+    </button>
+  );
+}
+
+type ActionMessageValue = { kind: "info" | "error" | "success"; text: string };
+
+/** What an action said back: progress, success or the server's reason. */
+function ActionMessage({ message, breakAll }: { message: ActionMessageValue; breakAll?: boolean }) {
+  return (
+    <div
+      style={{
+        padding: "8px 12px",
+        fontSize: 13,
+        lineHeight: 1.5,
+        borderRadius: 8,
+        border: "1px solid var(--vf-panel-stroke)",
+        background:
+          message.kind === "error"
+            ? "oklch(0.704 0.191 22.216 / 0.10)"
+            : message.kind === "success"
+              ? "oklch(0.72 0.16 150 / 0.10)"
+              : "rgb(var(--lt-ink, 255 255 255) / 0.04)",
+        color:
+          message.kind === "error"
+            ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)"
+            : message.kind === "success"
+              ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)"
+              : "var(--vf-text-dim)",
+        wordBreak: breakAll ? "break-all" : undefined,
+      }}
+    >
+      {message.text}
+    </div>
+  );
+}
+
+/** When a run started, in the interface language. */
+function fmtWhen(iso: string, locale: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleString(locale, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+const ROW_LABEL_STYLE: CSSProperties = {
   fontFamily: "var(--font-mono)",
-  fontSize: 10,
-  cursor: "pointer",
+  fontSize: 11,
+  color: "var(--vf-text-muted)",
+  letterSpacing: "0.10em",
+  textTransform: "uppercase",
+  minWidth: 130,
+  flexShrink: 0,
 };
 
 function PathRow({
@@ -1805,42 +1813,31 @@ function PathRow({
         display: "flex",
         alignItems: "center",
         gap: 12,
-        padding: "6px 0",
+        flexWrap: "wrap",
+        padding: "8px 0",
         borderTop: "1px solid var(--vf-panel-stroke)",
-        marginTop: 6,
       }}
     >
-      <span
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          color: "var(--vf-text-muted)",
-          letterSpacing: "0.10em",
-          textTransform: "uppercase",
-          minWidth: 110,
-        }}
-      >
-        {label}
-      </span>
+      <span style={ROW_LABEL_STYLE}>{label}</span>
       <code
         style={{
-          flex: 1,
+          flex: "1 1 240px",
           fontFamily: "var(--font-mono)",
-          fontSize: 11,
+          fontSize: 13,
           color: "var(--vf-text)",
           wordBreak: "break-all",
         }}
       >
         {value}
       </code>
-      <button
-        type="button"
+      <ActionButton
+        size="sm"
+        icon={<Copy />}
         onClick={() => void navigator.clipboard.writeText(value)}
         title={t.runDetail.copyPath}
-        style={PATH_ROW_BUTTON_STYLE}
       >
         {t.runDetail.copy}
-      </button>
+      </ActionButton>
       {action}
     </div>
   );
@@ -1851,25 +1848,21 @@ function KeyRow({ label, value }: { label: string; value: string }) {
     <div
       style={{
         display: "flex",
+        alignItems: "baseline",
         gap: 12,
-        padding: "6px 0",
+        padding: "8px 0",
         borderTop: "1px solid var(--vf-panel-stroke)",
-        marginTop: 6,
       }}
     >
+      <span style={ROW_LABEL_STYLE}>{label}</span>
       <span
         style={{
           fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          color: "var(--vf-text-muted)",
-          letterSpacing: "0.10em",
-          textTransform: "uppercase",
-          minWidth: 110,
+          fontSize: 13,
+          color: "var(--vf-text)",
+          overflowWrap: "anywhere",
         }}
       >
-        {label}
-      </span>
-      <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--vf-text)" }}>
         {value}
       </span>
     </div>
@@ -1952,13 +1945,13 @@ function MetricsGrid({
   const t = useT();
   const entries = Object.entries(metrics);
   if (entries.length === 0) {
-    return <div style={{ color: "var(--vf-text-muted)", fontSize: 12 }}>{t.runDetail.metrics.none}</div>;
+    return <div style={{ color: "var(--vf-text-muted)", fontSize: 13 }}>{t.runDetail.metrics.none}</div>;
   }
   return (
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+        gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
         gap: 8,
       }}
     >
@@ -1977,8 +1970,8 @@ function MetricsGrid({
             <div
               style={{
                 fontFamily: "var(--font-mono)",
-                fontSize: 9,
-                letterSpacing: "0.14em",
+                fontSize: 11,
+                letterSpacing: "0.12em",
                 textTransform: "uppercase",
                 color: "var(--vf-text-muted)",
               }}
@@ -1988,7 +1981,7 @@ function MetricsGrid({
             <div
               style={{
                 fontFamily: "var(--font-mono)",
-                fontSize: 15,
+                fontSize: 18,
                 fontWeight: 600,
                 color: "var(--vf-text)",
                 marginTop: 2,
@@ -2006,7 +1999,7 @@ function MetricsGrid({
                 style={{
                   marginTop: 3,
                   fontFamily: "var(--font-mono)",
-                  fontSize: 9,
+                  fontSize: 13,
                   color: "var(--vf-text-muted)",
                   whiteSpace: "nowrap",
                   cursor: "help",
@@ -2042,15 +2035,15 @@ function TestRow({ test, onOpenImage }: TestRowProps) {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontWeight: 600, fontSize: 13 }}>{test.label}</span>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--vf-text-muted)" }}>
+        <span style={{ fontWeight: 600, fontSize: 14 }}>{test.label}</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--vf-text-muted)" }}>
           {new Date(test.timestamp).toLocaleString(locale)}
         </span>
       </div>
       <code
         style={{
           fontFamily: "var(--font-mono)",
-          fontSize: 10,
+          fontSize: 13,
           color: "var(--vf-text-dim)",
           wordBreak: "break-all",
         }}
@@ -2071,7 +2064,7 @@ function TestRow({ test, onOpenImage }: TestRowProps) {
                 border: "1px solid var(--vf-panel-stroke)",
                 borderRadius: 6,
                 fontFamily: "var(--font-mono)",
-                fontSize: 10,
+                fontSize: 13,
                 color: "var(--vf-text-dim)",
                 cursor: "pointer",
               }}
@@ -2124,7 +2117,7 @@ function TrainingSection({ config }: { config: Record<string, unknown> }) {
   if (rows.length === 0 && !tl) return null;
 
   return (
-    <Section title={t.runDetail.training.title}>
+    <RefSection title={t.runDetail.training.title} open={sectionStartsOpen("training")}>
       {rows.map(([k, v]) => (
         <KeyRow key={k} label={k.replace(/_/g, " ")} value={String(v)} />
       ))}
@@ -2138,7 +2131,7 @@ function TrainingSection({ config }: { config: Record<string, unknown> }) {
           }
         />
       )}
-    </Section>
+    </RefSection>
   );
 }
 
@@ -2164,13 +2157,13 @@ function PipelineSection({ config }: { config: Record<string, unknown> }) {
   if (ppSteps.length === 0 && transformEntries.length === 0) return null;
 
   return (
-    <Section title={t.runDetail.pipeline.title}>
+    <RefSection title={t.runDetail.pipeline.title} open={sectionStartsOpen("pipeline")}>
       {ppSteps.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
           <div
             style={{
               fontFamily: "var(--font-mono)",
-              fontSize: 9,
+              fontSize: 11,
               letterSpacing: "0.14em",
               textTransform: "uppercase",
               color: "var(--vf-text-muted)",
@@ -2195,7 +2188,7 @@ function PipelineSection({ config }: { config: Record<string, unknown> }) {
                     border: "1px solid var(--vf-panel-stroke)",
                     borderRadius: 8,
                     fontFamily: "var(--font-mono)",
-                    fontSize: 11,
+                    fontSize: 13,
                     color: "var(--vf-text-dim)",
                     display: "inline-flex",
                     alignItems: "center",
@@ -2205,7 +2198,7 @@ function PipelineSection({ config }: { config: Record<string, unknown> }) {
                   <span style={{ color: "var(--accent-vf)" }}>{i + 1}.</span>
                   <span style={{ color: "var(--vf-text)" }}>{label}</span>
                   {paramStr && (
-                    <span style={{ color: "var(--vf-text-muted)", fontSize: 10 }}>
+                    <span style={{ color: "var(--vf-text-muted)", fontSize: 13 }}>
                       ({paramStr})
                     </span>
                   )}
@@ -2221,7 +2214,7 @@ function PipelineSection({ config }: { config: Record<string, unknown> }) {
           <div
             style={{
               fontFamily: "var(--font-mono)",
-              fontSize: 9,
+              fontSize: 11,
               letterSpacing: "0.14em",
               textTransform: "uppercase",
               color: "var(--vf-text-muted)",
@@ -2253,7 +2246,7 @@ function PipelineSection({ config }: { config: Record<string, unknown> }) {
                 <span
                   style={{
                     fontFamily: "var(--font-mono)",
-                    fontSize: 10,
+                    fontSize: 13,
                     color: "var(--vf-text-muted)",
                   }}
                 >
@@ -2262,7 +2255,7 @@ function PipelineSection({ config }: { config: Record<string, unknown> }) {
                 <span
                   style={{
                     fontFamily: "var(--font-mono)",
-                    fontSize: 11,
+                    fontSize: 13,
                     color: "var(--vf-text)",
                     wordBreak: "break-all",
                     textAlign: "right",
@@ -2275,7 +2268,7 @@ function PipelineSection({ config }: { config: Record<string, unknown> }) {
           </div>
         </div>
       )}
-    </Section>
+    </RefSection>
   );
 }
 
@@ -2291,7 +2284,7 @@ const exportLabelStyle: React.CSSProperties = {
   flexDirection: "column",
   gap: 4,
   fontFamily: "var(--font-mono)",
-  fontSize: 10,
+  fontSize: 11,
   color: "var(--vf-text-muted)",
   letterSpacing: "0.10em",
   textTransform: "uppercase",
@@ -2304,7 +2297,7 @@ const exportInputStyle: React.CSSProperties = {
   borderRadius: 8,
   color: "var(--vf-text)",
   fontFamily: "var(--font-mono)",
-  fontSize: 12,
+  fontSize: 13,
 };
 
 function ExportToggle({
@@ -2323,7 +2316,7 @@ function ExportToggle({
         alignItems: "center",
         gap: 8,
         fontFamily: "var(--font-mono)",
-        fontSize: 11,
+        fontSize: 13,
         color: value ? "var(--vf-text)" : "var(--vf-text-dim)",
         cursor: "pointer",
       }}
@@ -2460,7 +2453,7 @@ function BatchResultPanel({ result }: { result: BatchPredictResponse }) {
       >
         <span
           style={{
-            fontSize: 10,
+            fontSize: 11,
             color: "var(--vf-text-muted)",
             letterSpacing: "0.14em",
             textTransform: "uppercase",
@@ -2472,7 +2465,7 @@ function BatchResultPanel({ result }: { result: BatchPredictResponse }) {
         <code
           style={{
             flex: 1,
-            fontSize: 11,
+            fontSize: 13,
             color: "var(--vf-text)",
             wordBreak: "break-all",
           }}
@@ -2490,7 +2483,7 @@ function BatchResultPanel({ result }: { result: BatchPredictResponse }) {
             borderRadius: 6,
             color: "var(--vf-text-dim)",
             fontFamily: "var(--font-mono)",
-            fontSize: 10,
+            fontSize: 13,
             cursor: "pointer",
           }}
         >
@@ -2498,7 +2491,7 @@ function BatchResultPanel({ result }: { result: BatchPredictResponse }) {
         </button>
       </div>
       {failedHead.length > 0 && (
-        <details style={{ fontSize: 11, color: "var(--vf-text-muted)" }}>
+        <details style={{ fontSize: 13, color: "var(--vf-text-muted)" }}>
           <summary style={{ cursor: "pointer", color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)" }}>
             {t.runDetail.batch.failedFiles(result.failed_count)}
           </summary>
@@ -2510,7 +2503,7 @@ function BatchResultPanel({ result }: { result: BatchPredictResponse }) {
             ))}
           </ul>
           {more > 0 && (
-            <div style={{ marginTop: 4, fontSize: 10 }}>
+            <div style={{ marginTop: 4, fontSize: 13 }}>
               {t.runDetail.batch.more(more)}
             </div>
           )}
@@ -2540,7 +2533,7 @@ function ExportStat({
     >
       <div
         style={{
-          fontSize: 9,
+          fontSize: 11,
           color: "var(--vf-text-muted)",
           letterSpacing: "0.14em",
           textTransform: "uppercase",
@@ -2569,7 +2562,7 @@ function FormField({ label, value, onChange, placeholder }: FormFieldProps) {
       <span
         style={{
           fontFamily: "var(--font-mono)",
-          fontSize: 9,
+          fontSize: 11,
           letterSpacing: "0.14em",
           textTransform: "uppercase",
           color: "var(--vf-text-muted)",
@@ -2589,7 +2582,7 @@ function FormField({ label, value, onChange, placeholder }: FormFieldProps) {
           borderRadius: 8,
           color: "var(--vf-text)",
           fontFamily: "var(--font-mono)",
-          fontSize: 12,
+          fontSize: 13,
         }}
       />
     </label>

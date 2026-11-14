@@ -5,7 +5,6 @@ import { GENERIC_STORY, storySpecFor, type StorySpec } from "./story-family";
 import {
   activeFlows,
   overfittingSince,
-  STAGE_ORDER,
   storyMotion,
   trainingStory,
   type StoryInput,
@@ -407,12 +406,6 @@ describe("storyMotion", () => {
       expect(storyMotion({ stage, ...visible }), stage).toBe("none");
       expect(storyMotion({ stage, ...visible, reducedMotion: true }), stage).toBe("none");
     }
-  });
-});
-
-describe("STAGE_ORDER", () => {
-  it("lists the stages of a run in the order it goes through them", () => {
-    expect(STAGE_ORDER).toEqual(["preparing", "training", "testing", "done"]);
   });
 });
 

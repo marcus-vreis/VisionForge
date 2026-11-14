@@ -4,6 +4,8 @@ import {
   type HubPreview, type HubTokenStatus,
 } from "../api/client";
 import { useT } from "../i18n/useT";
+import { ActionButton } from "./ui/ActionButton";
+import { HuggingFaceIcon } from "./ui/BrandIcons";
 
 const FIELD: CSSProperties = {
   background: "var(--vf-panel)", color: "var(--vf-text)", padding: 8,
@@ -58,7 +60,9 @@ export function HubExportPanel({ runId }: { runId: string }) {
     finally { setBusy(false); }
   };
 
-  if (!open) return <button type="button" onClick={() => setOpen(true)}>{t.hub.open}</button>;
+  // Closed: the service's mark and name; the button's name says what opening does.
+  if (!open) return <ActionButton icon={<HuggingFaceIcon />} aria-label={t.hub.open} title={t.hub.open}
+    onClick={() => setOpen(true)}>{t.hub.service}</ActionButton>;
   return <section aria-label={t.hub.title} style={{ border: "1px solid var(--vf-panel-stroke)", borderRadius: 10, padding: 16 }}>
     <h3>{t.hub.title}</h3>
     <button type="button" onClick={() => { setToken(""); setOpen(false); }} disabled={busy}>{t.hub.close}</button>

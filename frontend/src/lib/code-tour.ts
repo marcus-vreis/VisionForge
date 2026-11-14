@@ -3,7 +3,7 @@ import { ApiError, fetchCodeTourTasks, type CodeSection } from "../api/client";
 let tourTasks: Promise<string[]> | null = null;
 
 /**
- * The tasks with a tour in the "Código" tab (ADR-173), asked of the server once
+ * The tasks with a code tour on "Como funciona" (ADR-173), asked of the server once
  * per page: it decides which tasks have one, so a new tour needs no change here.
  * A failed request is asked again the next time.
  */

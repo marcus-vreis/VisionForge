@@ -1,4 +1,8 @@
-"""The real code of a training, cut into the sections the "Código" tab shows (ADR-173).
+"""The real code of a training, cut into the sections the "Como funciona" tab shows (ADR-173).
+
+Each section belongs to a step of the run (``STEPS``) and says what it does in
+one plain sentence, so the tab can follow the run: the step the event stream
+proves is running is the one whose code is shown.
 
 Nothing here is a simplified copy: each section is the source of the function
 the run calls, read with ``inspect`` when asked, so it cannot drift from what
@@ -21,11 +25,17 @@ import inspect
 import sys
 import textwrap
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, get_args
 
 from visionforge.utils.messages import tr
+
+# The steps of a run, in the order the merged "Como funciona" tab lists them:
+# each section belongs to one, so the tab can show the code of the step the
+# event stream says is running.
+Step = Literal["data", "model", "loss", "train", "validate", "test"]
+STEPS: tuple[Step, ...] = get_args(Step)
 
 _FAMILIES = frozenset({"resnet", "efficientnet", "vit", "swin", "convnext", "vgg"})
 _ON_OFF = frozenset({"on", "off"})
@@ -68,6 +78,11 @@ class Note:
 class Section:
     """One function of the training, shown whole, with its notes.
 
+    ``step`` is the step of the run the function belongs to, and ``summary``
+    the key of one plain sentence that says what it does to a newcomer. Both
+    are keyword-only and required, so a section cannot be declared without
+    them.
+
     ``library`` names the distribution the function belongs to when it is not
     this project's code. Such a section is read from whatever version is
     installed: a note whose line that version lacks is dropped instead of
@@ -78,6 +93,8 @@ class Section:
     target: Callable[[], Callable[..., Any]]
     notes: tuple[Note, ...]
     library: str | None = None
+    step: Step = field(kw_only=True)
+    summary: str = field(kw_only=True)
 
 
 def _transforms() -> Callable[..., Any]:
@@ -138,6 +155,8 @@ CLASSIFICATION: tuple[Section, ...] = (
             ),
             Note("T.ToTensor(),", "code.data.tensor", end="return T.Compose"),
         ),
+        step="data",
+        summary="code.summary.classification.data",
     ),
     Section(
         "model",
@@ -155,6 +174,8 @@ CLASSIFICATION: tuple[Section, ...] = (
                 when=(("family", "vgg"),),
             ),
         ),
+        step="model",
+        summary="code.summary.classification.model",
     ),
     Section(
         "loss",
@@ -165,6 +186,8 @@ CLASSIFICATION: tuple[Section, ...] = (
                 "return nn.CrossEntropyLoss()", "code.loss.multiclass", when=_MULTICLASS
             ),
         ),
+        step="loss",
+        summary="code.summary.classification.loss",
     ),
     Section(
         "train",
@@ -202,6 +225,8 @@ CLASSIFICATION: tuple[Section, ...] = (
                 when=_MULTICLASS,
             ),
         ),
+        step="train",
+        summary="code.summary.classification.train",
     ),
     Section(
         "validate",
@@ -211,6 +236,8 @@ CLASSIFICATION: tuple[Section, ...] = (
             Note(_NO_GRAD, _KEY_VALIDATE_NO_GRAD),
             Note(_ADD_LOSS, "code.validate.loss"),
         ),
+        step="validate",
+        summary="code.summary.classification.validate",
     ),
     Section(
         "test",
@@ -235,6 +262,8 @@ CLASSIFICATION: tuple[Section, ...] = (
                 end="return EvalResult(",
             ),
         ),
+        step="test",
+        summary="code.summary.classification.test",
     ),
 )
 
@@ -290,6 +319,8 @@ REGRESSION: tuple[Section, ...] = (
                 "code.regression.data.target",
             ),
         ),
+        step="data",
+        summary="code.summary.regression.data",
     ),
     Section(
         "model",
@@ -309,6 +340,8 @@ REGRESSION: tuple[Section, ...] = (
                 "code.regression.model.head",
             ),
         ),
+        step="model",
+        summary="code.summary.regression.model",
     ),
     Section(
         "loss",
@@ -330,6 +363,8 @@ REGRESSION: tuple[Section, ...] = (
                 when=(("loss", "mse"),),
             ),
         ),
+        step="loss",
+        summary="code.summary.regression.loss",
     ),
     Section(
         "train",
@@ -357,6 +392,8 @@ REGRESSION: tuple[Section, ...] = (
                 "code.regression.train.mean",
             ),
         ),
+        step="train",
+        summary="code.summary.train_epoch",
     ),
     Section(
         "validate",
@@ -369,6 +406,8 @@ REGRESSION: tuple[Section, ...] = (
                 "metrics.update(outputs, targets)", "code.regression.validate.metrics"
             ),
         ),
+        step="validate",
+        summary="code.summary.regression.validate",
     ),
     Section(
         "test",
@@ -382,6 +421,8 @@ REGRESSION: tuple[Section, ...] = (
             ),
             Note("metrics.compute(),", "code.regression.test.metrics"),
         ),
+        step="test",
+        summary="code.summary.regression.test",
     ),
 )
 
@@ -466,6 +507,8 @@ SEGMENTATION: tuple[Section, ...] = (
                 end="return image_t, mask_t",
             ),
         ),
+        step="data",
+        summary="code.summary.segmentation.data",
     ),
     Section(
         "model",
@@ -484,6 +527,8 @@ SEGMENTATION: tuple[Section, ...] = (
                 when=_TORCHVISION_SEGMENTER,
             ),
         ),
+        step="model",
+        summary="code.summary.segmentation.model",
     ),
     Section(
         "unet",
@@ -512,6 +557,8 @@ SEGMENTATION: tuple[Section, ...] = (
                 when=_UNET,
             ),
         ),
+        step="model",
+        summary="code.summary.segmentation.unet",
     ),
     Section(
         "loss",
@@ -533,6 +580,8 @@ SEGMENTATION: tuple[Section, ...] = (
                 when=(("loss", "cross_entropy"),),
             ),
         ),
+        step="loss",
+        summary="code.summary.segmentation.loss",
     ),
     Section(
         "train",
@@ -561,6 +610,8 @@ SEGMENTATION: tuple[Section, ...] = (
                 end=_ADD_LOSS,
             ),
         ),
+        step="train",
+        summary="code.summary.train_epoch",
     ),
     Section(
         "validate",
@@ -585,6 +636,8 @@ SEGMENTATION: tuple[Section, ...] = (
                 "code.segmentation.validate.best",
             ),
         ),
+        step="validate",
+        summary="code.summary.segmentation.validate",
     ),
     Section(
         "test",
@@ -601,6 +654,8 @@ SEGMENTATION: tuple[Section, ...] = (
                 "code.segmentation.test.metrics",
             ),
         ),
+        step="test",
+        summary="code.summary.segmentation.test",
     ),
     Section(
         "metrics",
@@ -628,6 +683,8 @@ SEGMENTATION: tuple[Section, ...] = (
                 "code.segmentation.metrics.pixel_acc",
             ),
         ),
+        step="validate",
+        summary="code.summary.segmentation.metrics",
     ),
 )
 
@@ -713,6 +770,8 @@ ANOMALY: tuple[Section, ...] = (
                 end="self._num_workers = resolve_num_workers(",
             ),
         ),
+        step="data",
+        summary="code.summary.anomaly.data",
     ),
     Section(
         "model",
@@ -731,6 +790,8 @@ ANOMALY: tuple[Section, ...] = (
                 when=_PATCHCORE,
             ),
         ),
+        step="model",
+        summary="code.summary.anomaly.model",
     ),
     Section(
         "train",
@@ -761,6 +822,8 @@ ANOMALY: tuple[Section, ...] = (
                 when=_AUTOENCODER,
             ),
         ),
+        step="train",
+        summary="code.summary.anomaly.train",
     ),
     Section(
         "coreset",
@@ -790,6 +853,8 @@ ANOMALY: tuple[Section, ...] = (
                 when=_PATCHCORE,
             ),
         ),
+        step="train",
+        summary="code.summary.anomaly.coreset",
     ),
     Section(
         "score",
@@ -808,6 +873,8 @@ ANOMALY: tuple[Section, ...] = (
                 when=_PATCHCORE,
             ),
         ),
+        step="validate",
+        summary="code.summary.anomaly.score",
     ),
     Section(
         "patch_score",
@@ -831,6 +898,8 @@ ANOMALY: tuple[Section, ...] = (
                 when=_PATCHCORE,
             ),
         ),
+        step="validate",
+        summary="code.summary.anomaly.patch_score",
     ),
     Section(
         "threshold",
@@ -841,6 +910,8 @@ ANOMALY: tuple[Section, ...] = (
                 "code.anomaly.threshold.percentile",
             ),
         ),
+        step="validate",
+        summary="code.summary.anomaly.threshold",
     ),
     Section(
         "test",
@@ -856,6 +927,8 @@ ANOMALY: tuple[Section, ...] = (
                 "code.anomaly.test.scores",
             ),
         ),
+        step="test",
+        summary="code.summary.anomaly.test",
     ),
     Section(
         "metrics",
@@ -875,6 +948,8 @@ ANOMALY: tuple[Section, ...] = (
                 end="return auroc, threshold, f1",
             ),
         ),
+        step="validate",
+        summary="code.summary.anomaly.metrics",
     ),
 )
 
@@ -969,6 +1044,8 @@ DETECTION: tuple[Section, ...] = (
                 end="return tensor, target",
             ),
         ),
+        step="data",
+        summary="code.summary.detection.data",
     ),
     Section(
         "labels",
@@ -989,6 +1066,8 @@ DETECTION: tuple[Section, ...] = (
                 "code.detection.labels.background",
             ),
         ),
+        step="data",
+        summary="code.summary.detection.labels",
     ),
     Section(
         "collate",
@@ -1000,6 +1079,8 @@ DETECTION: tuple[Section, ...] = (
                 end="return images, targets",
             ),
         ),
+        step="data",
+        summary="code.summary.detection.collate",
     ),
     Section(
         "model",
@@ -1024,6 +1105,8 @@ DETECTION: tuple[Section, ...] = (
                 when=_RETINANET,
             ),
         ),
+        step="model",
+        summary="code.summary.detection.model",
     ),
     Section(
         "faster_rcnn",
@@ -1037,6 +1120,8 @@ DETECTION: tuple[Section, ...] = (
             ),
             _head("code.detection.faster_rcnn.head", "in_features =", _FASTER_RCNN),
         ),
+        step="model",
+        summary="code.summary.detection.faster_rcnn",
     ),
     Section(
         "ssd",
@@ -1050,6 +1135,8 @@ DETECTION: tuple[Section, ...] = (
             ),
             _head("code.detection.ssd.head", "in_channels =", _SSD),
         ),
+        step="model",
+        summary="code.summary.detection.ssd",
     ),
     Section(
         "retinanet",
@@ -1063,6 +1150,8 @@ DETECTION: tuple[Section, ...] = (
             ),
             _head("code.detection.retinanet.head", "num_anchors =", _RETINANET),
         ),
+        step="model",
+        summary="code.summary.detection.retinanet",
     ),
     Section(
         "train",
@@ -1085,6 +1174,8 @@ DETECTION: tuple[Section, ...] = (
                 end="total += float(loss.item())",
             ),
         ),
+        step="train",
+        summary="code.summary.detection.train",
     ),
     Section(
         "validate",
@@ -1097,6 +1188,8 @@ DETECTION: tuple[Section, ...] = (
                 "code.detection.validate.loss",
             ),
         ),
+        step="validate",
+        summary="code.summary.detection.validate",
     ),
     Section(
         "map",
@@ -1114,6 +1207,8 @@ DETECTION: tuple[Section, ...] = (
                 "code.detection.map.best",
             ),
         ),
+        step="validate",
+        summary="code.summary.detection.map",
     ),
     Section(
         "metric",
@@ -1138,6 +1233,8 @@ DETECTION: tuple[Section, ...] = (
                 "code.detection.metric.ap",
             ),
         ),
+        step="validate",
+        summary="code.summary.detection.metric",
     ),
 )
 
@@ -1198,6 +1295,8 @@ ULTRALYTICS_DETECTION: tuple[Section, ...] = (
             Note('"box": cfg.box,', "code.yolo.args.gains", end="# regularization"),
             Note("**_augmentation_kwargs(aug),", "code.yolo.args.augmentation"),
         ),
+        step="train",
+        summary="code.summary.yolo.yolo_args",
     ),
     Section(
         "yolo_augment",
@@ -1213,6 +1312,8 @@ ULTRALYTICS_DETECTION: tuple[Section, ...] = (
                 "code.yolo.augment.config",
             ),
         ),
+        step="data",
+        summary="code.summary.yolo.yolo_augment",
     ),
     Section(
         "yolo_fit",
@@ -1228,6 +1329,8 @@ ULTRALYTICS_DETECTION: tuple[Section, ...] = (
             Note("trainer.stop = True", "code.yolo.fit.stop"),
             Note("model.train(", "code.yolo.fit.train", end=_YOLO_FINISH, nth=1),
         ),
+        step="model",
+        summary="code.summary.yolo.yolo_fit",
     ),
     Section(
         "yolo_epoch",
@@ -1247,6 +1350,8 @@ ULTRALYTICS_DETECTION: tuple[Section, ...] = (
                 "code.yolo.epoch.resume",
             ),
         ),
+        step="validate",
+        summary="code.summary.yolo.yolo_epoch",
     ),
     Section(
         "yolo_loop",
@@ -1269,6 +1374,8 @@ ULTRALYTICS_DETECTION: tuple[Section, ...] = (
             Note("self.final_eval()", "code.yolo.loop.final_eval"),
         ),
         library="ultralytics",
+        step="train",
+        summary="code.summary.yolo.yolo_loop",
     ),
 )
 
@@ -1410,6 +1517,8 @@ def _section(section: Section, settings: Mapping[str, str]) -> dict[str, Any] | 
         notes = _tolerant_notes(section.notes, lines, settings)
     item: dict[str, Any] = {
         "id": section.id,
+        "step": section.step,
+        "summary": tr(section.summary),
         "name": target.__qualname__,
         "file": _module_file(target),
         "first_line": first_line,

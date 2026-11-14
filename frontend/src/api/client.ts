@@ -1247,7 +1247,7 @@ export interface CodeSettings {
   backend?: "torchvision" | "ultralytics";
 }
 
-/** A task the "Código" tab has a tour for, and the values of each setting it reads. */
+/** A task "Como funciona" has a code tour for, and the values of each setting it reads. */
 export interface CodeTourTask {
   task: string;
   settings: Record<string, string[]>;
@@ -1272,6 +1272,10 @@ export interface CodeLibrary {
 /** One real function of the training, read from the installed package. */
 export interface CodeSection {
   id: string;
+  /** The step of the run it belongs to (`code_tour.STEPS`). */
+  step: "data" | "model" | "loss" | "train" | "validate" | "test";
+  /** What it does, in one plain sentence, in the page's language. */
+  summary: string;
   name: string;
   file: string;
   first_line: number;
@@ -1294,7 +1298,7 @@ export async function fetchCodeTour(task: string, settings: CodeSettings): Promi
   return request<CodeSection[]>(`/code-tour/${encodeURIComponent(task)}${suffix}`);
 }
 
-/** The tasks whose training code the "Código" tab can show. */
+/** The tasks whose training code "Como funciona" can show. */
 export async function fetchCodeTourTasks(): Promise<CodeTourTask[]> {
   return request<CodeTourTask[]>("/code-tour");
 }
@@ -1540,8 +1544,9 @@ export async function fetchColabUsage(): Promise<ColabUsage> {
 export type ColabDatasetSource =
   | { kind: "url"; url: string }
   | { kind: "provider"; provider: "torchvision" | "huggingface"; dataset: string; limit?: number }
-  // The form's own dataset folder, inside Google Drive for desktop (ADR-164).
-  | { kind: "drive"; my_drive_root?: string };
+  // A folder inside Google Drive for desktop (ADR-164): `path` is the one picked
+  // in the panel's Drive browser; without it, the form's own dataset folder.
+  | { kind: "drive"; my_drive_root?: string; path?: string };
 
 export type ColabAccelerator = "T4" | "L4" | "A100" | "H100" | "G4";
 
@@ -1559,6 +1564,36 @@ export async function continueDriveConsent(runId: string): Promise<{ sent: boole
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ run_id: runId }),
+  });
+}
+
+/** One folder of this computer's "My Drive" (ADR-164). `root` is null when no
+ *  "My Drive" folder was found; `rel` is the folder under it, `/`-separated;
+ *  `path` is it on this machine and `remote` on the Colab VM. */
+export interface ColabDriveFolders {
+  root: string | null;
+  rel: string;
+  path: string | null;
+  remote: string | null;
+  folders: string[];
+  truncated: boolean;
+  can_open: boolean;
+}
+
+export async function fetchDriveFolders(rel: string, myDriveRoot?: string): Promise<ColabDriveFolders> {
+  const query = new URLSearchParams();
+  if (rel) query.set("rel", rel);
+  if (myDriveRoot?.trim()) query.set("my_drive_root", myDriveRoot.trim());
+  const suffix = query.size ? `?${query}` : "";
+  return request<ColabDriveFolders>(`/colab/drive/folders${suffix}`);
+}
+
+/** Show a folder of "My Drive" in this machine's file manager. */
+export async function openDriveFolder(rel: string, myDriveRoot?: string): Promise<{ path: string }> {
+  return request<{ path: string }>("/colab/drive/open", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rel, my_drive_root: myDriveRoot?.trim() || null }),
   });
 }
 

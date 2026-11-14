@@ -19,9 +19,9 @@ function render(node: ReactNode): string {
   );
 }
 
-/** The `<button …>` tags of the markup, one string each. */
+/** The `<button …>` elements of the markup (icon and label inside), one string each. */
 function buttons(html: string): string[] {
-  return html.match(/<button[^>]*>[^<]*<\/button>/g) ?? [];
+  return html.match(/<button[^>]*>.*?<\/button>/g) ?? [];
 }
 
 describe("RerunActions (#200)", () => {

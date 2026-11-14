@@ -56,8 +56,7 @@ import { readUserName, readUserPronoun } from "./lib/user-name";
 import {
   isProfileStorageKey,
   profileAfterStorageChange,
-  profileIsTheName,
-  profileLabel,
+  profileHasName,
   readProfile,
   type ProfileInfo,
 } from "./lib/profile";
@@ -108,6 +107,7 @@ import {
 import { CustomTaskPanel } from "./components/CustomTaskPanel";
 import { ContentBoundary, LazySurface } from "./components/ErrorBoundary";
 import { ResultsView } from "./components/ResultsView";
+import { historyTargetForResult, type HistoryTarget } from "./lib/history-target";
 import { TabBar } from "./components/TabBar";
 import { resultsOnTab } from "./lib/results-tab";
 import { TaskHero } from "./components/TaskHero";
@@ -176,18 +176,21 @@ export default function App() {
   const [tour, setTour] = useState<"none" | "convite" | GuideId>("none");
   // Set by the header chip: remounts the overlay so the intro replays clean.
   const [askName, setAskName] = useState(false);
-  // The profile in use and whether the server has any besides the default
-  // (ADR-114). The header chip only exists on a server that does; a one-person
-  // install sees no profile UI beyond the optional link under the name field.
+  // The profile in use and whether there is more than one (ADR-114). The
+  // header's profile chip edits its integrations and offers "switch profile"
+  // when there is another, "new profile" when there is not.
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const [sharedServer, setSharedServer] = useState(false);
-  // Set by the profile chip: remounts the overlay straight on "who are you".
+  // Set by the profile menu: remounts the overlay straight on "who are you".
   const [pickProfile, setPickProfile] = useState(false);
+  // Set by the profile menu's "new profile": remounts it on the create step.
+  const [newProfile, setNewProfile] = useState(false);
   const profileSlugRef = useRef<string | null>(null);
   const profileRef = useRef<ProfileInfo | null>(null);
   const [showHistory, setShowHistory] = useState(false);
-  // The run History opens on, when the results view sent it there (ADR-193).
-  const [historyRunId, setHistoryRunId] = useState<string | null>(null);
+  // The run History opens on: the one the results view sent it to (ADR-193), or
+  // the job the training sheet's "Ver resultados" just finished.
+  const [historyTarget, setHistoryTarget] = useState<HistoryTarget | null>(null);
   const [showDatasets, setShowDatasets] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
   const [historyCount, setHistoryCount] = useState(0);
@@ -946,16 +949,18 @@ export default function App() {
       <SkipLink />
 
       <Header
-        userName={
-          sharedServer && profileIsTheName(profile, userName) ? undefined : userName
-        }
+        userName={profile && profileHasName(profile) ? profile.name : userName}
         pronoun={profile?.pronoun ?? readUserPronoun()}
         onChangeName={() => setAskName(true)}
         onGuide={setTour}
-        profileName={
-          sharedServer && profile ? profileLabel(profile, t.profile.defaultShort) : undefined
-        }
+        profile={profile}
+        sharedServer={sharedServer}
+        onProfileSaved={(p) => {
+          profileRef.current = p;
+          setProfile(p);
+        }}
         onChangeProfile={() => setPickProfile(true)}
+        onNewProfile={() => setNewProfile(true)}
         profileSlug={profile?.slug}
         onTrainColab={
           activeKey === "classification" && !isCustomTask(activeTask)
@@ -1020,7 +1025,7 @@ export default function App() {
             // the report's own count is the one to trust.
             submittedUnits={result.stopped === true ? (queueSize ?? null) : null}
             onOpenInHistory={(runId) => {
-              setHistoryRunId(runId);
+              setHistoryTarget({ runId });
               setShowHistory(true);
             }}
             onClose={() => {
@@ -1206,7 +1211,7 @@ export default function App() {
       <BottomBar
         onHistory={() => {
           // The header opens the list, never a run a results view asked for.
-          setHistoryRunId(null);
+          setHistoryTarget(null);
           setShowHistory(true);
         }}
         onDatasets={() => setShowDatasets(true)}
@@ -1231,9 +1236,16 @@ export default function App() {
       <HistoryOverlay
         onClose={() => {
           setShowHistory(false);
-          setHistoryRunId(null);
+          setHistoryTarget(null);
         }}
-        initialRunId={historyRunId}
+        initialTarget={historyTarget}
+        // The finished job is not listed (its History entry failed to write, or
+        // a Colab search left its units on the VM): its results view stays.
+        onTargetMissing={() => {
+          setShowHistory(false);
+          setHistoryTarget(null);
+          setResultsVisible(true);
+        }}
         onCountChange={setHistoryCount}
         // `activeKey` is already the family the history groups by: the task
         // tabs are classification/detection/... and custom tasks carry their
@@ -1282,14 +1294,23 @@ export default function App() {
           onClose={() => setOverlayVisible(false)}
           onViewResults={() => {
             setOverlayVisible(false);
-            setResultsVisible(true);
+            // The run's History entry is its results page; a job History cannot
+            // name keeps the results view.
+            const target = result ? historyTargetForResult(result) : null;
+            if (target) {
+              setHistoryTarget(target);
+              setShowHistory(true);
+            } else {
+              setResultsVisible(true);
+            }
           }}
         />
       )}
       <WelcomeOverlay
-        key={askName ? "ask" : pickProfile ? "pick" : "boot"}
+        key={askName ? "ask" : pickProfile ? "pick" : newProfile ? "create" : "boot"}
         forceAsk={askName}
         forcePick={pickProfile}
+        forceCreate={newProfile}
         onProfile={(p, shared) => {
           // The History is the profile's: another profile's count and open sheet
           // would describe runs this one cannot see.
@@ -1305,6 +1326,7 @@ export default function App() {
           setUserName(n);
           setAskName(false);
           setPickProfile(false);
+          setNewProfile(false);
           // Só na primeira vez: quem já viu (ou dispensou) o guia entra direto.
           if (!readTourSeen()) setTour("convite");
         }}

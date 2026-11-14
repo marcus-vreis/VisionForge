@@ -275,6 +275,30 @@
       "system"
     ]
   },
+  "GET /api/colab/drive/folders": {
+    "operationId": "colab_drive_folders_api_colab_drive_folders_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "query:my_drive_root:optional",
+      "query:rel:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "ColabDriveFolders"
+      },
+      "400": {},
+      "403": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "colab"
+    ]
+  },
   "GET /api/colab/sessions": {
     "operationId": "colab_sessions_api_colab_sessions_get",
     "parameters": [
@@ -1325,6 +1349,31 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
+    },
+    "tags": [
+      "colab"
+    ]
+  },
+  "POST /api/colab/drive/open": {
+    "operationId": "open_drive_folder_api_colab_drive_open_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "ColabDriveOpenRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "403": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "500": {}
     },
     "tags": [
       "colab"

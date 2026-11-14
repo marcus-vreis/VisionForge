@@ -143,3 +143,19 @@ def test_ultralytics_detection_shows_the_layer_and_the_library() -> None:
     # Tolerant notes (ADR-194): how many resolve depends on the installed version.
     assert len(loop["notes"]) == loop["notes_resolved"]
     assert loop["notes_resolved"] <= loop["notes_total"]
+
+
+def test_each_section_names_its_step_and_a_sentence_in_the_language() -> None:
+    pt = _tour(lang="pt").json()
+    en = _tour(lang="en").json()
+    assert [s["step"] for s in pt] == [
+        "data",
+        "model",
+        "loss",
+        "train",
+        "validate",
+        "test",
+    ]
+    for pt_section, en_section in zip(pt, en, strict=True):
+        assert pt_section["summary"] and en_section["summary"]
+        assert pt_section["summary"] != en_section["summary"]

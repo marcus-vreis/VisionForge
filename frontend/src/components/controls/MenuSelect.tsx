@@ -16,6 +16,9 @@ interface MenuSelectProps {
   activeWhenNot?: string;
   title?: string;
   minWidth?: number;
+  /** `field` sizes the trigger like a form field (`SelectField`, `TextField`)
+   * and lets it fill its row: for a select that sits under one of those. */
+  size?: "toolbar" | "field";
 }
 
 /** Compact dropdown for inline controls — the toolbar sibling of `SelectField`.
@@ -37,6 +40,7 @@ export function MenuSelect({
   activeWhenNot,
   title,
   minWidth = 0,
+  size = "toolbar",
 }: MenuSelectProps) {
   const [open, setOpen] = useState(false);
   const { pos, wrapRef, btnRef, menuRef, closeRef } = useAnchoredMenu(open, minWidth);
@@ -65,9 +69,13 @@ export function MenuSelect({
   const current = options.map(normalize).find((o) => o.value === value);
   const label = current?.label ?? placeholder ?? value;
   const accented = activeWhenNot !== undefined && value !== activeWhenNot;
+  const field = size === "field";
 
   return (
-    <div ref={wrapRef} style={{ position: "relative", display: "inline-flex" }}>
+    <div
+      ref={wrapRef}
+      style={{ position: "relative", display: field ? "flex" : "inline-flex", flex: field ? 1 : undefined, minWidth: 0 }}
+    >
       <button
         ref={btnRef}
         type="button"
@@ -76,8 +84,11 @@ export function MenuSelect({
         style={{
           display: "inline-flex",
           alignItems: "center",
+          justifyContent: field ? "space-between" : undefined,
+          flex: field ? 1 : undefined,
+          minWidth: 0,
           gap: 8,
-          padding: "7px 10px",
+          padding: field ? "12px 14px" : "7px 10px",
           background: accented ? "var(--accent-soft)" : "rgb(var(--lt-shade, 0 0 0) / 0.35)",
           border: `1px solid ${
             open
@@ -86,10 +97,10 @@ export function MenuSelect({
                 ? "var(--accent-vf)"
                 : "var(--vf-panel-stroke)"
           }`,
-          borderRadius: 8,
+          borderRadius: field ? 10 : 8,
           color: "var(--vf-text)",
           fontFamily: "var(--font-mono)",
-          fontSize: 11,
+          fontSize: field ? 13 : 11,
           cursor: "pointer",
           whiteSpace: "nowrap",
           transition: "border-color 160ms ease",

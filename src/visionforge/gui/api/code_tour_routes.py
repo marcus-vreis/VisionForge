@@ -1,4 +1,4 @@
-"""The real code of a training, for the "Código" tab (ADR-173).
+"""The real code of a training, for the "Como funciona" tab (ADR-173).
 
 ``GET /api/code-tour`` lists the tasks with a tour and the settings each one
 reads; ``GET /api/code-tour/{task}`` sends the sections of one of them.
@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from visionforge.core.code_tour import (
     TOUR_SETTINGS,
     TOURS,
+    Step,
     code_tour,
     tour_settings,
 )
@@ -45,11 +46,16 @@ class CodeLibrary(BaseModel):
 class CodeSection(BaseModel):
     """One function of the training, as it is in the installed package.
 
-    ``notes_resolved`` of ``notes_total`` found their line: always all of them
-    for VisionForge's code, possibly fewer in a library's other version.
+    ``step`` is the step of the run it belongs to (data, model, loss, train,
+    validate, test), so the page can show the code of the step that is running;
+    ``summary`` says what it does in one plain sentence, in the request's
+    language. ``notes_resolved`` of ``notes_total`` found their line: always all
+    of them for VisionForge's code, possibly fewer in a library's other version.
     """
 
     id: str
+    step: Step
+    summary: str
     name: str
     file: str
     first_line: int
@@ -69,7 +75,7 @@ class CodeTourTask(BaseModel):
 
 @router.get("")
 def list_code_tours() -> list[CodeTourTask]:
-    """The tasks whose training code the "Código" tab can show."""
+    """The tasks whose training code the "Como funciona" tab can show."""
     return [
         CodeTourTask(
             task=task,

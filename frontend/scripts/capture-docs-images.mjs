@@ -189,10 +189,14 @@ async function datasetExplorer(page) {
   }).toPass({ timeout: 15_000 });
   await page.locator("[data-tour='datasets']").click();
   await page.getByRole("tab", { name: "Explorar" }).click();
-  // The same picker as the Dados step: the overlay's is the last in the page.
-  await page.getByPlaceholder("datasets/coffee").last().fill(sampleDir);
+  // The same picker as the Dados step, which is hidden behind the window: the
+  // visible one is the window's.
+  await page.locator("input[placeholder*='datasets/coffee']:visible").fill(sampleDir);
   await page.getByRole("button", { name: "Abrir", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Refazer divisão" })).toBeVisible({ timeout: 30_000 });
+  // The window only chooses; the tools are in the full-screen lab.
+  await page.getByRole("button", { name: "Abrir laboratório" }).click({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Visão geral" })).toBeVisible();
+  await expect(page.getByText("Refazer divisão", { exact: true }).first()).toBeVisible();
   await shot(page, "vf-datasets-explorer.png");
 }
 
@@ -249,10 +253,12 @@ async function codeTab(page) {
   const sheet = page.locator("[data-tour='training-sheet']");
   await expect(sheet).toBeVisible();
   await expect(sheet.getByText("treino concluído", { exact: true })).toBeVisible({ timeout: 300_000 });
-  await sheet.getByRole("tab", { name: "Código" }).click();
-  const panel = sheet.locator("[aria-labelledby='training-tab-code']");
+  // The steps of the run beside the real code of the step shown (ADR-204).
+  await sheet.getByRole("tab", { name: "Código ao vivo" }).click();
+  const panel = sheet.locator("[aria-labelledby='training-tab-story']");
   await expect(panel).toBeVisible();
-  await expect(panel.getByText(/código real que treina/)).toBeVisible({ timeout: 30_000 });
+  await expect(panel.getByText("Época de treino", { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(panel.getByText(/^def /).first()).toBeVisible({ timeout: 30_000 });
   await shot(page, "vf-code-tab.png");
   await sheet.getByRole("tab", { name: "Log" }).click();
   await shot(page, "vf-training.png");
@@ -263,13 +269,16 @@ async function resultsAndHistory(page) {
   const sheet = page.locator("[data-tour='training-sheet']");
   await sheet.getByRole("button", { name: /Ver resultados/ }).click();
   await expect(sheet).toBeHidden();
-  await expect(page.getByText("// resultados", { exact: true })).toBeVisible();
-  await expect(page.getByRole("img").first()).toBeVisible();
+  // The finished run opens in History, which is its results page (ADR-201).
+  const history = page.getByTestId("history-overlay");
+  await expect(history).toBeVisible();
+  await expect(history.getByText("Curvas por época", { exact: true })).toBeVisible();
   await shot(page, "vf-results.png");
-  await page.locator("[data-tour='history']").click();
-  await page.getByText("docs_code_tab", { exact: true }).first().click();
-  await expect(page.getByRole("button", { name: "Baixar bundle do experimento" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Versionar com DVC" })).toBeVisible();
+  // The same detail, lower down: what can be done with the run.
+  const bundle = history.getByRole("button", { name: "Baixar bundle do experimento" });
+  await bundle.scrollIntoViewIfNeeded();
+  await expect(bundle).toBeVisible();
+  await expect(history.getByRole("button", { name: "Versionar com DVC" })).toBeVisible();
   await shot(page, "vf-run-detail.png");
 }
 

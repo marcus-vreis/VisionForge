@@ -6,6 +6,8 @@ import {
 import { formatBytes } from "../lib/dataset-identity";
 import { canPrepare, repositoryNotes, resultLines } from "../lib/dvc-export";
 import { useI18n } from "../i18n/useT";
+import { ActionButton } from "./ui/ActionButton";
+import { DvcIcon } from "./ui/BrandIcons";
 
 // The last repository folder, remembered in this browser only (a convenience).
 const REPO_KEY = "vf.dvc.repo";
@@ -45,7 +47,9 @@ export function DvcExportPanel({ runId }: { runId: string }) {
     setResult(await versionRunWithDvc(runId, repo.trim(), preview.digest));
   });
 
-  if (!open) return <button type="button" onClick={() => setOpen(true)}>{d.open}</button>;
+  // Closed: the service's mark and name; the button's name says what opening does.
+  if (!open) return <ActionButton icon={<DvcIcon />} aria-label={d.open} title={d.open}
+    onClick={() => setOpen(true)}>{d.service}</ActionButton>;
   const repository = preview?.repository;
   const ready = repository?.state === "ready";
   return <section aria-label={d.title} style={{ border: "1px solid var(--vf-panel-stroke)", borderRadius: 10, padding: 16 }}>

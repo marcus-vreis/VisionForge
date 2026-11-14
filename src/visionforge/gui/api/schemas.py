@@ -1139,6 +1139,8 @@ class ColabDriveSource(BaseModel):
 
     kind: Literal["drive"] = "drive"
     my_drive_root: str | None = Field(default=None, max_length=1024)
+    # The folder picked in the panel's Drive browser; None keeps ``data.base_dir``.
+    path: str | None = Field(default=None, max_length=1024)
 
 
 class ColabRunRequest(BaseModel):
@@ -1162,6 +1164,33 @@ class ColabDriveContinueRequest(BaseModel):
     """The person says the Drive access was granted for this job's consent page."""
 
     run_id: str = Field(min_length=1, max_length=256)
+
+
+class ColabDriveFolders(BaseModel):
+    """One folder of this computer's "My Drive", to pick a Colab dataset (ADR-164).
+
+    ``root`` is None when no "My Drive" folder was found here: the page then
+    explains Google Drive for desktop instead of browsing. ``rel`` is the folder
+    under the root, ``/``-separated; ``path`` is it on this machine and
+    ``remote`` on the VM. ``folders`` holds names only, sorted, hidden ones left
+    out, cut at a cap that ``truncated`` reports.
+    """
+
+    root: str | None = None
+    rel: str = ""
+    path: str | None = None
+    remote: str | None = None
+    folders: list[str] = Field(default_factory=list)
+    truncated: bool = False
+    # Whether "open in the file manager" works on this machine.
+    can_open: bool = False
+
+
+class ColabDriveOpenRequest(BaseModel):
+    """A folder under "My Drive" to show in the file manager of this machine."""
+
+    rel: str = Field(default="", max_length=1024)
+    my_drive_root: str | None = Field(default=None, max_length=1024)
 
 
 class ColabSessionInfo(BaseModel):

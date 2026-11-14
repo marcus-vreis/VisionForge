@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { deleteRun, fetchRuns } from "../api/client";
 import { useI18n, useT } from "../i18n/useT";
 import { cardMetrics } from "../lib/compare-metrics";
+import { resolveHistoryTarget, type HistoryTarget } from "../lib/history-target";
+import { runStatusLabel, statusColor } from "../lib/run-status-color";
 import {
   foldGroups,
   formatAggregate,
@@ -30,9 +32,18 @@ interface HistoryOverlayProps {
   initialTask?: string;
   /** Sends a run back to its task's form (#200). */
   rerun?: RerunHandle;
-  /** A run to open on arrival: the results view's "open in History" (ADR-193). */
-  initialRunId?: string | null;
+  /** A run to open on arrival: the results view's "open in History" (ADR-193),
+   *  or the job the training sheet's "Ver resultados" just finished. */
+  initialTarget?: HistoryTarget | null;
+  /** Called when `initialTarget` is still not listed after the last retry, so
+   *  the caller can show what it has instead of an empty sheet. */
+  onTargetMissing?: () => void;
 }
+
+// A job's run.json is written as it ends, so the list fetched right after can
+// still miss it: a few spaced retries before giving up on the target.
+const TARGET_RETRIES = 4;
+const TARGET_RETRY_MS = 750;
 
 /** Inline caption preceding a filter control. */
 function FilterLabel({ children }: { children: React.ReactNode }) {
@@ -40,7 +51,7 @@ function FilterLabel({ children }: { children: React.ReactNode }) {
     <span
       style={{
         fontFamily: "var(--font-mono)",
-        fontSize: 9,
+        fontSize: 11,
         letterSpacing: "0.16em",
         textTransform: "uppercase",
         color: "var(--vf-text-muted)",
@@ -91,7 +102,7 @@ function FilterChips({
                 border: `1px solid ${active ? "var(--accent-vf)" : "var(--vf-panel-stroke)"}`,
                 borderRadius: 999,
                 fontFamily: "var(--font-mono)",
-                fontSize: 10,
+                fontSize: 11,
                 letterSpacing: "0.10em",
                 textTransform: "uppercase",
                 color: active ? "var(--vf-text)" : "var(--vf-text-dim)",
@@ -182,7 +193,7 @@ function TaskTabs({
                 padding: "1px 6px",
                 borderRadius: 999,
                 background: on ? "rgb(var(--lt-ink, 255 255 255) / 0.10)" : "rgb(var(--lt-ink, 255 255 255) / 0.04)",
-                fontSize: 10,
+                fontSize: 13,
                 color: "var(--vf-text-dim)",
               }}
             >
@@ -193,14 +204,6 @@ function TaskTabs({
       })}
     </div>
   );
-}
-
-/** Status dot color — completed is muted green, running is accent, failed is red. */
-function statusColor(status: string): string {
-  if (status === "completed") return "oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.18 150)";
-  if (status === "running") return "oklch(calc(0.74 - var(--lt-flip, 0) * 0.18) 0.16 240)";
-  if (status === "failed") return "oklch(calc(0.74 - var(--lt-flip, 0) * 0.18) 0.18 22)";
-  return "var(--vf-text-muted)";
 }
 
 /** Format an ISO date string in the interface language's locale. */
@@ -301,7 +304,7 @@ function RunCard({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            fontSize: 11,
+            fontSize: 13,
             color: "var(--vf-text)",
           }}
         >
@@ -328,7 +331,7 @@ function RunCard({
             background: deleting ? "rgb(var(--lt-ink, 255 255 255) / 0.04)" : "transparent",
             border: "1px solid var(--vf-panel-stroke)",
             color: deleting ? "var(--vf-text-muted)" : "oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.16 22)",
-            fontSize: 12,
+            fontSize: 13,
             cursor: deleting ? "wait" : "pointer",
             display: "flex",
             alignItems: "center",
@@ -339,13 +342,15 @@ function RunCard({
           {deleting ? "…" : "🗑"}
         </button>
       )}
-      {/* Top row: name + status dot */}
+      {/* Top row: name + status dot. Clear of the corner button (delete or
+          checkbox), which sits over the row's right end. */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           gap: 8,
+          paddingRight: selectable || onDelete ? 26 : 0,
         }}
       >
         <div
@@ -381,13 +386,13 @@ function RunCard({
           <span
             style={{
               fontFamily: "var(--font-mono)",
-              fontSize: 10,
+              fontSize: 11,
               letterSpacing: "0.12em",
               textTransform: "uppercase",
               color: dot,
             }}
           >
-            {run.status}
+            {runStatusLabel(run.status, t.runDetail.runStatus)}
           </span>
         </div>
       </div>
@@ -404,7 +409,7 @@ function RunCard({
         <span
           style={{
             fontFamily: "var(--font-mono)",
-            fontSize: 11,
+            fontSize: 13,
             color: "var(--vf-text-dim)",
           }}
         >
@@ -417,7 +422,7 @@ function RunCard({
             border: `1px solid ${accent}55`,
             borderRadius: 999,
             fontFamily: "var(--font-mono)",
-            fontSize: 10,
+            fontSize: 11,
             color: accent,
             letterSpacing: "0.10em",
             textTransform: "uppercase",
@@ -434,7 +439,7 @@ function RunCard({
               border: "1px solid oklch(0.72 0.16 150 / 0.45)",
               borderRadius: 999,
               fontFamily: "var(--font-mono)",
-              fontSize: 10,
+              fontSize: 11,
               color: "oklch(calc(0.88 - var(--lt-flip, 0) * 0.46) 0.15 150)",
               letterSpacing: "0.10em",
               textTransform: "uppercase",
@@ -452,12 +457,12 @@ function RunCard({
               border: "1px solid oklch(0.70 0.12 250 / 0.45)",
               borderRadius: 999,
               fontFamily: "var(--font-mono)",
-              fontSize: 10,
+              fontSize: 13,
               color: "oklch(calc(0.86 - var(--lt-flip, 0) * 0.42) 0.11 250)",
               letterSpacing: "0.10em",
               // A long dataset name must not push the other pills out of the
               // row; the row wraps, but the pill itself has to stay bounded.
-              maxWidth: 180,
+              maxWidth: 220,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -479,7 +484,7 @@ function RunCard({
               border: "1px solid oklch(0.80 0.16 85 / 0.45)",
               borderRadius: 999,
               fontFamily: "var(--font-mono)",
-              fontSize: 10,
+              fontSize: 11,
               color: "oklch(calc(0.90 - var(--lt-flip, 0) * 0.5) 0.15 85)",
               letterSpacing: "0.10em",
               textTransform: "uppercase",
@@ -498,7 +503,7 @@ function RunCard({
               border: "1px solid rgba(180, 140, 255, 0.45)",
               borderRadius: 999,
               fontFamily: "var(--font-mono)",
-              fontSize: 10,
+              fontSize: 11,
               color: "var(--lt-group-fg, rgba(220, 190, 255, 0.95))",
               letterSpacing: "0.10em",
               textTransform: "uppercase",
@@ -516,7 +521,7 @@ function RunCard({
               border: "1px solid oklch(0.84 0.12 85 / 0.45)",
               borderRadius: 999,
               fontFamily: "var(--font-mono)",
-              fontSize: 10,
+              fontSize: 11,
               color: "oklch(calc(0.90 - var(--lt-flip, 0) * 0.5) 0.12 85)",
               letterSpacing: "0.10em",
               textTransform: "uppercase",
@@ -534,7 +539,7 @@ function RunCard({
               border: "1px solid rgba(180, 140, 255, 0.45)",
               borderRadius: 999,
               fontFamily: "var(--font-mono)",
-              fontSize: 10,
+              fontSize: 11,
               color: "var(--lt-group-fg, rgba(220, 190, 255, 0.95))",
               letterSpacing: "0.10em",
               textTransform: "uppercase",
@@ -553,7 +558,7 @@ function RunCard({
               border: "1px solid oklch(0.78 0.14 60 / 0.45)",
               borderRadius: 999,
               fontFamily: "var(--font-mono)",
-              fontSize: 10,
+              fontSize: 11,
               color: "oklch(calc(0.88 - var(--lt-flip, 0) * 0.5) 0.14 60)",
               letterSpacing: "0.10em",
               textTransform: "uppercase",
@@ -566,7 +571,7 @@ function RunCard({
           style={{
             marginLeft: "auto",
             fontFamily: "var(--font-mono)",
-            fontSize: 11,
+            fontSize: 13,
             color: "var(--vf-text-muted)",
           }}
         >
@@ -594,7 +599,7 @@ function RunCard({
             paddingTop: 4,
             borderTop: "1px solid var(--vf-panel-stroke)",
             fontFamily: "var(--font-mono)",
-            fontSize: 11,
+            fontSize: 13,
             color: "var(--vf-text-dim)",
           }}
         >
@@ -619,7 +624,7 @@ function RunCard({
             paddingTop: 4,
             borderTop: "1px solid var(--vf-panel-stroke)",
             fontFamily: "var(--font-mono)",
-            fontSize: 11,
+            fontSize: 13,
             color: "var(--vf-text-dim)",
           }}
         >
@@ -664,7 +669,7 @@ function RunCard({
               <span
                 style={{
                   fontFamily: "var(--font-mono)",
-                  fontSize: 9,
+                  fontSize: 11,
                   letterSpacing: "0.16em",
                   textTransform: "uppercase",
                   color: "var(--vf-text-muted)",
@@ -683,7 +688,7 @@ function RunCard({
                 {shown ? shown.mean : run.final_metrics[k].toFixed(4)}
                 {shown?.half != null && (
                   <span
-                    style={{ fontSize: 11, fontWeight: 400, color: "var(--vf-text-muted)" }}
+                    style={{ fontSize: 13, fontWeight: 400, color: "var(--vf-text-muted)" }}
                   >
                     {" ± "}
                     {shown.half}
@@ -700,7 +705,7 @@ function RunCard({
       <div
         style={{
           fontFamily: "var(--font-mono)",
-          fontSize: 10,
+          fontSize: 13,
           color: "var(--vf-text-muted)",
           letterSpacing: "0.06em",
         }}
@@ -749,7 +754,7 @@ function GroupedRun({
               borderRadius: 8,
               color: "var(--vf-text-dim)",
               fontFamily: "var(--font-mono)",
-              fontSize: 10,
+              fontSize: 11,
               letterSpacing: "0.10em",
               textTransform: "uppercase",
               cursor: "pointer",
@@ -787,15 +792,17 @@ export function HistoryOverlay({
   onCountChange,
   initialTask,
   rerun,
-  initialRunId,
+  initialTarget,
+  onTargetMissing,
 }: HistoryOverlayProps) {
   const t = useT();
   const [runs, setRuns] = useState<RunSummary[]>([]);
   // Mounted means opening, and opening always fetches.
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Mounted on open, so the run asked for is simply the first one shown.
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(initialRunId ?? null);
+  // Mounted on open, so the run asked for is the first one shown once the list
+  // says it exists.
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   // The run to return to from the one open: a seed opened from its group goes
   // back to the group, not to the list.
   const [backTo, setBackTo] = useState<string | null>(null);
@@ -852,22 +859,48 @@ export function HistoryOverlay({
     // initial state *is* the reset. It used to stay mounted and re-clear twelve
     // pieces of state on the way in, which is a cascade of renders to reach the
     // values a fresh mount already has.
-    fetchRuns()
-      .then((data) => {
-        setRuns(data);
-        // A group counts as the one entry the list shows for it.
-        onCountChange?.(foldGroups(data).length);
-        // Only land on the active task's tab if that tab will actually exist.
-        if (initialTask && data.some((r) => taskFamily(r.task) === initialTask)) {
-          setTaskFilter(initialTask);
-        }
-      })
-      .catch((e: unknown) => {
-        // Empty means "no message of its own": the view then shows the
-        // dictionary's text, in whichever language is active when it renders.
-        setError(e instanceof Error ? e.message : "");
-      })
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const load = (attempt: number) => {
+      fetchRuns()
+        .then((data) => {
+          if (cancelled) return;
+          setRuns(data);
+          // A group counts as the one entry the list shows for it.
+          onCountChange?.(foldGroups(data).length);
+          // Only land on the active task's tab if that tab will actually exist.
+          if (initialTask && data.some((r) => taskFamily(r.task) === initialTask)) {
+            setTaskFilter(initialTask);
+          }
+          if (!initialTarget) {
+            setLoading(false);
+            return;
+          }
+          const id = resolveHistoryTarget(initialTarget, data);
+          if (id !== null) {
+            setSelectedRunId(id);
+            setLoading(false);
+          } else if (attempt < TARGET_RETRIES) {
+            timer = setTimeout(() => load(attempt + 1), TARGET_RETRY_MS);
+          } else {
+            setLoading(false);
+            // The caller's setters only: the first render's callback is current.
+            onTargetMissing?.();
+          }
+        })
+        .catch((e: unknown) => {
+          if (cancelled) return;
+          // Empty means "no message of its own": the view then shows the
+          // dictionary's text, in whichever language is active when it renders.
+          setError(e instanceof Error ? e.message : "");
+          setLoading(false);
+        });
+    };
+    load(0);
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) clearTimeout(timer);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleSelect = (runId: string) => {
@@ -1045,7 +1078,7 @@ export function HistoryOverlay({
           <div>
             <div
               style={{
-                fontSize: 10,
+                fontSize: 11,
                 letterSpacing: "0.22em",
                 color: "var(--vf-text-muted)",
                 fontFamily: "var(--font-mono)",
@@ -1257,7 +1290,7 @@ export function HistoryOverlay({
               <span
                 style={{
                   fontFamily: "var(--font-mono)",
-                  fontSize: 12,
+                  fontSize: 13,
                   color: "var(--vf-text-muted)",
                   letterSpacing: "0.08em",
                 }}
@@ -1283,7 +1316,7 @@ export function HistoryOverlay({
             >
               <div
                 style={{
-                  fontSize: 10,
+                  fontSize: 11,
                   letterSpacing: "0.16em",
                   textTransform: "uppercase",
                   color: "oklch(0.7 0.18 22)",
@@ -1326,7 +1359,7 @@ export function HistoryOverlay({
               <div
                 style={{
                   fontFamily: "var(--font-mono)",
-                  fontSize: 12,
+                  fontSize: 13,
                   color: "var(--vf-text-muted)",
                 }}
               >
@@ -1377,7 +1410,7 @@ export function HistoryOverlay({
                 border: "1px dashed oklch(0.78 0.18 150 / 0.5)",
                 borderRadius: 10,
                 fontFamily: "var(--font-mono)",
-                fontSize: 11,
+                fontSize: 13,
                 color: "oklch(calc(0.88 - var(--lt-flip, 0) * 0.46) 0.16 150)",
               }}
             >
@@ -1412,7 +1445,7 @@ export function HistoryOverlay({
                     borderRadius: 10,
                     color: "var(--vf-text)",
                     fontFamily: "var(--font-mono)",
-                    fontSize: 12,
+                    fontSize: 13,
                   }}
                 />
                 {query && (
@@ -1431,7 +1464,7 @@ export function HistoryOverlay({
                       background: "rgb(var(--lt-ink, 255 255 255) / 0.06)",
                       border: "1px solid var(--vf-panel-stroke)",
                       color: "var(--vf-text-dim)",
-                      fontSize: 12,
+                      fontSize: 13,
                       cursor: "pointer",
                       display: "flex",
                       alignItems: "center",
@@ -1446,7 +1479,7 @@ export function HistoryOverlay({
                 <span
                   style={{
                     fontFamily: "var(--font-mono)",
-                    fontSize: 10,
+                    fontSize: 13,
                     color: "var(--vf-text-muted)",
                     letterSpacing: "0.08em",
                   }}
@@ -1544,7 +1577,7 @@ export function HistoryOverlay({
                   style={{
                     padding: 24,
                     fontFamily: "var(--font-mono)",
-                    fontSize: 12,
+                    fontSize: 13,
                     color: "var(--vf-text-muted)",
                     textAlign: "center",
                     border: "1px dashed var(--vf-panel-stroke)",
@@ -1623,7 +1656,7 @@ export function HistoryOverlay({
             <div
               style={{
                 fontFamily: "var(--font-mono)",
-                fontSize: 10,
+                fontSize: 11,
                 letterSpacing: "0.20em",
                 textTransform: "uppercase",
                 color: "oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.16 22)",
@@ -1647,7 +1680,7 @@ export function HistoryOverlay({
                   key={r.run_id}
                   style={{
                     fontFamily: "var(--font-mono)",
-                    fontSize: 12,
+                    fontSize: 13,
                     color: "var(--vf-text)",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -1664,7 +1697,7 @@ export function HistoryOverlay({
             <div
               style={{
                 fontFamily: "var(--font-mono)",
-                fontSize: 11,
+                fontSize: 13,
                 color: "var(--vf-text-dim)",
                 lineHeight: 1.6,
               }}
@@ -1676,7 +1709,7 @@ export function HistoryOverlay({
               <div
                 style={{
                   fontFamily: "var(--font-mono)",
-                  fontSize: 11,
+                  fontSize: 13,
                   color: "oklch(calc(0.86 - var(--lt-flip, 0) * 0.42) 0.12 85)",
                   lineHeight: 1.6,
                 }}
@@ -1692,7 +1725,7 @@ export function HistoryOverlay({
                   border: "1px solid oklch(0.704 0.191 22.216 / 0.4)",
                   borderRadius: 8,
                   fontFamily: "var(--font-mono)",
-                  fontSize: 11,
+                  fontSize: 13,
                   color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
                 }}
               >

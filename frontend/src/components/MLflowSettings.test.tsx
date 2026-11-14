@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { LanguageContext } from "../i18n/context";
 import { pt } from "../i18n/pt";
 import { MLflowExportStatus } from "./MLflowExportStatus";
+import { ProfileMenu } from "./ProfileMenu";
 import { ProfileTrackingSettings } from "./ProfileTrackingSettings";
 
 const lang = { lang: "pt" as const, t: pt, locale: "pt-BR", setLang: () => {} };
@@ -16,6 +17,14 @@ describe("MLflow profile controls", () => {
     expect(legacy).not.toContain('checked=""');
     const enabled = wrap(<ProfileTrackingSettings profile={{ ...profile, settings: { mlflow: { enabled: true } } }} onSaved={() => {}} />);
     expect(enabled).toContain('checked=""');
+  });
+  it("lives in the header's profile menu as a switch", () => {
+    const profile = { slug: "default", name: "Marcus", is_default: true, settings: { mlflow: { enabled: true } } };
+    const menu = wrap(<ProfileMenu name="Marcus" profile={profile} shared={false} initialOpen
+      onProfileSaved={() => {}} onChangeName={() => {}} onSwitchProfile={() => {}} onNewProfile={() => {}} />);
+    const input = menu.split(`${pt.mlflow.label}</span>`)[1]?.match(/^<input[^>]*>/)?.[0] ?? "";
+    expect(input).toContain('role="switch"');
+    expect(input).toContain('checked=""');
   });
   it("offers retry and the error when the export failed", () => {
     const html = wrap(<MLflowExportStatus runId="r1" tracking={{ state: "failed", error: "OSError" }} onUpdated={() => {}} />);

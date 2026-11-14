@@ -51,6 +51,8 @@ Todas ficam sob `/api` e usam o perfil do cabeçalho.
 | `POST /api/colab/sessions/stop` | libera uma máquina pelo nome e devolve as que continuam vivas |
 | `POST /api/colab/experiment/run` | enfileira o treino de uma classificação no Colab |
 | `POST /api/colab/drive/continue` | avisa que o acesso ao Drive foi permitido, para o job continuar |
+| `GET /api/colab/drive/folders` | lista as subpastas de uma pasta do "Meu Drive" deste computador e o caminho dela no Colab |
+| `POST /api/colab/drive/open` | abre essa pasta no gerenciador de arquivos |
 
 Respostas de erro que o código define:
 
@@ -73,15 +75,29 @@ Respostas de erro que o código define:
   - `provider`: um dataset público que a VM baixa sozinha (`torchvision` ou
     `huggingface`), com `dataset` e `limit` opcional; nenhuma credencial sai
     deste computador;
-  - `drive`: a pasta do dataset da própria config, dentro do Google Drive para
-    desktop (ADR-164).
+  - `drive`: uma pasta dentro do Google Drive para desktop (ADR-164): a
+    escolhida no painel (`path`) ou, com `path` vazio, a pasta do dataset da
+    própria config.
 - `accelerator`: `T4` (padrão), `L4`, `A100`, `H100` ou `G4`.
 - `drive_export`: também grava o pacote da execução em
   `MyDrive/VisionForge/runs/`. Uma falha aí não derruba a execução.
 
 ## Dataset no Google Drive
 
-- O servidor traduz `data.base_dir` para `/content/drive/MyDrive/...` e manda a
+- No painel, **Escolher pasta no Drive** navega pelas pastas do "Meu Drive"
+  deste computador: clique para entrar, **Usar esta pasta** para confirmar. O
+  caminho no Colab aparece antes de confirmar. O navegador não sai do Drive e
+  não usa a API do Google: ele lê a pasta local que o Drive para desktop
+  sincroniza (ADR-203).
+- `GET /api/colab/drive/folders?rel=&my_drive_root=` devolve só nomes de
+  pastas, em ordem alfabética, até 500 (`truncated` avisa o corte). Arquivos,
+  links, pastas ocultas e as que começam com ponto ficam de fora. Um `rel`
+  com `..` ou caminho absoluto é recusado. As duas rotas só atendem este
+  computador (`403` de outra origem).
+- Sem o Drive para desktop, o painel mostra três passos (instalar, colocar o
+  dataset no "Meu Drive", voltar e escolher) e um campo para digitar a pasta
+  "Meu Drive" quando a detecção não a acha.
+- O servidor traduz a pasta escolhida para `/content/drive/MyDrive/...` e manda a
   contagem de arquivos local. A pasta "Meu Drive" é achada, nesta ordem: a pasta
   digitada (`my_drive_root`), o `DefaultMountPoint` do Drive para desktop no
   registro, ou um componente "My Drive"/"Meu Drive" logo abaixo de uma letra de
@@ -117,6 +133,7 @@ Respostas de erro que o código define:
 - Nada aqui foi rodado com uma conta Google real ao escrever este guia; é leitura
   do código e das decisões. Os testes do repositório usam uma CLI falsa.
 - A detecção do "Meu Drive" nunca rodou numa máquina com o Google Drive para
-  desktop instalado (risco registrado na ADR-164).
+  desktop instalado (risco registrado na ADR-164). O navegador de pastas foi
+  conferido com a pasta digitada apontando para uma pasta local comum.
 - A CLI é jovem e muda; a versão fixada e o texto em inglês que o código lê dela
   (como "Please visit" e "Mounted at") são a proteção. Outra versão pode quebrar.

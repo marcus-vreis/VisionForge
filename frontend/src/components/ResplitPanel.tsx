@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { FolderOpen } from "lucide-react";
 import {
   resplitApply,
   resplitCancel,
@@ -33,10 +34,18 @@ import {
 import { errorMessage as message, useJobPolling } from "../lib/useJobPolling";
 import { useT } from "../i18n/useT";
 import { TextField } from "./controls";
-import { button, card, ghostButton, mono, sectionLabel } from "./datasetExplorerStyles";
+import {
+  danger,
+  ghostButton,
+  mono,
+  sectionLabel,
+  stepTitle,
+  text,
+  warn,
+} from "./datasetExplorerStyles";
+import { ActionRow, AnalyzeButton, ApplyButton, DataTable, LabStep, LabTool, LearnMore } from "./DatasetLabParts";
 import { Progress } from "./JobProgress";
-
-const danger = { ...mono, color: "var(--vf-danger, #f87171)" };
+import { ActionButton } from "./ui/ActionButton";
 
 const pollPreview = (id: string) => resplitStatus<ResplitPreview>(id);
 const pollApply = (id: string) => resplitStatus<ResplitResult>(id);
@@ -45,7 +54,7 @@ function WarningLine({ w }: { w: ResplitWarning }) {
   const t = useT().datasetResplit;
   const ex = useT().datasetExplorer;
   const split = w.split ? ex.splitNames[w.split] : "";
-  const text =
+  const line =
     w.code === "new_split"
       ? t.warnNewSplit(split)
       : w.code === "empty_split"
@@ -55,7 +64,7 @@ function WarningLine({ w }: { w: ResplitWarning }) {
           : w.code === "class_missing"
             ? t.warnClassMissing(w.class ?? "", split)
             : w.code;
-  return <div style={mono}>{text}</div>;
+  return <div style={warn}>{line}</div>;
 }
 
 function CompareTable({ plan }: { plan: ResplitPlan }) {
@@ -63,7 +72,7 @@ function CompareTable({ plan }: { plan: ResplitPlan }) {
   const ex = useT().datasetExplorer;
   const cell = (before: number, after: number) => (before === after ? `${after}` : `${before} → ${after}`);
   return (
-    <table style={{ ...mono, borderCollapse: "collapse", width: "100%" }}>
+    <DataTable>
       <thead>
         <tr>
           <th style={{ textAlign: "left" }}>{ex.classColumn}</th>
@@ -95,7 +104,7 @@ function CompareTable({ plan }: { plan: ResplitPlan }) {
           ))}
         </tr>
       </tbody>
-    </table>
+    </DataTable>
   );
 }
 
@@ -137,7 +146,7 @@ function PlanView({ plan, preview }: { plan: ResplitPlan; preview: ResplitPrevie
       {plan.dropped_count > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <div style={sectionLabel}>{t.droppedTitle(plan.dropped_count)}</div>
-          <div style={mono}>{t.droppedHelp}</div>
+          <div style={text}>{t.droppedHelp}</div>
           <div style={mono}>
             {reasons
               .map((r) => t.reasonCount(t.reasons[r.reason] ?? r.reason, r.count))
@@ -170,7 +179,7 @@ export function ResplitPanel({
 }) {
   const t = useT().datasetResplit;
   const ex = useT().datasetExplorer;
-  const [expanded, setExpanded] = useState(false);
+  const lab = useT().datasetLab;
   const [groupCsv, setGroupCsv] = useState("");
   const [previewJob, setPreviewJob] = useState<IncorporateJob<ResplitPreview> | null>(null);
   const [applyJob, setApplyJob] = useState<IncorporateJob<ResplitResult> | null>(null);
@@ -280,16 +289,6 @@ export function ResplitPanel({
     setCustom(next);
   };
 
-  if (!expanded) {
-    return (
-      <div>
-        <button type="button" style={button} onClick={() => setExpanded(true)}>
-          {t.open}
-        </button>
-      </div>
-    );
-  }
-
   const destOk = isValidDestName(destName);
   const canApply =
     preview !== null &&
@@ -304,19 +303,19 @@ export function ResplitPanel({
     : jobPercent(applyJob?.done ?? 0, applyJob?.total ?? 0);
 
   return (
-    <div style={{ ...card, flexBasis: "100%" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={sectionLabel}>{t.open}</div>
-        <button type="button" style={ghostButton} onClick={() => setExpanded(false)}>
-          {t.close}
-        </button>
-      </div>
-      <div style={mono}>{t.intro}</div>
-
-      <div style={sectionLabel}>{t.groupTitle}</div>
-      <div style={mono}>{t.groupHelp}</div>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 12 }}>
-        <div style={{ flex: 1 }}>
+    <LabTool title={t.open} lead={lab.leadResplit} more={t.intro}>
+      <LabStep title={t.groupTitle}>
+        <div style={text}>{lab.groupLead}</div>
+        <LearnMore summary={lab.groupMore}>{t.groupHelp}</LearnMore>
+        <ActionRow
+          actions={
+            <AnalyzeButton
+              label={t.analyze}
+              disabled={previewRunning || applyRunning}
+              onClick={() => void startPreview()}
+            />
+          }
+        >
           <TextField
             label={t.groupFile}
             value={groupCsv}
@@ -324,16 +323,8 @@ export function ResplitPanel({
             placeholder={t.groupPlaceholder}
             mono
           />
-        </div>
-        <button
-          type="button"
-          style={button}
-          disabled={previewRunning || applyRunning}
-          onClick={() => void startPreview()}
-        >
-          {t.analyze}
-        </button>
-      </div>
+        </ActionRow>
+      </LabStep>
 
       {(previewRunning || applyRunning) && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -355,87 +346,93 @@ export function ResplitPanel({
           </div>
         </div>
       )}
-      {previewJob?.state === "cancelled" && <div style={mono}>{t.cancelled}</div>}
-      {applyJob?.state === "cancelled" && <div style={mono}>{t.cancelled}</div>}
+      {previewJob?.state === "cancelled" && <div style={text}>{t.cancelled}</div>}
+      {applyJob?.state === "cancelled" && <div style={text}>{t.cancelled}</div>}
       {previewJob?.state === "failed" && <div style={danger}>{t.failed(previewJob.error ?? "")}</div>}
       {applyJob?.state === "failed" && <div style={danger}>{t.failed(applyJob.error ?? "")}</div>}
       {error && <div style={danger}>{t.failed(error)}</div>}
 
       {preview && (
         <>
-          <div style={sectionLabel}>{t.previewTitle}</div>
-          <div style={{ display: "flex", gap: 18, flexWrap: "wrap", ...mono }}>
-            <span>{t.found(preview.images)}</span>
-            {preview.group_count !== null && (
-              <span>{t.groupsInfo(preview.group_count, preview.ungrouped)}</span>
-            )}
-            {preview.unknown_entries > 0 && <span>{t.unknownEntries(preview.unknown_entries)}</span>}
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 560 }}>
-            <label style={{ ...mono, display: "flex", gap: 6, alignItems: "center" }}>
-              <input
-                type="checkbox"
-                checked={locked}
-                disabled={!preview.present.test}
-                onChange={(e) => setLockTest(e.target.checked)}
-              />
-              {preview.present.test ? t.lockTest : t.lockNoTest}
-            </label>
-            {preview.present.test && <div style={mono}>{locked ? t.lockOnHelp : t.lockOffHelp}</div>}
-            {hasGroups && (
-              <label style={{ ...mono, display: "flex", gap: 6, alignItems: "center" }}>
+          <LabStep title={t.previewTitle}>
+            <div style={{ display: "flex", gap: 18, flexWrap: "wrap", ...mono }}>
+              <span>{t.found(preview.images)}</span>
+              {preview.group_count !== null && (
+                <span>{t.groupsInfo(preview.group_count, preview.ungrouped)}</span>
+              )}
+              {preview.unknown_entries > 0 && <span>{t.unknownEntries(preview.unknown_entries)}</span>}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 620 }}>
+              <label style={{ ...text, color: "var(--vf-text)", display: "flex", gap: 8, alignItems: "center" }}>
                 <input
                   type="checkbox"
-                  checked={byGroup}
-                  onChange={(e) => setByGroup(e.target.checked)}
+                  checked={locked}
+                  disabled={!preview.present.test}
+                  onChange={(e) => setLockTest(e.target.checked)}
                 />
-                {t.byGroup}
+                {preview.present.test ? t.lockTest : t.lockNoTest}
               </label>
-            )}
-            <label style={{ ...mono, display: "flex", gap: 6, alignItems: "center" }}>
-              <input
-                type="checkbox"
-                checked={custom}
-                onChange={(e) => toggleCustom(e.target.checked)}
-              />
-              {t.ratioCustom}
-            </label>
-            {!custom && <div style={mono}>{t.ratioSame}</div>}
-            {custom && (
-              <>
-                <div style={{ display: "flex", gap: 10 }}>
-                  {SPLITS.filter((s) => !(locked && s === "test")).map((s) => (
-                    <div key={s} style={{ flex: 1 }}>
-                      <TextField
-                        label={t.ratioPercent(ex.splitNames[s])}
-                        value={percents[s]}
-                        onChange={(v) => setPercents((p) => ({ ...p, [s]: v }))}
-                        mono
-                      />
-                    </div>
-                  ))}
-                </div>
-                <div style={mono}>{t.ratioHelp}</div>
-                {customRatios(percents, locked) === null && (
-                  <div style={danger}>{t.ratioInvalid}</div>
-                )}
-              </>
-            )}
-            <div style={{ width: 180 }}>
-              <TextField
-                label={t.seed}
-                value={seedText}
-                onChange={setSeedText}
-                hint={t.seedHint}
-                mono
-                error={parseSeed(seedText) === null ? t.seedInvalid : undefined}
-              />
+              {preview.present.test && (
+                <div style={locked ? text : warn}>{locked ? t.lockOnHelp : t.lockOffHelp}</div>
+              )}
+              {hasGroups && (
+                <label style={{ ...text, color: "var(--vf-text)", display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={byGroup}
+                    onChange={(e) => setByGroup(e.target.checked)}
+                  />
+                  {t.byGroup}
+                </label>
+              )}
+              <label style={{ ...text, color: "var(--vf-text)", display: "flex", gap: 8, alignItems: "center" }}>
+                <input
+                  type="checkbox"
+                  checked={custom}
+                  onChange={(e) => toggleCustom(e.target.checked)}
+                />
+                {t.ratioCustom}
+              </label>
+              {!custom && <div style={text}>{t.ratioSame}</div>}
+              {custom && (
+                <>
+                  <div className="vf-lab-fields">
+                    {SPLITS.filter((s) => !(locked && s === "test")).map((s) => (
+                      <div key={s}>
+                        <TextField
+                          label={t.ratioPercent(ex.splitNames[s])}
+                          value={percents[s]}
+                          onChange={(v) => setPercents((p) => ({ ...p, [s]: v }))}
+                          mono
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <div style={text}>{t.ratioHelp}</div>
+                  {customRatios(percents, locked) === null && (
+                    <div style={danger}>{t.ratioInvalid}</div>
+                  )}
+                </>
+              )}
+              <div style={{ width: "100%", maxWidth: 420 }}>
+                <TextField
+                  label={t.seed}
+                  value={seedText}
+                  onChange={setSeedText}
+                  hint={t.seedHint}
+                  mono
+                  error={parseSeed(seedText) === null ? t.seedInvalid : undefined}
+                />
+              </div>
             </div>
-          </div>
-          {plan && <PlanView plan={plan} preview={preview} />}
-          <div style={sectionLabel}>{t.destTitle}</div>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 12 }}>
-            <div style={{ flex: 1, maxWidth: 420 }}>
+            {plan && <PlanView plan={plan} preview={preview} />}
+          </LabStep>
+          <LabStep title={t.destTitle}>
+            <ActionRow
+              actions={
+                <ApplyButton label={t.apply} disabled={!canApply} onClick={() => void startApply()} />
+              }
+            >
               <TextField
                 label={t.destName}
                 value={destName}
@@ -444,33 +441,23 @@ export function ResplitPanel({
                 mono
                 error={destName !== "" && !destOk ? t.destInvalid : undefined}
               />
-            </div>
-            <button type="button" style={button} disabled={!canApply} onClick={() => void startApply()}>
-              {t.apply}
-            </button>
-          </div>
+            </ActionRow>
+          </LabStep>
         </>
       )}
 
       {result && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={sectionLabel}>{t.doneTitle}</div>
+        <div className="vf-lab-done">
+          <h3 style={{ ...stepTitle, margin: 0 }}>{t.doneTitle}</h3>
           <div style={mono}>{t.done(result.images, result.moved, result.path)}</div>
           <div style={mono}>{t.linkedCopied(result.files_linked, result.files_copied)}</div>
           <div>
-            <button
-              type="button"
-              style={button}
-              onClick={() => {
-                onOpenResult(result.path);
-                setExpanded(false);
-              }}
-            >
+            <ActionButton icon={<FolderOpen />} onClick={() => onOpenResult(result.path)}>
               {t.openResult}
-            </button>
+            </ActionButton>
           </div>
         </div>
       )}
-    </div>
+    </LabTool>
   );
 }

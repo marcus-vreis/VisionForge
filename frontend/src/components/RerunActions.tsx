@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { Repeat, RotateCcw } from "lucide-react";
 import { useT } from "../i18n/useT";
 import {
   rerunOptions,
@@ -7,6 +7,7 @@ import {
   type RerunRequest,
   type RerunSource,
 } from "../lib/history-rerun";
+import { ActionButton } from "./ui/ActionButton";
 
 /** What History needs from App to send a run back to a form (#200). */
 export interface RerunHandle {
@@ -14,21 +15,6 @@ export interface RerunHandle {
   families: readonly string[];
   onRerun: (request: RerunRequest) => void;
 }
-
-const buttonStyle: CSSProperties = {
-  padding: "6px 12px",
-  background: "rgb(var(--lt-ink, 255 255 255) / 0.04)",
-  border: "1px solid var(--vf-panel-stroke)",
-  borderRadius: 8,
-  color: "var(--vf-text-dim)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
-  letterSpacing: "0.10em",
-  textTransform: "uppercase",
-  cursor: "pointer",
-};
-
-const offStyle: CSSProperties = { ...buttonStyle, cursor: "not-allowed", opacity: 0.5 };
 
 /** "Carregar no formulário" and "Repetir com N seeds" for one run or group.
  *  When the run cannot go back to a form, both stay on screen, off, with the
@@ -45,32 +31,29 @@ export function RerunActions({ source, handle }: { source: RerunSource; handle: 
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-      <button
-        type="button"
+      <ActionButton
+        icon={<RotateCcw />}
         onClick={() => send("load")}
         disabled={off}
         title={options.disabledReason ?? r.loadTitle}
-        style={off ? offStyle : buttonStyle}
       >
         {r.load}
-      </button>
+      </ActionButton>
       {options.canReplicate && (
-        <button
-          type="button"
+        <ActionButton
+          icon={<Repeat />}
           onClick={() => send("replicates")}
           disabled={off}
           title={options.disabledReason ?? r.replicatesTitle(options.seeds.join(", "))}
-          style={off ? offStyle : buttonStyle}
         >
           {r.replicates(options.seeds.length)}
-        </button>
+        </ActionButton>
       )}
       {off && (
         <span
           role="note"
           style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
+            fontSize: 13,
             lineHeight: 1.5,
             color: "var(--vf-text-muted)",
           }}

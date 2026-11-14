@@ -1,13 +1,22 @@
 import type { CSSProperties } from "react";
 
-/** Inline styles shared by the dataset explorer and the incorporate panel. */
+/** Inline styles shared by the dataset lab and its tools. Prose is `text`
+ *  (13px, sans); `mono` is for data: counts, paths, table cells. */
 
 export const sectionLabel: CSSProperties = {
   fontFamily: "var(--font-mono)",
-  fontSize: 10,
-  letterSpacing: "0.22em",
+  fontSize: 11,
+  letterSpacing: "0.18em",
   textTransform: "uppercase",
   color: "var(--vf-text-muted)",
+};
+
+/** The title of a step inside a tool ("1. Pasta das imagens novas"). */
+export const stepTitle: CSSProperties = {
+  fontSize: 15,
+  fontWeight: 600,
+  color: "var(--vf-text)",
+  lineHeight: 1.35,
 };
 
 export const card: CSSProperties = {
@@ -22,9 +31,16 @@ export const card: CSSProperties = {
 
 export const mono: CSSProperties = {
   fontFamily: "var(--font-mono)",
-  fontSize: 11,
+  fontSize: 12,
   color: "var(--vf-text-dim)",
   lineHeight: 1.6,
+};
+
+/** Running text: explanations, help and notes. */
+export const text: CSSProperties = {
+  fontSize: 13,
+  color: "var(--vf-text-dim)",
+  lineHeight: 1.55,
 };
 
 export const button: CSSProperties = {
@@ -48,4 +64,7 @@ export const ghostButton: CSSProperties = {
   color: "var(--vf-text-dim)",
 };
 
-export const danger: CSSProperties = { ...mono, color: "var(--vf-danger, #f87171)" };
+export const danger: CSSProperties = { ...text, color: "var(--vf-danger, #f87171)" };
+
+/** A warning that prevents a mistake: visible, never behind a disclosure. */
+export const warn: CSSProperties = { ...text, color: "var(--vf-warn, #fbbf24)" };

@@ -9,17 +9,19 @@ import pytest
 
 from visionforge.core import code_tour as tour_mod
 from visionforge.core.code_tour import (
+    STEPS,
     TOUR_SETTINGS,
     TOURS,
     ULTRALYTICS_DETECTION,
     Note,
+    Section,
     code_tour,
     detection_arch,
     model_family,
     note_span,
     tour_settings,
 )
-from visionforge.utils.messages import message
+from visionforge.utils.messages import message, using_lang
 
 _LINES = [
     "def f(x):",
@@ -436,3 +438,70 @@ def test_the_ultralytics_tour_declares_its_settings() -> None:
         for note in section.notes:
             for key, value in note.when:
                 assert value in TOUR_SETTINGS["detection"][key], note.key
+
+
+# ── steps and plain sentences (the merged "Como funciona" tab) ───────────────
+_ALL_TOURS = {**TOURS, "detection-ultralytics": ULTRALYTICS_DETECTION}
+
+
+@pytest.mark.parametrize("tour", sorted(_ALL_TOURS))
+def test_every_section_belongs_to_a_step_and_says_what_it_does(tour: str) -> None:
+    for section in _ALL_TOURS[tour]:
+        assert section.step in STEPS, (tour, section.id)
+        pt = message("pt", section.summary)
+        en = message("en", section.summary)
+        assert pt and en and pt != en, (tour, section.id)
+        # One plain sentence: two lines at most on the tab.
+        assert len(pt) <= 110 and len(en) <= 110, (tour, section.id)
+
+
+def test_a_section_cannot_be_declared_without_its_step_and_sentence() -> None:
+    def target() -> object:
+        return None
+
+    with pytest.raises(TypeError):
+        Section("x", lambda: target, ())  # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize("tour", sorted(_ALL_TOURS))
+def test_every_tour_has_the_loop_the_page_follows_in_its_train_step(tour: str) -> None:
+    # The page shows this function while the stream reports batches or an epoch
+    # in flight (lib/run-steps.ts, LOOP_SECTIONS).
+    train = [s.id for s in _ALL_TOURS[tour] if s.step == "train"]
+    assert {"train", "yolo_loop"} & set(train), tour
+
+
+def test_patchcore_builds_its_bank_in_the_train_step() -> None:
+    # The `phase` "montando o banco" pins this section (lib/run-steps.ts).
+    steps = {s.id: s.step for s in TOURS["anomaly"]}
+    assert steps["coreset"] == "train"
+    assert steps["score"] == "validate"
+
+
+def test_the_classification_sections_are_the_six_steps_in_order() -> None:
+    sections = code_tour("classification", {})
+    assert [s["step"] for s in sections] == list(STEPS)
+    assert [s["id"] for s in sections] == list(STEPS)
+
+
+def test_the_ultralytics_layer_and_loop_are_placed_in_their_steps() -> None:
+    steps = {s.id: s.step for s in ULTRALYTICS_DETECTION}
+    assert steps == {
+        "yolo_args": "train",
+        "yolo_augment": "data",
+        "yolo_fit": "model",
+        "yolo_epoch": "validate",
+        "yolo_loop": "train",
+    }
+
+
+def test_the_sentence_follows_the_language_of_the_request() -> None:
+    with using_lang("pt"):
+        pt = code_tour("regression", {})
+    with using_lang("en"):
+        en = code_tour("regression", {})
+    assert pt[0]["summary"] == message("pt", "code.summary.regression.data")
+    assert en[0]["summary"] == message("en", "code.summary.regression.data")
+    # Regression and segmentation share the train loop, and its sentence.
+    train = next(s for s in en if s["id"] == "train")
+    assert train["summary"] == message("en", "code.summary.train_epoch")

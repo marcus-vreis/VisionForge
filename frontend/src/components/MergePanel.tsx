@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { FolderOpen } from "lucide-react";
 import {
   mergeApply,
   mergeCancel,
@@ -36,10 +37,10 @@ import { runPicker } from "../lib/picker-feedback";
 import { errorMessage, useJobPolling } from "../lib/useJobPolling";
 import { useT } from "../i18n/useT";
 import { TextField } from "./controls";
-import { button, card, ghostButton, mono, sectionLabel } from "./datasetExplorerStyles";
+import { danger, ghostButton, mono, sectionLabel, stepTitle, text, warn } from "./datasetExplorerStyles";
+import { ActionRow, AnalyzeButton, ApplyButton, DataTable, LabStep, LabTool, LearnMore } from "./DatasetLabParts";
 import { Progress } from "./JobProgress";
-
-const danger = { ...mono, color: "var(--vf-danger, #f87171)" };
+import { ActionButton } from "./ui/ActionButton";
 const DATALIST_ID = "vf-merge-targets";
 const cell = { padding: "3px 8px 3px 0", verticalAlign: "middle" } as const;
 const right = { ...cell, textAlign: "right" } as const;
@@ -73,7 +74,7 @@ function MappingTable({
   const origin: Record<Side, string> = { a: t.sideA, b: t.sideB };
   return (
     <>
-      <table style={{ ...mono, borderCollapse: "collapse", width: "100%" }}>
+      <DataTable>
         <thead>
           <tr>
             <th style={{ textAlign: "left" }}>{t.colOrigin}</th>
@@ -116,7 +117,7 @@ function MappingTable({
             );
           })}
         </tbody>
-      </table>
+      </DataTable>
       <datalist id={DATALIST_ID}>
         {targetSuggestions(preview).map((n) => (
           <option key={n} value={n} />
@@ -153,7 +154,7 @@ function DroppedView({ plan }: { plan: MergePlan }) {
       {plan.duplicates_dropped > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <div style={sectionLabel}>{t.duplicatesTitle(plan.duplicates_dropped)}</div>
-          <div style={mono}>{t.duplicatesHelp}</div>
+          <div style={text}>{t.duplicatesHelp}</div>
           {plan.duplicates_cross_split > 0 && <div style={mono}>{t.leakTitle(plan.duplicates_cross_split)}</div>}
           {plan.duplicates.map((d) => (
             <div key={d.b_path} style={{ ...mono, wordBreak: "break-all" }}>
@@ -174,7 +175,7 @@ function PlanView({ plan, detection }: { plan: MergePlan; detection: boolean }) 
   const ex = useT().datasetExplorer;
   const splits = presentSplits(plan);
   const side: Record<Side, string> = { a: t.sideA, b: t.sideB };
-  if (plan.images_total === 0) return <div style={mono}>{t.nothingLeft}</div>;
+  if (plan.images_total === 0) return <div style={warn}>{t.nothingLeft}</div>;
   return (
     <>
       <div style={{ display: "flex", gap: 18, flexWrap: "wrap", ...mono }}>
@@ -184,7 +185,7 @@ function PlanView({ plan, detection }: { plan: MergePlan; detection: boolean }) 
         )}
       </div>
       <div style={sectionLabel}>{t.classesTitle}</div>
-      <table style={{ ...mono, borderCollapse: "collapse", width: "100%" }}>
+      <DataTable>
         <thead>
           <tr>
             <th style={{ textAlign: "left" }}>{ex.classColumn}</th>
@@ -211,7 +212,7 @@ function PlanView({ plan, detection }: { plan: MergePlan; detection: boolean }) 
             </tr>
           ))}
         </tbody>
-      </table>
+      </DataTable>
       <div style={sectionLabel}>{t.splitsTitle}</div>
       {splits.map((s) => (
         <div key={s} style={mono}>
@@ -239,7 +240,7 @@ export function MergePanel({
   onOpenResult: (path: string) => void;
 }) {
   const t = useT().datasetMerge;
-  const [expanded, setExpanded] = useState(false);
+  const lab = useT().datasetLab;
   const [otherDir, setOtherDir] = useState("");
   const [pickNote, setPickNote] = useState<string | null>(null);
   const [previewJob, setPreviewJob] = useState<IncorporateJob<MergePreview> | null>(null);
@@ -337,16 +338,6 @@ export function MergePanel({
     }
   };
 
-  if (!expanded) {
-    return (
-      <div>
-        <button type="button" style={button} onClick={() => setExpanded(true)}>
-          {t.open}
-        </button>
-      </div>
-    );
-  }
-
   const destOk = isValidDestName(destName);
   const canApply = preview !== null && canMerge(problems, plan) && destOk && !applyRunning && !result;
   const workingPct = previewRunning
@@ -355,19 +346,36 @@ export function MergePanel({
   const hints = preview ? activeHints(preview, rows) : [];
 
   return (
-    <div style={{ ...card, flexBasis: "100%" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={sectionLabel}>{t.open}</div>
-        <button type="button" style={ghostButton} onClick={() => setExpanded(false)}>
-          {t.close}
-        </button>
-      </div>
-      <div style={mono}>{t.intro}</div>
-
-      <div style={sectionLabel}>{t.sourceTitle}</div>
-      <div style={mono}>{t.sourceHelp}</div>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 12 }}>
-        <div style={{ flex: 1 }}>
+    <LabTool title={t.open} lead={lab.leadMerge} more={t.intro}>
+      <LabStep title={t.sourceTitle}>
+        <div style={text}>{t.sourceHelp}</div>
+        <ActionRow
+          actions={
+            <>
+              <button
+                type="button"
+                style={ghostButton}
+                onClick={() =>
+                  void runPicker(
+                    pickDatasetFolder,
+                    (path) => {
+                      setOtherDir(path);
+                      setPickNote(null);
+                    },
+                    { canceled: t.pickCancelled, failed: t.pickFailed },
+                  ).then(setPickNote)
+                }
+              >
+                {t.browse}
+              </button>
+              <AnalyzeButton
+                label={t.analyze}
+                disabled={otherDir.trim() === "" || previewRunning || applyRunning}
+                onClick={() => void startPreview()}
+              />
+            </>
+          }
+        >
           <TextField
             label={t.sourceDir}
             value={otherDir}
@@ -375,33 +383,9 @@ export function MergePanel({
             placeholder={t.sourcePlaceholder}
             mono
           />
-        </div>
-        <button
-          type="button"
-          style={ghostButton}
-          onClick={() =>
-            void runPicker(
-              pickDatasetFolder,
-              (path) => {
-                setOtherDir(path);
-                setPickNote(null);
-              },
-              { canceled: t.pickCancelled, failed: t.pickFailed },
-            ).then(setPickNote)
-          }
-        >
-          {t.browse}
-        </button>
-        <button
-          type="button"
-          style={button}
-          disabled={otherDir.trim() === "" || previewRunning || applyRunning}
-          onClick={() => void startPreview()}
-        >
-          {t.analyze}
-        </button>
-      </div>
-      {pickNote && <div style={mono}>{pickNote}</div>}
+        </ActionRow>
+        {pickNote && <div style={text}>{pickNote}</div>}
+      </LabStep>
 
       {(previewRunning || applyRunning) && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -423,38 +407,43 @@ export function MergePanel({
           </div>
         </div>
       )}
-      {previewJob?.state === "cancelled" && <div style={mono}>{t.cancelled}</div>}
-      {applyJob?.state === "cancelled" && <div style={mono}>{t.cancelled}</div>}
+      {previewJob?.state === "cancelled" && <div style={text}>{t.cancelled}</div>}
+      {applyJob?.state === "cancelled" && <div style={text}>{t.cancelled}</div>}
       {previewJob?.state === "failed" && <div style={danger}>{t.failed(previewJob.error ?? "")}</div>}
       {applyJob?.state === "failed" && <div style={danger}>{t.failed(applyJob.error ?? "")}</div>}
       {error && <div style={danger}>{t.failed(error)}</div>}
 
       {preview && (
         <>
-          <div style={sectionLabel}>{t.mappingTitle}</div>
-          <div style={mono}>{t.found(preview.found.a, preview.found.b)}</div>
-          {SIDES.some((s) => preview.repeated_within[s] > 0) && (
-            <div style={mono}>{t.repeatedWithin(preview.repeated_within.a, preview.repeated_within.b)}</div>
-          )}
-          <div style={mono}>{t.mappingHelp}</div>
-          {hints.map((group) => (
-            <div key={group.join("|")} style={mono}>
-              {t.similarHint(group.join(", "))}
-            </div>
-          ))}
-          <MappingTable
-            preview={preview}
-            rows={rows}
-            problems={problems}
-            onChange={(side, name, patch) => setRows((r) => updateRow(r, side, name, patch))}
-          />
-          <div style={mono}>{finalOrder(rows).join("  ›  ")}</div>
-          <div style={sectionLabel}>{t.resultTitle}</div>
-          {plan && <PlanView plan={plan} detection={preview.task === "detection"} />}
-          {plan && <DroppedView plan={plan} />}
-          <div style={sectionLabel}>{t.destTitle}</div>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 12 }}>
-            <div style={{ flex: 1, maxWidth: 420 }}>
+          <LabStep title={t.mappingTitle}>
+            <div style={mono}>{t.found(preview.found.a, preview.found.b)}</div>
+            {SIDES.some((s) => preview.repeated_within[s] > 0) && (
+              <div style={text}>{t.repeatedWithin(preview.repeated_within.a, preview.repeated_within.b)}</div>
+            )}
+            <LearnMore summary={lab.mappingMore}>{t.mappingHelp}</LearnMore>
+            {hints.map((group) => (
+              <div key={group.join("|")} style={warn}>
+                {t.similarHint(group.join(", "))}
+              </div>
+            ))}
+            <MappingTable
+              preview={preview}
+              rows={rows}
+              problems={problems}
+              onChange={(side, name, patch) => setRows((r) => updateRow(r, side, name, patch))}
+            />
+            <div style={mono}>{finalOrder(rows).join("  ›  ")}</div>
+          </LabStep>
+          <LabStep title={t.resultTitle}>
+            {plan && <PlanView plan={plan} detection={preview.task === "detection"} />}
+            {plan && <DroppedView plan={plan} />}
+          </LabStep>
+          <LabStep title={t.destTitle}>
+            <ActionRow
+              actions={
+                <ApplyButton label={t.apply} disabled={!canApply} onClick={() => void startApply()} />
+              }
+            >
               <TextField
                 label={t.destName}
                 value={destName}
@@ -463,33 +452,23 @@ export function MergePanel({
                 mono
                 error={destName !== "" && !destOk ? t.destInvalid : undefined}
               />
-            </div>
-            <button type="button" style={button} disabled={!canApply} onClick={() => void startApply()}>
-              {t.apply}
-            </button>
-          </div>
+            </ActionRow>
+          </LabStep>
         </>
       )}
 
       {result && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={sectionLabel}>{t.doneTitle}</div>
+        <div className="vf-lab-done">
+          <h3 style={{ ...stepTitle, margin: 0 }}>{t.doneTitle}</h3>
           <div style={mono}>{t.done(result.images, result.path)}</div>
           <div style={mono}>{t.linkedCopied(result.files_linked, result.files_copied)}</div>
           <div>
-            <button
-              type="button"
-              style={button}
-              onClick={() => {
-                onOpenResult(result.path);
-                setExpanded(false);
-              }}
-            >
+            <ActionButton icon={<FolderOpen />} onClick={() => onOpenResult(result.path)}>
               {t.openResult}
-            </button>
+            </ActionButton>
           </div>
         </div>
       )}
-    </div>
+    </LabTool>
   );
 }

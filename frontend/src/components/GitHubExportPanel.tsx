@@ -5,6 +5,8 @@ import {
 } from "../api/client";
 import { formatBytes } from "../lib/dataset-identity";
 import { useI18n } from "../i18n/useT";
+import { ActionButton } from "./ui/ActionButton";
+import { GitHubIcon } from "./ui/BrandIcons";
 
 // The only host a commit link may point at.
 const GITHUB_HOST = /^github\.com$/;
@@ -61,7 +63,9 @@ export function GitHubExportPanel({ runId }: { runId: string }) {
     finally { setBusy(false); }
   };
 
-  if (!open) return <button type="button" onClick={() => setOpen(true)}>{g.open}</button>;
+  // Closed: the service's mark and name; the button's name says what opening does.
+  if (!open) return <ActionButton icon={<GitHubIcon />} aria-label={g.open} title={g.open}
+    onClick={() => setOpen(true)}>{g.service}</ActionButton>;
   return <section aria-label={g.title} style={{ border: "1px solid var(--vf-panel-stroke)", borderRadius: 10, padding: 16 }}>
     <h3>{g.title}</h3>
     <button type="button" onClick={() => { setToken(""); setOpen(false); }} disabled={busy}>{g.close}</button>
