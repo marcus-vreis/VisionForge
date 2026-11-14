@@ -450,9 +450,12 @@ def test_every_section_belongs_to_a_step_and_says_what_it_does(tour: str) -> Non
         assert section.step in STEPS, (tour, section.id)
         pt = message("pt", section.summary)
         en = message("en", section.summary)
-        assert pt and en and pt != en, (tour, section.id)
+        assert pt, (tour, section.id)
+        assert en, (tour, section.id)
+        assert pt != en, (tour, section.id)
         # One plain sentence: two lines at most on the tab.
-        assert len(pt) <= 110 and len(en) <= 110, (tour, section.id)
+        assert len(pt) <= 110, (tour, section.id)
+        assert len(en) <= 110, (tour, section.id)
 
 
 def test_a_section_cannot_be_declared_without_its_step_and_sentence() -> None:

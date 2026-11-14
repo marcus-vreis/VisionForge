@@ -157,5 +157,6 @@ def test_each_section_names_its_step_and_a_sentence_in_the_language() -> None:
         "test",
     ]
     for pt_section, en_section in zip(pt, en, strict=True):
-        assert pt_section["summary"] and en_section["summary"]
+        assert pt_section["summary"]
+        assert en_section["summary"]
         assert pt_section["summary"] != en_section["summary"]
