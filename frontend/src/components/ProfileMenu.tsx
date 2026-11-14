@@ -132,7 +132,10 @@ export function ProfileMenu({
             animation: "pulse-dot 2.6s ease-in-out infinite",
           }}
         />
+        {/* The greeting gives way first on a narrow header (index.css): the
+            name is what identifies the profile. */}
         <span
+          className="vf-profile-greeting"
           style={{
             fontFamily: "var(--font-mono)",
             fontSize: 11,
