@@ -37,7 +37,7 @@ def _loader(n_batches: int) -> DataLoader[Any]:
     return DataLoader(data, batch_size=1, generator=torch.Generator().manual_seed(0))
 
 
-def test_a_slow_epoch_reports_its_batches_and_leaves_the_last_to_epoch_end() -> None:
+def test_a_slow_epoch_reports_its_batches_and_its_last() -> None:
     events: list[dict[str, Any]] = []
     wrapped = loop.BatchProgressLoader(
         _loader(5),
@@ -50,9 +50,9 @@ def test_a_slow_epoch_reports_its_batches_and_leaves_the_last_to_epoch_end() -> 
     batches = [b[0].item() for b in wrapped]
 
     assert batches == [0.0, 1.0, 2.0, 3.0, 4.0]
-    # One read per batch at 1 s each: 2 s have passed after batches 2 and 4,
-    # and batch 5 is the epoch's last, which epoch_end covers.
-    assert [e["batch"] for e in events] == [2, 4]
+    # One read per batch at 1 s each: 2 s have passed after batches 2 and 4;
+    # batch 5 is the epoch's last, reported although only 1 s passed since 4.
+    assert [e["batch"] for e in events] == [2, 4, 5]
     assert events[0] == {
         "event": "batch",
         "epoch": 3,
@@ -62,7 +62,8 @@ def test_a_slow_epoch_reports_its_batches_and_leaves_the_last_to_epoch_end() -> 
     }
 
 
-def test_a_fast_epoch_adds_nothing_to_the_stream() -> None:
+def test_a_fast_epoch_reports_only_its_last_batch() -> None:
+    """The interval never passes, yet the end of training is told (ADR-205)."""
     events: list[dict[str, Any]] = []
     wrapped = loop.BatchProgressLoader(
         _loader(5),
@@ -71,7 +72,40 @@ def test_a_fast_epoch_adds_nothing_to_the_stream() -> None:
         ),
     )
     assert len(list(wrapped)) == 5
+    assert events == [
+        {
+            "event": "batch",
+            "epoch": 1,
+            "batch": 5,
+            "total_batches": 5,
+            "total_epochs": 10,
+        }
+    ]
+
+
+def test_a_middle_batch_still_waits_for_the_interval() -> None:
+    events: list[dict[str, Any]] = []
+    reporter = loop.BatchProgressReporter(
+        events.append, 2, interval_s=2.0, clock=_SteppedClock(0.5)
+    )
+    reporter.start_epoch(1)
+    for index in range(1, 4):
+        reporter.batch_done(index, 4)
+    # 0.5 s per read: 1.5 s after the start when batch 3 ends, under 2 s.
     assert events == []
+
+
+def test_a_one_batch_epoch_reports_that_batch_once() -> None:
+    events: list[dict[str, Any]] = []
+    wrapped = loop.BatchProgressLoader(
+        _loader(1),
+        loop.BatchProgressReporter(
+            events.append, 3, interval_s=2.0, clock=_SteppedClock(0.01)
+        ),
+    )
+    wrapped.epoch = 2
+    assert len(list(wrapped)) == 1
+    assert [(e["epoch"], e["batch"], e["total_batches"]) for e in events] == [(2, 1, 1)]
 
 
 def test_the_wrapper_still_looks_like_the_loader() -> None:
@@ -135,7 +169,16 @@ def test_run_epochs_stamps_each_epoch_on_the_progress(
     writes.pool.shutdown()
 
     batch_epochs = [(e["epoch"], e["batch"]) for e in events if e["event"] == "batch"]
-    assert batch_epochs == [(2, 1), (2, 2), (2, 3), (3, 1), (3, 2), (3, 3)]
+    assert batch_epochs == [
+        (2, 1),
+        (2, 2),
+        (2, 3),
+        (2, 4),
+        (3, 1),
+        (3, 2),
+        (3, 3),
+        (3, 4),
+    ]
 
 
 def test_no_callback_means_the_plain_loader() -> None:

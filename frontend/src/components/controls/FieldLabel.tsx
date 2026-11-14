@@ -24,10 +24,12 @@ export function FieldLabel({
   const Label = htmlFor ? "label" : "span";
   return (
     <div
+      className="vf-field-label"
       style={{
         display: "flex",
         alignItems: "center",
         gap: 8,
+        minWidth: 0,
         marginBottom: 8,
         fontSize: 11,
         letterSpacing: "0.14em",
@@ -50,7 +52,9 @@ export function FieldLabel({
       )}
       {/* The label never wraps: a hint beside it squeezed "NOME DO / EXPERIMENTO"
           onto two lines, which pushed that field below its neighbours. The hint
-          gives way instead, cut with an ellipsis and whole in its tooltip. */}
+          gives way instead, cut with an ellipsis and whole in its tooltip. At
+          phone width there is no tooltip to hover, so the hint takes a line of
+          its own under the label (.vf-field-hint in index.css). */}
       <Label id={id} htmlFor={htmlFor} style={{ whiteSpace: "nowrap", flexShrink: 0 }}>{children}</Label>
       {help && <InfoDot text={help} />}
       {help && helpId && <span id={helpId} className="sr-only">{help}</span>}
@@ -58,6 +62,7 @@ export function FieldLabel({
         <span
           id={hintId}
           title={hint}
+          className="vf-field-hint"
           style={{
             marginLeft: "auto",
             minWidth: 0,

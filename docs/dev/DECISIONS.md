@@ -8237,3 +8237,46 @@ Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS
 - *A line pointer driven by a tracer (`sys.settrace` / `sys.monitoring`).* It slows the training it describes, and at loop speed the pointer would be noise.
 - *Animate the pointer through the loop on a timer.* It would look like tracing while being invented, which ADR-118 rules out.
 - *Keep two tabs and link them.* The link is the thing the user had to make; one screen removes it.
+
+## ADR-205 — The last batch of every epoch is always reported
+
+**Date:** 2026-11-14
+**Status:** Accepted
+**Amends:** ADR-204
+
+**Context:** ADR-204 left a known gap: `BatchProgressReporter.batch_done` skipped an epoch's last batch, leaving it to `epoch_end`. Validation runs between the two, so the "Código ao vivo" tab kept saying "train" through it, and an epoch shorter than the reporter's interval (about 2 s) sent no `batch` at all and showed the train + validation group for the whole run.
+
+**Decision:**
+
+- `batch_done` reports the epoch's last batch (`index >= total`) always, whatever the interval; the batches before it are still limited by the interval. This holds for the loops VisionForge owns (`BatchProgressLoader`) and for Ultralytics' (its `on_train_batch_end` fires for the last batch too).
+- `lib/run-steps.ts`: when the newest event is a `batch` with `batch >= total_batches`, the position is validation alone, with no pinned function; a smaller `batch` is still train alone in the loop function. Everything else of ADR-204 stays, PatchCore's phases included.
+
+**Consequences:** every epoch now adds one `batch` event to the stream, also in short runs whose streams used to hold only `start`, `epoch_end` and `end`; tests that pinned the old sequences were updated to the new contract. The progress bar reads `batch == total` as the epoch done, the same fraction its `epoch_end` gives, so it neither passes 100% nor steps back; on the last epoch it reaches 100% when training ends rather than after the last validation. Every tour has a validation step. For Ultralytics it is VisionForge's record of the epoch (`yolo_epoch`); the library's own `validate()` call sits in `yolo_loop`, which belongs to the train step, so YOLO's validation is shown through the code that reads its metrics. A run stopped mid-epoch does not report a last batch and keeps showing training until the stop.
+
+**Alternatives considered:**
+
+- *A dedicated `validation_start` event.* Clearer, but every trainer (and Ultralytics' callback) would need a new emission point and the frontend a new event type; the last `batch` already marks the same instant.
+- *Infer validation from time since the last `batch`.* It would guess, which ADR-118 rules out.
+
+## ADR-206 — The sample dataset that already exists answers 200, and three small layers of in-app help
+
+**Date:** 2026-11-14
+**Status:** Accepted
+**Amends:** ADR-115 and ADR-117 (the sample dataset), ADR-156 (the strategy step), ADR-201 (the History entry as the results page)
+
+**Context:** two things left over from the interface review. `POST /api/sample-dataset` answered 409 when `datasets/exemplo-<tarefa>/` already held files, and the client turned that 409 into success with `existed: true`. Every caller treated it as success, yet the browser logged a failed request each time, which reads as a bug to anyone with the console open. And the interface said what each thing does, in the terms of someone who already knows it, but not when to pick it or what to do after: a strategy selector listed six strategies with a one-line recipe each, a finished run showed its metrics and stopped, and the empty History said only that it was empty.
+
+**Decision:**
+
+- `POST /api/sample-dataset` answers **200** with `existed: true`, the path and empty `classes` and `counts` when the folder is already there, and **201** with `existed: false` when it wrote it. The folder is still never read or touched (it may hold the researcher's own files). 409 leaves the route's contract; the client reads `existed` from the body and treats any error status as a failure.
+- **When to use.** Under every strategy selector, one sentence says when that strategy is the right choice (`components/WhenToUse.tsx`, `whenToUse` in the dictionaries): the classification block selector and the strategy card of the other tasks. The selectors' existing hints stay: they say what the strategy does.
+- **What next.** The run detail shows, under the top metrics, at most two suggestions with one sentence and at most one action each (`lib/next-steps.ts`, `components/NextSteps.tsx`). The rules read only what the run recorded; where none applies the block is absent. No rule diagnoses from a new heuristic.
+- **The empty History** says what will appear there and offers the "first training" guide.
+- Each of the three is one sentence where the decision is made. No panel, tour or modal was added.
+
+**Consequences:** a second click on "usar dataset de exemplo" logs nothing in the console. A client written against the 409 (none is known outside this repository) would now read a 200 it may not expect; `existed` tells the two cases apart. The "when to use" sentences are advice, not rules: they are in the dictionaries so a reviewer can correct one without touching code.
+
+**Alternatives considered:**
+
+- *Keep the 409 and silence it in the client.* A browser logs a failed request whatever the page does with it.
+- *A help panel or a longer tour.* The complaint that started the interface work was too much text on the screen; a sentence where the choice happens costs one line.

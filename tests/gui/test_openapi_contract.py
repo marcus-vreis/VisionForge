@@ -103,10 +103,11 @@ def test_resume_errors_are_documented() -> None:
     assert {"404", "409", "500"} <= responses.keys()
 
 
-def test_sample_dataset_conflict_is_documented() -> None:
-    """Clients can discover the existing-folder response carrying a usable path."""
+def test_sample_dataset_reuse_is_documented() -> None:
+    """Clients can discover that an existing folder answers 200, not an error."""
     responses = app.openapi()["paths"]["/api/sample-dataset"]["post"]["responses"]
-    assert {"400", "409", "500"} <= responses.keys()
+    assert {"200", "201", "400", "500"} <= responses.keys()
+    assert "409" not in responses
 
 
 def _operations(openapi: dict[str, Any]) -> Iterator[tuple[str, dict[str, Any]]]:

@@ -1006,6 +1006,8 @@ class SampleDatasetResponse(BaseModel):
     image and mask pairs); ``classes`` is what the layout declares (class folders,
     ``classes.txt`` names, mask pixel values, or the ``test/`` subfolders of an
     anomaly dataset); ``targets`` is the CSV target columns of a regression one.
+    ``existed`` is true when the folder was already there and is reused as it
+    is (ADR-206): it is not read, so ``classes`` and ``counts`` come empty.
     """
 
     task: str = "classification"
@@ -1013,6 +1015,7 @@ class SampleDatasetResponse(BaseModel):
     classes: list[str]
     counts: dict[str, int]
     targets: list[str] = []
+    existed: bool = False
 
 
 __all__ = [

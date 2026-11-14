@@ -10,7 +10,8 @@
  * times a second and no tracer runs. When the stream cannot tell two steps apart
  * (data, model and loss while the run prepares; training and validation inside an
  * epoch whose trainer sent no `batch` yet), the group is what runs, and the tab
- * says so instead of picking one.
+ * says so instead of picking one. The epoch's last `batch` is always sent
+ * (ADR-205), so validation is told apart once training is over.
  *
  * Pure on purpose: no DOM and no fetch, so it is covered by plain vitest.
  */
@@ -101,7 +102,8 @@ function phasePosition(label: string): RunPosition {
  *   data, the model and the loss, as a group;
  * - after `start`, or after an epoch that is not the last: an epoch in flight,
  *   training or validation, as a group, in the function that walks the batches;
- * - a `batch` is the newest word: training, in that function;
+ * - a `batch` is the newest word: training, in that function; the epoch's last
+ *   batch (`batch >= total_batches`) means its validation, alone;
  * - a PatchCore `phase`: extracting features and building the bank are its
  *   training (the bank pins its function), scoring is its validation.
  */
@@ -113,7 +115,11 @@ export function runPosition(events: readonly TrainingEvent[], stage: StoryStage)
     case "start":
       return { steps: IN_EPOCH, pins: LOOP_SECTIONS };
     case "batch":
-      return { steps: ["train"], pins: LOOP_SECTIONS };
+      // The trainer always reports an epoch's last batch (ADR-205): past it the
+      // epoch validates. No pin: the stream proves no particular function there.
+      return latest.batch >= latest.total_batches
+        ? { steps: ["validate"], pins: [] }
+        : { steps: ["train"], pins: LOOP_SECTIONS };
     case "epoch_end":
       return latest.total_epochs > 0 && latest.epoch >= latest.total_epochs
         ? { steps: ["test"], pins: [] }

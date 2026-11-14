@@ -40,8 +40,8 @@ describe("runSample", () => {
     expect(calls).toEqual([[`C:/work/datasets/exemplo-${task}`, SAMPLE_SETUP[task]]]);
   });
 
-  it("reuses the path of a folder that already exists (409)", async () => {
-    vi.stubGlobal("fetch", reply(409, { detail: "já existe", path: "C:/work/datasets/exemplo-segmentacao" }));
+  it("reuses the path of a folder that already exists", async () => {
+    vi.stubGlobal("fetch", reply(200, { task: "segmentation", path: "C:/work/datasets/exemplo-segmentacao", classes: [], targets: [], counts: {}, existed: true }));
     const calls: unknown[][] = [];
 
     const note = await runSample("segmentation", (...a) => calls.push(a), failed);

@@ -230,7 +230,7 @@ describe("the sample dataset action, per task", () => {
   });
 
   it("applies the setup to a folder that already existed too", async () => {
-    vi.stubGlobal("fetch", reply(409, { detail: "já existe", path: "C:/work/datasets/exemplo-segmentacao" }));
+    vi.stubGlobal("fetch", reply(200, { task: "segmentation", path: "C:/work/datasets/exemplo-segmentacao", classes: [], targets: [], counts: {}, existed: true }));
     const calls: unknown[][] = [];
     const ctx: GuideContext = {
       selectTask: () => {},

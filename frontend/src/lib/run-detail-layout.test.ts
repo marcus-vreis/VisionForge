@@ -10,6 +10,7 @@ describe("detailSections", () => {
   it("puts a run's numbers and charts before its actions and its reference", () => {
     expect(detailSections({})).toEqual([
       "metrics",
+      "nextSteps",
       "charts",
       "actions",
       "tests",
@@ -31,6 +32,13 @@ describe("detailSections", () => {
     expect(sections).not.toContain("tests");
     expect(sections).not.toContain("member");
     expect(sections.indexOf("charts")).toBeLessThan(sections.indexOf("dataset"));
+  });
+
+  it("puts what to do next right under the numbers, for a run and for a group", () => {
+    for (const detail of [{}, { group_id: "g1" }, { group: { kind: "replicates" } }]) {
+      const sections = detailSections(detail);
+      expect(sections.indexOf("nextSteps")).toBe(sections.indexOf("metrics") + 1);
+    }
   });
 });
 

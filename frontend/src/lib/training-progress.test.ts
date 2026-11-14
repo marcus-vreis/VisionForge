@@ -48,6 +48,13 @@ describe("liveBatchFraction", () => {
     ).toBeCloseTo(0.125);
   });
 
+  it("reads an epoch's last batch as that epoch done, never past the end", () => {
+    // Batch 10 of 10 (always reported, ADR-205) is where epoch_end will put the bar.
+    expect(liveBatchFraction([start, epochEnd(1), batch(2, 10)])).toBeCloseTo(2 / 4);
+    expect(liveBatchFraction([start, epochEnd(3), batch(4, 10)])).toBe(1);
+    expect(liveBatchFraction([start, batch(4, 11)])).toBe(1);
+  });
+
   it("is null with no batch at all", () => {
     expect(liveBatchFraction([start, epochEnd(1)])).toBeNull();
   });

@@ -583,32 +583,21 @@ export interface SampleDataset {
   existed: boolean;
 }
 
-/** Create `datasets/exemplo-<task>/` on the server. A 409 means the folder is
- *  already there: the call then resolves with `existed: true` and its path, so the
- *  guide can use it. Any other failure rejects. */
+/** Create `datasets/exemplo-<task>/` on the server, or get the one already
+ *  there: the server answers 200 with `existed: true` for a folder it reuses
+ *  and 201 for one it wrote now (ADR-206). A failure rejects. */
 export async function createSampleDataset(
   task = "classification",
 ): Promise<SampleDataset> {
-  try {
-    const made = await request<Omit<SampleDataset, "existed">>(
-      "/sample-dataset",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ task }),
-      },
-    );
-    return { ...made, existed: false };
-  } catch (e) {
-    const path =
-      e instanceof ApiError && e.status === 409
-        ? (e.body as { path?: unknown } | null | undefined)?.path
-        : undefined;
-    if (typeof path === "string" && path !== "") {
-      return { task, path, classes: [], targets: [], counts: {}, existed: true };
-    }
-    throw e;
-  }
+  const made = await request<Omit<SampleDataset, "existed"> & { existed?: boolean }>(
+    "/sample-dataset",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ task }),
+    },
+  );
+  return { ...made, existed: made.existed === true };
 }
 
 export interface DatasetDownloadRequest {

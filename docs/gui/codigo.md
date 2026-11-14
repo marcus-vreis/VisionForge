@@ -24,8 +24,10 @@ linhas. Ela junta as antigas abas "Como funciona" e "Código" (ADR-204). Tudo aq
   execução". A posição vem só do que o treino informa (início, lotes, fim de
   cada época, fim): um laço passa pelas mesmas linhas milhares de vezes por
   segundo, e nenhum rastreador roda. Quando os eventos não separam dois passos
-  (dados e modelo na preparação; treino e validação dentro de uma época
-  curta), o grupo inteiro fica marcado.
+  (dados e modelo na preparação; treino e validação no começo de uma época,
+  antes do primeiro lote informado), o grupo inteiro fica marcado. O último
+  lote de cada época é sempre informado, então a validação aparece sozinha
+  depois dele (ADR-205).
 - **Você pode olhar outro passo.** Clicar em outro passo ou função pausa o
   acompanhamento; **voltar ao que está rodando** retoma. Depois que o treino
   termina, nada fica marcado e a navegação é livre.

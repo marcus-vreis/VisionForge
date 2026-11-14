@@ -11,6 +11,7 @@ export type DetailSection =
   | "member"
   | "group"
   | "metrics"
+  | "nextSteps"
   | "charts"
   | "actions"
   | "tests"
@@ -34,16 +35,20 @@ export type ReferenceSection = (typeof REFERENCE_SECTIONS)[number];
 /** The blocks of a run's detail, top to bottom.
  *
  * A group (ADR-113) is a job, not a training: its own summary leads, and it has
- * no checkpoint to test. A seed of a group says so before its numbers.
+ * no checkpoint to test. A seed of a group says so before its numbers. What to
+ * do next ("E agora?") sits right under the numbers it is read from.
  */
 export function detailSections(detail: {
   group?: unknown;
   group_id?: string | null;
 }): DetailSection[] {
-  if (detail.group) return ["group", "metrics", "charts", "actions", ...REFERENCE_SECTIONS];
+  if (detail.group) {
+    return ["group", "metrics", "nextSteps", "charts", "actions", ...REFERENCE_SECTIONS];
+  }
   return [
     ...(detail.group_id ? (["member"] as const) : []),
     "metrics",
+    "nextSteps",
     "charts",
     "actions",
     "tests",

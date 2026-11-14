@@ -1,7 +1,9 @@
 # Estratégias: quantos treinos rodar e como compará-los
 
 A etapa **Estratégia** decide se o botão da barra roda um treino ou vários.
-Todas partem da mesma configuração das outras etapas.
+Todas partem da mesma configuração das outras etapas. Sob o seletor, a linha
+**Quando usar** resume em uma frase a situação em que a estratégia marcada
+serve.
 
 ![Etapa Estratégia da classificação](../images/vf-strategy.png)
 

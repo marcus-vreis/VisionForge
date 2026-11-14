@@ -6,9 +6,9 @@ a 1440×960, tema escuro, pt-BR. A versão do cabeçalho fica oculta na
 captura. Não edite à mão: rode o script de novo e confira com
 `python scripts/capture_docs_images.py --check`.
 
-- Commit: `af1e007d1d7e1b2d00a60afac7d55865e9ee887d`
+- Commit: `19242b10c155292d2755c41039e46c7025c3d17a`
 - Versão: `0.21.0`
-- Data: 2026-11-13
+- Data: 2026-11-14
 
 | Imagem | Mostra | Dimensões (px) |
 | --- | --- | --- |

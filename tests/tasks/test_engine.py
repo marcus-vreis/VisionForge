@@ -105,7 +105,10 @@ class TestGenericTaskEngineLevel1:
 
         batches = [e for e in events if e["event"] == "batch"]
         assert {e["epoch"] for e in batches} == {1, 2, 3}
-        assert all(e["batch"] < e["total_batches"] for e in batches)
+        assert all(e["batch"] <= e["total_batches"] for e in batches)
+        # Each epoch tells its last batch, where validation begins (ADR-205).
+        last = {e["epoch"] for e in batches if e["batch"] == e["total_batches"]}
+        assert last == {1, 2, 3}
         assert all(e["total_epochs"] == 3 for e in batches)
 
     def test_trains_streams_and_writes_run_json(self, tmp_path: Path) -> None:

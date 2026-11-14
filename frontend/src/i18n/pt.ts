@@ -1554,6 +1554,18 @@ export const pt = {
       status: "status",
     },
   },
+  // "E agora?" under a run's numbers (components/NextSteps.tsx, lib/next-steps.ts).
+  nextSteps: {
+    title: "E agora?",
+    unfinished: "Este treino não terminou; os números acima podem estar incompletos.",
+    unfinishedResume: "Este treino não terminou. Retome de onde parou.",
+    stillImproving:
+      "A melhor época foi a última: o modelo ainda melhorava. Vale treinar por mais épocas.",
+    untested: "Ainda não há resultado no split de teste. Avalie nele antes de reportar um número.",
+    singleRun:
+      "Um treino só não mostra quanto o resultado varia. Rode réplicas com outras seeds antes de comparar.",
+    resume: "Retomar",
+  },
   // The detection form (components/DetectionPanel.tsx). Ultralytics hyperparameter
   // names and their short labels (lrf, Cosine LR, Mosaic, imgsz…) read the same in
   // every language and are repeated in both dictionaries; the hints beside them and
@@ -1828,8 +1840,10 @@ export const pt = {
     loading: "carregando histórico…",
     errorTitle: "Erro",
     loadFailed: "Erro ao carregar histórico.",
-    emptyTitle: "Nenhum treinamento ainda",
-    emptyHint: "Execute o primeiro experimento para vê-lo aqui.",
+    emptyTitle: "Nenhum treino ainda",
+    emptyHint:
+      "Cada treino que terminar aparece aqui, com as métricas, as curvas e o modelo para baixar ou reusar.",
+    emptyGuide: "Fazer o primeiro treino com o guia",
     selectModeTip: "Modo seleção — marque os runs que quer excluir ou comparar.",
     selectedTip: (n: number) =>
       `${n} ${n === 1 ? "selecionado" : "selecionados"} — 🗑 exclui; ↔ compara a partir de 2.`,
@@ -2675,6 +2689,27 @@ export const pt = {
       replicates: "mesma config, N seeds → média ± IC 95%",
       compare: "uma run por arquitetura, mesma config → tabela comparativa",
       replicatedComparison: "2 a 4 variantes de um campo, mesmas seeds → teste pareado",
+    },
+  },
+  // One sentence under a strategy selector saying when that strategy is the
+  // right choice (components/WhenToUse.tsx). The selectors' own hints say what
+  // each one does; these are for choosing.
+  whenToUse: {
+    label: "Quando usar",
+    strategies: {
+      simple:
+        "No primeiro treino de um dataset, ou para acertar a config antes de gastar mais tempo.",
+      cv: "Com dataset pequeno, em que uma única divisão de validação daria um número instável.",
+      sweep:
+        "Quando você ainda não sabe quais hiperparâmetros usar e quer que a busca teste por você.",
+      grid: "Quando há poucos valores a testar e você quer ver todas as combinações.",
+      random:
+        "Quando o espaço é grande demais para testar tudo: sorteia um número fixo de configurações.",
+      replicates:
+        "Quando o número vai para um relatório ou artigo: dá média e intervalo, não um treino só.",
+      compare: "Quando a dúvida é qual arquitetura serve melhor a este dataset.",
+      replicatedComparison:
+        "Quando você quer afirmar, com um teste estatístico, que uma variante é melhor que outra.",
     },
   },
   // The K-fold launcher (components/CvCard.tsx).

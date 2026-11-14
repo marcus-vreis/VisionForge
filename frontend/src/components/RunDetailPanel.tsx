@@ -1,4 +1,4 @@
-import { Fragment, lazy, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, lazy, useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
 import {
   Copy,
   FileCode2,
@@ -56,6 +56,9 @@ import { RunCurves } from "./RunCurves";
 import { runTaskKey } from "../lib/compare-metrics";
 import { runCurveGroups } from "../lib/run-curves";
 import { RerunActions, type RerunHandle } from "./RerunActions";
+import { rerunRequest } from "../lib/history-rerun";
+import { nextSteps } from "../lib/next-steps";
+import { NextSteps } from "./NextSteps";
 import { DownloadBundleButton } from "./DownloadBundleButton";
 import { ActionButton } from "./ui/ActionButton";
 
@@ -173,6 +176,7 @@ export function RunDetailPanel({
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState<{ kind: "info" | "error" | "success"; text: string } | null>(null);
   const [showTestForm, setShowTestForm] = useState(false);
+  const testsSectionId = useId();
 
   // ONNX export state — kept local because the result is single-shot, not part
   // of the persistent run.json.
@@ -466,6 +470,15 @@ export function RunDetailPanel({
     }
   };
 
+  // "E agora?" points here from the top of the page; the tests block sits below
+  // the charts and the actions, so the open form is brought into view.
+  const openTestForm = () => {
+    setShowTestForm(true);
+    requestAnimationFrame(() =>
+      document.getElementById(testsSectionId)?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
+  };
+
   const runTest = async () => {
     if (!testForm.data_dir.trim()) {
       setTestMsg({ kind: "error", text: t.runDetail.tests.needFolder });
@@ -573,6 +586,23 @@ export function RunDetailPanel({
           </>
         );
 
+      case "nextSteps": {
+        const load = rerun ? rerunRequest(t, detail, rerun.families, "load") : null;
+        const replicates = rerun ? rerunRequest(t, detail, rerun.families, "replicates") : null;
+        return (
+          <NextSteps
+            steps={nextSteps(detail)}
+            handlers={{
+              resume: detail.resumable ? () => void doResume() : undefined,
+              reuse: rerun && load ? () => rerun.onRerun(load) : undefined,
+              replicate: rerun && replicates ? () => rerun.onRerun(replicates) : undefined,
+              test: detail.group ? undefined : openTestForm,
+            }}
+            disabled={{ resume: resuming }}
+          />
+        );
+      }
+
       case "charts":
         return (
           <>
@@ -620,6 +650,7 @@ export function RunDetailPanel({
                     <img
                       src={url}
                       alt={label}
+                      className="vf-saved-plot"
                       style={{ width: "100%", height: "auto", display: "block" }}
                     />
                     <div
@@ -755,6 +786,7 @@ export function RunDetailPanel({
       case "tests":
         return detail.group ? null : (
           <Section
+            id={testsSectionId}
             title={t.runDetail.tests.title}
             action={
               <ActionButton
@@ -1506,6 +1538,8 @@ interface SectionProps {
   title: string;
   children: React.ReactNode;
   action?: React.ReactNode;
+  /** Lets another part of the page bring this block into view. */
+  id?: string;
 }
 
 const SECTION_TITLE_STYLE: CSSProperties = {
@@ -1518,9 +1552,10 @@ const SECTION_TITLE_STYLE: CSSProperties = {
 
 const SECTION_HINT_STYLE: CSSProperties = { fontSize: 12, color: "var(--vf-text-muted)" };
 
-function Section({ title, children, action }: SectionProps) {
+function Section({ title, children, action, id }: SectionProps) {
   return (
     <section
+      id={id}
       style={{
         padding: "14px 16px",
         background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
