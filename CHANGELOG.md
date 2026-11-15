@@ -191,8 +191,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
-- Em telas estreitas o cabeçalho quebra linha em vez de cortar idioma, tema, guia e perfil, que ficavam fora da tela; o relógio some abaixo de 1100 px. Na etapa Dados, o campo de pasta, **Escolher pasta** e as três subpastas cabem em 375 px, e no celular a dica de um campo ocupa a própria linha em vez de terminar em reticências.
+- Em telas estreitas o cabeçalho quebra linha em vez de cortar idioma, tema, guia e perfil, que ficavam fora da tela. Abaixo de 1100 px o relógio some e o chip do perfil mostra só o nome, o que mantém o cabeçalho em uma linha até 1024 px. Na etapa Dados, o campo de pasta, **Escolher pasta** e as três subpastas cabem em 375 px, e no celular a dica de um campo ocupa a própria linha em vez de terminar em reticências.
 - No tema escuro, as miniaturas dos gráficos gravados (PNG de fundo branco) ficam atenuadas e voltam ao normal sob o mouse ou o foco. O arquivo e as cores não mudam.
+- A barra de progresso do treino não chega mais a 100% antes da validação da última época: o último batch fica meio batch antes do fim da época.
+- As explicações de K-fold, grid search e random search, na etapa Estratégia da classificação, passam de 10 px para 12 px.
 - A interface não mostra mais um perfil "padrão": o primeiro perfil aparece só pelo nome. A primeira entrada pede nome e pronome e nada mais; com um perfil só, entra direto; com mais de um, a escolha aparece em toda carga da página, com o último usado marcado (antes, uma vez por aba) (ADR-202).
 - Os valores extras de um campo no grid search têm a altura e a largura do campo original, e **+ valor** ocupa a linha inteira.
 - No Histórico em português, o estado da execução aparece como "concluído", "em andamento" ou "falhou", e as métricas como "Melhor época" e "Épocas treinadas".

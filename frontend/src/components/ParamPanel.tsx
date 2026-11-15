@@ -543,9 +543,9 @@ function BlockSelector({
         <div
           style={{
             fontFamily: "var(--font-mono)",
-            fontSize: 10,
+            fontSize: 12,
             color: "var(--vf-text-muted)",
-            lineHeight: 1.5,
+            lineHeight: 1.6,
             marginTop: 2,
           }}
         >
@@ -556,9 +556,9 @@ function BlockSelector({
         <div
           style={{
             fontFamily: "var(--font-mono)",
-            fontSize: 10,
+            fontSize: 12,
             color: "var(--vf-text-muted)",
-            lineHeight: 1.5,
+            lineHeight: 1.6,
             marginTop: 2,
           }}
         >
@@ -569,9 +569,9 @@ function BlockSelector({
         <div
           style={{
             fontFamily: "var(--font-mono)",
-            fontSize: 10,
+            fontSize: 12,
             color: "var(--vf-text-muted)",
-            lineHeight: 1.5,
+            lineHeight: 1.6,
             marginTop: 2,
           }}
         >

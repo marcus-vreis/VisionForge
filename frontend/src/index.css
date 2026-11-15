@@ -818,9 +818,11 @@ button:focus-visible > .vf-saved-plot { filter: none; }
    the components, hence the !important. */
 @media (max-width: 1100px) {
   /* Below this the header's tools no longer fit beside the brand. The clock is
-     the one thing there every screen already shows, so it gives up its place
-     first and the row holds down to a small laptop. */
+     the one thing there every screen already shows, and the profile chip is
+     still the profile without its greeting: both give up their place so the
+     header stays one row down to a 1024px laptop. */
   .vf-app-header-clock { display: none; }
+  .vf-profile-greeting { display: none; }
 }
 @media (max-width: 640px) {
   .vf-app-main { padding: 20px 12px !important; padding-bottom: max(96px, var(--vf-bar-clearance, 0px)) !important; }

@@ -48,11 +48,24 @@ describe("liveBatchFraction", () => {
     ).toBeCloseTo(0.125);
   });
 
-  it("reads an epoch's last batch as that epoch done, never past the end", () => {
-    // Batch 10 of 10 (always reported, ADR-205) is where epoch_end will put the bar.
-    expect(liveBatchFraction([start, epochEnd(1), batch(2, 10)])).toBeCloseTo(2 / 4);
-    expect(liveBatchFraction([start, epochEnd(3), batch(4, 10)])).toBe(1);
-    expect(liveBatchFraction([start, batch(4, 11)])).toBe(1);
+  it("holds an epoch's last batch short of the epoch's end: its validation still runs", () => {
+    // Batch 10 of 10 is always reported (ADR-205) and the validation follows
+    // it, so the bar stops half a batch before where epoch_end will put it.
+    expect(liveBatchFraction([start, epochEnd(1), batch(2, 10)])).toBeCloseTo((1 + 0.95) / 4);
+    expect(liveBatchFraction([start, epochEnd(3), batch(4, 10)])).toBeCloseTo((3 + 0.95) / 4);
+    // A count past the total is held at the same place, never at 100%.
+    expect(liveBatchFraction([start, batch(4, 11)])).toBeCloseTo((3 + 0.95) / 4);
+  });
+
+  it("never steps back when the last batch follows the one before it", () => {
+    const before = liveBatchFraction([start, batch(2, 9)]) ?? 0;
+    const last = liveBatchFraction([start, batch(2, 10)]) ?? 0;
+    expect(last).toBeGreaterThan(before);
+  });
+
+  it("puts an epoch of a single batch halfway while it validates", () => {
+    const one: TrainingEvent = { event: "batch", epoch: 1, batch: 1, total_batches: 1, total_epochs: 2 };
+    expect(liveBatchFraction([start, one])).toBeCloseTo(0.25);
   });
 
   it("is null with no batch at all", () => {
