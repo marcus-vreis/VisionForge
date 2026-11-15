@@ -1131,6 +1131,17 @@ export const en: Dict = {
     dfl: "Weight of the distribution focal loss (DFL), which refines the box edges.",
   },
   paramPanel: {
+    // An imported YAML can name a model of the researcher's own or a timm one; see pt.ts.
+    otherModel: {
+      label: { custom_model: "Your own model", timm_model: "timm model" },
+      note: {
+        custom_model: (name: string) =>
+          `The imported YAML uses your model **${name}**, from user_models/. It is the one that will train: the Architecture and the Pretrained weights below are ignored.`,
+        timm_model: (name: string) =>
+          `The imported YAML uses the timm model **${name}**. It is the one that will train: the Architecture below is ignored.`,
+      },
+      useBuiltin: "Use the architecture below",
+    },
     sectionLabels: {
       model: "Model",
       training: "Training",
@@ -2889,9 +2900,14 @@ export const en: Dict = {
       test_auroc: "AUROC (test)",
       test_image_f1: "Image F1 (test)",
       test_threshold: "Decision threshold (test)",
-      auroc: "AUROC (val)",
-      image_f1: "Image F1 (val)",
-      threshold: "Decision threshold (val)",
+      // Anomaly has no validation split; see the same lines in pt.ts.
+      auroc: "AUROC (best epoch)",
+      image_f1: "Image F1 (best epoch)",
+      threshold: "Decision threshold (best epoch)",
+      best_auroc: "Best AUROC",
+      mse: "MSE (val)",
+      test_mse: "MSE (test)",
+      best_val_miou: "Best mIoU (val)",
     },
     direction: {
       higher: "higher is better",
@@ -2972,9 +2988,9 @@ export const en: Dict = {
       val_miou: "Val mIoU",
       val_dice: "Val Dice",
       val_pixel_acc: "Val pixel accuracy",
-      val_auroc: "Val AUROC",
-      val_image_f1: "Val image F1",
-      val_threshold: "Val decision threshold",
+      val_auroc: "AUROC (test)",
+      val_image_f1: "Image F1 (test)",
+      val_threshold: "Decision threshold",
     },
   },
   // The "Starting from zero" screen (ADR-207); see the same block in pt.ts.

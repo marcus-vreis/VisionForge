@@ -98,6 +98,10 @@ O que normalmente se faz à mão, ou se esquece, o VisionForge faz em todo trein
 | Detecção | layout YOLO (`images/<split>` e `labels/<split>`, ou `<split>/images` e `<split>/labels`) ou um `data.yaml`; COCO se converte no laboratório de datasets | `map50_95` |
 | Anomalia | estilo MVTec AD: `train/good/` só com imagens normais; `test/good/` e uma subpasta por defeito | `auroc` |
 
+A anomalia não tem split de validação: o treino pontua cada época no split de
+teste, e é por isso que o resultado mostra "AUROC (melhor época)" ao lado de
+"AUROC (teste)", sem nenhum "(val)".
+
 A métrica principal ordena o ranking das estratégias quando você não escolhe
 outra. Os nomes de colunas e de pastas acima são os padrões da configuração
 (`image_column`, `target_columns`, `normal_dir`, ...). A detecção tem dois backends, Ultralytics e torchvision; a

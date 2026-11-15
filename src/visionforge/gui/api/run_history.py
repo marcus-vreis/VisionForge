@@ -261,6 +261,21 @@ def run_span(
     return started, finished
 
 
+def _model_arch(model: dict[str, Any]) -> str | None:
+    """The architecture a run trained, by the name the researcher would use.
+
+    `custom_model` and `timm_model` replace the builtin when the model is built
+    (utils/config.py), while `model.name` stays in the config at its default: a
+    run of `my_net` used to be listed as resnet18.
+    """
+    for source in ("custom_model", "timm_model"):
+        chosen = model.get(source)
+        if isinstance(chosen, str) and chosen.strip():
+            return chosen.strip()
+    name = model.get("name")
+    return str(name) if name else None
+
+
 def parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
     """Build a RunSummary from a parsed run.json dict."""
     status: str = data["status"]
@@ -284,7 +299,7 @@ def parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
 
     # Custom tasks declare no architecture; the researcher's label is the most
     # useful thing to show in that column.
-    model_arch = (config.get("model") or {}).get("name") or data.get("task_label", task)
+    model_arch = _model_arch(config.get("model") or {}) or data.get("task_label", task)
 
     dataset_name, dataset_root = dataset_identity(data)
     resumable, configured_epochs = resume_status(run_dir, data)

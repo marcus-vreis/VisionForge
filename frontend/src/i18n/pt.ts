@@ -1175,6 +1175,18 @@ export const pt = {
   // that ParamPanel's <Rich> turns into elements, so a translation can reorder
   // the words around them.
   paramPanel: {
+    // Um YAML importado pode trazer `model.custom_model` ou `model.timm_model`,
+    // que o formulário não tem como escolher (lib/model-source.ts).
+    otherModel: {
+      label: { custom_model: "Modelo próprio", timm_model: "Modelo timm" },
+      note: {
+        custom_model: (name: string) =>
+          `O YAML importado usa o seu modelo **${name}**, de user_models/. É ele que vai treinar: a Arquitetura e os Pesos pré-treinados abaixo são ignorados.`,
+        timm_model: (name: string) =>
+          `O YAML importado usa o modelo timm **${name}**. É ele que vai treinar: a Arquitetura abaixo é ignorada.`,
+      },
+      useBuiltin: "Usar a arquitetura abaixo",
+    },
     sectionLabels: {
       model: "Modelo",
       training: "Treinamento",
@@ -3158,9 +3170,16 @@ export const pt = {
       test_auroc: "AUROC (teste)",
       test_image_f1: "F1 da imagem (teste)",
       test_threshold: "Limiar de decisão (teste)",
-      auroc: "AUROC (val)",
-      image_f1: "F1 da imagem (val)",
-      threshold: "Limiar de decisão (val)",
+      // A anomalia não tem split de validação: o treino pontua cada época no
+      // split de teste (core/anomaly_trainer.py), então estes três não são "(val)".
+      auroc: "AUROC (melhor época)",
+      image_f1: "F1 da imagem (melhor época)",
+      threshold: "Limiar de decisão (melhor época)",
+      best_auroc: "Melhor AUROC",
+      // Só o detalhe da execução mostra estes; a comparação não os lista.
+      mse: "MSE (val)",
+      test_mse: "MSE (teste)",
+      best_val_miou: "Melhor mIoU (val)",
     },
     // Which way a metric improves, beside its name; and what the marked cell of a
     // row is. The mark describes the numbers: it is not a verdict on the runs.
@@ -3252,9 +3271,10 @@ export const pt = {
       val_miou: "Val mIoU",
       val_dice: "Val Dice",
       val_pixel_acc: "Val acurácia de pixel",
-      val_auroc: "Val AUROC",
-      val_image_f1: "Val F1 da imagem",
-      val_threshold: "Val limiar de decisão",
+      // O backend chama de `val_`, mas a anomalia pontua cada época no split de teste.
+      val_auroc: "AUROC (teste)",
+      val_image_f1: "F1 da imagem (teste)",
+      val_threshold: "Limiar de decisão",
     },
   },
   // The first-run guide (components/GuidedTour.tsx). The steps are `tour`.
