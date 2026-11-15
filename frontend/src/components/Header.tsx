@@ -64,6 +64,7 @@ export function Header({
   pronoun,
   onChangeName,
   onGuide,
+  onLearn,
   profile,
   sharedServer = false,
   onProfileSaved,
@@ -87,6 +88,8 @@ export function Header({
   colabTrainBlocked?: string;
   /** Abre um guia escolhido no menu (ADR-104, ADR-115). */
   onGuide?: (id: GuideId) => void;
+  /** Opens the "Começando do zero" page from the guide menu. */
+  onLearn?: () => void;
   /** Perfil em uso (ADR-114): o menu do chip edita as integrações dele. */
   profile?: ProfileInfo | null;
   /** Mais de um perfil: o menu oferece "trocar de perfil" em vez de "novo perfil". */
@@ -238,7 +241,7 @@ export function Header({
           ))}
         </div>
         <ThemeSwitch />
-        {onGuide && <GuideMenu onSelect={onGuide} />}
+        {onGuide && <GuideMenu onSelect={onGuide} onLearn={onLearn} />}
         {userName && (
           <ProfileMenu
             name={userName}

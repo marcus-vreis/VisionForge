@@ -123,6 +123,9 @@ import { taskDefinitions } from "./types/tasks";
 const HistoryOverlay = lazy(() =>
   import("./components/HistoryOverlay").then((m) => ({ default: m.HistoryOverlay })),
 );
+const LearnOverlay = lazy(() =>
+  import("./components/learn/LearnOverlay").then((m) => ({ default: m.LearnOverlay })),
+);
 
 /** What the training sheet shows about a run, fixed when it is submitted: the
  *  forms go on changing while it trains or waits (ADR-159). */
@@ -174,6 +177,9 @@ export default function App() {
   // "convite" na primeira visita; um id de guia quando escolhido no menu do
   // cabeçalho (ADR-115).
   const [tour, setTour] = useState<"none" | "convite" | GuideId>("none");
+  // The "Começando do zero" page (ADR-207), opened from the guide menu or the
+  // first-visit invitation.
+  const [showLearn, setShowLearn] = useState(false);
   // Set by the header chip: remounts the overlay so the intro replays clean.
   const [askName, setAskName] = useState(false);
   // The profile in use and whether there is more than one (ADR-114). The
@@ -953,6 +959,7 @@ export default function App() {
         pronoun={profile?.pronoun ?? readUserPronoun()}
         onChangeName={() => setAskName(true)}
         onGuide={setTour}
+        onLearn={() => setShowLearn(true)}
         profile={profile}
         sharedServer={sharedServer}
         onProfileSaved={(p) => {
@@ -1346,7 +1353,22 @@ export default function App() {
           datasetPaths={guideDatasetPaths}
           context={guideContext}
           onClose={() => setTour("none")}
+          onLearn={() => {
+            setTour("none");
+            setShowLearn(true);
+          }}
         />
+      )}
+      {showLearn && (
+        <LazySurface>
+          <LearnOverlay
+            onClose={() => setShowLearn(false)}
+            onFirstTraining={() => {
+              setShowLearn(false);
+              setTour("firstTraining");
+            }}
+          />
+        </LazySurface>
       )}
     </div>
   );

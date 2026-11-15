@@ -7,13 +7,18 @@ import { GUIDES, type GuideId } from "../lib/guides";
  *
  * The menu closes on a pick, on Esc and on a click anywhere outside it. It is
  * built from the registry, so a guide added there appears here with no change.
+ * "Começando do zero" comes first when `onLearn` is given: it is a page, not a
+ * tour, so it is not in the registry (ADR-207).
  * `initialOpen` exists for the tests, which render it without a DOM to click.
  */
 export function GuideMenu({
   onSelect,
+  onLearn,
   initialOpen = false,
 }: {
   onSelect: (id: GuideId) => void;
+  /** Opens the "Começando do zero" page. */
+  onLearn?: () => void;
   initialOpen?: boolean;
 }) {
   const t = useT();
@@ -81,14 +86,24 @@ export function GuideMenu({
             zIndex: 10,
           }}
         >
-          {GUIDES.map((guide) => (
+          {[
+            ...(onLearn
+              ? [{ key: "learn", title: t.learn.menuTitle, summary: t.learn.menuSummary, pick: onLearn }]
+              : []),
+            ...GUIDES.map((guide) => ({
+              key: guide.id,
+              title: guide.title(t),
+              summary: guide.summary(t),
+              pick: () => onSelect(guide.id),
+            })),
+          ].map((item) => (
             <button
-              key={guide.id}
+              key={item.key}
               type="button"
               role="menuitem"
               onClick={() => {
                 setOpen(false);
-                onSelect(guide.id);
+                item.pick();
               }}
               style={{
                 display: "block",
@@ -114,7 +129,7 @@ export function GuideMenu({
                   color: "var(--vf-text)",
                 }}
               >
-                {guide.title(t)}
+                {item.title}
               </div>
               <div
                 style={{
@@ -124,7 +139,7 @@ export function GuideMenu({
                   color: "var(--vf-text-muted)",
                 }}
               >
-                {guide.summary(t)}
+                {item.summary}
               </div>
             </button>
           ))}

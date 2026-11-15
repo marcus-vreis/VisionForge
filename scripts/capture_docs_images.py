@@ -12,6 +12,11 @@ part is ``frontend/scripts/capture-docs-images.mjs`` (Playwright with the
 installed Chrome; run ``npm ci`` in ``frontend`` first). It hides the version
 in the header before every shot and checks in the DOM that it is hidden.
 ``docs/images/README.md`` records commit, version, date and size of each image.
+
+The same run also films a second, longer training: the browser script saves
+frames, and this script turns them into ``docs/images/vf-training-film.gif``
+(for the guides on GitHub) and into the WebP files the interface's "Começando
+do zero" screen shows (``frontend/src/assets/learn``).
 """
 
 from __future__ import annotations
@@ -37,6 +42,23 @@ FRONTEND = ROOT / "frontend"
 NODE_SCRIPT = FRONTEND / "scripts" / "capture-docs-images.mjs"
 PROVENANCE = "README.md"
 WORKSPACE_NAME = "vf-docs-images"
+GIF_SIGNATURES = (b"GIF87a", b"GIF89a")
+LEARN_ASSETS_DIR = FRONTEND / "src" / "assets" / "learn"
+
+# The film of a training run: the animation the guides show, made from frames.
+FILM_GIF = "vf-training-film.gif"
+FILM_SHOWS = "Um treino de 8 épocas na CPU, da etapa Revisão ao resultado (animação)"
+FILM_GIF_WIDTH = 640
+FILM_WEBP_WIDTH = 960
+FILM_MAX_FRAMES = 36
+FILM_FRAME_MS = 420
+FILM_LAST_FRAME_MS = 2600
+# Stills the interface shows, resized from the images below.
+LEARN_STILLS: dict[str, str] = {
+    "data-step.webp": "vf-classification.png",
+    "results.webp": "vf-results.png",
+}
+LEARN_STILL_WIDTH = 1100
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 # Every image the script captures, with what it shows.
@@ -47,6 +69,8 @@ EXPECTED_IMAGES: dict[str, str] = {
     "vf-colab.png": "Canto do Colab aberto, sem CLI instalado nem conta Google",
     "vf-strategy.png": "Classificação, etapa Estratégia com as seis estratégias",
     "vf-guide-menu.png": "Menu de guias do cabeçalho aberto",
+    "vf-learn.png": "Tela Começando do zero, abertura e primeiro capítulo",
+    "vf-learn-curves.png": "Tela Começando do zero, capítulo das curvas de perda",
     "vf-review.png": "Classificação, etapa Revisão antes de treinar",
     "vf-training.png": "Painel de treino na aba Log, após 1 época na CPU",
     "vf-results.png": "Execução aberta no Histórico por Ver resultados: métricas e curvas",
@@ -79,6 +103,11 @@ def problems(images_dir: Path) -> list[str]:
             png_size(image)
         except ValueError as error:
             found.append(str(error))
+    film = images_dir / FILM_GIF
+    if not film.is_file():
+        found.append(f"missing image: {FILM_GIF}")
+    elif film.read_bytes()[:6] not in GIF_SIGNATURES:
+        found.append(f"{FILM_GIF} is not a GIF file")
     readme = images_dir / PROVENANCE
     if not readme.is_file():
         found.append(f"missing provenance: {PROVENANCE}")
@@ -86,7 +115,7 @@ def problems(images_dir: Path) -> list[str]:
     text = readme.read_text(encoding="utf-8")
     found.extend(
         f"{PROVENANCE} does not list {name}"
-        for name in EXPECTED_IMAGES
+        for name in [*EXPECTED_IMAGES, FILM_GIF]
         if f"`{name}`" not in text
     )
     return found
@@ -100,7 +129,7 @@ def check(images_dir: Path) -> int:
     if found:
         print("run: python scripts/capture_docs_images.py", file=sys.stderr)
         return 1
-    print(f"{len(EXPECTED_IMAGES)} images in {images_dir}")
+    print(f"{len(EXPECTED_IMAGES)} images and {FILM_GIF} in {images_dir}")
     return 0
 
 
@@ -128,8 +157,73 @@ def provenance(images_dir: Path, commit: str, version: str, date: str) -> str:
             "| --- | --- | --- |",
             *rows,
             "",
+            "## Animação",
+            "",
+            f"`{FILM_GIF}`: {FILM_SHOWS}. O mesmo script filma um segundo",
+            "treino, quadro a quadro, e monta o GIF. Dos mesmos quadros e de duas",
+            "imagens acima saem os arquivos WebP que a tela Começando do zero da",
+            "interface mostra, em `frontend/src/assets/learn/`.",
+            "",
         ]
     )
+
+
+def film_frames(frames_dir: Path) -> list[Path]:
+    """The frames worth showing: no frame equal to the one before it, and at
+    most ``FILM_MAX_FRAMES``, the first and the last always kept."""
+    distinct: list[Path] = []
+    previous = b""
+    for path in sorted(frames_dir.glob("*.png")):
+        content = path.read_bytes()
+        if content != previous:
+            distinct.append(path)
+        previous = content
+    if len(distinct) <= FILM_MAX_FRAMES:
+        return distinct
+    step = (len(distinct) - 1) / (FILM_MAX_FRAMES - 1)
+    return [distinct[round(i * step)] for i in range(FILM_MAX_FRAMES)]
+
+
+def build_film(frames_dir: Path, images_dir: Path, assets_dir: Path) -> None:
+    """Write the GIF for the guides and the WebP files the interface shows."""
+    from PIL import Image
+
+    paths = film_frames(frames_dir)
+    if len(paths) < 2:
+        raise RuntimeError(f"the film has {len(paths)} frame(s) in {frames_dir}")
+    durations = [FILM_FRAME_MS] * (len(paths) - 1) + [FILM_LAST_FRAME_MS]
+    frames = [Image.open(path).convert("RGB") for path in paths]
+
+    def resized(width: int) -> list[Image.Image]:
+        height = round(frames[0].height * width / frames[0].width)
+        return [f.resize((width, height), Image.Resampling.LANCZOS) for f in frames]
+
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    small = resized(FILM_GIF_WIDTH)
+    small[0].save(
+        images_dir / FILM_GIF,
+        save_all=True,
+        append_images=small[1:],
+        duration=durations,
+        loop=0,
+        optimize=True,
+    )
+    large = resized(FILM_WEBP_WIDTH)
+    large[0].save(
+        assets_dir / "training-film.webp",
+        save_all=True,
+        append_images=large[1:],
+        duration=durations,
+        loop=0,
+        quality=60,
+        method=6,
+    )
+    for name, source in LEARN_STILLS.items():
+        still = Image.open(images_dir / source).convert("RGB")
+        height = round(still.height * LEARN_STILL_WIDTH / still.width)
+        still.resize((LEARN_STILL_WIDTH, height), Image.Resampling.LANCZOS).save(
+            assets_dir / name, quality=72, method=6
+        )
 
 
 def free_port() -> int:
@@ -188,7 +282,9 @@ def remove_workspace(workspace: Path, attempts: int = 20) -> None:
     print(f"could not remove {workspace}; delete it by hand", file=sys.stderr)
 
 
-def capture(images_dir: Path, workspace: Path) -> int:
+def capture(
+    images_dir: Path, workspace: Path, assets_dir: Path = LEARN_ASSETS_DIR
+) -> int:
     """Start a throwaway GUI, run the browser script, write the provenance."""
     node = shutil.which("node")
     if node is None:
@@ -205,9 +301,14 @@ def capture(images_dir: Path, workspace: Path) -> int:
     base_url = f"http://127.0.0.1:{port}"
     workspace.mkdir(parents=True)
     try:
-        with tempfile.TemporaryDirectory(
-            prefix="vf-docs-home-", ignore_cleanup_errors=True
-        ) as home:
+        with (
+            tempfile.TemporaryDirectory(
+                prefix="vf-docs-home-", ignore_cleanup_errors=True
+            ) as home,
+            tempfile.TemporaryDirectory(
+                prefix="vf-docs-film-", ignore_cleanup_errors=True
+            ) as film,
+        ):
             env = {
                 **os.environ,
                 "PYTHONPATH": os.pathsep.join(
@@ -227,8 +328,12 @@ def capture(images_dir: Path, workspace: Path) -> int:
                 version = wait_health(base_url)["version"]
                 script = [node, str(NODE_SCRIPT), "--base-url", base_url]
                 status = subprocess.run(
-                    [*script, "--out", str(images_dir)], cwd=FRONTEND, check=False
+                    [*script, "--out", str(images_dir), "--film", film],
+                    cwd=FRONTEND,
+                    check=False,
                 ).returncode
+                if status == 0:
+                    build_film(Path(film), images_dir, assets_dir)
             finally:
                 server.terminate()
                 try:
