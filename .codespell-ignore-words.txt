@@ -72,3 +72,5 @@ afterall
 meu
 acidental
 vetor
+termo
+cursos

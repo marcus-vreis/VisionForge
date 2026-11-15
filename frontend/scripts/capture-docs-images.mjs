@@ -6,6 +6,10 @@
 // local e2e suite does; set VF_DOCS_CHANNEL="" to use Playwright's chromium.
 //
 //   node scripts/capture-docs-images.mjs --base-url http://127.0.0.1:PORT --out DIR
+//
+// With --film DIR it also trains a second, longer run and saves the screen
+// every few hundred milliseconds as numbered PNG frames in DIR; the Python
+// script turns them into the animation of a training run.
 import { chromium, expect } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
@@ -15,15 +19,18 @@ const { values } = parseArgs({
   options: {
     "base-url": { type: "string" },
     out: { type: "string" },
+    film: { type: "string" },
   },
 });
 const baseURL = values["base-url"];
 const outDir = values.out;
+const filmDir = values.film;
 if (!baseURL || !outDir) {
   console.error("usage: capture-docs-images.mjs --base-url URL --out DIR");
   process.exit(2);
 }
 mkdirSync(outDir, { recursive: true });
+if (filmDir) mkdirSync(filmDir, { recursive: true });
 
 // The size of the images the README has shown since v0.20.
 const VIEWPORT = { width: 1440, height: 960 };
@@ -210,6 +217,21 @@ async function guideMenu(page) {
   await expect(page.getByRole("menu")).toBeHidden();
 }
 
+/** The "Começando do zero" page: its opening, then the curves chapter. */
+async function learnPage(page) {
+  await page.getByTitle(/Abrir os guias/).click();
+  await page.getByRole("menuitem", { name: /Começando do zero/ }).click();
+  const learn = page.getByTestId("learn-overlay");
+  await expect(learn.getByRole("heading", { level: 1 })).toBeVisible();
+  await shot(page, "vf-learn.png");
+  await learn.locator("#learn-curves").scrollIntoViewIfNeeded();
+  await learn.locator("#learn-curves").evaluate((el) => el.scrollIntoView({ block: "start" }));
+  await expect(learn.getByRole("button", { name: "adequada" })).toBeVisible();
+  await shot(page, "vf-learn-curves.png");
+  await page.keyboard.press("Escape");
+  await expect(learn).toBeHidden();
+}
+
 /** The Colab corner as a fresh install sees it: no CLI and no Google account. */
 async function colabCorner(page) {
   const chip = page.getByRole("button", { name: /^colab · / });
@@ -282,6 +304,63 @@ async function resultsAndHistory(page) {
   await shot(page, "vf-run-detail.png");
 }
 
+// The film: epochs of the second run, the pause between frames and the most
+// frames one run may take (a slow machine stops being filmed, not the run).
+// The film is taken in a smaller window than the images, so the training
+// sheet fills more of each frame; same 3:2 shape.
+const FILM_VIEWPORT = { width: 1080, height: 720 };
+const FILM_EPOCHS = "8";
+const FILM_INTERVAL_MS = 250;
+const FILM_MAX_FRAMES = 90;
+let filmFrames = 0;
+
+async function frame(page, times = 1) {
+  await hideVersion(page);
+  for (let i = 0; i < times; i += 1) {
+    filmFrames += 1;
+    const file = path.join(filmDir, `${String(filmFrames).padStart(3, "0")}.png`);
+    await page.screenshot({ path: file });
+  }
+}
+
+/** A second run of a few epochs, filmed from the Revisão step to its results. */
+async function trainingFilm(page) {
+  const history = page.getByTestId("history-overlay");
+  await expect(async () => {
+    await page.keyboard.press("Escape");
+    await expect(history).toBeHidden({ timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
+  await openStep(page, "Treinamento");
+  const epochs = field(page, "Épocas");
+  await epochs.fill(FILM_EPOCHS);
+  await epochs.press("Enter");
+  await expect(field(page, "Épocas")).toHaveValue(FILM_EPOCHS);
+  await openStep(page, "Revisão");
+  await field(page, "Nome do experimento").fill("primeiro_treino");
+  await page.setViewportSize(FILM_VIEWPORT);
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(1_200);
+  await frame(page, 3);
+  await page.locator("[data-tour='train']").click();
+  const sheet = page.locator("[data-tour='training-sheet']");
+  await expect(sheet).toBeVisible();
+  const done = sheet.getByText("treino concluído", { exact: true });
+  while (filmFrames < FILM_MAX_FRAMES && !(await done.isVisible())) {
+    await frame(page);
+    await page.waitForTimeout(FILM_INTERVAL_MS);
+  }
+  await expect(done).toBeVisible({ timeout: 300_000 });
+  await page.waitForTimeout(600);
+  await frame(page, 4);
+  await sheet.getByRole("button", { name: /Ver resultados/ }).click();
+  await expect(history).toBeVisible();
+  await expect(history.getByText("Curvas por época", { exact: true })).toBeVisible();
+  await page.waitForTimeout(1_200);
+  await frame(page, 6);
+  await page.setViewportSize(VIEWPORT);
+  console.log(`filmed ${filmFrames} frames in ${filmDir}`);
+}
+
 const browser = await chromium.launch({
   ...(channel ? { channel } : {}),
   args: ["--disable-gpu"],
@@ -308,8 +387,10 @@ try {
   await colabCorner(page);
   await replicates(page);
   await guideMenu(page);
+  await learnPage(page);
   await codeTab(page);
   await resultsAndHistory(page);
+  if (filmDir) await trainingFilm(page);
   await datasetExplorer(page);
   await context.close();
 } finally {

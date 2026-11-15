@@ -57,6 +57,8 @@ interface GuidedTourProps {
   /** O que um passo pode mudar na aplicação. */
   context: GuideContext;
   onClose: () => void;
+  /** The invitation's third way: the "Começando do zero" page (ADR-207). */
+  onLearn?: () => void;
 }
 
 export function GuidedTour({
@@ -67,6 +69,7 @@ export function GuidedTour({
   datasetPaths,
   context,
   onClose,
+  onLearn,
 }: GuidedTourProps) {
   const t = useT();
   const [guideId, setGuideId] = useState<GuideId | null>(invite ? null : guide);
@@ -414,6 +417,31 @@ export function GuidedTour({
               </button>
             ))}
           </div>
+        )}
+        {!current && onLearn && (
+          <button
+            type="button"
+            onClick={() => {
+              markTourSeen();
+              onLearn();
+            }}
+            style={{
+              ...ghostStyle,
+              display: "block",
+              marginTop: 14,
+              padding: 0,
+              fontFamily: "var(--font-sans)",
+              fontSize: 13,
+              letterSpacing: 0,
+              textTransform: "none",
+              textAlign: "left",
+              textDecoration: "underline",
+              textUnderlineOffset: 4,
+              color: "var(--vf-text-dim)",
+            }}
+          >
+            {t.learn.inviteLink}
+          </button>
         )}
 
         <div

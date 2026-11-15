@@ -3258,6 +3258,184 @@ export const pt = {
     },
   },
   // The first-run guide (components/GuidedTour.tsx). The steps are `tour`.
+  // A tela "Começando do zero" (ADR-207): para quem nunca treinou um modelo.
+  // Um capítulo por conceito, na ordem de lib/learn.ts; cada um tem um título,
+  // parágrafos e, quando ajuda, os termos novos em uma linha cada.
+  learn: {
+    menuTitle: "Começando do zero",
+    menuSummary:
+      "Para quem nunca treinou um modelo: os conceitos com figuras e um treino de verdade para assistir.",
+    inviteLink: "Nunca treinei um modelo: começar do zero",
+    eyebrow: "guia · começando do zero",
+    title: "Treinar um modelo, do zero",
+    lead: "Você não precisa programar nem conhecer a área para chegar ao fim desta página. Ela explica o que um treino faz, o que cada tela pede e o que os números do resultado querem dizer. São uns dez minutos de leitura.",
+    close: "Fechar",
+    closeTitle: "Fechar o guia (Esc)",
+    railLabel: "Capítulos",
+    chapterOf: (n: number, total: number) => `${n} de ${total}`,
+    termsLabel: "em uma linha",
+    illustrative: "Figura ilustrativa: os números não vêm de um treino.",
+    opensOutside: "abre no navegador",
+    chapters: {
+      idea: {
+        title: "O que é treinar um modelo",
+        body: [
+          "Um modelo de visão computacional é um programa que recebe uma imagem e devolve uma resposta: de que classe ela é, onde estão os objetos, quanto vale uma medida. Ninguém escreve as regras dessa resposta. O modelo começa com milhões de números ajustáveis, os pesos, e aprende as regras com exemplos.",
+          "Treinar é repetir três passos. O modelo vê algumas imagens e arrisca uma resposta. Uma conta, a função de perda, mede o tamanho do erro. O erro volta pelo modelo e corrige um pouco cada peso. Depois de milhares de repetições, as respostas melhoram.",
+        ],
+        figureLabel: "Desenho de uma rede: as imagens entram, a resposta sai e a correção volta",
+        legend: { data: "imagens indo", gradient: "correção voltando", validation: "validação" },
+        caption:
+          "É o mesmo desenho que a aba Código ao vivo mostra durante um treino. O ponto cheio são as imagens indo, o anel é a correção voltando e o losango é a validação.",
+        terms: [
+          ["peso", "um dos números que o treino ajusta; um modelo tem milhões."],
+          ["perda (loss)", "o tamanho do erro numa leva de imagens; o treino tenta diminuí-la."],
+          ["gradiente", "a direção em que cada peso deve mudar para o erro cair."],
+        ],
+      },
+      data: {
+        title: "Os dados: exemplos com a resposta certa",
+        body: [
+          "Para classificar, o dataset é uma pasta com uma subpasta por classe: as imagens de cada classe ficam na subpasta que leva o nome dela. É assim que o VisionForge sabe a resposta certa de cada imagem.",
+          "As imagens são divididas em três partes que nunca se misturam. O treino é o que o modelo estuda. A validação é uma prova ao fim de cada época, para ver se ele está aprendendo. O teste é a prova final, com imagens que ele nunca viu, usada uma vez só.",
+          "Na etapa Dados você aponta a pasta, e o VisionForge mostra as divisões e as classes que encontrou. Se ainda não tem imagens, o botão “usar dataset de exemplo” cria um conjunto pequeno para o primeiro treino.",
+        ],
+        figureLabel: "Quarenta imagens divididas em treino, validação e teste",
+        parts: { train: "treino", val: "validação", test: "teste" },
+        partNotes: {
+          train: "o modelo estuda",
+          val: "prova a cada época",
+          test: "prova final",
+        },
+        caption: "Uma divisão comum: 70% para o treino, 15% para a validação e 15% para o teste.",
+        screenAlt: "Etapa Dados da classificação com o dataset de exemplo carregado",
+        screenCaption: "A etapa Dados, com o dataset de exemplo: três divisões e duas classes encontradas.",
+        terms: [
+          ["dataset", "o conjunto de imagens, com a resposta certa de cada uma."],
+          ["classe", "uma das respostas possíveis, como “gato” ou “defeito”."],
+          ["divisão (split)", "cada uma das partes: treino, validação e teste."],
+        ],
+      },
+      loop: {
+        title: "Épocas, lotes e taxa de aprendizado",
+        body: [
+          "O modelo não vê todas as imagens de uma vez. Ele recebe um lote (batch) por vez, por exemplo 32 imagens, corrige os pesos e passa ao lote seguinte. Quando todos os lotes do treino passaram, terminou uma época. Um treino tem várias épocas: o modelo revê as mesmas imagens e erra menos a cada volta.",
+          "A taxa de aprendizado (learning rate) é o tamanho de cada correção, e é o número que mais muda o resultado. Pequena demais, o treino anda devagar. Grande demais, as correções passam do ponto e o erro não assenta.",
+          "Na etapa Treinamento esses campos aparecem primeiro: épocas, tamanho do batch e taxa de aprendizado. Os outros já vêm com valores que funcionam e ficam recolhidos em “avançado”.",
+        ],
+        figureLabel: "Uma época: os lotes de imagens passam pelo modelo, um de cada vez",
+        batch: (n: number) => `lote ${n}`,
+        epochDone: "passaram todos: 1 época",
+        caption: "Cada lote corrige os pesos uma vez. Uma época é uma passada por todos os lotes.",
+        terms: [
+          ["lote (batch)", "as imagens que o modelo vê antes de cada correção."],
+          ["época", "uma passada completa pelas imagens de treino."],
+          ["taxa de aprendizado", "o tamanho de cada correção nos pesos."],
+        ],
+      },
+      curves: {
+        title: "Ler as curvas: aprender ou decorar",
+        body: [
+          "Durante o treino o VisionForge desenha a perda de cada época em duas curvas: a do treino e a da validação. As duas devem cair. Troque a taxa de aprendizado na figura e veja o que muda.",
+          "É para isso que a validação existe: ela mostra o momento em que estudar mais deixa de ajudar. O VisionForge guarda os pesos da melhor época na validação, não os da última.",
+        ],
+        figureLabel: "Curvas de perda do treino e da validação por época",
+        rateLabel: "taxa de aprendizado",
+        rates: { low: "baixa", good: "adequada", high: "alta" },
+        train: "treino",
+        val: "validação",
+        epochAxis: "época",
+        lossAxis: "perda",
+        best: (epoch: number) => `melhor época: ${epoch}`,
+        notes: {
+          low: "Taxa baixa: as duas curvas caem, mas devagar. Trinta épocas não bastaram.",
+          good: (epoch: number) =>
+            `Taxa adequada: o erro cai rápido. Depois da época ${epoch} a validação volta a subir enquanto o treino continua caindo. O modelo começou a decorar as imagens de treino, o que se chama overfitting. Os pesos guardados são os da época ${epoch}.`,
+          high: "Taxa alta: o erro pula de um lado para o outro e não assenta.",
+        },
+        terms: [
+          ["overfitting", "o modelo decora o treino e piora nas imagens que não viu."],
+          ["melhor época", "a de menor perda na validação; é dela que os pesos são guardados."],
+        ],
+      },
+      result: {
+        title: "O resultado: quanto o modelo acerta",
+        body: [
+          "Terminado o treino, o modelo é medido no teste. A acurácia é a fração de imagens que ele acertou. A matriz de confusão abre esse número: cada linha é a classe verdadeira e cada coluna é a classe que o modelo respondeu. A diagonal são os acertos; fora dela, cada célula diz qual classe foi confundida com qual.",
+          "Um número sozinho pode ser sorte. O treino parte de pesos sorteados, e a seed fixa esse sorteio. Mudar a seed muda um pouco o resultado. Para saber quanto, a estratégia Réplicas repete o treino com várias seeds e dá a média com um intervalo de confiança.",
+          "Cada tarefa tem a sua métrica: acurácia na classificação, mAP na detecção, mIoU na segmentação, R² na regressão e AUROC na anomalia. A ideia é sempre a mesma: medir em imagens que o modelo não viu.",
+        ],
+        figureLabel: "Matriz de confusão de três classes em 60 imagens de teste",
+        trueAxis: "classe verdadeira",
+        predictedAxis: "classe prevista",
+        classes: ["A", "B", "C"],
+        accuracy: (correct: number, total: number, percent: string) =>
+          `${correct} acertos em ${total} imagens: acurácia de ${percent}`,
+        caption: "A diagonal são os acertos. A classe B foi confundida com C duas vezes e com A outras duas.",
+        screenAlt: "Resultado de uma execução no Histórico, com métricas e curvas por época",
+        screenCaption: "O resultado de um treino no Histórico: métricas no topo e as curvas por época.",
+        terms: [
+          ["acurácia", "a fração de imagens em que o modelo acertou."],
+          ["seed", "o número que fixa os sorteios do treino, para ele poder ser repetido."],
+          ["métrica", "a conta que resume o resultado; cada tarefa tem a sua."],
+        ],
+      },
+      watch: {
+        title: "Veja um treino acontecer",
+        body: [
+          "A gravação mostra um treino real de oito épocas no dataset de exemplo, na CPU, da etapa Revisão ao resultado. A barra avança a cada época, o log mostra a perda caindo, e no fim o resultado abre no Histórico.",
+          "O próximo passo é fazer o seu. O guia Primeiro treino acompanha cada clique na própria tela, com o dataset de exemplo, e leva poucos minutos.",
+        ],
+        filmAlt: "Gravação de um treino de oito épocas, do clique em Treinar ao resultado",
+        filmCaption: "Um treino de verdade, gravado nesta interface. A gravação pula os intervalos entre os quadros.",
+        start: "Fazer o primeiro treino guiado",
+      },
+      stack: {
+        title: "O que roda por trás",
+        body: [
+          "O VisionForge não tem um treino próprio escondido: ele organiza bibliotecas abertas que a área inteira usa, e a aba Código ao vivo mostra o código que está rodando. Vale conhecer cada uma pelo nome.",
+        ],
+        items: {
+          pytorch: "A biblioteca de redes neurais em que todo modelo aqui é treinado.",
+          torchvision: "Arquiteturas prontas, pesos pré-treinados e transformações de imagem.",
+          timm: "Centenas de arquiteturas a mais, escolhidas pelo nome.",
+          ultralytics: "YOLO e RT-DETR para detecção de objetos. É opcional e se instala à parte.",
+          sklearn: "As métricas do resultado e a divisão do K-fold.",
+          optuna: "A busca guiada de hiperparâmetros.",
+          onnx: "Roda o modelo exportado em ONNX, fora do PyTorch.",
+          fastapi: "O servidor local com que esta interface conversa.",
+          react: "A interface que você está usando.",
+          pydantic: "Confere a configuração antes de o treino começar.",
+        },
+      },
+      more: {
+        title: "Para aprender mais",
+        body: [
+          "Esta página dá o vocabulário. Para entender a área de verdade, estes materiais são gratuitos e muito usados em cursos.",
+        ],
+        resourcesTitle: "Cursos e livros",
+        resources: {
+          d2lPt: "Livro aberto com teoria e código lado a lado. Em português.",
+          crashCourse: "Curso introdutório do Google, com exercícios. Em português.",
+          threeBlue: "Vídeos com animações de como uma rede neural aprende. Em inglês.",
+          fastai: "Curso prático: você treina um modelo já na primeira aula. Em inglês.",
+          cs231n: "O curso de Stanford sobre redes neurais para visão computacional. Em inglês.",
+          pytorchTutorials: "Os tutoriais oficiais do PyTorch. Em inglês.",
+          deepLearningBook: "O livro-texto da área, com a matemática por trás. Em inglês.",
+        },
+        docsTitle: "A documentação do VisionForge",
+        docs: {
+          firstTraining: "Primeiro treino, passo a passo",
+          strategies: "Quando usar K-fold, busca, réplicas e comparação",
+          afterTraining: "O que fazer com o resultado",
+          datasets: "Explorar, auditar e redividir um dataset",
+          features: "Tudo o que o VisionForge faz",
+          allGuides: "Todos os guias",
+        },
+        footnote: "Os links abrem no navegador e precisam de internet.",
+      },
+    },
+  },
   guidedTour: {
     dialogLabel: "Guia do VisionForge",
     closeLabel: "Fechar o guia",

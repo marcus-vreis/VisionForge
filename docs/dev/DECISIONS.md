@@ -8280,3 +8280,28 @@ Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS
 
 - *Keep the 409 and silence it in the client.* A browser logs a failed request whatever the page does with it.
 - *A help panel or a longer tour.* The complaint that started the interface work was too much text on the screen; a sentence where the choice happens costs one line.
+
+## ADR-207 — Guides by reader, and a full-screen page for someone who has never trained a model
+
+**Date:** 2026-11-15
+**Status:** Accepted
+**Amends:** ADR-115 (the guide menu and the first-visit invitation), ADR-206 (in-app help); the capture script of issue #221
+
+**Context:** the guides in `docs/gui/` answer "I want to do X" and assume the reader knows what an epoch is. Three readers were not served: someone new to the field, someone who trains models already and only needs to learn this tool, and someone who wants to see what the tool does before installing it. For the first one a tour card is the wrong size: the tours point at the screen, and this reader needs the field explained, with pictures, before the screen means anything.
+
+**Decision:**
+
+- **Three entry pages in `docs/guias/`**, one per reader, linked from the top of `docs/gui/README.md`: `comecando-do-zero.md`, `ja-treino-modelos.md` and `o-que-o-visionforge-faz.md`. They point at the task pages instead of repeating them.
+- **"Começando do zero" is also a page inside the interface** (`components/learn/`, `lib/learn.ts`, `learn` in the dictionaries): full screen, eight chapters read top to bottom, a rail that follows the reader, the new terms of each chapter in one line each. It opens from the guide menu, where it is the first entry, and from a link on the first-visit invitation. It is not in the guide registry, which holds scripts of steps; nothing else opens it.
+- **Three kinds of figure, each labelled for what it is.** The network drawing is the component the training sheet already has (ADR-118), running on its own. The split, batches, loss curves and confusion matrix are drawn from closed formulas and fixed numbers in `lib/learn.ts`, and the page says they are illustrative. The screens are captured from the interface: two stills and the film of a real run.
+- **The film is made by the capture script.** `capture_docs_images.py` trains a second run of eight epochs on the sample dataset and saves the screen as frames in a smaller window; Pillow assembles `docs/images/vf-training-film.gif` for the pages on GitHub and an animated WebP for the interface (`frontend/src/assets/learn/`, with the two stills). `--check` requires the GIF and its provenance line. The three WebP files add about 200 kB to the package.
+- **The page links out**: to the documentation of the libraries the project is built on and to seven free courses and books, each checked to answer on the day this was written. Every link opens in a new tab with `rel="noopener noreferrer"`; the page says they need a connection. The links to the project's own pages point at `main`, and a test checks that each file exists in the repository.
+
+**Consequences:** the guide menu has three entries and the invitation one more line. A release that ships this page before `docs/guias/` reaches `main` would link to pages that are not there yet: both land together in the next release. The screens inside the page are in Portuguese and in the dark theme whatever the reader's language and theme are, and the English captions say so. The stills and the film go stale when the interface changes, like every image in `docs/images`; the same command refreshes them. The external links can rot: nothing checks them after today.
+
+**Alternatives considered:**
+
+- *A longer guided tour.* A card beside a control cannot hold a figure or three paragraphs, and it would make the reader click through an explanation that is better scrolled.
+- *Only a page in `docs/`.* The reader who needs it most is the one least likely to look for documentation on GitHub; the interface is where they already are.
+- *A recorded video file.* Playwright records WebM, which GitHub does not show inline in a Markdown page, and a video in the wheel is heavier than a few dozen frames. Frames assembled by Pillow need no encoder beyond what the project already depends on.
+- *Figures as images.* A drawn figure follows the theme and the language, can be tried (the learning rate switch), and costs no bytes.

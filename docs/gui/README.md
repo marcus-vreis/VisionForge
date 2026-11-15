@@ -4,6 +4,16 @@ Cada página responde a uma pergunta e pode ser lida sozinha. Os prints vêm de
 `python scripts/capture_docs_images.py`, que sobe a GUI deste checkout e os
 refaz; nenhum é editado à mão ([`../images/README.md`](../images/README.md)).
 
+## Por onde começar
+
+Três páginas de entrada, uma para cada leitor:
+
+| Eu... | Página |
+| --- | --- |
+| nunca treinei um modelo | [Começando do zero](../guias/comecando-do-zero.md) |
+| já treino modelos e quero aprender o VisionForge | [Já treino modelos](../guias/ja-treino-modelos.md) |
+| quero ver o que o VisionForge faz | [O que o VisionForge faz](../guias/o-que-o-visionforge-faz.md) |
+
 ## Começar
 
 | Quero... | Página |
@@ -45,12 +55,15 @@ refaz; nenhum é editado à mão ([`../images/README.md`](../images/README.md)).
 
 ## Ajuda dentro da interface
 
-O botão **guia**, no cabeçalho, abre dois roteiros que rodam sobre a própria
-tela. Na primeira visita a interface oferece os dois uma vez; depois disso
-eles só abrem por esse botão.
+O botão **guia**, no cabeçalho, abre uma página e dois roteiros que rodam
+sobre a própria tela. Na primeira visita a interface oferece os três uma vez;
+depois disso eles só abrem por esse botão.
 
 ![Menu de guias aberto no cabeçalho](../images/vf-guide-menu.png)
 
+- **Começando do zero**: uma página em tela cheia para quem nunca treinou um
+  modelo, com os conceitos em oito capítulos, figuras e a gravação de um
+  treino ([a mesma página em texto](../guias/comecando-do-zero.md)).
 - **Tour da interface**: sete paradas pelos pontos principais da tela.
 - **Primeiro treino**: um treino de verdade, passo a passo, com um dataset de
   exemplo da tarefa da aba aberta.
