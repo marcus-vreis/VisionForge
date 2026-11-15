@@ -9,19 +9,10 @@ VisionForge is below `1.0.0`: the configuration schema and the HTTP API may stil
 
 ## On `development` (next release)
 
-- **Classification replicates and CLI strategies:** multi-seed replicates in the Classification tab, and `strategy:` + `config:` YAML envelopes (`replicates`, `replicated_comparison`, `sweep`, `cv`) in `visionforge run`.
-- **History rerun:** load any run's configuration back into the form or repeat it across 3 new seeds directly from History.
-- **Dataset explorer and safe derived datasets:** the **Explore** tab in **Datasets** (class/split counts, thumbnail gallery with bounding boxes, background SHA-256 scan) and sibling-folder operations to incorporate images, merge datasets, resplit with the test set locked by default, and convert between YOLO and COCO.
-- **Code tab across all five tasks:** live inspection of the actual package functions (`inspect`) for classification, regression, segmentation, anomaly detection and `torchvision` object detection, highlighting the active configuration's branch.
-- **Opt-in tracking and publication:** local MLflow, Weights & Biases, Hugging Face Hub, Zenodo draft, private GitHub repository report and DVC, each with a local preview before anything is sent, plus Google Drive datasets for Colab classification runs.
-- **Paper figures and privacy defaults:** 300 dpi PNG and vector (`pdf`, `svg`) figure output, `replicates_strip` plots, and third-party SDK telemetry disabled by default.
+Nothing yet. `0.22.0` shipped everything that was listed here, and four items that were under "Planned next": the paired comparison in the GUI for the five task families, `ultralytics` as the optional `detection` extra, the guaranteed offline mode (`--offline`) and the Apple Silicon GPU (`mps`, experimental until it is validated on a real Mac). The full list is in the [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## Planned next
 
-- **Paired comparison in the GUI** (`replicated-comparison`) across all five task families, with confidence intervals matched to the paired test (Student's *t* or Hodges-Lehmann).
-- **License boundary for detection backends:** move `ultralytics` (AGPL-3.0) to an optional `detection` extra while keeping `torchvision` detectors available in the MIT base install, accompanied by `THIRD_PARTY_NOTICES.md`.
-- **Guaranteed offline mode:** an explicit offline switch that blocks non-loopback network sockets during training, verified by automated tests.
-- **Apple Silicon GPU (`mps`):** MPS device selection on macOS once validated on Apple Silicon hardware.
 - **Independent bundle reproduction:** `visionforge reproduce <bundle>` to re-train a seed from a verified experiment bundle and compare the result against its recorded confidence interval.
 
 ## Criteria for `1.0.0`
@@ -43,19 +34,10 @@ O VisionForge está abaixo da `1.0.0`: o schema de configuração e a API HTTP a
 
 ## Em `development` (próxima release)
 
-- **Réplicas na classificação e estratégias no CLI:** réplicas multi-semente na aba Classificação e envelopes YAML `strategy:` + `config:` (`replicates`, `replicated_comparison`, `sweep`, `cv`) no `visionforge run`.
-- **Repetir pelo Histórico:** carregar a configuração de uma execução no formulário ou repeti-la com 3 novas sementes direto do Histórico.
-- **Explorador e operações seguras de dataset:** aba **Explorar** em **Datasets** (contagens por classe e divisão, galeria de miniaturas com caixas e varredura SHA-256 em segundo plano) e criação de datasets derivados em pasta irmã (incorporar imagens, juntar datasets, refazer divisão com teste travado por padrão e converter entre YOLO e COCO).
-- **Aba Código nas cinco tarefas:** leitura das funções reais do pacote instalado (`inspect`) para classificação, regressão, segmentação, anomalia e detecção `torchvision`, marcando o ramo ativo da configuração.
-- **Acompanhamento e publicação opt-in:** MLflow local, Weights & Biases, Hugging Face Hub, rascunho no Zenodo, relatório em repositório privado do GitHub e DVC, sempre com prévia local antes do envio, além de datasets no Google Drive para treinos no Colab.
-- **Figuras vetoriais e privacidade por padrão:** saída em PNG a 300 dpi e vetorial (`pdf`, `svg`), gráfico `replicates_strip` e telemetria de SDKs de terceiros desligada por padrão.
+Nada ainda. A `0.22.0` levou tudo o que estava listado aqui e quatro itens que estavam em "Próximos passos": a comparação pareada na GUI nas cinco famílias de tarefa, o `ultralytics` como extra opcional `detection`, o modo offline garantido (`--offline`) e a GPU Apple Silicon (`mps`, experimental até ser validada num Mac de verdade). A lista completa está no [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## Próximos passos
 
-- **Comparação pareada na GUI** (`replicated-comparison`) nas cinco famílias de tarefa, com intervalo de confiança alinhado ao teste pareado (*t* de Student ou Hodges-Lehmann).
-- **Fronteira de licença nos backends de detecção:** tornar `ultralytics` (AGPL-3.0) um extra opcional `detection`, mantendo os detectores `torchvision` na instalação base MIT, junto com o `THIRD_PARTY_NOTICES.md`.
-- **Modo offline garantido:** opção explícita que bloqueia sockets de rede fora de loopback durante o treino, provada por teste automatizado.
-- **GPU Apple Silicon (`mps`):** suporte ao dispositivo MPS no macOS após validação em hardware Apple Silicon.
 - **Reprodução independente de bundle:** `visionforge reproduce <bundle>` para retreinar uma semente a partir de um pacote de experimento verificado e comparar o resultado com o intervalo de confiança registrado.
 
 ## Critérios para a `1.0.0`
