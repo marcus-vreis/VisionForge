@@ -104,6 +104,36 @@ class TestLoadRunsSingleRun:
         # No preprocessing in the synthetic run → count is 0 by default.
         assert s.preprocessing_count == 0
 
+    @pytest.mark.parametrize("source", ["custom_model", "timm_model"])
+    def test_a_model_of_another_source_is_named_instead_of_the_ignored_builtin(
+        self, tmp_path: Path, source: str
+    ) -> None:
+        """`custom_model` and `timm_model` replace `model.name` when the run is
+        built (utils/config.py), so the History must not show the builtin name
+        the config still carries: a run of `my_net` was listed as resnet18."""
+        run_dir = _make_run_json(tmp_path, folder="20260101_100000_000000")
+        path = run_dir / "run.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["config"]["model"] = {"name": "resnet18", source: "my_net"}
+        path.write_text(json.dumps(data), encoding="utf-8")
+
+        assert _load_runs(tmp_path)[0].model_arch == "my_net"
+
+    def test_an_empty_alternate_source_leaves_the_builtin_name(
+        self, tmp_path: Path
+    ) -> None:
+        run_dir = _make_run_json(tmp_path, folder="20260101_100000_000000")
+        path = run_dir / "run.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["config"]["model"] = {
+            "name": "resnet50",
+            "custom_model": None,
+            "timm_model": "",
+        }
+        path.write_text(json.dumps(data), encoding="utf-8")
+
+        assert _load_runs(tmp_path)[0].model_arch == "resnet50"
+
     def test_summary_reports_preprocessing_count(self, tmp_path: Path) -> None:
         """RunSummary must expose the number of preprocessing filters used."""
         run_dir = tmp_path / "exp_pp" / "20260301_120000_000000"

@@ -33,6 +33,7 @@ import type { Dict } from "../i18n/pt";
 import { useI18n, useT } from "../i18n/useT";
 import { formatBytes, shortDigest } from "../lib/dataset-identity";
 import { metricCi } from "../lib/metric-ci";
+import { metricLabel } from "../lib/metric-labels";
 import { pickerCancelText } from "../lib/picker-feedback";
 import { PREPROCESS_KIND_LABELS } from "../lib/preprocess-kinds";
 import { canOfferReveal, revealErrorText } from "../lib/reveal-folder";
@@ -94,30 +95,6 @@ interface RunDetailPanelProps {
   knownRunIds?: ReadonlySet<string>;
   /** Sends the run back to its task's form (#200); absent, no such actions. */
   rerun?: RerunHandle;
-}
-
-/** Metric names read the same in every language; only the words around them are translated. */
-const METRIC_NAMES: Record<string, string> = {
-  f1: "F1",
-  recall: "Recall",
-  auc_roc: "AUC-ROC",
-  // Detection metrics (mAP @ IoU thresholds; box validation loss).
-  map50: "mAP@50",
-  map50_95: "mAP@50-95",
-  box_loss: "Box loss (val)",
-};
-
-/** The metrics a test run reports under a `test_` prefix. */
-const TEST_METRICS = ["accuracy", "f1", "precision", "recall", "auc_roc"];
-
-function metricLabel(t: Dict, key: string): string {
-  const words: Record<string, string> = t.runDetail.metrics.labels;
-  const label = METRIC_NAMES[key] ?? words[key];
-  if (label) return label;
-  if (key.startsWith("test_") && TEST_METRICS.includes(key.slice(5))) {
-    return t.runDetail.metrics.onTestSet(metricLabel(t, key.slice(5)));
-  }
-  return key;
 }
 
 function fmtMetric(v: unknown): string {

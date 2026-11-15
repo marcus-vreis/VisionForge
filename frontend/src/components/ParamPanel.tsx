@@ -39,6 +39,8 @@ import type { PanelStrategy } from "./ExperimentHeader";
 import type { ReplicatesPayload } from "../lib/replicates-form";
 import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-form";
 import { Rich } from "./Rich";
+import { alternateModel } from "../lib/model-source";
+import { ActionButton } from "./ui/ActionButton";
 import { StepShell, type StepDef } from "./StepShell";
 import {
   coerceGridValue,
@@ -1957,6 +1959,8 @@ export function ParamPanel({
   // Either one: a strategy of the GUI, not a `block`.
   const guiStrategyOn = replicatesOn || comparisonOn;
   const modelData = (formData["model"] ?? {}) as Record<string, unknown>;
+  // A model that replaces the builtin one, from an imported YAML (lib/model-source.ts).
+  const otherModel = alternateModel(modelData);
   const trainingData = (formData["training"] ?? {}) as Record<string, unknown>;
   const dataData = (formData["data"] ?? {}) as Record<string, unknown>;
   const baseDir = String(dataData["base_dir"] ?? "");
@@ -2267,8 +2271,18 @@ export function ParamPanel({
     {
       step: "model",
       rows: [
-        row(labels["model.name"], modelData["name"], "model.name"),
-        row(labels.pretrained, modelData["pretrained"], "model.pretrained"),
+        ...(otherModel
+          ? [
+              {
+                ...row(t.paramPanel.otherModel.label[otherModel.source], otherModel.name),
+                changed: true,
+              },
+            ]
+          : [row(labels["model.name"], modelData["name"], "model.name")]),
+        // A model of the researcher's own ignores `pretrained`; timm honours it.
+        ...(otherModel?.source === "custom_model"
+          ? []
+          : [row(labels.pretrained, modelData["pretrained"], "model.pretrained")]),
         ...(modelData["weights_path"]
           ? [row(labels.weights_path, modelData["weights_path"], "model.weights_path")]
           : []),
@@ -2536,13 +2550,43 @@ export function ParamPanel({
     },
     {
       id: "model",
-      summary: String(modelData["name"] ?? "") || undefined,
+      summary: otherModel?.name ?? (String(modelData["name"] ?? "") || undefined),
       changes:
         changed(["model.name", "model.pretrained", "model.weights_path"]) +
-        (tlOn ? 1 : 0),
+        (tlOn ? 1 : 0) +
+        (otherModel ? 1 : 0),
       errors: errorsIn(["model", "transfer_learning"], ["model.num_classes"]),
       content: (
         <div style={stepStack}>
+          {otherModel && (
+            <div
+              data-other-model={otherModel.source}
+              role="note"
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: 12,
+                padding: "12px 14px",
+                borderLeft: "2px solid var(--accent-vf)",
+                borderRadius: "0 10px 10px 0",
+                background: "var(--accent-soft)",
+                fontSize: 13,
+                lineHeight: 1.55,
+                color: "var(--vf-text)",
+              }}
+            >
+              <span style={{ flex: "1 1 320px", minWidth: 0 }}>
+                <Rich text={t.paramPanel.otherModel.note[otherModel.source](otherModel.name)} />
+              </span>
+              <ActionButton
+                size="sm"
+                onClick={() => setField("model", otherModel.source, null)}
+              >
+                {t.paramPanel.otherModel.useBuiltin}
+              </ActionButton>
+            </div>
+          )}
           <div style={card}>
             <div style={sectionLabel}>{t.paramPanel.kickers.model}</div>
             <div style={fieldGrid}>

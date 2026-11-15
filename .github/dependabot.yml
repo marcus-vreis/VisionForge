@@ -3,6 +3,11 @@ version: 2
 # Monthly, grouped version updates against `development` (the integration
 # branch). torch and torchvision are excluded: the build has to match the
 # hardware extra (cpu / cu118 ... cu130), so a bump is chosen by hand.
+#
+# A group holds only minor and patch updates. A major one comes alone, in its
+# own pull request: the first grouped npm update put TypeScript 7, ESLint 10
+# and vitest 5 beside 22 small bumps, `npm ci` refused the lockfile, and none
+# of the small ones could be merged.
 updates:
   - package-ecosystem: github-actions
     directory: /
@@ -15,6 +20,7 @@ updates:
     groups:
       github-actions:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: npm
     directory: /frontend
@@ -27,6 +33,7 @@ updates:
     groups:
       npm:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: pip
     directory: /
@@ -39,6 +46,7 @@ updates:
     groups:
       pip:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
     ignore:
       - dependency-name: torch
       - dependency-name: torchvision

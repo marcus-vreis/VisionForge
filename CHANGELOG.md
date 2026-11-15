@@ -13,6 +13,23 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Added
+
+- `docs/QUICKSTART.md` ganha a versão em português, depois da versão em inglês, com os mesmos comandos e os nomes que a interface usa em português.
+- Dois testes de navegador novos: o primeiro treino de regressão, segmentação, anomalia e detecção com o dataset de exemplo, e um YAML com `custom_model` importado e treinado pela interface.
+
+### Changed
+
+- O Dependabot agrupa só atualizações minor e patch; cada salto de versão maior vem num PR próprio. O primeiro grupo de npm juntou TypeScript 7, ESLint 10 e vitest 5 a 22 atualizações pequenas e nenhuma pôde ser mesclada.
+- O extra `hub` aceita `huggingface-hub` 2.x (antes `<2`): as chamadas que o VisionForge faz existem com os mesmos parâmetros na 2.4.0.
+
+### Fixed
+
+- O detalhe de uma execução de regressão, segmentação ou anomalia mostrava as métricas com o nome cru do `run.json` (`TEST_R2`, `BEST_VAL_MIOU`, `IMAGE_F1`). Agora usa os mesmos rótulos da comparação entre execuções: "R² (teste)", "mIoU (val)", "F1 da imagem (teste)" (ADR-208).
+- As métricas por época da anomalia apareciam como "(val)" e "Val AUROC", mas a tarefa não tem split de validação: o treino pontua cada época no split de teste. Os rótulos passam a dizer "AUROC (melhor época)" e "AUROC (teste)" (ADR-208).
+- O Histórico listava uma execução treinada com `model.custom_model` ou `model.timm_model` pelo nome do modelo embutido que o config ainda carregava e que foi ignorado (um treino de `my_net` aparecia como resnet18). Agora mostra o modelo que treinou (ADR-208).
+- Ao importar na interface um YAML com `custom_model` ou `timm_model`, as etapas Modelo e Revisão continuavam mostrando a arquitetura embutida, embora o treino usasse o outro modelo. Elas agora dizem qual modelo vai treinar, e um botão volta à arquitetura do formulário (ADR-208).
+
 ## [0.22.0] — 2026-11-15
 
 ### Added
