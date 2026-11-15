@@ -116,7 +116,7 @@ tensorboard = []
 roboflow = []
 kaggle = []
 huggingface = []
-hub = ["huggingface-hub>=1.16.1,<2"]
+hub = ["huggingface-hub>=1.16.1,<3"]
 
 dev = [
     "pytest>=8.0",
@@ -125,7 +125,7 @@ dev = [
     # Exact pin: CI installs the newest release and mypy 2.x flagged code the
     # local hook (1.x) accepted. Keep this, .pre-commit-config.yaml `rev` and
     # uv.lock on the same version so the hook, CI and `uv run mypy` agree.
-    "mypy==2.4.0",
+    "mypy==2.4.1",
     "codespell>=2.3",
     "pre-commit>=4.0",
     "bump-my-version>=0.24",
