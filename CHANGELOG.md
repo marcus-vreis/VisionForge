@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.22.1] — 2026-11-15
+
 ### Added
 
 - `docs/QUICKSTART.md` ganha a versão em português, depois da versão em inglês, com os mesmos comandos e os nomes que a interface usa em português.
