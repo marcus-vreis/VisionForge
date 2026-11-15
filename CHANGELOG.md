@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-11-15
+
 ### Added
 
 - **Começando do zero**, a primeira entrada do menu **guia**: uma página em tela cheia para quem nunca treinou um modelo. Oito capítulos explicam o que é treinar, os dados e suas divisões, épocas e taxa de aprendizado, como ler as curvas e o resultado, com figuras (a rede do painel de treino, curvas de perda em que se troca a taxa de aprendizado, uma matriz de confusão), a gravação de um treino real e os termos novos de cada capítulo em uma linha. Termina com as bibliotecas que rodam por trás e onde estudar a área. O convite da primeira visita também leva a ela (ADR-207).
