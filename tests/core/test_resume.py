@@ -203,7 +203,8 @@ def test_atomic_save_failure_preserves_previous_checkpoint(
         raise OSError("replace denied")
 
     if failure == "write":
-        monkeypatch.setattr("visionforge.core.resume.torch.save", fail_write)
+        # resume.py imports torch per call (#202): patch the function it calls.
+        monkeypatch.setattr("torch.save", fail_write)
     else:
         monkeypatch.setattr("visionforge.core.resume.os.replace", fail_replace)
     new_state = _state(4)

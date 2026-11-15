@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import platform
 import subprocess
 from pathlib import Path
@@ -90,7 +89,9 @@ def test_records_extended_dependency_versions() -> None:
         assert isinstance(env[name], str)
 
 
-def _source_checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def _source_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_env: dict[str, str]
+) -> Path:
     from visionforge.utils import environment
 
     root = tmp_path / "checkout"
@@ -101,9 +102,6 @@ def _source_checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         '[project]\nname = "visionforge-studio"\n', encoding="utf-8"
     )
     # Commit hooks export repository routing even when Git runs with another cwd.
-    git_env = {
-        key: value for key, value in os.environ.items() if not key.startswith("GIT_")
-    }
     for args in (
         ["init", "--quiet"],
         ["add", "."],
@@ -128,12 +126,10 @@ def _source_checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def test_source_fixture_isolates_inherited_git_repository(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_git_env: dict[str, str]
 ) -> None:
     """A commit hook must not redirect the fixture into its caller's repository."""
-    clean_env = {
-        key: value for key, value in os.environ.items() if not key.startswith("GIT_")
-    }
+    clean_env = clean_git_env
     foreign = tmp_path / "foreign.git"
     subprocess.run(
         ["git", "init", "--bare", "--quiet", str(foreign)], check=True, env=clean_env
@@ -143,7 +139,7 @@ def test_source_fixture_isolates_inherited_git_repository(
     monkeypatch.setenv("GIT_DIR", str(foreign))
     monkeypatch.setenv("GIT_INDEX_FILE", str(foreign / "hook-index"))
 
-    root = _source_checkout(tmp_path, monkeypatch)
+    root = _source_checkout(tmp_path, monkeypatch, clean_git_env)
 
     assert (foreign / "config").read_bytes() == original_config
     assert (foreign / "HEAD").read_bytes() == original_head
@@ -156,17 +152,13 @@ def test_source_fixture_isolates_inherited_git_repository(
 
 
 def test_records_actual_source_revision_and_dirty_state(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_git_env: dict[str, str]
 ) -> None:
-    root = _source_checkout(tmp_path, monkeypatch)
+    root = _source_checkout(tmp_path, monkeypatch, clean_git_env)
     revision = subprocess.check_output(
         ["git", "-C", str(root), "rev-parse", "HEAD"],
         text=True,
-        env={
-            key: value
-            for key, value in os.environ.items()
-            if not key.startswith("GIT_")
-        },
+        env=clean_git_env,
     ).strip()
     env = capture_environment()
     assert env["git_revision"] == revision
@@ -176,11 +168,11 @@ def test_records_actual_source_revision_and_dirty_state(
 
 
 def test_installed_package_does_not_report_current_workspace_git(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_git_env: dict[str, str]
 ) -> None:
     from visionforge.utils import environment
 
-    root = _source_checkout(tmp_path, monkeypatch)
+    root = _source_checkout(tmp_path, monkeypatch, clean_git_env)
     monkeypatch.chdir(root)
     monkeypatch.setattr(
         environment,
@@ -193,11 +185,11 @@ def test_installed_package_does_not_report_current_workspace_git(
 
 
 def test_git_failure_is_bounded_and_does_not_break_capture(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_git_env: dict[str, str]
 ) -> None:
     from visionforge.utils import environment
 
-    _source_checkout(tmp_path, monkeypatch)
+    _source_checkout(tmp_path, monkeypatch, clean_git_env)
 
     def unavailable(*args: object, **kwargs: object) -> None:
         assert kwargs["timeout"] == 2
@@ -221,11 +213,11 @@ def test_import_never_invokes_git(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_source_layout_without_own_git_does_not_use_ancestor_repository(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_git_env: dict[str, str]
 ) -> None:
     from visionforge.utils import environment
 
-    root = _source_checkout(tmp_path, monkeypatch)
+    root = _source_checkout(tmp_path, monkeypatch, clean_git_env)
     nested = root / "nested/src/visionforge/utils/environment.py"
     nested.parent.mkdir(parents=True)
     nested.write_text("", encoding="utf-8")
@@ -237,9 +229,9 @@ def test_source_layout_without_own_git_does_not_use_ancestor_repository(
 
 
 def test_source_identity_ignores_git_environment_overrides(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_git_env: dict[str, str]
 ) -> None:
-    root = _source_checkout(tmp_path, monkeypatch)
+    root = _source_checkout(tmp_path, monkeypatch, clean_git_env)
     monkeypatch.setenv("GIT_DIR", str(tmp_path / "unrelated.git"))
     monkeypatch.setenv("GIT_WORK_TREE", str(tmp_path))
     assert capture_environment()["git_revision"] != "unknown"

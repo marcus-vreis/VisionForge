@@ -13,6 +13,7 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from PIL import Image
 
+import visionforge.gui.api.execution as execution_mod
 from visionforge.core.experiment_bundle import verify_experiment_bundle
 from visionforge.gui.api import evidence_routes, routes
 from visionforge.gui.api.profiles import default_profile
@@ -178,15 +179,15 @@ def test_active_or_resuming_runs_cannot_be_exported(
     requested_id: str,
 ) -> None:
     run = _run(Path("outputs/models"))
-    occupy_queue(routes, "new_resume_id" if resuming else "example_run")
+    occupy_queue(execution_mod, "new_resume_id" if resuming else "example_run")
     try:
         if resuming:
-            assert routes._RUN_QUEUE._active is not None
-            monkeypatch.setattr(routes._RUN_QUEUE._active, "resume_dir", run)
+            assert execution_mod._RUN_QUEUE._active is not None
+            monkeypatch.setattr(execution_mod._RUN_QUEUE._active, "resume_dir", run)
         response = client.get(f"/api/runs/{requested_id}/bundle")
         assert response.status_code == 409
     finally:
-        release_queue(routes)
+        release_queue(execution_mod)
 
 
 def test_download_temporary_files_are_cleaned_on_success_and_failure(
@@ -280,7 +281,7 @@ def test_continuation_cannot_start_while_archive_reads_source(
             response = client.post("/api/runs/example_run/resume")
             assert response.status_code == 409
             assert "export" in response.json()["detail"]
-            assert not routes._RUN_QUEUE.is_busy()
+            assert not execution_mod._RUN_QUEUE.is_busy()
         finally:
             finish.set()
         assert download.result(timeout=10).status_code == 200

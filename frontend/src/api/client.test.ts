@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createProfile,
+  updateProfile,
+  retryMLflowExport,
+  fetchHubToken, saveHubToken, deleteHubToken, fetchHubPreview, exportRunToHub,
   deleteRun,
   downloadRunMarkdown,
   fetchProfiles,
@@ -255,5 +258,70 @@ describe("fetchStatus", () => {
       "/api/experiment/status?run_id=a%20b",
       "/api/experiment/status",
     ]);
+  });
+});
+
+
+describe("MLflow requests", () => {
+  it("updates the explicitly named profile with nested settings", async () => {
+    const fetchMock = stubFetch({ slug: "ana", settings: { mlflow: { enabled: true } } });
+    await updateProfile("ana", { settings: { mlflow: { enabled: true } } });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/profiles/ana");
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(init.body as string)).toEqual({ settings: { mlflow: { enabled: true } } });
+  });
+  it("retries the encoded history ID in the active profile", async () => {
+    stubStorage({ "vf.profile": "ana" });
+    const fetchMock = stubFetch({ state: "completed", run_id: "external" });
+    expect(await retryMLflowExport("exp/run")).toEqual({ state: "completed", run_id: "external" });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/runs/exp%2Frun/mlflow/retry");
+    expect(init.method).toBe("POST");
+    expect(sentHeader(fetchMock, "X-VF-Profile")).toBe("ana");
+  });
+  it("reports a disabled-profile conflict to the caller", async () => {
+    stubFetch({ detail: "MLflow disabled" }, 409);
+    await expect(retryMLflowExport("r1")).rejects.toMatchObject({ status: 409, message: "MLflow disabled" });
+  });
+});
+
+describe("Hub requests", () => {
+  it("reads token status in the selected profile", async () => {
+    stubStorage({ "vf.profile": "ana" });
+    const f = stubFetch({ configured: true, shared: true });
+    expect(await fetchHubToken()).toEqual({ configured: true, shared: true });
+    expect((f.mock.calls[0] as unknown as [string, RequestInit])[0]).toBe("/api/hub/token");
+    expect(sentHeader(f, "X-VF-Profile")).toBe("ana");
+  });
+  it("saves and deletes credentials only through the token endpoint", async () => {
+    const f = stubFetch({ configured: true, shared: false });
+    await saveHubToken("hf_test_placeholder");
+    const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/hub/token");
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(init.body as string)).toEqual({ token: "hf_test_placeholder" });
+    await deleteHubToken();
+    const deleted = f.mock.calls[1] as unknown as [string, RequestInit];
+    expect(deleted[1].method).toBe("DELETE");
+    expect(deleted[1].body).toBeUndefined();
+  });
+  it("previews the encoded history ID", async () => {
+    const snapshot = { files: ["README.md", "run.json"], card: "# Example", digest: "snapshot" };
+    const f = stubFetch(snapshot);
+    expect(await fetchHubPreview("exp/run")).toEqual(snapshot);
+    expect((f.mock.calls[0] as unknown as [string, RequestInit])[0]).toBe("/api/hub/preview?run_id=exp%2Frun");
+  });
+  it("sends the reviewed digest and explicit destination", async () => {
+    const f = stubFetch({ url: "https://huggingface.co/ana/model" });
+    await exportRunToHub("exp/run", "ana/model", "snapshot");
+    const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/hub/export");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ run_id: "exp/run", repo_id: "ana/model", digest: "snapshot" });
+  });
+  it("propagates a stale-preview conflict", async () => {
+    stubFetch({ detail: "Preview changed" }, 409);
+    await expect(exportRunToHub("r1", "ana/model", "old")).rejects.toMatchObject({ status: 409 });
   });
 });

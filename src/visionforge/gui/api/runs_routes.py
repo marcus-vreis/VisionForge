@@ -17,9 +17,12 @@ from visionforge.core.dataset_fingerprint import dataset_identity
 from visionforge.gui.api.folder_opener import can_reveal
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST,
-    CONFLICT,
+    BAD_REQUEST_TEXT,
+    CONFLICT_TEXT,
     NOT_FOUND,
-    SERVER_ERROR,
+    NOT_FOUND_TEXT,
+    SERVER_ERROR_TEXT,
+    TAG_RUNS,
 )
 from visionforge.gui.api.profiles import PROFILE_HEADER, Profile
 from visionforge.gui.api.run_history import (
@@ -32,7 +35,14 @@ from visionforge.gui.api.run_history import (
     run_span,
     run_task,
 )
-from visionforge.gui.api.schemas import DatasetInfo, RunDetail, RunSummary
+from visionforge.gui.api.schemas import (
+    CometStatus,
+    DatasetInfo,
+    MlflowStatus,
+    RunDetail,
+    RunSummary,
+    WandbStatus,
+)
 from visionforge.utils.messages import tr
 
 
@@ -47,7 +57,7 @@ def build_runs_router(
     ``run_state`` returns the state of the job with that run id, if one started,
     so a delete can refuse a running one without this module holding a copy.
     """
-    router = APIRouter()
+    router = APIRouter(tags=[TAG_RUNS])
 
     def profile_dep(
         x_vf_profile: Annotated[str | None, Header(alias=PROFILE_HEADER)] = None,
@@ -62,7 +72,12 @@ def build_runs_router(
         return load_runs(profile.models_dir.resolve())
 
     @router.get(
-        "/runs/{run_id}", responses={**BAD_REQUEST, **NOT_FOUND, **SERVER_ERROR}
+        "/runs/{run_id}",
+        responses={
+            400: {"description": BAD_REQUEST_TEXT},
+            404: {"description": NOT_FOUND_TEXT},
+            500: {"description": SERVER_ERROR_TEXT},
+        },
     )
     async def get_run_detail(
         run_id: str, request: Request, profile: ProfileDep
@@ -73,7 +88,14 @@ def build_runs_router(
             raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
         return _build_run_detail(run_dir, _read_run_json(run_dir), client_host(request))
 
-    @router.delete("/runs/{run_id}", responses={**BAD_REQUEST, **NOT_FOUND, **CONFLICT})
+    @router.delete(
+        "/runs/{run_id}",
+        responses={
+            400: {"description": BAD_REQUEST_TEXT},
+            404: {"description": NOT_FOUND_TEXT},
+            409: {"description": CONFLICT_TEXT},
+        },
+    )
     async def delete_run(run_id: str, profile: ProfileDep) -> dict[str, str]:
         """Permanently remove a run directory and all its artifacts.
 
@@ -120,6 +142,39 @@ def _run_dataset(data: dict[str, Any]) -> DatasetInfo | None:
     )
 
 
+def read_mlflow_status(run_dir: Path) -> MlflowStatus | None:
+    """Read optional tracking diagnostics from a regular file inside the run."""
+    sidecar = run_dir / "tracking.json"
+    if sidecar.is_symlink():
+        return None
+    try:
+        return MlflowStatus.model_validate_json(sidecar.read_bytes())
+    except (OSError, ValueError):
+        return None
+
+
+def read_comet_status(run_dir: Path) -> CometStatus | None:
+    """Read the optional Comet diagnostics from a regular file inside the run."""
+    sidecar = run_dir / "comet.json"
+    if sidecar.is_symlink():
+        return None
+    try:
+        return CometStatus.model_validate_json(sidecar.read_bytes())
+    except (OSError, ValueError):
+        return None
+
+
+def read_wandb_status(run_dir: Path) -> WandbStatus | None:
+    """Read the optional W&B diagnostics from a regular file inside the run."""
+    sidecar = run_dir / "wandb.json"
+    if sidecar.is_symlink():
+        return None
+    try:
+        return WandbStatus.model_validate_json(sidecar.read_bytes())
+    except (OSError, ValueError):
+        return None
+
+
 def _build_run_detail(
     run_dir: Path, data: dict[str, Any], host: str | None
 ) -> RunDetail:
@@ -131,6 +186,9 @@ def _build_run_detail(
     metrics: dict[str, Any] = data.get("metrics", {})
     history: list[dict[str, Any]] = data.get("history", [])
     return RunDetail(
+        tracking=read_mlflow_status(run_dir),
+        wandb=read_wandb_status(run_dir),
+        comet=read_comet_status(run_dir),
         run_id=run_dir.name,
         experiment_name=data.get("experiment", run_dir.parent.name),
         status=status,

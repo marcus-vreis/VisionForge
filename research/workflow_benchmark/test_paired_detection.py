@@ -40,7 +40,7 @@ def test_exact_cpu_parity(parity):
         == "monkeypatch of detection_trainer.build_torchvision_detector"
     )
     assert report["purpose"] == "engineering_parity_only"
-    assert report["execution_order"] == paired.EXECUTION_ORDER
+    assert report["execution_order"] == paired.execution_order(37)
     assert report["environment"]["git_revision"]
     assert report["dataset_fingerprint"] == paired.fingerprint_dataset(dataset)
     assert json.loads((root / "pair/paired_result.json").read_text()) == report
@@ -145,7 +145,7 @@ def test_phase_failure_keeps_partial_report(
         )
     output = tmp_path_factory.mktemp("failure") / "pair"
     with pytest.raises(phase_contract.PhaseFailure):
-        paired.run_pair(dataset, initial, output, epochs=1)
+        paired.run_pair(dataset, initial, output, seed=36, epochs=1)
     saved = json.loads((output / "paired_result.json").read_text())
     assert saved["status"] == "failed"
     assert saved["failed_phase"] == f"{side}.{phase}"
@@ -198,3 +198,36 @@ def test_fallback_uses_first_split_without_test(tmp_path_factory):
         report["native"]["test_split"] == report["visionforge"]["test_split"] == "train"
     )
     assert report["native"]["test_stems"] == ["000", "001"]
+
+
+@pytest.mark.parametrize(
+    ("seed", "expected"),
+    [
+        (0, ["native_pytorch", "visionforge_trainer"]),
+        (1, ["visionforge_trainer", "native_pytorch"]),
+        (36, ["native_pytorch", "visionforge_trainer"]),
+        (37, ["visionforge_trainer", "native_pytorch"]),
+    ],
+)
+def test_execution_order_alternates_with_seed_parity(
+    tmp_path, monkeypatch, seed, expected
+):
+    """Even seeds run native first and odd seeds VisionForge first, per pair."""
+    dataset, initial = make_detection_fixture(tmp_path)
+    calls = []
+    monkeypatch.setattr(
+        native_detection,
+        "run_native",
+        lambda *a, **kw: calls.append("native_pytorch") or {},
+    )
+    monkeypatch.setattr(
+        paired,
+        "run_visionforge",
+        lambda *a, **kw: calls.append("visionforge_trainer") or {},
+    )
+    output = tmp_path / "pair"
+    with pytest.raises(KeyError):  # empty stub reports fail at the comparison
+        paired.run_pair(dataset, initial, output, seed=seed, epochs=1, batch_size=2)
+    report = json.loads((output / "paired_result.json").read_text())
+    assert calls == expected
+    assert report["execution_order"] == expected

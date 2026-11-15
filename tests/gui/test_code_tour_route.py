@@ -1,0 +1,162 @@
+"""GET /api/code-tour/{task} (ADR-173)."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi.testclient import TestClient
+
+from visionforge.gui.server import app
+
+
+def _tour(query: str = "", lang: str = "pt") -> Any:
+    return TestClient(app).get(
+        f"/api/code-tour/classification{query}", headers={"X-VF-Lang": lang}
+    )
+
+
+def test_the_classification_tour_lists_its_sections_in_order() -> None:
+    response = _tour()
+    assert response.status_code == 200
+    assert [s["id"] for s in response.json()] == [
+        "data",
+        "model",
+        "loss",
+        "train",
+        "validate",
+        "test",
+    ]
+
+
+def test_the_settings_pick_the_branch_of_this_run() -> None:
+    sections = {
+        s["id"]: s
+        for s in _tour("?kind=multiclass&amp=false&augment=true&model=resnet18").json()
+    }
+    loss = sections["loss"]
+    actives = {loss["lines"][n["first"]].strip(): n["active"] for n in loss["notes"]}
+    assert actives == {
+        "return nn.BCEWithLogitsLoss()": False,
+        "return nn.CrossEntropyLoss()": True,
+    }
+    model = [n["active"] for n in sections["model"]["notes"]]
+    assert model == [True, False, False, False, False, False]
+
+
+def test_an_unknown_model_leaves_the_branches_undecided() -> None:
+    model = next(
+        s for s in _tour("?model=mobilenet_v3_small").json() if s["id"] == "model"
+    )
+    assert all(note["active"] is None for note in model["notes"])
+
+
+def test_the_notes_follow_the_language() -> None:
+    pt = _tour(lang="pt").json()[0]["notes"][0]["text"]
+    en = _tour(lang="en").json()[0]["notes"][0]["text"]
+    assert pt != en
+    assert "image" in en
+
+
+def test_detection_without_a_backend_gets_the_ultralytics_tour() -> None:
+    # Ultralytics is the default backend; it has a tour since ADR-194.
+    response = TestClient(app).get("/api/code-tour/detection")
+    assert response.status_code == 200
+    assert response.json()[0]["id"] == "yolo_args"
+
+
+def test_the_regression_tour_marks_the_loss_of_the_query() -> None:
+    response = TestClient(app).get("/api/code-tour/regression?loss=mae")
+    assert response.status_code == 200
+    loss = next(s for s in response.json() if s["id"] == "loss")
+    actives = {loss["lines"][n["first"]].strip(): n["active"] for n in loss["notes"]}
+    assert actives["return nn.L1Loss()"] is True
+    assert actives["return nn.MSELoss()"] is False
+
+
+def test_the_list_names_the_tasks_with_a_tour_and_their_settings() -> None:
+    response = TestClient(app).get("/api/code-tour")
+    assert response.status_code == 200
+    tours = {item["task"]: item["settings"] for item in response.json()}
+    assert {"classification", "regression"} <= set(tours)
+    assert tours["regression"] == {"loss": ["huber", "mae", "mse"]}
+    assert tours["classification"]["kind"] == ["binary", "multiclass"]
+
+
+def test_an_unknown_task_is_404() -> None:
+    response = TestClient(app).get("/api/code-tour/foo")
+    assert response.status_code == 404
+    assert response.json()["detail"]
+
+
+def test_the_segmentation_tour_marks_the_loss_and_is_listed() -> None:
+    client = TestClient(app)
+    response = client.get("/api/code-tour/segmentation?loss=dice&model=unet")
+    assert response.status_code == 200
+    sections = {s["id"]: s for s in response.json()}
+    loss = sections["loss"]
+    actives = {loss["lines"][n["first"]].strip(): n["active"] for n in loss["notes"]}
+    assert actives["return _DiceCriterion(self._ignore_index)"] is True
+    assert actives["return _CombinedLoss(self._ignore_index)"] is False
+    assert all(n["active"] is True for n in sections["unet"]["notes"])
+    tasks = [item["task"] for item in client.get("/api/code-tour").json()]
+    assert "segmentation" in tasks
+
+
+def test_the_anomaly_tour_follows_the_method_of_the_query() -> None:
+    response = TestClient(app).get("/api/code-tour/anomaly?method=patchcore")
+    assert response.status_code == 200
+    sections = {s["id"]: s for s in response.json()}
+    assert all(n["active"] is True for n in sections["coreset"]["notes"])
+    assert all(n["active"] is False for n in sections["train"]["notes"])
+
+
+def test_the_torchvision_detection_tour_marks_the_detector() -> None:
+    response = TestClient(app).get(
+        "/api/code-tour/detection?backend=torchvision&arch=retinanet"
+    )
+    assert response.status_code == 200
+    sections = {s["id"]: s for s in response.json()}
+    assert all(n["active"] is True for n in sections["retinanet"]["notes"])
+    assert all(n["active"] is False for n in sections["ssd"]["notes"])
+
+
+def test_ultralytics_detection_shows_the_layer_and_the_library() -> None:
+    import ultralytics
+
+    response = TestClient(app).get(
+        "/api/code-tour/detection?backend=ultralytics&model=yolo11n",
+        headers={"X-VF-Lang": "en"},
+    )
+    assert response.status_code == 200
+    sections = response.json()
+    assert [s["id"] for s in sections] == [
+        "yolo_args",
+        "yolo_augment",
+        "yolo_fit",
+        "yolo_epoch",
+        "yolo_loop",
+    ]
+    assert sections[0]["library"] is None
+    loop = sections[-1]
+    assert loop["library"]["version"] == ultralytics.__version__
+    assert loop["library"]["license"] == "AGPL-3.0"
+    # Tolerant notes (ADR-194): how many resolve depends on the installed version.
+    assert len(loop["notes"]) == loop["notes_resolved"]
+    assert loop["notes_resolved"] <= loop["notes_total"]
+
+
+def test_each_section_names_its_step_and_a_sentence_in_the_language() -> None:
+    pt = _tour(lang="pt").json()
+    en = _tour(lang="en").json()
+    assert [s["step"] for s in pt] == [
+        "data",
+        "model",
+        "loss",
+        "train",
+        "validate",
+        "test",
+    ]
+    for pt_section, en_section in zip(pt, en, strict=True):
+        assert pt_section["summary"]
+        assert en_section["summary"]
+        assert pt_section["summary"] != en_section["summary"]

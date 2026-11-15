@@ -87,6 +87,20 @@ classificação, não uma promessa de CV por grupos para todas as tarefas.
 Na GUI de classificação, o formulário de K-fold também aceita o caminho do CSV.
 O valor acompanha a configuração ao salvar/exportar YAML.
 
+## Mesma seed, mesmos números
+
+Com `training.deterministic: true` (o padrão), cada treino semeia o Python, o
+NumPy e o PyTorch com a `training.seed`. Também liga os kernels determinísticos
+do cuDNN e do próprio PyTorch (ADR-199). Em 12/11/2026, numa RTX 5060 Ti com
+torch 2.14.1+cu130, duas execuções de cada tarefa (uma época, dados do
+`selftest`) repetiram as mesmas métricas.
+
+Duas operações não têm versão determinística na GPU e geram um aviso do PyTorch
+no log: a cross-entropy da segmentação (`nll_loss2d`) e o backward do
+`roi_align` da detecção torchvision. Nesses dois casos, a repetição observada
+não é garantida. Os números também podem mudar entre GPUs, versões do
+PyTorch/CUDA e com mais de um worker no DataLoader.
+
 ## Retomar um treino
 
 O estado de retomada formato 2 preserva modelo, optimizer, scheduler, scaler,

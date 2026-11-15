@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from loguru import logger
 
+from visionforge.gui.api.http_responses import (
+    TAG_PROFILES,
+    UNPROCESSABLE_TEXT,
+    VALIDATION_ERROR_CONTENT,
+)
 from visionforge.gui.api.profiles import (
     InvalidProfileError,
     Profile,
@@ -31,29 +35,7 @@ from visionforge.gui.api.schemas import (
 # (tests and the CLI repoint them), so they are handed in, not imported back.
 ProfileDirs = Callable[[], tuple[Path, Path]]
 
-_BAD_REQUEST: dict[int | str, dict[str, Any]] = {
-    400: {"description": "Invalid profile slug"}
-}
-_NOT_FOUND: dict[int | str, dict[str, Any]] = {
-    404: {"description": "Profile not found"}
-}
-_CONFLICT: dict[int | str, dict[str, Any]] = {
-    409: {"description": "Profile already exists"}
-}
-_UNPROCESSABLE: dict[int | str, dict[str, Any]] = {
-    422: {
-        "description": "Invalid request",
-        # Keeps FastAPI's validation-error schema that a description-only entry would drop.
-        "content": {
-            "application/json": {
-                "schema": {"$ref": "#/components/schemas/HTTPValidationError"}
-            }
-        },
-    }
-}
-_SERVER_ERROR: dict[int | str, dict[str, Any]] = {
-    500: {"description": "Profile could not be saved"}
-}
+_SAVE_FAILED_TEXT = "Profile could not be saved"
 
 
 def _profile_info(profile: Profile) -> ProfileInfo:
@@ -62,12 +44,13 @@ def _profile_info(profile: Profile) -> ProfileInfo:
         name=profile.name,
         is_default=profile.is_default,
         pronoun=profile.pronoun,
+        settings=profile.settings,
     )
 
 
 def build_profiles_router(dirs: ProfileDirs) -> APIRouter:
     """Router for /profiles; mount it under the ``/api`` router that sets the language."""
-    router = APIRouter()
+    router = APIRouter(tags=[TAG_PROFILES])
 
     @router.get("/profiles")
     async def get_profiles() -> ProfileListResponse:
@@ -84,7 +67,14 @@ def build_profiles_router(dirs: ProfileDirs) -> APIRouter:
     @router.post(
         "/profiles",
         status_code=201,
-        responses={**_CONFLICT, **_UNPROCESSABLE, **_SERVER_ERROR},
+        responses={
+            409: {"description": "Profile already exists"},
+            422: {
+                "description": UNPROCESSABLE_TEXT,
+                "content": VALIDATION_ERROR_CONTENT,
+            },
+            500: {"description": _SAVE_FAILED_TEXT},
+        },
     )
     async def add_profile(req: ProfileCreateRequest) -> ProfileInfo:
         """Create ``outputs/profiles/<slug>/`` for a display name (ADR-114).
@@ -109,7 +99,15 @@ def build_profiles_router(dirs: ProfileDirs) -> APIRouter:
 
     @router.put(
         "/profiles/{slug}",
-        responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_SERVER_ERROR},
+        responses={
+            400: {"description": "Invalid profile slug"},
+            404: {"description": "Profile not found"},
+            422: {
+                "description": UNPROCESSABLE_TEXT,
+                "content": VALIDATION_ERROR_CONTENT,
+            },
+            500: {"description": _SAVE_FAILED_TEXT},
+        },
     )
     async def edit_profile(slug: str, req: ProfileUpdateRequest) -> ProfileInfo:
         """Change a profile's display name and/or pronoun, the default's too (ADR-126).
@@ -122,7 +120,12 @@ def build_profiles_router(dirs: ProfileDirs) -> APIRouter:
         profiles_dir, models_dir = dirs()
         try:
             profile = update_profile(
-                slug, profiles_dir, models_dir, name=req.name, pronoun=req.pronoun
+                slug,
+                profiles_dir,
+                models_dir,
+                name=req.name,
+                pronoun=req.pronoun,
+                settings=req.settings,
             )
         except InvalidProfileError as exc:
             raise HTTPException(400, str(exc)) from exc

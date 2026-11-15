@@ -121,3 +121,27 @@ jobs:
         with:
           body_path: release-notes.md
           files: dist/*
+
+  # The site is a separate repository and is updated by hand (docs/dev/RELEASING.md,
+  # "After publishing"). This only reminds: it never fails the release and it does
+  # not dispatch anything to the site.
+  site-version-check:
+    name: Site shows the released version
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: github-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    continue-on-error: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Warn when the site lacks this version
+        run: python scripts/sync_site_release.py --warn --version "${GITHUB_REF_NAME#v}"

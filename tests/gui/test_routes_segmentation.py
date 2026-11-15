@@ -1,14 +1,20 @@
 from __future__ import annotations
 
-import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.strategies as strategies
+from tests.helpers import wait_experiment_done, wait_until
 from visionforge.utils.selftest_data import build_segmentation_dataset
 
 from .conftest import occupy_queue, release_queue
+
+# Any: the tests swap its orchestrators and executors for fakes.
+strategies_mod: Any = strategies
 
 
 @pytest.fixture
@@ -51,7 +57,7 @@ class TestSegmentationRun:
         from visionforge.blocks.segmentation import SegmentationBlock
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
         orig_setup = SegmentationBlock.setup
@@ -79,11 +85,10 @@ class TestSegmentationRun:
 
                 # Wait for run(), not setup(): has_callback is written in run, and
                 # waiting on setup's key raced the assert below.
-                deadline = time.monotonic() + 30.0
-                while time.monotonic() < deadline:
-                    if "has_callback" in captured:
-                        break
-                    time.sleep(0.05)
+                wait_until(
+                    lambda: "has_callback" in captured,
+                    message='"has_callback" in captured',
+                )
                 assert captured.get("class") == "SegmentationBlock"
                 assert captured.get("model") == "unet"
                 assert captured.get("has_callback") is True
@@ -91,26 +96,26 @@ class TestSegmentationRun:
             SegmentationBlock.setup = orig_setup  # type: ignore[method-assign]
             SegmentationBlock.run = orig_run  # type: ignore[method-assign]
             SegmentationBlock.report = orig_report  # type: ignore[method-assign]
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post("/api/segmentation/run", json=_payload(tmp_path))
             assert resp.status_code == 200
             assert resp.json()["status"] == "queued"
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_run_rejects_invalid_config(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         payload = _payload(tmp_path)
         # ignore_index (1) collides with a class id when num_classes=3 -> 422
         payload["data"] = {"base_dir": payload["data"]["base_dir"], "ignore_index": 1}
@@ -121,12 +126,16 @@ class TestSegmentationRun:
 
 class TestSegmentationCompare:
     def test_compare_dispatches_and_reports(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.comparison import ComparisonTrial
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         def fake_compare(
             runner, config_dict, model_names, metric, progress_callback=None
@@ -136,8 +145,7 @@ class TestSegmentationCompare:
                 ComparisonTrial("deeplabv3_resnet50", "failed", {}, error="boom"),
             ]
 
-        orig = routes_mod.run_model_comparison
-        routes_mod.run_model_comparison = fake_compare
+        monkeypatch.setattr(strategies_mod, "run_model_comparison", fake_compare)
         try:
             client = live_client
             payload = {
@@ -148,12 +156,7 @@ class TestSegmentationCompare:
             assert resp.status_code == 200, resp.text
             run_id = resp.json()["run_id"]
 
-            status = {"status": "running"}
-            for _ in range(50):
-                status = client.get("/api/experiment/status").json()
-                if status["status"] in ("completed", "failed"):
-                    break
-                time.sleep(0.05)
+            status = wait_experiment_done(client)
             assert status["status"] == "completed", status
 
             report = client.get(f"/api/experiment/result/{run_id}").json()["report"]
@@ -162,14 +165,13 @@ class TestSegmentationCompare:
             assert report["failed_count"] == 1
             assert report["top_3"][0]["model_arch"] == "unet"
         finally:
-            routes_mod.run_model_comparison = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_compare_requires_two_models(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(
             "/api/segmentation/compare",
@@ -180,12 +182,16 @@ class TestSegmentationCompare:
 
 class TestSegmentationSweep:
     def test_random_sweep_dispatches_and_reports(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.sweep import SweepTrial
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         def fake_sweep(
             runner, base, space, *, mode, metric, n_trials, seed, progress_callback=None
@@ -196,8 +202,7 @@ class TestSegmentationSweep:
                 )
             ]
 
-        orig = routes_mod.run_sweep
-        routes_mod.run_sweep = fake_sweep
+        monkeypatch.setattr(strategies_mod, "run_sweep", fake_sweep)
         try:
             client = live_client
             payload = {
@@ -216,12 +221,7 @@ class TestSegmentationSweep:
             assert resp.status_code == 200, resp.text
             run_id = resp.json()["run_id"]
 
-            status = {"status": "running"}
-            for _ in range(50):
-                status = client.get("/api/experiment/status").json()
-                if status["status"] in ("completed", "failed"):
-                    break
-                time.sleep(0.05)
+            status = wait_experiment_done(client)
             assert status["status"] == "completed", status
 
             report = client.get(f"/api/experiment/result/{run_id}").json()["report"]
@@ -229,5 +229,4 @@ class TestSegmentationSweep:
             assert report["metric"] == "miou"  # defaulted from primary_metric
             assert report["successful_trials"] == 1
         finally:
-            routes_mod.run_sweep = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()

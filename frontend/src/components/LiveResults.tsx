@@ -4,6 +4,8 @@
  *  receives (lib/live-results.ts). */
 
 import { artifactUrl } from "../api/client";
+import { LineChart } from "./ui/LineChart";
+import { TRAIN_COLOR, VAL_COLOR } from "../lib/run-curves";
 import { useT } from "../i18n/useT";
 import {
   bestEpoch,
@@ -22,8 +24,6 @@ import type { StorySpec } from "../lib/story-family";
 import { overfittingSince } from "../lib/training-story";
 import type { LiveConfusion, TrainingEvent } from "../types/run";
 
-const TRAIN_COLOR = "oklch(calc(0.74 - var(--lt-flip, 0) * 0.18) 0.16 240)";
-const VAL_COLOR = "oklch(calc(0.84 - var(--lt-flip, 0) * 0.38) 0.18 75)";
 
 interface LiveResultsProps {
   events: readonly TrainingEvent[];
@@ -354,27 +354,9 @@ function LiveChart({
   best: BestEpoch | null;
   accent: string;
 }) {
+  const t = useT();
   const series = all.filter((s) => s.points.length > 0);
   if (series.length === 0) return null;
-
-  const width = 640;
-  const height = 150;
-  const pad = { top: 10, right: 12, bottom: 22, left: 52 };
-  const innerW = width - pad.left - pad.right;
-  const innerH = height - pad.top - pad.bottom;
-  const xs = series.flatMap((s) => s.points.map((p) => p.epoch));
-  const ys = series.flatMap((s) => s.points.map((p) => p.value));
-  const xMin = Math.min(...xs);
-  const xMax = Math.max(...xs);
-  const yMin = Math.min(...ys);
-  const yMax = Math.max(...ys);
-  const x = (epoch: number) => pad.left + ((epoch - xMin) / Math.max(xMax - xMin, 1)) * innerW;
-  // A number that never moved (an accuracy stuck at 1.0) is a level line through
-  // the middle, with one label: two equal labels at the edges read as a range.
-  const flat = yMax === yMin;
-  const y = (value: number) =>
-    flat ? pad.top + innerH / 2 : pad.top + innerH - ((value - yMin) / (yMax - yMin)) * innerH;
-  const showBest = best !== null && best.epoch >= xMin && best.epoch <= xMax;
 
   return (
     <figure
@@ -392,7 +374,7 @@ function LiveChart({
           gap: 12,
           flexWrap: "wrap",
           fontFamily: "var(--font-mono)",
-          fontSize: 10,
+          fontSize: 11,
           letterSpacing: "0.12em",
           textTransform: "uppercase",
           color: "var(--vf-text-muted)",
@@ -409,68 +391,18 @@ function LiveChart({
             </span>
           ))}
       </figcaption>
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        width="100%"
-        role="img"
-        aria-label={title}
-        style={{ display: "block" }}
-      >
-        {flat ? (
-          <text x={pad.left - 6} y={y(yMin) + 3} fontSize="10" fill="var(--vf-text-muted)" textAnchor="end">
-            {formatValue(yMin)}
-          </text>
-        ) : (
-          <>
-            <text x={pad.left - 6} y={pad.top + 8} fontSize="10" fill="var(--vf-text-muted)" textAnchor="end">
-              {formatValue(yMax)}
-            </text>
-            <text x={pad.left - 6} y={pad.top + innerH} fontSize="10" fill="var(--vf-text-muted)" textAnchor="end">
-              {formatValue(yMin)}
-            </text>
-          </>
-        )}
-        <text x={pad.left} y={height - 6} fontSize="10" fill="var(--vf-text-muted)">
-          {xMin}
-        </text>
-        <text x={width - pad.right} y={height - 6} fontSize="10" fill="var(--vf-text-muted)" textAnchor="end">
-          {xMax}
-        </text>
-        <line
-          x1={pad.left}
-          y1={pad.top + innerH}
-          x2={width - pad.right}
-          y2={pad.top + innerH}
-          stroke="var(--vf-panel-stroke)"
-        />
-        {showBest && (
-          <line
-            data-best-epoch={best.epoch}
-            x1={x(best.epoch)}
-            y1={pad.top}
-            x2={x(best.epoch)}
-            y2={pad.top + innerH}
-            stroke={accent}
-            strokeDasharray="3 3"
-          />
-        )}
-        {series.map((s) => (
-          <g key={s.name}>
-            <path
-              d={s.points.map((p, i) => `${i === 0 ? "M" : "L"} ${x(p.epoch)} ${y(p.value)}`).join(" ")}
-              fill="none"
-              stroke={s.color}
-              strokeWidth="2"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-            {/* A single epoch is a point, which a line does not draw. */}
-            {s.points.length === 1 && (
-              <circle cx={x(s.points[0].epoch)} cy={y(s.points[0].value)} r={3.5} fill={s.color} />
-            )}
-          </g>
-        ))}
-      </svg>
+      <LineChart
+        title={title}
+        height={170}
+        formatValue={formatValue}
+        marker={best ? { x: best.epoch, color: accent, label: t.chart.best } : null}
+        series={series.map((s) => ({
+          key: s.name,
+          name: s.name,
+          color: s.color,
+          points: s.points.map((p) => ({ x: p.epoch, y: p.value })),
+        }))}
+      />
     </figure>
   );
 }

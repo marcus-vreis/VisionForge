@@ -19,7 +19,8 @@ from visionforge.gui.api.schemas import (
     SystemInfo,
     TrialLearningRateResponse,
 )
-from visionforge.utils.cuda import CUDAInfo
+from visionforge.utils.cuda import CUDAInfo, mps_available
+from visionforge.utils.doctor import detection_install_command, ultralytics_installed
 from visionforge.utils.messages import tr
 
 
@@ -30,6 +31,8 @@ def system_info(suggested_workers: int) -> SystemInfo:
         suggested_workers=suggested_workers,
         platform=platform.system(),
         version=__version__,
+        ultralytics_installed=ultralytics_installed(),
+        detection_install_command=detection_install_command(),
     )
 
 
@@ -38,6 +41,7 @@ def device_info(info: CUDAInfo) -> DeviceInfoResponse:
     return DeviceInfoResponse(
         cuda_available=info.available,
         cuda_version=info.cuda_version,
+        mps_available=mps_available(),
         cpu_name=platform.processor() or platform.machine() or "CPU",
         gpus=[
             GPUInfo(

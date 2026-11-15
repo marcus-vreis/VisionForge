@@ -1,0 +1,26 @@
+schema_version: 1
+name: real_det_s37
+task: detection
+model:
+  backend: ultralytics
+  name: yolo11s
+  num_classes: 20
+  pretrained: true
+data:
+  data_yaml: ~/vfsmoke/real-v1/voc.yaml
+  image_size: 640
+training:
+  epochs: 100
+  batch_size: 16
+  learning_rate: 0.01
+  patience: 0
+  seed: 37
+  deterministic: true
+  workers: 4
+output:
+  models_dir: ~\vfsmoke\real-v1\det\seed37\vf\models
+  graphics_dir: ~\vfsmoke\real-v1\det\seed37\vf\graphics
+  logs_dir: ~\vfsmoke\real-v1\det\seed37\vf\logs
+  reports_dir: ~\vfsmoke\real-v1\det\seed37\vf\reports
+device:
+  kind: cuda

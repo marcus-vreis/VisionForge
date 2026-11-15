@@ -16,9 +16,19 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from loguru import logger
+from pydantic import SecretStr
 
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.gui.api.dataset_download import credentials_in_play, download_dataset
+from visionforge.gui.api.error_messages import unexpected_error
+from visionforge.gui.api.http_responses import (
+    BAD_REQUEST_TEXT,
+    FORBIDDEN_TEXT,
+    NOT_FOUND_TEXT,
+    SERVER_ERROR_TEXT,
+    TAG_DATASETS,
+)
+from visionforge.gui.api.profile_tokens import quiet_validation_route
 from visionforge.gui.api.schemas import (
     AnomalyDatasetStatsRequest,
     AnomalyDatasetStatsResponse,
@@ -54,18 +64,18 @@ from visionforge.gui.api.schemas import (
 from visionforge.utils.messages import tr
 from visionforge.utils.redact import redact_secrets
 
-router = APIRouter()
+router = APIRouter(tags=[TAG_DATASETS])
+# Its own router so a malformed body 422s without FastAPI's echo of the input,
+# which here would be the key.
+credentials_router = APIRouter(
+    route_class=quiet_validation_route("credentials.invalid")
+)
 
-_BAD_REQUEST: dict[int | str, dict[str, Any]] = {
-    400: {"description": "Invalid request"}
-}
-_FORBIDDEN: dict[int | str, dict[str, Any]] = {403: {"description": "Access denied"}}
-_NOT_FOUND: dict[int | str, dict[str, Any]] = {
-    404: {"description": "Resource not found"}
-}
-_SERVER_ERROR: dict[int | str, dict[str, Any]] = {
-    500: {"description": "Operation failed"}
-}
+# Same for the download: its body can hold an api_key or token.
+download_router = APIRouter(
+    route_class=quiet_validation_route("download.request_invalid")
+)
+
 
 SCAN_BASE_MISSING_KEY = "scan.base_missing"
 PICK_NO_TKINTER_KEY = "pick.no_tkinter"
@@ -181,7 +191,13 @@ async def pick_dataset_folder() -> DatasetPickResponse:
     return await asyncio.to_thread(_open_native_folder_dialog)
 
 
-@router.post("/dataset/download", responses={**_BAD_REQUEST, **_SERVER_ERROR})
+@download_router.post(
+    "/dataset/download",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        500: {"description": SERVER_ERROR_TEXT},
+    },
+)
 async def dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadResponse:
     """One-shot download of a dataset to a local folder (ADR-055).
 
@@ -196,21 +212,27 @@ async def dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadRespon
     have used, and the exception itself is never handed to the logger: its
     traceback repeats the message, and ``diagnose`` would add the variables.
     """
+    api_key, token = _reveal(req.api_key), _reveal(req.token)
     try:
         return await asyncio.to_thread(_execute_dataset_download, req)
     except (ValueError, FileNotFoundError, ImportError) as exc:
-        secrets = credentials_in_play(req.api_key, req.token)
+        secrets = credentials_in_play(api_key, token)
         # `from None`: whoever formats this HTTPException must not walk back to
         # the original exception and its unredacted message.
         raise HTTPException(400, redact_secrets(str(exc), *secrets)) from None
     except Exception as exc:  # noqa: BLE001
-        secrets = credentials_in_play(req.api_key, req.token)
+        secrets = credentials_in_play(api_key, token)
         detail = redact_secrets(f"{type(exc).__name__}: {exc}", *secrets)
         trace = redact_secrets("".join(traceback.format_exception(exc)), *secrets)
         logger.error(
             "Dataset download ({}) failed: {}\n{}", req.provider, detail, trace
         )
-        raise HTTPException(500, detail) from None
+        raise HTTPException(500, unexpected_error(exc, detail=detail)) from None
+
+
+def _reveal(secret: SecretStr | None) -> str | None:
+    """The plain value of an optional request secret (None stays None)."""
+    return secret.get_secret_value() if secret is not None else None
 
 
 def _execute_dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadResponse:
@@ -221,8 +243,8 @@ def _execute_dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadRes
         out_dir=req.out_dir,
         splits=tuple(req.splits),
         limit=req.limit,
-        api_key=req.api_key,
-        token=req.token,
+        api_key=_reveal(req.api_key),
+        token=_reveal(req.token),
         version=req.version,
         dataset_format=req.dataset_format,
     )
@@ -234,6 +256,7 @@ def _execute_dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadRes
         total_images=result.total_images,
         splits=result.splits,
         classes=result.classes,
+        revision=result.revision,
     )
 
 
@@ -304,7 +327,7 @@ async def regression_dataset_stats(
     return await asyncio.to_thread(_collect_regression_dataset_stats, req)
 
 
-@router.get("/credentials")
+@credentials_router.get("/credentials")
 async def get_credentials() -> CredentialsResponse:
     """Which dataset providers have a key stored, masked."""
     from visionforge.utils.credentials import config_dir, credential_status
@@ -315,14 +338,16 @@ async def get_credentials() -> CredentialsResponse:
     )
 
 
-@router.post("/credentials", responses=_BAD_REQUEST)
+@credentials_router.post(
+    "/credentials", responses={400: {"description": BAD_REQUEST_TEXT}}
+)
 async def save_credential_route(req: CredentialSaveRequest) -> CredentialsResponse:
     """Store (or replace) one provider's key, then return the masked status."""
     from visionforge.utils.credentials import config_dir, credential_status
     from visionforge.utils.credentials import save_credential as _save
 
     try:
-        _save(req.provider, req.value)
+        _save(req.provider, req.value.get_secret_value())
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return CredentialsResponse(
@@ -331,7 +356,7 @@ async def save_credential_route(req: CredentialSaveRequest) -> CredentialsRespon
     )
 
 
-@router.delete("/credentials/{provider}")
+@credentials_router.delete("/credentials/{provider}")
 async def forget_credential_route(provider: str) -> CredentialsResponse:
     """Remove one provider's stored key."""
     from visionforge.utils.credentials import config_dir, credential_status
@@ -344,7 +369,14 @@ async def forget_credential_route(provider: str) -> CredentialsResponse:
     )
 
 
-@router.get("/dataset/file", responses={**_BAD_REQUEST, **_FORBIDDEN, **_NOT_FOUND})
+@router.get(
+    "/dataset/file",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        403: {"description": FORBIDDEN_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+    },
+)
 async def serve_dataset_file(path: str) -> FileResponse:
     """Serve a local image file for dataset preview thumbnails.
 
@@ -1367,3 +1399,7 @@ def _missing_split_roles(
     if not test_dir:
         missing.append(tr("detect.role_test"))
     return missing
+
+
+router.include_router(credentials_router)
+router.include_router(download_router)

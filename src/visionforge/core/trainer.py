@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import random
 import time
 from collections.abc import Callable
@@ -23,14 +24,16 @@ from visionforge.core.resume import (
     ResumeState,
     clear_resume_state,
 )
+from visionforge.core.run_trackers import RunTracker, TrackerFactory
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.training_health import (
     collapsed_predictions,
+    mps_not_deterministic,
     stagnant_loss,
     summarize,
 )
 from visionforge.utils.config import DeviceConfig, ExperimentConfig
-from visionforge.utils.cuda import check_cuda
+from visionforge.utils.cuda import check_cuda, mps_available
 
 
 @dataclass
@@ -117,6 +120,15 @@ def _seed_everything(seed: int, *, deterministic: bool = False) -> None:
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = deterministic
     torch.backends.cudnn.benchmark = not deterministic
+    # cuDNN alone left CUDA kernels such as the bilinear upsampling backward of
+    # the segmentation decoder on atomicAdd, so two GPU runs of one seed parted
+    # in the fourth decimal (#305). Strict mode selects their deterministic
+    # versions; warn_only keeps an op that has none running, with a warning,
+    # instead of raising mid-training (ADR-199). cuBLAS reads its workspace
+    # setting when the first handle is made, so it is set before any matmul.
+    if deterministic:
+        os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+    torch.use_deterministic_algorithms(deterministic, warn_only=True)
 
 
 def seed_before_building(training: Any) -> None:
@@ -131,7 +143,22 @@ def resolve_device(device_cfg: DeviceConfig) -> tuple[torch.device, list[int], s
     if device_cfg.kind == "cpu":
         return torch.device("cpu"), [], "cpu"
 
+    if device_cfg.kind == "mps":
+        if mps_available():
+            return torch.device("mps"), [], "mps (Apple GPU)"
+        logger.warning("Device requested 'mps' but MPS unavailable — using the CPU.")
+        return torch.device("cpu"), [], "cpu (fallback: MPS unavailable)"
+
     if not info.available:
+        # "cuda" is the default and means "the accelerator": on a Mac that is
+        # the Apple GPU (ADR-192). The label keeps the word fallback so run.json
+        # shows the run did not get the device its config names.
+        if mps_available():
+            logger.warning(
+                "Device requested '{}' but CUDA unavailable — using the Apple GPU (MPS).",
+                device_cfg.kind,
+            )
+            return torch.device("mps"), [], "mps (fallback: CUDA unavailable)"
         logger.warning(
             "Device requested '{}' but CUDA unavailable — falling back to CPU.",
             device_cfg.kind,
@@ -186,6 +213,10 @@ def _resolve_single_cuda(
 class Trainer:
     """Manages the full training loop for one classification experiment."""
 
+    # Optional exporters (ADR-170, ADR-172), built when the run folder exists.
+    tracker_factories: tuple[TrackerFactory, ...] = ()
+    trackers: tuple[RunTracker, ...] = ()
+
     def __init__(self, config: ExperimentConfig) -> None:
         self._config = config
         self._loader_workers: dict[str, int] = {}
@@ -221,6 +252,9 @@ class Trainer:
         model, optimizer, criterion, scheduler, scaler, run_dir, tb = (
             self._initialize_training(model, optimizer, resume_dir, resumed)
         )
+        self.trackers = tuple(build(run_dir) for build in self.tracker_factories)
+        for tracker in self.trackers:
+            tracker.start(self._config.model_dump(mode="json"))
         model_path = run_dir / "best_model.pth"
 
         history, best_val_loss, best_epoch, patience_counter, start_epoch = (
@@ -241,45 +275,49 @@ class Trainer:
         state = training_loop.EpochState(
             history, best_val_loss, best_epoch, patience_counter, start_epoch
         )
-        writes, stopped = training_loop.run_epochs(
-            state,
-            training_loop.EpochRuntime(
-                train_loader, val_loader, cfg.epochs, resumed, cancel_token
-            ),
-            training_loop.CheckpointContext(
-                model,
-                model_path,
-                save_best_checkpoint,
-                lambda: self._checkpoint_components(
-                    model, optimizer, scheduler, scaler
+        try:
+            writes, stopped = training_loop.run_epochs(
+                state,
+                training_loop.EpochRuntime(
+                    train_loader, val_loader, cfg.epochs, resumed, cancel_token
                 ),
-            ),
-            training_loop.EpochCallbacks(
-                compute=epoch_lr.around(
-                    lambda epoch: self._compute_epoch_result(
-                        epoch,
-                        model,
-                        train_loader,
-                        val_loader,
-                        optimizer,
-                        criterion,
-                        scheduler,
-                        scaler=scaler,
-                    )
-                ),
-                report=lambda result: self._report_and_explain(
-                    result,
-                    tb,
-                    progress_callback,
-                    t0,
-                    self._live_fields(epoch_lr, class_names),
+                training_loop.CheckpointContext(
                     model,
-                    insights,
+                    model_path,
+                    save_best_checkpoint,
+                    lambda: self._checkpoint_components(
+                        model, optimizer, scheduler, scaler
+                    ),
                 ),
-                early_stop=self._early_stopping_reached,
-            ),
-            training_loop.MetricPolicy("val_loss"),
-        )
+                training_loop.EpochCallbacks(
+                    compute=epoch_lr.around(
+                        lambda epoch: self._compute_epoch_result(
+                            epoch,
+                            model,
+                            train_loader,
+                            val_loader,
+                            optimizer,
+                            criterion,
+                            scheduler,
+                            scaler=scaler,
+                        )
+                    ),
+                    report=lambda result: self._report_and_explain(
+                        result,
+                        tb,
+                        progress_callback,
+                        t0,
+                        self._live_fields(epoch_lr, class_names),
+                        model,
+                        insights,
+                    ),
+                    early_stop=self._early_stopping_reached,
+                ),
+                training_loop.MetricPolicy("val_loss"),
+            )
+        except training_loop.NonFiniteMetricError as error:
+            self._record_non_finite(error, state, run_dir, model_path, data_module, tb)
+            raise
         best_val_loss, best_epoch = state.best_metric, state.best_epoch
 
         if not is_cancelled(cancel_token):
@@ -303,6 +341,34 @@ class Trainer:
             writes.future,
             progress_callback,
         )
+
+    def _record_non_finite(
+        self,
+        error: training_loop.NonFiniteMetricError,
+        state: training_loop.EpochState[EpochResult],
+        run_dir: Path,
+        model_path: Path,
+        data_module: Any,
+        tb: TensorBoardLogger,
+    ) -> None:
+        """Leave a failed run.json that names the epoch and the metric (ADR-182)."""
+        try:
+            failed = TrainResult(
+                stopped=False,
+                best_epoch=state.best_epoch,
+                best_val_loss=state.best_metric,
+                total_epochs=len(state.history),
+                device_used=self._device_label,
+                history=state.history,
+                model_path=model_path,
+                warnings=[error.health_warning().to_dict()],
+            )
+            self._write_run_json(
+                run_dir, failed, getattr(data_module, "class_names", None)
+            )
+            training_loop.record_non_finite_failure(run_dir, error)
+        finally:
+            tb.close()
 
     # ── private helpers ────────────────────────────────────────────────────────
 
@@ -409,6 +475,16 @@ class Trainer:
         extra: dict[str, Any] | None = None,
     ) -> None:
         """Report the task-specific epoch metrics and progress event."""
+        for tracker in self.trackers:
+            tracker.epoch(
+                result.epoch,
+                {
+                    "loss/train": result.train_loss,
+                    "loss/val": result.val_loss,
+                    "accuracy/train": result.train_accuracy,
+                    "accuracy/val": result.val_accuracy,
+                },
+            )
         training_loop.report_epoch(
             result,
             tb,
@@ -445,6 +521,26 @@ class Trainer:
             patience_counter, self._config.training.early_stopping_patience
         )
 
+    def _health_warnings(self, history: list[EpochResult]) -> list[dict[str, str]]:
+        """What run.json must say about this run besides its numbers."""
+        # A run that collapsed still reports an accuracy, so say so out loud
+        # rather than letting the number stand on its own (ADR-099).
+        return summarize(
+            [
+                collapsed_predictions(
+                    self._last_val_preds,
+                    2
+                    if self._config.task == "binary"
+                    else self._config.model.num_classes,
+                ),
+                stagnant_loss([h.train_loss for h in history]),
+                # Apple's GPU has no deterministic kernels (ADR-192).
+                mps_not_deterministic(
+                    self._device.type, self._config.training.deterministic
+                ),
+            ]
+        )
+
     def _finish_training(
         self,
         train_result: TrainResult,
@@ -456,19 +552,7 @@ class Trainer:
         progress_callback: Callable[[dict[str, Any]], None] | None,
     ) -> TrainResult:
         """Summarize health, finish checkpoint writes and publish the run."""
-        # A run that collapsed still reports an accuracy, so say so out loud
-        # rather than letting the number stand on its own (ADR-099).
-        health = summarize(
-            [
-                collapsed_predictions(
-                    self._last_val_preds,
-                    2
-                    if self._config.task == "binary"
-                    else self._config.model.num_classes,
-                ),
-                stagnant_loss([h.train_loss for h in train_result.history]),
-            ]
-        )
+        health = self._health_warnings(train_result.history)
         train_result.warnings = health
         for warning in health:
             logger.warning("{}", warning["message"])

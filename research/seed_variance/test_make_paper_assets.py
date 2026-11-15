@@ -1,8 +1,17 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
-from make_paper_assets import headline, macros, table_rows
+from make_paper_assets import (
+    PAPER,
+    SUMMARY,
+    exploratory_macros,
+    headline,
+    macros,
+    study_wall_hours,
+    table_rows,
+)
 
 
 def _cell(
@@ -95,3 +104,57 @@ class TestTableRows:
     def test_signed_effect_with_interval(self) -> None:
         first = table_rows(CELLS).splitlines()[1]
         assert "-0.005 [-0.010, +0.010]" in first
+
+
+class TestCommittedAssets:
+    """numbers.tex and table_cells.tex are what summary.json generates today."""
+
+    def _summary(self) -> dict[str, Any]:
+        summary: dict[str, Any] = json.loads(SUMMARY.read_text(encoding="utf-8"))
+        return summary
+
+    def test_numbers_tex_regenerates(self) -> None:
+        summary = self._summary()
+        text = macros(
+            headline(summary["cells"]),
+            summary["hypotheses"],
+            study_wall_hours(),
+            summary["exploratory_contrasts"],
+        )
+        assert text == (PAPER / "numbers.tex").read_text(encoding="utf-8")
+
+    def test_table_cells_tex_regenerates(self) -> None:
+        text = table_rows(self._summary()["cells"])
+        assert text == (PAPER / "table_cells.tex").read_text(encoding="utf-8")
+
+
+class TestExploratoryMacros:
+    def _contrast(self, p: float, significant: bool) -> dict[str, Any]:
+        return {
+            "dataset": "usk_full",
+            "architecture": "resnet18",
+            "label_a": "no_aug",
+            "label_b": "res160",
+            "b_minus_a": 0.03,
+            "p_value": p,
+            "significant_holm": significant,
+        }
+
+    def test_names_the_smallest_significant_contrast(self) -> None:
+        values = exploratory_macros(
+            [self._contrast(0.03, True), self._contrast(0.0072, True)]
+        )
+        assert values["NExploratoryHolm"] == "2"
+        assert values["ExploratoryP"] == "0.0072"
+        assert values["ExploratoryCell"] == "USK-Coffee, ResNet-18"
+        assert values["ExploratoryPair"] == "160 px vs.\\ no aug."
+        assert values["ExploratoryDelta"] == "+0.030"
+
+    def test_without_a_significant_contrast_only_counts(self) -> None:
+        values = exploratory_macros([self._contrast(0.4, False)])
+        assert values == {"NExploratory": "1", "NExploratoryHolm": "0"}
+
+    def test_numbers_tex_has_the_exploratory_p(self) -> None:
+        text = (PAPER / "numbers.tex").read_text(encoding="utf-8")
+        assert "\\newcommand{\\ExploratoryP}{0.0072}" in text
+        assert "\\newcommand{\\NExploratoryHolm}{1}" in text

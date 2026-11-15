@@ -1,5 +1,6 @@
 """A distribution smoke check must reject checkout imports and missing SPA files."""
 
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ from scripts.verify_distribution import (
     validate_package_origin,
     validate_run_metadata,
     validate_static_assets,
+    validate_wheel_licenses,
 )
 
 
@@ -68,3 +70,33 @@ def test_run_schema_is_recorded_inside_config() -> None:
     report["config"] = {}
     with pytest.raises(ValueError, match="schema version"):
         validate_run_metadata(report)
+
+
+def _wheel(path: Path, members: list[str]) -> Path:
+    with zipfile.ZipFile(path, "w") as archive:
+        for name in members:
+            archive.writestr(name, "text")
+    return path
+
+
+def test_wheel_must_carry_license_and_third_party_notices(tmp_path: Path) -> None:
+    info = "visionforge_studio-1.0.dist-info"
+    complete = _wheel(
+        tmp_path / "complete.whl",
+        [
+            "visionforge/__init__.py",
+            f"{info}/licenses/LICENSE",
+            f"{info}/licenses/THIRD_PARTY_NOTICES.md",
+        ],
+    )
+    assert validate_wheel_licenses(complete) == [
+        f"{info}/licenses/LICENSE",
+        f"{info}/licenses/THIRD_PARTY_NOTICES.md",
+    ]
+    # A copy elsewhere in the wheel is not where PEP 639 tools look for it.
+    stray = _wheel(
+        tmp_path / "stray.whl",
+        [f"{info}/licenses/LICENSE", "visionforge/THIRD_PARTY_NOTICES.md"],
+    )
+    with pytest.raises(ValueError, match="THIRD_PARTY_NOTICES.md"):
+        validate_wheel_licenses(stray)

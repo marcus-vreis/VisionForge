@@ -10,6 +10,7 @@ Same rationale as ADR-033 (detection) / ADR-036 (regression) / ADR-037 (segmenta
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -24,8 +25,9 @@ from visionforge.core.anomaly_trainer import (
 )
 from visionforge.core.cancellation import CancellationToken
 from visionforge.core.metric_ci import MetricCI, bootstrap_anomaly_cis
-from visionforge.core.plotter import MetricsPlotter
+from visionforge.core.plotter import MetricsPlotter, figure_graphic
 from visionforge.core.trainer import seed_before_building
+from visionforge.core.training_health import single_class_test_split
 from visionforge.models.anomaly_factory import AnomalyModelFactory
 from visionforge.utils.anomaly_config import AnomalyConfig
 
@@ -36,7 +38,7 @@ class AnomalyBlock:
     def setup(self, config: AnomalyConfig) -> None:
         self._config = config
         self._train_result: AnomalyTrainResult | None = None
-        self._test_metrics: tuple[float, float, float] | None = None
+        self._test_metrics: tuple[float | None, float, float | None] | None = None
         self._metric_cis: dict[str, MetricCI] = {}
         self._test_scores: tuple[Any, Any] | None = None
         # Injected by the GUI layer to stream live progress via SSE.
@@ -129,9 +131,15 @@ class AnomalyBlock:
     def _render_plots(self, run_dir: Path) -> list[Path]:
         """Render the AUROC-over-epochs curve (reuses the generic plotter curve)."""
         assert self._train_result is not None
+        fmts = self._config.output.figure_formats
+        dpi = self._config.output.figure_dpi
         auroc_path = run_dir / "auroc.png"
         epochs = [r.epoch for r in self._train_result.history]
-        values = [r.val_auroc for r in self._train_result.history]
+        # An undefined AUROC (one-class test split) is a gap, not a point.
+        values = [
+            math.nan if r.val_auroc is None else r.val_auroc
+            for r in self._train_result.history
+        ]
         MetricsPlotter.metric_curve(
             epochs,
             values,
@@ -139,8 +147,10 @@ class AnomalyBlock:
             label="AUROC",
             ylabel="Image AUROC",
             title="Image-level AUROC over epochs",
+            formats=fmts,
+            dpi=dpi,
         )
-        graphics = [auroc_path]
+        graphics = [figure_graphic(auroc_path, fmts)]
 
         # Test-set diagnostic (ADR-077): AUROC says how separable the two
         # populations are, this says where they sit and what the chosen cut keeps.
@@ -148,9 +158,14 @@ class AnomalyBlock:
             labels, scores = self._test_scores
             hist_path = run_dir / "score_histogram.png"
             MetricsPlotter.score_histogram(
-                labels, scores, hist_path, threshold=self._test_metrics[1]
+                labels,
+                scores,
+                hist_path,
+                threshold=self._test_metrics[1],
+                formats=fmts,
+                dpi=dpi,
             )
-            graphics.append(hist_path)
+            graphics.append(figure_graphic(hist_path, fmts))
         return graphics
 
     def _update_run_json(self, run_dir: Path, graphics: list[Path]) -> None:
@@ -173,6 +188,13 @@ class AnomalyBlock:
             data["metric_cis"] = {
                 name: ci.to_dict() for name, ci in self._metric_cis.items()
             }
+        if self._test_scores is not None:
+            warning = single_class_test_split(self._test_scores[0].tolist())
+            warnings: list[dict[str, str]] = data.setdefault("warnings", [])
+            if warning is not None and all(
+                w.get("code") != warning.code for w in warnings
+            ):
+                warnings.append(warning.to_dict())
         data["artifacts"]["graphics"] = [str(p) for p in graphics]
         run_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 

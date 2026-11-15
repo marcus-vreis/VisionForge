@@ -69,3 +69,8 @@ comandos
 prefere
 foto
 afterall
+meu
+acidental
+vetor
+termo
+cursos

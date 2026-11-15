@@ -22,12 +22,15 @@ import {
   segmentationFormFromPayload,
   type SegmentationForm,
 } from "../lib/segmentation-models";
-import { checkImportedConfig, exportConfigToYaml } from "../lib/yaml-config";
+import { exportConfigToYaml, importIntoForm } from "../lib/yaml-config";
+import { usePendingImport, type PendingImportProps } from "../hooks/usePendingImport";
 import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
 import { CvCard, type CvPayload } from "./CvCard";
 import { StrategyCard, type PanelStrategy } from "./ExperimentHeader";
 import { ReplicatesCard } from "./ReplicatesCard";
+import { ReplicatedComparisonCard } from "./ReplicatedComparisonCard";
+import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-form";
 import { SegmentationDatasetStats } from "./TaskDatasetStats";
 import { SweepCard, type SweepPayload } from "./SweepCard";
 import { TransformsSection } from "./TransformsSection";
@@ -39,7 +42,7 @@ const SWEEP_PATH_HINTS = [
   "model.name",
 ];
 
-interface SegmentationPanelProps {
+interface SegmentationPanelProps extends PendingImportProps {
   formData: SegmentationForm;
   setFormData: (updater: (prev: SegmentationForm) => SegmentationForm) => void;
   accent: string;
@@ -47,6 +50,8 @@ interface SegmentationPanelProps {
   busy?: boolean;
   onSweep?: (payload: SweepPayload) => void;
   onReplicates?: (payload: ReplicatesPayload) => void;
+  /** Launches the paired comparison (ADR-193); without it, no card. */
+  onReplicatedComparison?: (payload: ReplicatedComparisonPayload) => void;
   /** Lets App label and route the main Treinar button by the active strategy. */
   onStrategyChange?: (strategy: PanelStrategy) => void;
   /** Incremented by Treinar so the selected strategy's card runs. */
@@ -79,8 +84,11 @@ export function SegmentationPanel({
   onSweep,
   onReplicates,
   onStrategyChange,
+  onReplicatedComparison,
   runSignal,
   onCv,
+  pendingImport,
+  onImportApplied,
 }: SegmentationPanelProps) {
   const t = useT();
   const compareMetrics = [
@@ -91,6 +99,28 @@ export function SegmentationPanel({
   const [picking, setPicking] = useState(false);
   const [pickNote, setPickNote] = useState<string | null>(null);
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
+  const chooseStrategy = (s: PanelStrategy) => {
+    setStrategy(s);
+    onStrategyChange?.(s);
+  };
+  // The YAML button's import; a run sent from History goes through it too (#200).
+  const importConfig = async (data: Record<string, unknown>): Promise<string | null> => {
+    // Schema unavailable → import tolerantly; the submit's 422 covers it.
+    const schema = await fetchTaskSchema("segmentation").catch(() => null);
+    const imported = importIntoForm(t, data, schema, segmentationFormFromPayload);
+    if ("problem" in imported) return imported.problem;
+    setFormData(() => imported.form);
+    return null;
+  };
+  const { notice, replicatesPreset } = usePendingImport({
+    taskKey: "segmentation",
+    pendingImport,
+    onImportApplied,
+    ready: true,
+    importConfig,
+    refusesOnProblem: true,
+    onStrategy: chooseStrategy,
+  });
 
   const setModel = (patch: Partial<SegmentationForm["model"]>) =>
     setFormData((p) => ({ ...p, model: { ...p.model, ...patch } }));
@@ -145,6 +175,7 @@ export function SegmentationPanel({
     { value: "cv", label: t.paramPanel.blocks.crossValidation },
     { value: "sweep", label: t.taskPanel.sweep },
     { value: "replicates", label: t.taskPanel.replicates },
+    { value: "replicatedComparison", label: t.taskPanel.replicatedComparison },
   ];
   const strategyLabel = strategies.find((s) => s.value === strategy)!.label;
   const suggestion = suggestExperimentName({
@@ -326,10 +357,7 @@ export function SegmentationPanel({
         <>
           <StrategyCard
             strategy={strategy}
-            onStrategyChange={(s) => {
-              setStrategy(s);
-              onStrategyChange?.(s);
-            }}
+            onStrategyChange={chooseStrategy}
             strategies={strategies}
 
           />
@@ -350,6 +378,17 @@ export function SegmentationPanel({
               accent={accent}
               disabled={busy}
               onReplicates={onReplicates}
+              runSignal={runSignal}
+              preset={replicatesPreset}
+            />
+          )}
+          {strategy === "replicatedComparison" && onReplicatedComparison && (
+            <ReplicatedComparisonCard
+              metrics={compareMetrics}
+              pathHints={SWEEP_PATH_HINTS}
+              accent={accent}
+              disabled={busy}
+              onReplicatedComparison={onReplicatedComparison}
               runSignal={runSignal}
             />
           )}
@@ -566,19 +605,8 @@ export function SegmentationPanel({
             onExportYaml={() =>
               exportConfigToYaml(buildSegmentationPayload(formData), formData.name)
             }
-            onImportConfig={async (data) => {
-              let payload = data;
-              try {
-                const schema = await fetchTaskSchema("segmentation");
-                const checked = checkImportedConfig(t, data, schema, schema.$defs ?? {});
-                if("problem" in checked) return checked.problem;
-                payload = checked.data;
-              } catch {
-                // schema unavailable → import tolerantly; o 422 do submit cobre.
-              }
-              setFormData(() => segmentationFormFromPayload(payload));
-              return null;
-            }}
+            onImportConfig={importConfig}
+            importNotice={notice}
           />
         </>
       )

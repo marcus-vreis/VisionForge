@@ -1,0 +1,39 @@
+schema_version: 1
+name: real_cls_s39
+task: multiclass
+model:
+  name: resnet18
+  num_classes: 10
+  pretrained: true
+training:
+  learning_rate: 0.0003
+  epochs: 30
+  batch_size: 128
+  early_stopping_patience: 0
+  optimizer: adamw
+  weight_decay: 0.01
+  seed: 39
+  deterministic: true
+  mixed_precision: false
+  scheduler:
+    kind: cosine
+data:
+  base_dir: ~/vfsmoke/datasets/cifar10-full
+  train_dir: train
+  val_dir: val
+  test_dir: test
+  num_workers: 4
+  pin_memory: true
+  transforms:
+    image_size: 224
+    augment: true
+    horizontal_flip: true
+    rotation_degrees: 10
+    color_jitter: false
+output:
+  models_dir: ~\vfsmoke\real-v1\gui-v1\cls\seed39\gui\models
+  graphics_dir: ~\vfsmoke\real-v1\gui-v1\cls\seed39\gui\graphics
+  logs_dir: ~\vfsmoke\real-v1\gui-v1\cls\seed39\gui\logs
+  reports_dir: ~\vfsmoke\real-v1\gui-v1\cls\seed39\gui\reports
+device:
+  kind: cuda

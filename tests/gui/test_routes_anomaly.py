@@ -1,14 +1,20 @@
 from __future__ import annotations
 
-import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.strategies as strategies
+from tests.helpers import wait_experiment_done, wait_until
 from visionforge.utils.messages import using_lang
 
 from .conftest import occupy_queue, release_queue
+
+# Any: the tests swap its orchestrators and executors for fakes.
+strategies_mod: Any = strategies
 
 
 @pytest.fixture
@@ -52,7 +58,7 @@ class TestAnomalyRun:
         from visionforge.blocks.anomaly import AnomalyBlock
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
         orig_setup = AnomalyBlock.setup
@@ -80,11 +86,9 @@ class TestAnomalyRun:
 
             # Wait for run(), not setup(): has_callback is written in run, and
             # waiting on setup's key raced the assert below.
-            deadline = time.monotonic() + 30.0
-            while time.monotonic() < deadline:
-                if "has_callback" in captured:
-                    break
-                time.sleep(0.05)
+            wait_until(
+                lambda: "has_callback" in captured, message='"has_callback" in captured'
+            )
             assert captured.get("class") == "AnomalyBlock"
             assert captured.get("model") == "autoencoder"
             assert captured.get("has_callback") is True
@@ -92,26 +96,26 @@ class TestAnomalyRun:
             AnomalyBlock.setup = orig_setup  # type: ignore[method-assign]
             AnomalyBlock.run = orig_run  # type: ignore[method-assign]
             AnomalyBlock.report = orig_report  # type: ignore[method-assign]
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post("/api/anomaly/run", json=_payload(tmp_path))
             assert resp.status_code == 200
             assert resp.json()["status"] == "queued"
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_run_rejects_invalid_config(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         payload = _payload(tmp_path)
         # coreset_ratio out of (0, 1] -> 422
         payload["model"] = {"name": "patchcore", "coreset_ratio": 2.0}
@@ -122,12 +126,16 @@ class TestAnomalyRun:
 
 class TestAnomalyCompareSweep:
     def test_compare_dispatches_and_reports(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.comparison import ComparisonTrial
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         def fake_compare(
             runner, config_dict, model_names, metric, progress_callback=None
@@ -137,8 +145,7 @@ class TestAnomalyCompareSweep:
                 ComparisonTrial("autoencoder", "success", {"auroc": 0.88}),
             ]
 
-        orig = routes_mod.run_model_comparison
-        routes_mod.run_model_comparison = fake_compare
+        monkeypatch.setattr(strategies_mod, "run_model_comparison", fake_compare)
         try:
             client = live_client
             payload = {
@@ -149,36 +156,32 @@ class TestAnomalyCompareSweep:
             assert resp.status_code == 200, resp.text
             run_id = resp.json()["run_id"]
 
-            status = {"status": "running"}
-            for _ in range(50):
-                status = client.get("/api/experiment/status").json()
-                if status["status"] in ("completed", "failed"):
-                    break
-                time.sleep(0.05)
+            status = wait_experiment_done(client)
             assert status["status"] == "completed", status
 
             report = client.get(f"/api/experiment/result/{run_id}").json()["report"]
             assert report["metric"] == "auroc"  # defaulted from primary_metric
             assert report["top_3"][0]["model_arch"] == "patchcore"
         finally:
-            routes_mod.run_model_comparison = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_sweep_is_refused_before_queueing(
-        self, app_and_routes: tuple, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         # Anomaly's only labelled split is test, so a sweep would tune on it
         # (ADR-131): the route answers 422 and never starts the job.
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         called: list[object] = []
 
         def fake_sweep(*args, **kwargs):  # type: ignore[no-untyped-def]
             called.append(args)
             return []
 
-        orig = routes_mod.run_sweep
-        routes_mod.run_sweep = fake_sweep
+        monkeypatch.setattr(strategies_mod, "run_sweep", fake_sweep)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             payload = {
@@ -193,7 +196,6 @@ class TestAnomalyCompareSweep:
             assert resp.status_code == 422, resp.text
             assert "validation" in resp.json()["detail"].lower()
             assert called == []
-            assert routes_mod._JOB_STATES == {}
+            assert execution_mod._JOB_STATES == {}
         finally:
-            routes_mod.run_sweep = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()

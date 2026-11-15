@@ -71,7 +71,7 @@ com um comentário que declarava a lacuna como se fosse decisão.
 O selftest sintético não pegava porque transfer learning é um *block* de
 classificação, não uma das estratégias que ele enumera. Corrigido em ADR-065,
 com dois testes de regressão: um garante que `epoch_end` chega ao callback, o
-outro garante que `routes._execute_experiment` continua citando o block — um
+outro garante que `execution._wire_block` continua citando o block — um
 block que aceita um callback que ninguém liga tem o mesmo defeito.
 
 ## Três falhas que eram do harness, não do produto
@@ -97,3 +97,8 @@ A matriz prova que **o sistema funciona**: cada modelo treina, cada estratégia
 fecha, cada relatório sai com a forma certa e cada run transmite progresso. Um
 número defensável exige o caminho de `docs/archive/TRAINING_PLAN.md` — camada
 P2, com múltiplas seeds e teste de significância.
+
+As médias da coluna k-fold carregam ainda um viés otimista: a época de cada fold
+é escolhida pela métrica de validação no próprio fold, e esse mesmo fold a
+avalia (`blocks/cross_validation.py` e `_cv_common._score_fold`). Não há divisão
+aninhada; a legenda LaTeX do K-fold declara isso em PT e EN.

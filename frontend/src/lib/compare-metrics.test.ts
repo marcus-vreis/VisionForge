@@ -23,6 +23,21 @@ describe("inferMetricDirection", () => {
     }
   });
 
+  it("reads the errors outside the built-in tasks as lower-is-better", () => {
+    for (const name of [
+      "test_mape", "val_smape", "msle", "rmsle", "nll", "val_bce", "huber_loss", "perplexity",
+      "cer", "wer", "hd95", "fid", "eer", "fpr", "ece", "brier_score", "val_fid50",
+    ]) {
+      expect(inferMetricDirection(name), name).toBe("lower");
+    }
+  });
+
+  it("matches a short token only as a whole word", () => {
+    for (const name of ["answer_rate", "power", "confidence", "piece_count", "career", "fidelity"]) {
+      expect(inferMetricDirection(name), name).toBe("higher");
+    }
+  });
+
   it("reads everything else as higher-is-better", () => {
     for (const name of ["accuracy", "f1", "auc_roc", "r2", "miou", "dice", "map50_95", "auroc"]) {
       expect(inferMetricDirection(name), name).toBe("higher");

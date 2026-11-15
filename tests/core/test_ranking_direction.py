@@ -15,6 +15,7 @@ from typing import Any, Literal
 
 import pytest
 
+import visionforge.gui.api.execution as execution_mod
 from visionforge.core.comparison import run_model_comparison
 from visionforge.core.replicated_comparison import run_replicated_comparison
 from visionforge.core.sweep import run_sweep
@@ -207,21 +208,21 @@ class TestTheReportsAreToldTheDirection:
     """No default: a caller that forgets it would label a lower-is-better ranking."""
 
     def test_the_comparison_report_requires_it(self) -> None:
-        import visionforge.gui.api.routes as routes_mod
+        import visionforge.gui.api.strategies as strategies_mod
 
         with pytest.raises(TypeError, match="direction"):
-            routes_mod._comparison_report([], "rmse")  # type: ignore[call-arg]
+            strategies_mod._comparison_report([], "rmse")  # type: ignore[call-arg]
 
-        report = routes_mod._comparison_report([], "rmse", "lower")
+        report = strategies_mod._comparison_report([], "rmse", "lower")
         assert report["metric_direction"] == "lower"
 
     def test_the_sweep_report_requires_it(self) -> None:
-        import visionforge.gui.api.routes as routes_mod
+        import visionforge.gui.api.strategies as strategies_mod
 
         with pytest.raises(TypeError, match="direction"):
-            routes_mod._sweep_report([], "grid", "rmse")  # type: ignore[call-arg]
+            strategies_mod._sweep_report([], "grid", "rmse")  # type: ignore[call-arg]
 
-        report = routes_mod._sweep_report([], "grid", "rmse", "lower")
+        report = strategies_mod._sweep_report([], "grid", "rmse", "lower")
         assert report["metric_direction"] == "lower"
 
 
@@ -253,7 +254,7 @@ class TestTheExportsFollowTheRanking:
         import asyncio
         import csv
 
-        import visionforge.gui.api.routes as routes_mod
+        import visionforge.gui.api.strategies as strategies_mod
         from visionforge.core.cancellation import CancellationToken
 
         runner = _ScoredRunner("rmse", {"a": 0.5, "b": 0.2, "c": 0.9})
@@ -266,16 +267,16 @@ class TestTheExportsFollowTheRanking:
         }
         from tests.gui.conftest import job_run, release_queue, start_job
 
-        start_job(routes_mod, "r", cancel_token=CancellationToken())
+        start_job(execution_mod, "r", cancel_token=CancellationToken())
         try:
             asyncio.run(
-                routes_mod._execute_comparison(
-                    runner, base, ["a", "b", "c"], "rmse", "r"
+                strategies_mod._execute_comparison(
+                    runner, base, ["a", "b", "c"], "rmse", "r", models_dir=tmp_path
                 )
             )
-            state = dict(job_run(routes_mod, "r") or {})
+            state = dict(job_run(execution_mod, "r") or {})
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
         report = state["report"]
         assert report["metric_direction"] == "lower"
@@ -295,7 +296,7 @@ class TestTheExportsFollowTheRanking:
         import asyncio
         import csv
 
-        import visionforge.gui.api.routes as routes_mod
+        import visionforge.gui.api.strategies as strategies_mod
         from visionforge.core.cancellation import CancellationToken
         from visionforge.gui.api.schemas import SweepRequest
 
@@ -312,12 +313,16 @@ class TestTheExportsFollowTheRanking:
         )
         from tests.gui.conftest import job_run, release_queue, start_job
 
-        start_job(routes_mod, "r", cancel_token=CancellationToken())
+        start_job(execution_mod, "r", cancel_token=CancellationToken())
         try:
-            asyncio.run(routes_mod._execute_sweep(runner, base, req, "rmse", "r"))
-            state = dict(job_run(routes_mod, "r") or {})
+            asyncio.run(
+                strategies_mod._execute_sweep(
+                    runner, base, req, "rmse", "r", models_dir=tmp_path
+                )
+            )
+            state = dict(job_run(execution_mod, "r") or {})
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
         report = state["report"]
         assert report["metric_direction"] == "lower"

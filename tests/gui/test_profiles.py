@@ -18,7 +18,6 @@ import asyncio
 import json
 import os
 import subprocess
-import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -27,6 +26,12 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
+import visionforge.gui.api.custom_task_routes as custom_tasks_mod
+import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.strategies as strategies_mod
+import visionforge.gui.api.submission as submission_mod
+import visionforge.gui.api.training_routes as training_mod
+from tests.helpers import wait_experiment_done
 from visionforge.gui.api.profiles import (
     OUTPUT_SUBDIRS,
     InvalidProfileError,
@@ -41,6 +46,7 @@ from visionforge.gui.api.profiles import (
     normalize_display_name,
     resolve_profile,
     slugify,
+    update_profile,
 )
 from visionforge.gui.api.schemas import RunResponse
 from visionforge.utils.config import OutputConfig
@@ -56,6 +62,13 @@ from .test_routes_custom_orchestrators import _register_toy
 from .test_routes_resume import _classification_full
 from .test_routes_resume import _run as _stopped_run
 
+# What a profile with no saved settings reports: every export off.
+_DEFAULT_SETTINGS = {
+    "mlflow": {"enabled": False},
+    "wandb": {"enabled": False, "project": "visionforge", "entity": ""},
+    "comet": {"enabled": False, "project": "visionforge", "workspace": ""},
+}
+
 HEADER = "X-VF-Profile"
 _TS = "20260522_100000_000000"
 
@@ -69,9 +82,9 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-unt
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(routes_mod, "_MODELS_DIR", Path("outputs/models"))
     monkeypatch.setattr(routes_mod, "_PROFILES_DIR", Path("outputs/profiles"))
-    routes_mod._JOB_STATES.clear()
+    execution_mod._JOB_STATES.clear()
     yield app, routes_mod
-    release_queue(routes_mod)
+    release_queue(execution_mod)
 
 
 @pytest.fixture
@@ -465,7 +478,13 @@ class TestProfilesApi:
         body = client.get("/api/profiles").json()
 
         assert body["profiles"] == [
-            {"slug": "default", "name": "default", "is_default": True, "pronoun": None}
+            {
+                "slug": "default",
+                "name": "default",
+                "is_default": True,
+                "pronoun": None,
+                "settings": _DEFAULT_SETTINGS,
+            }
         ]
 
     def test_creating_then_listing(self, client: TestClient, tmp_path: Path) -> None:
@@ -476,6 +495,7 @@ class TestProfilesApi:
             "name": "João Silva",
             "is_default": False,
             "pronoun": None,
+            "settings": _DEFAULT_SETTINGS,
         }
         assert (tmp_path / "outputs" / "profiles" / "joao-silva" / "models").is_dir()
         slugs = [p["slug"] for p in client.get("/api/profiles").json()["profiles"]]
@@ -529,6 +549,7 @@ class TestIdentity:
             "name": "Marcus",
             "is_default": True,
             "pronoun": "ele",
+            "settings": _DEFAULT_SETTINGS,
         }
         _make_profile(client, "Luana")
         listed = client.get("/api/profiles").json()["profiles"]
@@ -562,6 +583,7 @@ class TestIdentity:
             "name": "Ana Lima",
             "is_default": False,
             "pronoun": "neutro",
+            "settings": _DEFAULT_SETTINGS,
         }
         data = json.loads(meta.read_text(encoding="utf-8"))
         assert data["created_at"] == created_at
@@ -600,6 +622,24 @@ class TestIdentity:
         default = client.get("/api/profiles").json()["profiles"][0]
 
         assert (default["name"], default["pronoun"]) == ("default", None)
+
+    def test_a_new_name_that_tidies_to_nothing_is_refused(self, tmp_path: Path) -> None:
+        with pytest.raises(ProfileNameError):
+            update_profile("default", tmp_path / "p", tmp_path / "m", name="   ")
+
+        assert not (tmp_path / "p").exists()
+
+    def test_a_file_the_os_refuses_to_write_is_a_clear_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        create_profile("Ana", tmp_path / "p")
+
+        def full(self: Path, *args: Any, **kwargs: Any) -> int:
+            raise OSError(28, "No space left on device")
+
+        monkeypatch.setattr(Path, "write_text", full)
+        with pytest.raises(ProfileCreateError, match="No space left"):
+            update_profile("ana", tmp_path / "p", tmp_path / "m", name="Ana Lima")
 
 
 class TestHeaderValidation:
@@ -787,8 +827,8 @@ class TestHistoryIsPerProfile:
         async def fake_execute(config, job_id, *, resume_dir):  # type: ignore[no-untyped-def]
             seen.update(config=config, resume_dir=resume_dir)
 
-        monkeypatch.setattr(routes_mod, "_submit_job", fake_submit)
-        monkeypatch.setattr(routes_mod, "_execute_experiment", fake_execute)
+        monkeypatch.setattr(submission_mod, "_submit_job", fake_submit)
+        monkeypatch.setattr(execution_mod, "_execute_experiment", fake_execute)
 
         assert (
             client.post(
@@ -943,13 +983,7 @@ class TestHistoryIsPerProfile:
 
 
 def _finish(client: TestClient) -> dict[str, Any]:
-    status: dict[str, Any] = {"status": "running"}
-    for _ in range(600):
-        status = client.get("/api/experiment/status").json()
-        if status["status"] in ("completed", "failed"):
-            break
-        time.sleep(0.1)
-    return status
+    return wait_experiment_done(client, timeout=60.0)
 
 
 class TestARealRunLandsInItsProfile:
@@ -970,9 +1004,9 @@ class TestARealRunLandsInItsProfile:
                 _make_profile(client, "Bob")
                 yield client
         finally:
-            routes_mod._RUN_QUEUE.reset()
-            routes_mod._JOB_STATES.clear()
-            routes_mod._JOB_STATES.clear()
+            execution_mod._RUN_QUEUE.reset()
+            execution_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
             clear_task_registry()
 
     @staticmethod
@@ -1042,7 +1076,7 @@ class TestQueueShowsTheProfile:
         _, routes_mod = env
         _make_profile(client, "João Silva")
         base = build_regression_dataset(tmp_path / "ds")
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         body = {
             "name": "reg",
             "model": {"name": "resnet18", "num_targets": 1, "pretrained": False},
@@ -1186,7 +1220,10 @@ class TestEverySubmissionIsScoped:
 
         def paths(output: Any) -> dict[str, str]:
             raw = output if isinstance(output, dict) else output.model_dump()
-            return {k: Path(str(v)).as_posix() for k, v in raw.items()}
+            # Only the folders: OutputConfig also carries the figure settings.
+            return {
+                k: Path(str(v)).as_posix() for k, v in raw.items() if k.endswith("_dir")
+            }
 
         def fake_submit(
             run_id, label, task, strategy, start, stop_at="auto", profile=None
@@ -1205,25 +1242,25 @@ class TestEverySubmissionIsScoped:
 
             return fake
 
-        async def fake_cv(config, req, run_id, cv_fn, task_label):  # type: ignore[no-untyped-def]
+        async def fake_cv(config, req, run_id, cv_fn, task_label, *, models_dir):  # type: ignore[no-untyped-def]
             outputs.append(paths(config.output))
             outputs.append(paths(req.config["output"]))
 
-        monkeypatch.setattr(routes_mod, "_submit_job", fake_submit)
+        monkeypatch.setattr(submission_mod, "_submit_job", fake_submit)
+        monkeypatch.setattr(execution_mod, "_execute_experiment", single(0))
         for name in (
-            "_execute_experiment",
             "_execute_detection",
             "_execute_regression",
             "_execute_segmentation",
             "_execute_anomaly",
         ):
-            monkeypatch.setattr(routes_mod, name, single(0))
-        monkeypatch.setattr(routes_mod, "_execute_custom_task", single(1))
-        monkeypatch.setattr(routes_mod, "_execute_comparison", single(1))
-        monkeypatch.setattr(routes_mod, "_execute_sweep", single(1))
-        monkeypatch.setattr(routes_mod, "_execute_replicated_comparison", single(1))
-        monkeypatch.setattr(routes_mod, "_execute_replicates", single(1))
-        monkeypatch.setattr(routes_mod, "_execute_task_cv", fake_cv)
+            monkeypatch.setattr(training_mod, name, single(0))
+        monkeypatch.setattr(custom_tasks_mod, "_execute_custom_task", single(1))
+        monkeypatch.setattr(strategies_mod, "_execute_comparison", single(1))
+        monkeypatch.setattr(strategies_mod, "_execute_sweep", single(1))
+        monkeypatch.setattr(strategies_mod, "_execute_replicated_comparison", single(1))
+        monkeypatch.setattr(strategies_mod, "_execute_replicates", single(1))
+        monkeypatch.setattr(strategies_mod, "_execute_task_cv", fake_cv)
         yield jobs, outputs
         clear_task_registry()
 
@@ -1350,3 +1387,61 @@ class TestEverySubmissionIsScoped:
 
         assert resp.status_code == 422, resp.text
         assert not jobs
+
+
+class TestMLflowProfileSettings:
+    @pytest.mark.parametrize("slug", ["default", "ana"])
+    def test_settings_are_independent_and_preserve_metadata(
+        self, client: TestClient, tmp_path: Path, slug: str
+    ) -> None:
+        _make_profile(client, "Ana")
+        root = tmp_path / "outputs" / "profiles"
+        path = (
+            root / "default.json" if slug == "default" else root / slug / "profile.json"
+        )
+        meta = json.loads(path.read_text()) if path.exists() else {}
+        meta["custom"] = {"keep": 1}
+        meta["settings"] = {"future": 5, "mlflow": {"future": 6}}
+        path.write_text(json.dumps(meta), encoding="utf-8")
+        response = client.put(
+            f"/api/profiles/{slug}", json={"settings": {"mlflow": {"enabled": True}}}
+        )
+        assert response.status_code == 200
+        assert response.json()["settings"]["mlflow"]["enabled"] is True
+        saved = json.loads(path.read_text())
+        assert saved["custom"] == {"keep": 1}
+        assert saved["settings"] == {
+            "future": 5,
+            "mlflow": {"future": 6, "enabled": True},
+        }
+        listed = client.get("/api/profiles").json()["profiles"]
+        assert {p["slug"]: p["settings"]["mlflow"]["enabled"] for p in listed} == {
+            "default": slug == "default",
+            "ana": slug == "ana",
+        }
+        renamed = client.put(f"/api/profiles/{slug}", json={"name": "Renamed"})
+        assert renamed.json()["settings"]["mlflow"]["enabled"] is True
+
+    @pytest.mark.parametrize("enabled", ["true", 1, None, [], {}])
+    def test_explicit_invalid_settings_are_rejected(
+        self, client: TestClient, enabled: Any
+    ) -> None:
+        response = client.put(
+            "/api/profiles/default", json={"settings": {"mlflow": {"enabled": enabled}}}
+        )
+        assert response.status_code == 422
+
+    @pytest.mark.parametrize(
+        "settings", [None, [], {"mlflow": None}, {"mlflow": {"enabled": "invalid"}}]
+    )
+    def test_malformed_legacy_settings_disable_export(
+        self, client: TestClient, tmp_path: Path, settings: Any
+    ) -> None:
+        path = tmp_path / "outputs" / "profiles" / "default.json"
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            json.dumps({"name": "Legacy", "settings": settings}), encoding="utf-8"
+        )
+        profile = client.get("/api/profiles").json()["profiles"][0]
+        assert profile["name"] == "Legacy"
+        assert profile["settings"]["mlflow"]["enabled"] is False

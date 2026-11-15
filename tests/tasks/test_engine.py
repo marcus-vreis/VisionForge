@@ -105,7 +105,10 @@ class TestGenericTaskEngineLevel1:
 
         batches = [e for e in events if e["event"] == "batch"]
         assert {e["epoch"] for e in batches} == {1, 2, 3}
-        assert all(e["batch"] < e["total_batches"] for e in batches)
+        assert all(e["batch"] <= e["total_batches"] for e in batches)
+        # Each epoch tells its last batch, where validation begins (ADR-205).
+        last = {e["epoch"] for e in batches if e["batch"] == e["total_batches"]}
+        assert last == {1, 2, 3}
         assert all(e["total_epochs"] == 3 for e in batches)
 
     def test_trains_streams_and_writes_run_json(self, tmp_path: Path) -> None:
@@ -255,6 +258,38 @@ class TestGenericTaskEngineLevel1:
         cfg = _config(tmp_path, epochs=4, early_stopping_patience=10)
         result = GenericTaskEngine(get_task("valley"), cfg).run()
         assert result.best_epoch == 2  # err=1.0 was the minimum
+
+
+class TestGenericTaskEngineNonFinite:
+    def test_nan_loss_stops_in_epoch_one_and_marks_the_run_failed(
+        self, tmp_path: Path
+    ) -> None:
+        """A NaN primary metric never improved: every epoch ran, no best checkpoint."""
+        task = _register_toy()
+        task.compute_metrics = lambda self, model, loader, cfg: {"mae": float("nan")}
+        engine = GenericTaskEngine(get_task("toyreg"), _config(tmp_path))
+        with pytest.raises(training_loop.NonFiniteMetricError, match="non-finite") as c:
+            engine.run()
+        assert "mae" in str(c.value)
+        assert c.value.epoch == 1
+
+        run_dir = next((tmp_path / "models").iterdir())
+        assert not (run_dir / "best_model.pth").exists()
+        data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+        assert data["status"] == "failed"
+        assert "non-finite" in data["error"]
+        assert [w["code"] for w in data["warnings"]] == ["non_finite_metric"]
+
+    def test_nan_train_loss_is_caught_even_when_the_metric_is_finite(
+        self, tmp_path: Path
+    ) -> None:
+        task = _register_toy()
+        task.compute_loss = lambda self, model, batch, cfg: (
+            nn.functional.mse_loss(model(batch[0]), batch[1]) * float("nan")
+        )
+        engine = GenericTaskEngine(get_task("toyreg"), _config(tmp_path))
+        with pytest.raises(training_loop.NonFiniteMetricError, match="train_loss"):
+            engine.run()
 
 
 class TestGenericTaskEngineStop:

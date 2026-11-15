@@ -102,6 +102,24 @@ class TestFineTuningSplitsTheLearningRate:
             cfg.training.learning_rate,
         ]
 
+    @pytest.mark.parametrize("arch", ARCHITECTURES)
+    def test_the_full_rate_group_is_exactly_the_final_linear(self, arch: str) -> None:
+        # The head is the layer replace_final_layer made (ADR-101). On VGG and
+        # AlexNet the last child is a three-Linear classifier, and putting all
+        # of it at the full rate trained 119M parameters as "the head".
+        model, block, _cfg = _frozen_model(arch, mode="fine_tuning")
+        head = final_linear(model)
+        assert head is not None
+
+        optimizer = block._build_transfer_optimizer(model)
+        head_group = optimizer.param_groups[1]["params"]
+        backbone_group = optimizer.param_groups[0]["params"]
+
+        assert {id(p) for p in head_group} == {id(p) for p in head.parameters()}
+        assert len(backbone_group) + len(head_group) == sum(
+            1 for p in model.parameters() if p.requires_grad
+        )
+
     def test_fine_tuning_leaves_everything_trainable(self) -> None:
         model, _block, _cfg = _frozen_model("resnet18", mode="fine_tuning")
 

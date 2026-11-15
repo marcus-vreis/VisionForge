@@ -17,12 +17,15 @@ import {
   regressionFormFromPayload,
   type RegressionForm,
 } from "../lib/regression-models";
-import { checkImportedConfig, exportConfigToYaml } from "../lib/yaml-config";
+import { exportConfigToYaml, importIntoForm } from "../lib/yaml-config";
+import { usePendingImport, type PendingImportProps } from "../hooks/usePendingImport";
 import type { ValidationError } from "../hooks/useExperiment";
 import { FieldLabel, NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
 import { CvCard, type CvPayload } from "./CvCard";
 import { StrategyCard, type PanelStrategy } from "./ExperimentHeader";
 import { ReplicatesCard } from "./ReplicatesCard";
+import { ReplicatedComparisonCard } from "./ReplicatedComparisonCard";
+import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-form";
 import { ReviewStep } from "./ReviewStep";
 import { StepShell } from "./StepShell";
 import { RegressionDatasetStats } from "./TaskDatasetStats";
@@ -46,7 +49,7 @@ const SWEEP_PATH_HINTS = [
   "model.name",
 ];
 
-interface RegressionPanelProps {
+interface RegressionPanelProps extends PendingImportProps {
   formData: RegressionForm;
   setFormData: (updater: (prev: RegressionForm) => RegressionForm) => void;
   accent: string;
@@ -54,6 +57,8 @@ interface RegressionPanelProps {
   busy?: boolean;
   onSweep?: (payload: SweepPayload) => void;
   onReplicates?: (payload: ReplicatesPayload) => void;
+  /** Launches the paired comparison (ADR-193); without it, no card. */
+  onReplicatedComparison?: (payload: ReplicatedComparisonPayload) => void;
   /** Lets App label and route the main Treinar button by the active strategy. */
   onStrategyChange?: (strategy: PanelStrategy) => void;
   /** Incremented by Treinar so the selected strategy's card runs. */
@@ -92,13 +97,38 @@ export function RegressionPanel({
   onSweep,
   onReplicates,
   onStrategyChange,
+  onReplicatedComparison,
   runSignal,
   onCv,
+  pendingImport,
+  onImportApplied,
 }: RegressionPanelProps) {
   const t = useT();
   const [picking, setPicking] = useState(false);
   const [pickNote, setPickNote] = useState<string | null>(null);
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
+  const chooseStrategy = (s: PanelStrategy) => {
+    setStrategy(s);
+    onStrategyChange?.(s);
+  };
+  // The YAML button's import; a run sent from History goes through it too (#200).
+  const importConfig = async (data: Record<string, unknown>): Promise<string | null> => {
+    // Schema unavailable → import tolerantly; the submit's 422 covers it.
+    const schema = await fetchTaskSchema("regression").catch(() => null);
+    const imported = importIntoForm(t, data, schema, regressionFormFromPayload);
+    if ("problem" in imported) return imported.problem;
+    setFormData(() => imported.form);
+    return null;
+  };
+  const { notice, replicatesPreset } = usePendingImport({
+    taskKey: "regression",
+    pendingImport,
+    onImportApplied,
+    ready: true,
+    importConfig,
+    refusesOnProblem: true,
+    onStrategy: chooseStrategy,
+  });
 
   const setModel = (patch: Partial<RegressionForm["model"]>) =>
     setFormData((p) => ({ ...p, model: { ...p.model, ...patch } }));
@@ -134,6 +164,7 @@ export function RegressionPanel({
     { value: "cv", label: t.paramPanel.blocks.crossValidation },
     { value: "sweep", label: t.taskPanel.sweep },
     { value: "replicates", label: t.taskPanel.replicates },
+    { value: "replicatedComparison", label: t.taskPanel.replicatedComparison },
   ];
   const strategyLabel = strategies.find((s) => s.value === strategy)?.label ?? "";
 
@@ -272,10 +303,7 @@ export function RegressionPanel({
     <div style={stack}>
       <StrategyCard
         strategy={strategy}
-        onStrategyChange={(s) => {
-          setStrategy(s);
-          onStrategyChange?.(s);
-        }}
+        onStrategyChange={chooseStrategy}
         strategies={strategies}
       />
       {strategy === "sweep" && onSweep && (
@@ -295,6 +323,17 @@ export function RegressionPanel({
           accent={accent}
           disabled={busy}
           onReplicates={onReplicates}
+          runSignal={runSignal}
+          preset={replicatesPreset}
+        />
+      )}
+      {strategy === "replicatedComparison" && onReplicatedComparison && (
+        <ReplicatedComparisonCard
+          metrics={COMPARE_METRICS}
+          pathHints={SWEEP_PATH_HINTS}
+          accent={accent}
+          disabled={busy}
+          onReplicatedComparison={onReplicatedComparison}
           runSignal={runSignal}
         />
       )}
@@ -511,19 +550,8 @@ export function RegressionPanel({
       onNameChange={(name) => setFormData((p) => ({ ...p, name }))}
       suggestion={suggestion}
       onExportYaml={() => exportConfigToYaml(buildRegressionPayload(formData), formData.name)}
-      onImportConfig={async (data) => {
-        let payload = data;
-        try {
-          const schema = await fetchTaskSchema("regression");
-          const checked = checkImportedConfig(t, data, schema, schema.$defs ?? {});
-          if ("problem" in checked) return checked.problem;
-          payload = checked.data;
-        } catch {
-          // schema unavailable → import tolerantly; o 422 do submit cobre.
-        }
-        setFormData(() => regressionFormFromPayload(payload));
-        return null;
-      }}
+      onImportConfig={importConfig}
+      importNotice={notice}
       sections={[
         {
           step: "data",

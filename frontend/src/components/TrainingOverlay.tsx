@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, useEffect, useRef, useState } from "react";
 import { ApiError, cancelQueuedRun, fetchQueue } from "../api/client";
+import { driveConsentPrompt } from "../lib/drive-consent";
 import { findQueuedJob, isColabLane, laneAccount } from "../lib/queue-lanes";
 import type { Dict } from "../i18n/pt";
 import { useT } from "../i18n/useT";
@@ -21,8 +22,16 @@ import { liveBatchFraction } from "../lib/training-progress";
 import { SHEET_TABS, type SheetTab } from "../lib/training-story";
 import { STOPPED_COLOR } from "../lib/unit-status";
 import type { QueuedJobInfo, RunStatus, TrainingEvent } from "../types/run";
+import { DriveConsentPrompt } from "./DriveConsentPrompt";
 import { LiveResults } from "./LiveResults";
-import { TrainingStory } from "./training-story/TrainingStory";
+import { LazySurface } from "./ErrorBoundary";
+import type { CodeSettings } from "../api/client";
+
+// "Como funciona" (the run's steps, its code and the drawing) is a tab the log
+// does not need: its own chunk, fetched the first time the tab opens (GUI-12).
+const TrainingCodeTab = lazy(() =>
+  import("./training-code/TrainingCodeTab").then((m) => ({ default: m.TrainingCodeTab })),
+);
 
 interface TrainingOverlayProps {
   status: RunStatus;
@@ -53,6 +62,8 @@ interface TrainingOverlayProps {
   /** Which drawing the "Como funciona" tab shows, recorded when the run was
    *  submitted: the sheet outlives the form it came from (ADR-118). */
   story?: StorySpec;
+  /** What picks the branches of the code on "Como funciona"; null when the run's settings are unknown. */
+  codeSettings?: CodeSettings | null;
   /** The tab of the sheet that is open. The log is the default, and the guide can
    *  ask for the other one, so the choice lives in the page. */
   tab: SheetTab;
@@ -88,6 +99,7 @@ export function TrainingOverlay({
   stopped = null,
   customRun = false,
   story = GENERIC_STORY,
+  codeSettings = null,
   tab,
   onTabChange,
   onClose,
@@ -101,6 +113,8 @@ export function TrainingOverlay({
     model_comparison: t.trainingOverlay.blocks.modelComparison,
     cross_validation: t.trainingOverlay.blocks.crossValidation,
     replicates: t.trainingOverlay.blocks.replicates,
+    // The queue names it by its route (ADR-193).
+    "replicated-comparison": t.trainingOverlay.blocks.replicatedComparison,
   };
   const queueLabel = blockKind ? queueBlocks[blockKind] : undefined;
   const isRunning = status.status === "running";
@@ -230,6 +244,7 @@ export function TrainingOverlay({
   // does not: read it once the run starts executing, and again until it is read
   // (a custom task is not offered the stop before the queue says which level it is).
   const runId = status.run_id;
+  const drivePrompt = driveConsentPrompt(progressEvents);
   const [activeJob, setActiveJob] = useState<QueuedJobInfo | null>(null);
   const jobKnown = activeJob !== null && activeJob.run_id === runId;
   useEffect(() => {
@@ -423,7 +438,9 @@ export function TrainingOverlay({
       <div
         data-tour="training-sheet"
         style={{
-          width: "min(720px, 100%)",
+          // "Como funciona" puts the steps beside the code, and the code wants
+          // the width; the log and the results keep the narrow sheet.
+          width: tab === "story" ? "min(1080px, 100%)" : "min(720px, 100%)",
           background: "rgb(var(--lt-surface, 12 14 18) / 0.95)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 18,
@@ -451,7 +468,7 @@ export function TrainingOverlay({
               flexShrink: 0,
             }}
           />
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
             <div
               style={{
                 fontFamily: "var(--font-mono)",
@@ -507,6 +524,9 @@ export function TrainingOverlay({
                   : t.trainingOverlay.queuedNote(status.position, status.queued)}
               </div>
             )}
+            {!isFinished && drivePrompt !== null && runId && (
+              <DriveConsentPrompt key={drivePrompt.url} prompt={drivePrompt} runId={runId} />
+            )}
             {!isFinished && status.connection && (
               <div
                 role="status"
@@ -528,6 +548,7 @@ export function TrainingOverlay({
               fontFamily: "var(--font-mono)",
               fontSize: 28,
               fontWeight: 600,
+              flexShrink: 0,
               color: hasFailed ? "oklch(calc(0.74 - var(--lt-flip, 0) * 0.18) 0.18 22)" : barColor,
             }}
           >
@@ -672,7 +693,8 @@ export function TrainingOverlay({
           </div>
         )}
 
-        {/* Log, results and "Como funciona": the log is what the sheet opens on. */}
+        {/* Log, results and "Como funciona" (the steps and their code): the log
+            is what the sheet opens on. */}
         <div
           role="tablist"
           aria-label={t.trainingStory.tabsLabel}
@@ -732,27 +754,33 @@ export function TrainingOverlay({
           </div>
         )}
 
-        {/* The story is mounted only while it is the open tab, so its animations
-            stop with it; the log stays mounted (hidden), to keep what it holds. */}
+        {/* "Como funciona" is mounted only while it is the open tab, so its
+            drawing stops with it; the log stays mounted (hidden), to keep what
+            it holds. On a narrow window its columns stack, and the panel scrolls. */}
         {tab === "story" && (
           <div
             role="tabpanel"
             id="training-panel-story"
             aria-labelledby="training-tab-story"
+            style={{ maxHeight: "max(360px, calc(100vh - 260px))", overflowY: "auto" }}
           >
-            <TrainingStory
-              events={progressEvents}
-              status={status.status}
-              stopped={stopOutcomeNow === "stopped"}
-              unitKind={
-                mode === "trial" || mode === "fold" || mode === "model" || mode === "replicate"
-                  ? mode
-                  : null
-              }
-              spec={story}
-              tabAccent={taskAccent}
-              sheetVisible={visible}
-            />
+            <LazySurface>
+              <TrainingCodeTab
+                events={progressEvents}
+                status={status.status}
+                stopped={stopOutcomeNow === "stopped"}
+                unitKind={
+                  mode === "trial" || mode === "fold" || mode === "model" || mode === "replicate"
+                    ? mode
+                    : null
+                }
+                spec={story}
+                accent={taskAccent}
+                sheetVisible={visible}
+                taskKey={taskKey}
+                settings={codeSettings}
+              />
+            </LazySurface>
           </div>
         )}
 

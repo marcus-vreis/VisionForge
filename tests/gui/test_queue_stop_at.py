@@ -18,6 +18,9 @@ import torch
 from fastapi.testclient import TestClient
 from torch import nn
 
+import visionforge.gui.api.custom_task_routes as custom_tasks_mod
+import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.strategies as strategies
 from visionforge.core.cancellation import STOPPED, CancellationToken
 from visionforge.core.comparison import ComparisonTrial
 from visionforge.core.replicates import ReplicateTrial
@@ -39,18 +42,21 @@ from visionforge.utils.selftest_data import (
 
 from .conftest import fake_run, job_run, occupy_queue, release_queue, start_job
 
+# Any: the tests swap its orchestrators and executors for fakes.
+strategies_mod: Any = strategies
+
 
 @pytest.fixture
 def client_and_routes():  # type: ignore[no-untyped-def]
     import visionforge.gui.api.routes as routes_mod
     from visionforge.gui.server import app
 
-    occupy_queue(routes_mod, run_id="holding")
+    occupy_queue(execution_mod, run_id="holding")
     try:
         yield TestClient(app, raise_server_exceptions=True), routes_mod
     finally:
-        release_queue(routes_mod)
-        routes_mod._JOB_STATES.clear()
+        release_queue(execution_mod)
+        execution_mod._JOB_STATES.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -320,7 +326,9 @@ class TestStopAtInTheSnapshot:
 
     def test_the_active_job_carries_it_too(self, client_and_routes: tuple) -> None:
         client, routes_mod = client_and_routes
-        routes_mod._RUN_QUEUE._active.stop_at = "fold"
+        active = execution_mod._RUN_QUEUE._active
+        assert active is not None
+        active.stop_at = "fold"
 
         assert client.get("/api/queue").json()["active"]["stop_at"] == "fold"
 
@@ -333,7 +341,8 @@ class TestCancellingAJobThatCannotStop:
         self, client_and_routes: tuple
     ) -> None:
         client, routes_mod = client_and_routes
-        active = routes_mod._RUN_QUEUE._active
+        active = execution_mod._RUN_QUEUE._active
+        assert active is not None
         active.stop_at = None
 
         resp = client.delete("/api/queue/holding")
@@ -362,10 +371,12 @@ class TestCancellingAJobThatCannotStop:
         self, client_and_routes: tuple
     ) -> None:
         client, routes_mod = client_and_routes
-        routes_mod._RUN_QUEUE._active.stop_at = "replicate"
+        active = execution_mod._RUN_QUEUE._active
+        assert active is not None
+        active.stop_at = "replicate"
 
         assert client.delete("/api/queue/holding").status_code == 200
-        assert routes_mod._RUN_QUEUE._active.cancel_token.cancelled is True
+        assert active.cancel_token.cancelled is True
 
 
 class TestQueueUnit:
@@ -405,9 +416,9 @@ class TestQueueUnit:
 def _run_executor(
     routes_mod: Any, coro: Any, token: CancellationToken, run_id: str = "r"
 ) -> dict:
-    start_job(routes_mod, run_id, cancel_token=token)
+    start_job(execution_mod, run_id, cancel_token=token)
     asyncio.run(coro)
-    return dict(job_run(routes_mod, run_id))
+    return dict(job_run(execution_mod, run_id))
 
 
 class _Runner:
@@ -433,15 +444,16 @@ class TestExecutorsHandTheTokenOn:
                 ComparisonTrial("b", STOPPED, {"r2": 0.1}),
             ]
 
-        monkeypatch.setattr(routes_mod, "run_model_comparison", fake)
+        monkeypatch.setattr(strategies_mod, "run_model_comparison", fake)
         state = _run_executor(
             routes_mod,
-            routes_mod._execute_comparison(
+            strategies_mod._execute_comparison(
                 runner,
                 {"name": "c", "output": _output(tmp_path)},
                 ["a", "b"],
                 "r2",
                 "r",
+                models_dir=tmp_path,
             ),
             token,
         )
@@ -464,12 +476,17 @@ class TestExecutorsHandTheTokenOn:
             seen["token"] = runner_arg._cancel_token
             return [SweepTrial(0, {}, "success", {"r2": 0.5})]
 
-        monkeypatch.setattr(routes_mod, "run_sweep", fake)
+        monkeypatch.setattr(strategies_mod, "run_sweep", fake)
         req = SweepRequest(config={"name": "s"}, search_space={"x": [1, 2, 3]})
         state = _run_executor(
             routes_mod,
-            routes_mod._execute_sweep(
-                runner, {"name": "s", "output": _output(tmp_path)}, req, "r2", "r"
+            strategies_mod._execute_sweep(
+                runner,
+                {"name": "s", "output": _output(tmp_path)},
+                req,
+                "r2",
+                "r",
+                models_dir=tmp_path,
             ),
             token,
         )
@@ -511,7 +528,9 @@ class TestExecutorsHandTheTokenOn:
         req = TaskCvRequest(config=raw, n_folds=3)
         state = _run_executor(
             routes_mod,
-            routes_mod._execute_task_cv(config, req, "r", fake_cv, "Regression"),
+            strategies_mod._execute_task_cv(
+                config, req, "r", fake_cv, "Regression", models_dir=tmp_path
+            ),
             token,
         )
 
@@ -551,12 +570,13 @@ class TestExecutorsHandTheTokenOn:
 
         state = _run_executor(
             routes_mod,
-            routes_mod._execute_replicates(
+            strategies_mod._execute_replicates(
                 _OwnsItsLoop(),
                 {"name": "rep", "output": _output(tmp_path)},
                 [1, 2, 3],
                 "r2",
                 "r",
+                models_dir=tmp_path,
             ),
             token,
         )
@@ -597,12 +617,13 @@ class TestExecutorsHandTheTokenOn:
 
         state = _run_executor(
             routes_mod,
-            routes_mod._execute_replicates(
+            strategies_mod._execute_replicates(
                 _LastSeedFinishes(),
                 {"name": "rep", "output": _output(tmp_path)},
                 [1, 2],
                 "r2",
                 "r",
+                models_dir=tmp_path,
             ),
             token,
         )
@@ -626,7 +647,7 @@ class TestExecutorsHandTheTokenOn:
     ) -> None:
         client, routes_mod = client_and_routes
         fake_run(
-            routes_mod,
+            execution_mod,
             {
                 "run_id": "single",
                 "status": "completed",
@@ -655,15 +676,16 @@ class TestExecutorsHandTheTokenOn:
             assert runner_arg._cancel_token is token
             return [ReplicateTrial(seeds[0], STOPPED)]
 
-        monkeypatch.setattr(routes_mod, "run_replicates", fake)
+        monkeypatch.setattr(strategies_mod, "run_replicates", fake)
         state = _run_executor(
             routes_mod,
-            routes_mod._execute_replicates(
+            strategies_mod._execute_replicates(
                 runner,
                 {"name": "rep", "output": _output(tmp_path)},
                 [1, 2, 3],
                 "r2",
                 "r",
+                models_dir=tmp_path,
             ),
             token,
         )
@@ -699,19 +721,20 @@ class TestExecutorsHandTheTokenOn:
                 "skipped_variants": ["a"],
             }
 
-        monkeypatch.setattr(routes_mod, "run_replicated_comparison", fake)
+        monkeypatch.setattr(strategies_mod, "run_replicated_comparison", fake)
         req = ReplicatedComparisonRequest(
             config={"name": "rc"}, variants={"a": {}, "b": {}}
         )
         state = _run_executor(
             routes_mod,
-            routes_mod._execute_replicated_comparison(
+            strategies_mod._execute_replicated_comparison(
                 runner,
                 {"name": "rc", "output": _output(tmp_path)},
                 req,
                 [1, 2],
                 "r2",
                 "r",
+                models_dir=tmp_path,
             ),
             token,
         )
@@ -743,11 +766,11 @@ class TestExecutorsHandTheTokenOn:
                     stopped=True,
                 )
 
-        monkeypatch.setattr(routes_mod, "GenericTaskEngine", _FakeEngine)
+        monkeypatch.setattr(custom_tasks_mod, "GenericTaskEngine", _FakeEngine)
         info = SimpleNamespace(key="toy")
         state = _run_executor(
             routes_mod,
-            routes_mod._execute_custom_task(info, BaseTaskConfig, "r"),
+            custom_tasks_mod._execute_custom_task(info, BaseTaskConfig, "r"),
             token,
         )
 

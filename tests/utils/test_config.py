@@ -6,7 +6,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from visionforge.utils.config import ExperimentConfig, load_config
+from visionforge.utils.config import ExperimentConfig, OutputConfig, load_config
 from visionforge.utils.messages import using_lang
 
 
@@ -317,3 +317,26 @@ class TestTransformConfig:
         path = write_yaml(tmp_path, make_raw_config(tmp_path))
         config = load_config(path)
         assert config.data.transforms.horizontal_flip is True
+
+
+class TestFigureOutputConfig:
+    def test_defaults_keep_png_at_300_dpi(self, tmp_path: Path) -> None:
+        config = load_config(write_yaml(tmp_path, make_raw_config(tmp_path)))
+        assert config.output.figure_formats == ["png"]
+        assert config.output.figure_dpi == 300
+
+    def test_formats_are_deduplicated_in_order(self) -> None:
+        output = OutputConfig(figure_formats=["svg", "png", "svg"])
+        assert output.figure_formats == ["svg", "png"]
+
+    def test_empty_formats_raise(self) -> None:
+        with pytest.raises(ValidationError):
+            OutputConfig(figure_formats=[])
+
+    def test_unknown_format_raises(self) -> None:
+        with pytest.raises(ValidationError):
+            OutputConfig.model_validate({"figure_formats": ["tiff"]})
+
+    def test_dpi_below_72_raises(self) -> None:
+        with pytest.raises(ValidationError):
+            OutputConfig(figure_dpi=10)

@@ -49,7 +49,7 @@ def _make_anomaly_run(tmp_path: Path) -> Path:
 
 class TestAnomalyBatchPredict:
     def test_writes_score_and_decision_csv(self, tmp_path: Path) -> None:
-        from visionforge.gui.api.routes import _execute_batch_predict
+        from visionforge.gui.api.evaluation_routes import _execute_batch_predict
         from visionforge.gui.api.schemas import BatchPredictRequest
 
         run_dir = _make_anomaly_run(tmp_path)

@@ -10,7 +10,12 @@ from pathlib import Path
 from . import phase_contract
 
 METRIC_ABS_TOLERANCE = 1e-12
-EXECUTION_ORDER = ["native_pytorch", "visionforge_trainer"]
+EXECUTION_ORDER = list(phase_contract.EXECUTION_ORDER)
+
+
+execution_order = phase_contract.execution_order
+
+
 VISIONFORGE_INCLUDES = {
     "setup": [
         "DetectionConfig validation (torchvision, SSDLite, pretrained=False)",
@@ -19,7 +24,7 @@ VISIONFORGE_INCLUDES = {
     ],
     "training": [
         "DetectionTrainer.fit: seeding, injected prebuilt model, SGD and YOLO loaders",
-        "train, validation loss (train mode including BatchNorm updates), validation mAP",
+        "train, validation loss (train mode with BatchNorm in eval), validation mAP",
         "best checkpoint, resume state, TensorBoard, plots, health checks and run.json",
         "public epoch_end callback captures train and validation losses",
     ],
@@ -314,7 +319,7 @@ def run_pair(
     device="cpu",
     parity_atol=None,
 ):
-    """Run native first and retain paired evidence even when a phase fails."""
+    """Run both paths, order set by seed parity; keep evidence on failure."""
     from visionforge.utils.environment import capture_environment
 
     from .native_detection import preflight, run_native
@@ -347,13 +352,14 @@ def run_pair(
     )
     fingerprint = fingerprint_dataset(dataset)
     output.mkdir(parents=True)
+    order = execution_order(seed)
     report = {
         "purpose": "engineering_parity_only",
         "task": "detection",
         "status": "running",
         "failed_phase": None,
         "phase_contract": phase_contract.contract_header(),
-        "execution_order": EXECUTION_ORDER,
+        "execution_order": order,
         **options,
         "tolerances": {
             "losses": {"atol": parity_atol, "rtol": 0},
@@ -365,7 +371,12 @@ def run_pair(
         "environment": capture_environment(),
     }
     try:
-        for key, runner in (("native", run_native), ("visionforge", run_visionforge)):
+        runners = {
+            "native_pytorch": ("native", run_native),
+            "visionforge_trainer": ("visionforge", run_visionforge),
+        }
+        for workflow in order:
+            key, runner = runners[workflow]
             try:
                 report[key] = runner(dataset, initial_weights, output / key, **options)
             except phase_contract.PhaseFailure as failure:

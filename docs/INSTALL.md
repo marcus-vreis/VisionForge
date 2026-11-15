@@ -14,17 +14,19 @@ só os comandos mudam:
 Leva de 5 a 15 minutos, quase tudo de download: o PyTorch tem de 200 MB (CPU) a uns
 3 GB (CUDA).
 
-**O que já foi conferido:** em 19/10/2026, a 0.17.0 do PyPI foi instalada seguindo os
-passos 2, 3 e 5 deste guia no Windows, no Ubuntu e no macOS (Apple Silicon), com Python
-3.12 e 3.13; nos seis casos o `doctor` terminou em `environment looks good` e o
-`selftest --quick` em `5/5 cases passed` (workflow
-[Install from PyPI](https://github.com/marcus-vreis/VisionForge/actions/workflows/install-smoke.yml),
-que roda de novo a cada release). Essas máquinas não têm GPU nem tela: o passo 4 com placa
+**O que já foi conferido:** depois de cada release, o workflow
+[Install from PyPI](https://github.com/marcus-vreis/VisionForge/actions/workflows/install-smoke.yml)
+instala o pacote publicado seguindo os passos 2 e 3 deste guia no Windows, no Ubuntu e no
+macOS (Apple Silicon), com Python 3.12 e 3.13, e roda `visionforge doctor` e
+`visionforge selftest --quick` (passo 5); qualquer falha deixa o workflow vermelho. O
+resultado da última execução está na página do workflow; este guia não repete a versão.
+Essas máquinas não têm GPU nem tela: o passo 4 com placa
 NVIDIA e a interface no navegador foram usados no Windows (a partir do código-fonte), mas
 ainda não no Linux nem no Mac.
 
 **Requisitos:** Python 3.12 ou 3.13, uns 6 GB livres em disco e internet na instalação.
-Depois de instalado, tudo roda na sua máquina, sem nuvem. Uma GPU NVIDIA deixa o treino
+Depois de instalado, roda na sua máquina; nada sai dela sem você pedir (datasets, Colab e
+exportadores são opt-in, com prévia local). Uma GPU NVIDIA deixa o treino
 muito mais rápido, mas não é obrigatória: os datasets de exemplo treinam em segundos na CPU.
 
 ---
@@ -263,6 +265,24 @@ pip install --upgrade visionforge-studio
 A atualização mantém o PyTorch que você já tem. Para desinstalar, apague a pasta `.venv`
 (e `outputs/` e `datasets/`, se não quiser os runs e os dados).
 
+## Docker (opcional)
+
+A partir de um clone do repositório, o `Dockerfile` e o `docker-compose.yml` empacotam a
+interface compilada, o Python 3.13, o PyTorch (`CUDA_TAG=cu128` por padrão, ou `VARIANT=cpu`
+sobre `ubuntu:22.04`) e o VisionForge:
+
+```bash
+docker compose up                 # GPU NVIDIA (exige driver + nvidia-container-toolkit no host)
+docker compose --profile cpu up   # imagem só CPU
+```
+
+A pasta `./datasets` entra como somente leitura (`/work/datasets:ro`) e `./outputs`,
+`./user_models` e `./user_tasks` são montadas em `/work`, rodando como usuário sem
+privilégios (`uid 1000`) na porta `8000`. Dentro do container (`VISIONFORGE_CONTAINER=1`)
+não há janela nativa para escolher pasta: digite o caminho montado (por exemplo
+`/work/datasets/meu_dataset`) no campo de dataset. Detalhes e tabela de verificação em
+[`dev/DOCKER.md`](dev/DOCKER.md).
+
 ## Problemas comuns
 
 | Sintoma | Causa provável | O que fazer |
@@ -274,3 +294,35 @@ A atualização mantém o PyTorch que você já tem. Para desinstalar, apague a 
 | Download de dataset falha com `SSL: CERTIFICATE_VERIFY_FAILED` (Mac) | certificados do Python.org não instalados | rode "Install Certificates.command" (passo 1 do macOS) |
 | O botão de escolher pasta não faz nada | falta o Tk (Linux) ou o diálogo nativo falhou (Mac) | Linux: `sudo apt install python3-tk`; em qualquer sistema, cole o caminho no campo |
 | A porta 8000 já está em uso | outro programa (ou outro `visionforge gui`) nela | feche o outro terminal ou use `visionforge gui --port 8001` |
+
+## Licenças de terceiros
+
+O VisionForge é MIT, mas o `pip install` também traz pacotes com outras licenças,
+listados em [`THIRD_PARTY_NOTICES.md`](https://github.com/marcus-vreis/VisionForge/blob/main/THIRD_PARTY_NOTICES.md). O principal é o **Ultralytics, sob
+AGPL-3.0**, o backend de detecção YOLO / RT-DETR: quem distribui um programa feito
+sobre ele, ou deixa usuários acessarem uma versão modificada pela rede, precisa
+publicar o código desse programa sob a mesma licença. Por isso ele não vem no passo 3:
+para treinar YOLO ou RT-DETR, instale o extra `detection` com o ambiente ativado.
+
+```bash
+pip install "visionforge-studio[detection]"
+```
+
+Sem ele, a detecção treina com o backend `torchvision` (Faster R-CNN, RetinaNet, SSD),
+marcado "sem AGPL" no formulário.
+
+## Rede e privacidade
+
+Depois de instalado, o VisionForge não tem telemetria própria e só acessa a internet
+quando você pede (baixar dataset ou pesos pré-treinados, exportar um run, conectar o
+Colab, `visionforge doctor --fix`) e numa checagem de atualização no `pypi.org` quando
+a interface abre. Para desligar essa checagem:
+
+```bash
+export VISIONFORGE_NO_UPDATE_CHECK=1      # Linux / macOS
+$env:VISIONFORGE_NO_UPDATE_CHECK = "1"    # Windows (PowerShell)
+```
+
+A lista completa de conexões e das variáveis que desligam a telemetria dos SDKs
+embutidos está na seção
+[Rede e privacidade do README](https://github.com/marcus-vreis/VisionForge/blob/main/README.md#rede-e-privacidade).

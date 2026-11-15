@@ -6,12 +6,16 @@ treino e a pessoa lia uma exceção crua em inglês no log.
 
 from __future__ import annotations
 
+import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
+from visionforge.utils.messages import message
 from visionforge.utils.selftest_data import (
     build_classification_dataset,
     build_detection_dataset,
@@ -27,7 +31,7 @@ def client_and_routes():  # type: ignore[no-untyped-def]
     import visionforge.gui.api.routes as routes_mod
     from visionforge.gui.server import app
 
-    routes_mod._JOB_STATES.clear()
+    execution_mod._JOB_STATES.clear()
     return TestClient(app, raise_server_exceptions=True), routes_mod
 
 
@@ -87,9 +91,9 @@ def _classification(
 def busy_queue(client_and_routes: tuple):  # type: ignore[no-untyped-def]
     """Accepted jobs stay queued, so a 200 here never trains anything."""
     _, routes_mod = client_and_routes
-    occupy_queue(routes_mod)
+    occupy_queue(execution_mod)
     yield
-    release_queue(routes_mod)
+    release_queue(execution_mod)
 
 
 @pytest.mark.usefixtures("busy_queue")
@@ -121,7 +125,19 @@ class TestDetectionSubmit:
         (base / "images" / "val").mkdir(parents=True)
         resp = client.post("/api/detection/run", json=_detection(tmp_path, base))
         assert resp.status_code == 422
-        assert "treino" in resp.json()["detail"]
+        assert resp.json()["detail"] == message("pt", "submit.detection_empty_train")
+
+    def test_missing_train_split_is_refused(
+        self, client_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        # val and test exist, train does not: the run would start with nothing to fit.
+        client, _ = client_and_routes
+        base = build_detection_dataset(tmp_path / "ds")
+        shutil.rmtree(base / "images" / "train")
+        shutil.rmtree(base / "labels" / "train")
+        resp = client.post("/api/detection/run", json=_detection(tmp_path, base))
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == message("pt", "submit.detection_empty_train")
 
     def test_language_header_selects_english(
         self, client_and_routes: tuple, tmp_path: Path
@@ -152,6 +168,52 @@ class TestDetectionSubmit:
         for img in [p for p in train.iterdir() if p.is_file()]:
             img.rename(nested / f"{img.stem}.tif")
         resp = client.post("/api/detection/run", json=_detection(tmp_path, base))
+        assert resp.status_code == 200, resp.text
+
+
+def _without_ultralytics(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every ``import ultralytics...`` raises ImportError, as in a plain install."""
+    for name in [m for m in sys.modules if m.split(".")[0] == "ultralytics"]:
+        monkeypatch.setitem(sys.modules, name, None)
+    monkeypatch.setitem(sys.modules, "ultralytics", None)
+
+
+@pytest.mark.usefixtures("busy_queue")
+class TestDetectionSubmitWithoutUltralytics:
+    """A plain install has no `detection` extra (ADR-195)."""
+
+    def test_ultralytics_backend_is_refused_with_the_install_line(
+        self,
+        client_and_routes: tuple,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _without_ultralytics(monkeypatch)
+        client, _ = client_and_routes
+        base = build_detection_dataset(tmp_path / "ds")
+        resp = client.post("/api/detection/run", json=_detection(tmp_path, base))
+        assert resp.status_code == 422
+        assert "[detection]" in resp.json()["detail"]
+
+    def test_torchvision_backend_is_accepted(
+        self,
+        client_and_routes: tuple,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # The train-image probe used ultralytics' format list; without it, the
+        # torchvision reader's extensions decide.
+        _without_ultralytics(monkeypatch)
+        client, _ = client_and_routes
+        base = build_detection_dataset(tmp_path / "ds")
+        payload = _detection(tmp_path, base)
+        payload["model"] = {
+            "backend": "torchvision",
+            "name": "fasterrcnn_mobilenet_v3_large_fpn",
+            "num_classes": 1,
+            "pretrained": False,
+        }
+        resp = client.post("/api/detection/run", json=payload)
         assert resp.status_code == 200, resp.text
 
 

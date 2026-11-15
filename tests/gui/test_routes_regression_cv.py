@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 import json
-import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.strategies as strategies
+from tests.helpers import wait_experiment_done
+
 from .conftest import occupy_queue, release_queue
+
+# Any: the tests swap its orchestrators and executors for fakes.
+strategies_mod: Any = strategies
 
 
 @pytest.fixture
@@ -35,7 +42,11 @@ def _payload(tmp_path: Path) -> dict:
 
 class TestRegressionCv:
     def test_cv_dispatches_and_reports_fold_table(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.blocks.regression_cv import (
             CrossValidationReport,
@@ -43,7 +54,7 @@ class TestRegressionCv:
         )
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
 
@@ -64,8 +75,7 @@ class TestRegressionCv:
                 aggregate={"r2": {"mean": 0.85, "std": 0.05}},
             )
 
-        orig = routes_mod.run_regression_cross_validation
-        routes_mod.run_regression_cross_validation = fake_cv
+        monkeypatch.setattr(strategies_mod, "run_regression_cross_validation", fake_cv)
         try:
             client = live_client
             resp = client.post(
@@ -80,12 +90,7 @@ class TestRegressionCv:
             assert resp.status_code == 200, resp.text
             run_id = resp.json()["run_id"]
 
-            status = {"status": "running"}
-            for _ in range(50):
-                status = client.get("/api/experiment/status").json()
-                if status["status"] in ("completed", "failed"):
-                    break
-                time.sleep(0.05)
+            status = wait_experiment_done(client)
             assert status["status"] == "completed", status
 
             assert captured == {"n_folds": 2, "shuffle": True, "seed": 7}
@@ -106,14 +111,13 @@ class TestRegressionCv:
             assert [c["fold"] for c in group["children"]] == [0, 1]
             assert group["aggregates"]["r2"]["mean"] == 0.85
         finally:
-            routes_mod.run_regression_cross_validation = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post(
@@ -123,13 +127,13 @@ class TestRegressionCv:
             assert resp.status_code == 200
             assert resp.json()["status"] == "queued"
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_rejects_invalid_config(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         cfg = _payload(tmp_path)
         cfg["model"] = {"name": "resnet18", "num_targets": 2, "pretrained": False}
         client = TestClient(app, raise_server_exceptions=True)
@@ -138,7 +142,7 @@ class TestRegressionCv:
 
     def test_rejects_single_fold(self, app_and_routes: tuple, tmp_path: Path) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(
             "/api/regression/cv", json={"config": _payload(tmp_path), "n_folds": 1}

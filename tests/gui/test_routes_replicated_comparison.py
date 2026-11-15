@@ -8,14 +8,20 @@ for N x M trainings, and the stored report carries the paired matrix.
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.strategies as strategies
+from tests.helpers import wait_experiment_done
+
 from .conftest import occupy_queue, release_queue
+
+# Any: the tests swap its orchestrators and executors for fakes.
+strategies_mod: Any = strategies
 
 
 @pytest.fixture
@@ -46,25 +52,18 @@ def _variants() -> dict[str, dict[str, Any]]:
 
 
 def _wait(client: TestClient) -> dict:
-    status: dict = {"status": "running"}
-    for _ in range(80):
-        status = client.get("/api/experiment/status").json()
-        if status["status"] in ("completed", "failed"):
-            return status
-        time.sleep(0.05)
-    return status
+    return wait_experiment_done(client)
 
 
 class TestRoutesExist:
     def test_every_task_exposes_replicated_comparison(
         self, app_and_routes: tuple
     ) -> None:
-        # Probe the APIRouter directly: depending on the Starlette version,
-        # app.routes may hide included-router children entirely.
-        _, routes_mod = app_and_routes
-        # getattr: newer FastAPI keeps an included router (profiles, ADR-132) as an
-        # entry without a path of its own.
-        paths = {getattr(route, "path", None) for route in routes_mod.router.routes}
+        # The OpenAPI document of the served app lists every route however the
+        # routers are split (ADR-132); router.routes hides an included router's
+        # children on newer FastAPI versions, and CI installs the newest one.
+        app, _ = app_and_routes
+        paths = set(app.openapi()["paths"])
         for task in (
             "classification",
             "regression",
@@ -78,10 +77,14 @@ class TestRoutesExist:
 
 class TestDispatch:
     def test_report_carries_the_paired_matrix(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, Any] = {}
 
@@ -115,8 +118,9 @@ class TestDispatch:
                 "power_note": "",
             }
 
-        orig = routes_mod.run_replicated_comparison
-        routes_mod.run_replicated_comparison = fake_comparison
+        monkeypatch.setattr(
+            strategies_mod, "run_replicated_comparison", fake_comparison
+        )
         try:
             client = live_client
             resp = client.post(
@@ -145,14 +149,17 @@ class TestDispatch:
             assert (report_dir / "comparison_summary.json").exists()
             assert (report_dir / "comparison_table.tex").exists()
         finally:
-            routes_mod.run_replicated_comparison = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_seeds_derived_from_the_config_when_omitted(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         captured: dict[str, Any] = {}
 
         def fake_comparison(  # type: ignore[no-untyped-def]
@@ -161,8 +168,9 @@ class TestDispatch:
             captured["seeds"] = seeds
             return {"comparisons": [{"x": 1}], "skipped_variants": []}
 
-        orig = routes_mod.run_replicated_comparison
-        routes_mod.run_replicated_comparison = fake_comparison
+        monkeypatch.setattr(
+            strategies_mod, "run_replicated_comparison", fake_comparison
+        )
         try:
             client = live_client
             resp = client.post(
@@ -178,8 +186,7 @@ class TestDispatch:
             # RegressionConfig defaults training.seed to 42 -> 42, 43, 44
             assert captured["seeds"] == [42, 43, 44]
         finally:
-            routes_mod.run_replicated_comparison = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
 
 class TestGuards:
@@ -187,7 +194,7 @@ class TestGuards:
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(
             "/api/regression/replicated-comparison",
@@ -200,13 +207,13 @@ class TestGuards:
         assert resp.status_code == 422
         assert "training.nope" in resp.text
         # nothing was started
-        assert routes_mod._JOB_STATES == {}
+        assert execution_mod._JOB_STATES == {}
 
     def test_single_variant_rejected_by_schema(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(
             "/api/regression/replicated-comparison",
@@ -218,7 +225,7 @@ class TestGuards:
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(
             "/api/regression/replicated-comparison",
@@ -234,7 +241,7 @@ class TestGuards:
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post(
@@ -244,21 +251,26 @@ class TestGuards:
             assert resp.status_code == 200
             assert resp.json()["status"] == "queued"
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_all_variants_failing_marks_the_run_failed(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         def fake_comparison(  # type: ignore[no-untyped-def]
             runner, base, variants, seeds, metric, *, alpha=0.05, progress_callback=None
         ):
             return {"comparisons": [], "skipped_variants": list(variants)}
 
-        orig = routes_mod.run_replicated_comparison
-        routes_mod.run_replicated_comparison = fake_comparison
+        monkeypatch.setattr(
+            strategies_mod, "run_replicated_comparison", fake_comparison
+        )
         try:
             client = live_client
             resp = client.post(
@@ -275,5 +287,4 @@ class TestGuards:
             # The error names what was skipped instead of a bare traceback.
             assert "baseline" in status["error"]
         finally:
-            routes_mod.run_replicated_comparison = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()

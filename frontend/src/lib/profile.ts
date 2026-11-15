@@ -8,15 +8,11 @@
  * storage ausente ou bloqueado (a escolha vale só para a sessão).
  */
 
-import { normalizeUserName } from "./user-name";
-
 export const PROFILE_HEADER = "X-VF-Profile";
 export const DEFAULT_PROFILE = "default";
 
 const SLUG_KEY = "vf.profile";
 const NAME_KEY = "vf.profile.name";
-// Per tab: answering "Quem é você?" once lasts until the tab closes (ADR-126).
-const SESSION_KEY = "vf.profile.session";
 
 /** Mesmos limites do servidor (gui/api/profiles.py). */
 export const MAX_SLUG_LENGTH = 40;
@@ -38,6 +34,11 @@ export interface ProfileInfo {
   name: string;
   is_default: boolean;
   pronoun?: Pronoun | null;
+  settings?: {
+    mlflow: { enabled: boolean };
+    wandb?: { enabled: boolean; project: string; entity: string };
+    comet?: { enabled: boolean; project: string; workspace: string };
+  };
 }
 
 /** O que o navegador lembra do perfil escolhido. */
@@ -168,11 +169,6 @@ export function clearProfile(): void {
   }
 }
 
-/** Se o servidor tem algum perfil além do padrão. */
-export function hasNamedProfiles(profiles: readonly ProfileInfo[]): boolean {
-  return profiles.some((p) => !p.is_default);
-}
-
 /** O perfil guardado, se ainda existe no servidor (com o nome atual dele).
  *
  * Uma pasta apagada à mão deixa um slug órfão no navegador; ele não conta como
@@ -186,35 +182,33 @@ export function pickStoredProfile(
   return profiles.find((p) => p.slug === stored.slug) ?? null;
 }
 
-/** Se a introdução precisa perguntar "quem é você?".
+/** Se a entrada mostra a lista de perfis: só quando há mais de um.
  *
- * Só num servidor com perfis além do padrão, uma vez por sessão do navegador
- * (ADR-126): uma aba nova pergunta de novo, com o último perfil já marcado;
- * recarregar a mesma aba não. Uma instalação de uma pessoa nunca vê a pergunta.
+ * Com um perfil só não há o que escolher; com dois ou mais a lista aparece a
+ * cada carga da página, com o último usado já marcado.
  */
-export function needsProfileChoice(
-  profiles: readonly ProfileInfo[],
-  chosen: ProfileInfo | null,
-  answeredThisSession: boolean,
-): boolean {
-  return hasNamedProfiles(profiles) && (chosen === null || !answeredThisSession);
+export function offersProfileChoice(profiles: readonly ProfileInfo[]): boolean {
+  return profiles.length > 1;
 }
 
-/** Se esta aba já respondeu "Quem é você?". Storage bloqueado conta como não. */
-export function chosenThisSession(): boolean {
-  try {
-    return sessionStorage.getItem(SESSION_KEY) !== null;
-  } catch {
-    return false;
-  }
-}
+/** O passo da entrada depois da saudação; ver `entryStep`. */
+export type EntryStep = "name" | "enter" | "choose";
 
-export function markChosenThisSession(): void {
-  try {
-    sessionStorage.setItem(SESSION_KEY, "1");
-  } catch {
-    /* storage indisponível — a pergunta volta na próxima carga */
-  }
+/** O que a entrada faz depois da saudação.
+ *
+ * - `"name"`: primeira vez, nenhum perfil tem nome ainda: pede nome e pronome.
+ * - `"enter"`: um perfil só, com nome: entra direto, a cada carga.
+ * - `"choose"`: mais de um perfil: mostra a lista, a cada carga.
+ *
+ * `savedName` é o nome que este navegador guardou: um padrão ainda sem nome no
+ * servidor o recebe (`legacyDefaultName`), então quem o tem já não é primeira
+ * vez. Uma lista vazia (falha de leitura) decide só por ele.
+ */
+export function entryStep(profiles: readonly ProfileInfo[], savedName: string): EntryStep {
+  if (offersProfileChoice(profiles)) return "choose";
+  const only = profiles[0];
+  if (only && profileHasName(only)) return "enter";
+  return savedName ? "enter" : "name";
 }
 
 /** Se o perfil padrão já recebeu um nome na introdução (ADR-126). */
@@ -222,10 +216,18 @@ export function defaultHasName(profile: ProfileInfo): boolean {
   return profile.is_default && profile.name !== "" && profile.name !== DEFAULT_PROFILE;
 }
 
-/** Como um perfil aparece: o padrão pelo nome dado, ou pelo rótulo da interface. */
-export function profileLabel(profile: ProfileInfo, defaultLabel: string): string {
-  if (!profile.is_default) return profile.name;
-  return defaultHasName(profile) ? profile.name : defaultLabel;
+/** Se um perfil tem nome: todo perfil criado tem; o padrão, depois da introdução. */
+export function profileHasName(profile: ProfileInfo): boolean {
+  return !profile.is_default || defaultHasName(profile);
+}
+
+/** Como um perfil aparece: pelo nome, ou pelo rótulo de "sem nome" da interface.
+ *
+ * O padrão é um detalhe de armazenamento (ADR-114): na tela ele é um perfil
+ * como os outros, chamado pelo nome que recebeu.
+ */
+export function profileLabel(profile: ProfileInfo, unnamedLabel: string): string {
+  return profileHasName(profile) ? profile.name : unnamedLabel;
 }
 
 /** O nome que este navegador guardou para um padrão que o servidor ainda não conhece.
@@ -246,35 +248,19 @@ export function legacyDefaultName(
   return savedName;
 }
 
-/** Se o chip do perfil já diz quem está na tela, dispensando o do nome.
- *
- * Escolher um perfil nomeado grava o nome dele como o nome de quem usa (uma
- * pergunta só); dois chips com o mesmo nome lado a lado são só ruído.
- */
-export function profileIsTheName(
-  profile: ProfileInfo | null,
-  userName: string,
-): boolean {
-  return (
-    profile !== null &&
-    (!profile.is_default || defaultHasName(profile)) &&
-    userName !== "" &&
-    userName === normalizeUserName(profile.name)
-  );
-}
-
 /** De quem é uma execução da fila, no texto da etiqueta.
  *
- * O padrão se chama como a interface o chama; um perfil, pelo nome de exibição
- * (e pelo slug se um servidor não o mandou).
+ * Pelo nome de exibição, o do padrão inclusive; o padrão que ainda não tem nome
+ * leva o rótulo de "sem nome", e um perfil cujo nome o servidor não mandou, o slug.
  */
 export function jobProfileLabel(
   job: { profile?: string; profile_name?: string },
-  defaultLabel: string,
+  unnamedLabel: string,
 ): string {
   const slug = job.profile ?? DEFAULT_PROFILE;
-  if (slug === DEFAULT_PROFILE) return defaultLabel;
-  return job.profile_name || slug;
+  if (slug !== DEFAULT_PROFILE) return job.profile_name || slug;
+  const name = job.profile_name ?? "";
+  return name && name !== DEFAULT_PROFILE ? name : unnamedLabel;
 }
 
 /** Se a fila deve dizer de quem é cada execução.

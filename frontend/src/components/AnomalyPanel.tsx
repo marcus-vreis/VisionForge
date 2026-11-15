@@ -15,12 +15,15 @@ import {
   makeDefaultAnomalyForm,
   type AnomalyForm,
 } from "../lib/anomaly-models";
-import { checkImportedConfig, exportConfigToYaml } from "../lib/yaml-config";
+import { exportConfigToYaml, importIntoForm } from "../lib/yaml-config";
+import { usePendingImport, type PendingImportProps } from "../hooks/usePendingImport";
 import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
 import { AdvancedFields } from "./AdvancedFields";
 import { StrategyCard, type PanelStrategy } from "./ExperimentHeader";
 import { ReplicatesCard } from "./ReplicatesCard";
+import { ReplicatedComparisonCard } from "./ReplicatedComparisonCard";
+import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-form";
 import { ReviewStep } from "./ReviewStep";
 import { StepShell } from "./StepShell";
 import { AnomalyDatasetStats } from "./TaskDatasetStats";
@@ -32,13 +35,22 @@ import { countChanged, errorsUnder } from "../lib/steps";
 import type { ReplicatesPayload } from "../lib/replicates-form";
 import type { ComparePayload } from "../lib/compare-form";
 
-interface AnomalyPanelProps {
+// Anomaly has no sweep: these are the comparison's own suggested axes.
+const ANOMALY_PATH_HINTS = [
+  "training.learning_rate",
+  "model.latent_dim",
+  "training.threshold_percentile",
+];
+
+interface AnomalyPanelProps extends PendingImportProps {
   formData: AnomalyForm;
   setFormData: (updater: (prev: AnomalyForm) => AnomalyForm) => void;
   accent: string;
   validationErrors: ValidationError[];
   busy?: boolean;
   onReplicates?: (payload: ReplicatesPayload) => void;
+  /** Launches the paired comparison (ADR-193); without it, no card. */
+  onReplicatedComparison?: (payload: ReplicatedComparisonPayload) => void;
   onCompare?: (payload: ComparePayload) => void;
   /** Lets App label and route the main Treinar button by the active strategy. */
   onStrategyChange?: (strategy: PanelStrategy) => void;
@@ -76,8 +88,11 @@ export function AnomalyPanel({
   busy,
   onReplicates,
   onCompare,
+  onReplicatedComparison,
   onStrategyChange,
   runSignal,
+  pendingImport,
+  onImportApplied,
 }: AnomalyPanelProps) {
   const t = useT();
   const compareMetrics = [
@@ -87,6 +102,28 @@ export function AnomalyPanel({
   const [picking, setPicking] = useState(false);
   const [pickNote, setPickNote] = useState<string | null>(null);
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
+  const chooseStrategy = (s: PanelStrategy) => {
+    setStrategy(s);
+    onStrategyChange?.(s);
+  };
+  // The YAML button's import; a run sent from History goes through it too (#200).
+  const importConfig = async (data: Record<string, unknown>): Promise<string | null> => {
+    // Schema unavailable → import tolerantly; the submit's 422 covers it.
+    const schema = await fetchTaskSchema("anomaly").catch(() => null);
+    const imported = importIntoForm(t, data, schema, anomalyFormFromPayload);
+    if ("problem" in imported) return imported.problem;
+    setFormData(() => imported.form);
+    return null;
+  };
+  const { notice, replicatesPreset } = usePendingImport({
+    taskKey: "anomaly",
+    pendingImport,
+    onImportApplied,
+    ready: true,
+    importConfig,
+    refusesOnProblem: true,
+    onStrategy: chooseStrategy,
+  });
 
   const setModel = (patch: Partial<AnomalyForm["model"]>) =>
     setFormData((p) => ({ ...p, model: { ...p.model, ...patch } }));
@@ -124,6 +161,7 @@ export function AnomalyPanel({
     { value: "simple", label: t.paramPanel.blocks.simple },
     { value: "compare", label: t.anomalyPanel.compareLabel },
     { value: "replicates", label: t.taskPanel.replicates },
+    { value: "replicatedComparison", label: t.taskPanel.replicatedComparison },
   ];
   const strategyLabel = strategies.find((s) => s.value === strategy)?.label ?? "";
 
@@ -242,10 +280,7 @@ export function AnomalyPanel({
     <div style={stack}>
       <StrategyCard
         strategy={strategy}
-        onStrategyChange={(s) => {
-          setStrategy(s);
-          onStrategyChange?.(s);
-        }}
+        onStrategyChange={chooseStrategy}
         strategies={strategies}
       />
       {strategy === "compare" && onCompare && (
@@ -265,6 +300,17 @@ export function AnomalyPanel({
           accent={accent}
           disabled={busy}
           onReplicates={onReplicates}
+          runSignal={runSignal}
+          preset={replicatesPreset}
+        />
+      )}
+      {strategy === "replicatedComparison" && onReplicatedComparison && (
+        <ReplicatedComparisonCard
+          metrics={compareMetrics}
+          pathHints={ANOMALY_PATH_HINTS}
+          accent={accent}
+          disabled={busy}
+          onReplicatedComparison={onReplicatedComparison}
           runSignal={runSignal}
         />
       )}
@@ -443,19 +489,8 @@ export function AnomalyPanel({
       onNameChange={(name) => setFormData((p) => ({ ...p, name }))}
       suggestion={suggestion}
       onExportYaml={() => exportConfigToYaml(buildAnomalyPayload(formData), formData.name)}
-      onImportConfig={async (data) => {
-        let payload = data;
-        try {
-          const schema = await fetchTaskSchema("anomaly");
-          const checked = checkImportedConfig(t, data, schema, schema.$defs ?? {});
-          if ("problem" in checked) return checked.problem;
-          payload = checked.data;
-        } catch {
-          // schema unavailable → import tolerantly; o 422 do submit cobre.
-        }
-        setFormData(() => anomalyFormFromPayload(payload));
-        return null;
-      }}
+      onImportConfig={importConfig}
+      importNotice={notice}
       sections={[
         {
           step: "data",

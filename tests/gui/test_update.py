@@ -19,6 +19,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
 from visionforge.gui.api import updates
 
 
@@ -302,9 +303,7 @@ class TestRoutes:
     def test_apply_refuses_while_a_job_runs(
         self, routes: dict[str, Any], monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        import visionforge.gui.api.routes as routes_mod
-
-        monkeypatch.setattr(routes_mod._RUN_QUEUE, "is_busy", lambda: True)
+        monkeypatch.setattr(execution_mod._RUN_QUEUE, "is_busy", lambda: True)
 
         resp = _client(routes["app"]).post(
             "/api/update/apply", headers={"X-VF-Lang": "en"}

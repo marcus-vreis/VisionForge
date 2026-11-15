@@ -29,7 +29,8 @@ import {
   type DetectionForm,
   type DetectionOptimizer,
 } from "../lib/detection-models";
-import { checkImportedConfig, exportConfigToYaml } from "../lib/yaml-config";
+import { exportConfigToYaml, importIntoForm } from "../lib/yaml-config";
+import { usePendingImport, type PendingImportProps } from "../hooks/usePendingImport";
 import type { ValidationError } from "../hooks/useExperiment";
 import {
   NumberField,
@@ -44,7 +45,10 @@ import { DetectionDatasetStats } from "./DetectionDatasetStats";
 import { PreprocessingPanel } from "./PreprocessingPanel";
 import { StrategyCard, type PanelStrategy } from "./ExperimentHeader";
 import { Rich } from "./Rich";
+import { missingUltralyticsCommand, useUltralyticsStatus } from "../lib/ultralytics-status";
 import { ReplicatesCard } from "./ReplicatesCard";
+import { ReplicatedComparisonCard } from "./ReplicatedComparisonCard";
+import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-form";
 import { SweepCard, type SweepPayload } from "./SweepCard";
 import type { ReplicatesPayload } from "../lib/replicates-form";
 
@@ -59,7 +63,7 @@ const SWEEP_PATH_HINTS = [
   "model.name",
 ];
 
-interface DetectionPanelProps {
+interface DetectionPanelProps extends PendingImportProps {
   formData: DetectionForm;
   setFormData: (updater: (prev: DetectionForm) => DetectionForm) => void;
   accent: string;
@@ -67,6 +71,8 @@ interface DetectionPanelProps {
   busy?: boolean;
   onSweep?: (payload: SweepPayload) => void;
   onReplicates?: (payload: ReplicatesPayload) => void;
+  /** Launches the paired comparison (ADR-193); without it, no card. */
+  onReplicatedComparison?: (payload: ReplicatedComparisonPayload) => void;
   /** Lets App label and route the main Treinar button by the active strategy. */
   onStrategyChange?: (strategy: PanelStrategy) => void;
   /** Incremented by Treinar so the selected strategy's card runs. */
@@ -98,12 +104,37 @@ export function DetectionPanel({
   onSweep,
   onReplicates,
   onStrategyChange,
+  onReplicatedComparison,
   runSignal,
+  pendingImport,
+  onImportApplied,
 }: DetectionPanelProps) {
   const t = useT();
   const [picking, setPicking] = useState(false);
   const [pickNote, setPickNote] = useState<string | null>(null);
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
+  const chooseStrategy = (s: PanelStrategy) => {
+    setStrategy(s);
+    onStrategyChange?.(s);
+  };
+  // The YAML button's import; a run sent from History goes through it too (#200).
+  const importConfig = async (data: Record<string, unknown>): Promise<string | null> => {
+    // Schema unavailable → import tolerantly; the submit's 422 covers it.
+    const schema = await fetchTaskSchema("detection").catch(() => null);
+    const imported = importIntoForm(t, data, schema, detectionFormFromPayload);
+    if ("problem" in imported) return imported.problem;
+    setFormData(() => imported.form);
+    return null;
+  };
+  const { notice, replicatesPreset } = usePendingImport({
+    taskKey: "detection",
+    pendingImport,
+    onImportApplied,
+    ready: true,
+    importConfig,
+    refusesOnProblem: true,
+    onStrategy: chooseStrategy,
+  });
 
   const setModel = (patch: Partial<DetectionForm["model"]>) =>
     setFormData((p) => ({ ...p, model: { ...p.model, ...patch } }));
@@ -121,6 +152,9 @@ export function DetectionPanel({
     }));
 
   const isUltralytics = formData.model.backend === "ultralytics";
+  // Ultralytics is the optional `detection` extra (ADR-195).
+  const ultralyticsStatus = useUltralyticsStatus();
+  const installCommand = missingUltralyticsCommand(formData.model.backend, ultralyticsStatus);
 
   const onBackendChange = (raw: string) => {
     const backend = raw as DetectionBackend;
@@ -188,6 +222,7 @@ export function DetectionPanel({
     { value: "simple", label: t.paramPanel.blocks.simple },
     { value: "sweep", label: t.taskPanel.sweep },
     { value: "replicates", label: t.taskPanel.replicates },
+    { value: "replicatedComparison", label: t.taskPanel.replicatedComparison },
   ];
   const strategyLabel = strategies.find((s) => s.value === strategy)!.label;
   const suggestion = suggestExperimentName({
@@ -350,11 +385,8 @@ export function DetectionPanel({
         <>
           <StrategyCard
             strategy={strategy}
-            onStrategyChange={(s) => {
-              setStrategy(s);
-              onStrategyChange?.(s);
-            }}
-
+            onStrategyChange={chooseStrategy}
+            strategies={strategies}
           />
           {strategy === "sweep" && onSweep && (
             <SweepCard
@@ -373,6 +405,17 @@ export function DetectionPanel({
               accent={accent}
               disabled={busy}
               onReplicates={onReplicates}
+              runSignal={runSignal}
+              preset={replicatesPreset}
+            />
+          )}
+          {strategy === "replicatedComparison" && onReplicatedComparison && (
+            <ReplicatedComparisonCard
+              metrics={COMPARE_METRICS}
+              pathHints={SWEEP_PATH_HINTS}
+              accent={accent}
+              disabled={busy}
+              onReplicatedComparison={onReplicatedComparison}
               runSignal={runSignal}
             />
           )}
@@ -396,6 +439,7 @@ export function DetectionPanel({
                 options={DETECTION_BACKENDS.map((b) => ({
                   value: b,
                   label: b === "ultralytics" ? "Ultralytics" : "Torchvision",
+                  badge: b === "torchvision" ? t.detectionPanel.model.noAgplBadge : undefined,
                 }))}
                 hint={t.detectionPanel.model.backendHint}
               />
@@ -422,6 +466,21 @@ export function DetectionPanel({
                 help={paramHelp(t, "freeze")}
               />)}
             </div>
+            {installCommand && (
+              <p
+                role="status"
+                data-testid="ultralytics-missing"
+                style={{
+                  marginTop: 14,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  lineHeight: 1.6,
+                  color: "var(--vf-text-muted)",
+                }}
+              >
+                <Rich text={t.detectionPanel.model.ultralyticsMissing(installCommand)} />
+              </p>
+            )}
           </div>
 
         </>
@@ -958,19 +1017,8 @@ export function DetectionPanel({
                 formData.name,
               )
             }
-            onImportConfig={async (data) => {
-              let payload = data;
-              try {
-                const schema = await fetchTaskSchema("detection");
-                const checked = checkImportedConfig(t, data, schema, schema.$defs ?? {});
-                if("problem" in checked) return checked.problem;
-                payload = checked.data;
-              } catch {
-                // schema unavailable → import tolerantly; o 422 do submit cobre.
-              }
-              setFormData(() => detectionFormFromPayload(payload));
-              return null;
-            }}
+            onImportConfig={importConfig}
+            importNotice={notice}
           />
         </>
       )

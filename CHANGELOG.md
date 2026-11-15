@@ -13,6 +13,254 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-11-15
+
+### Added
+
+- **Começando do zero**, a primeira entrada do menu **guia**: uma página em tela cheia para quem nunca treinou um modelo. Oito capítulos explicam o que é treinar, os dados e suas divisões, épocas e taxa de aprendizado, como ler as curvas e o resultado, com figuras (a rede do painel de treino, curvas de perda em que se troca a taxa de aprendizado, uma matriz de confusão), a gravação de um treino real e os termos novos de cada capítulo em uma linha. Termina com as bibliotecas que rodam por trás e onde estudar a área. O convite da primeira visita também leva a ela (ADR-207).
+- Três guias de entrada em `docs/guias/`, um por leitor: **Começando do zero** (o mesmo conteúdo da página da interface), **Já treino modelos** (onde fica no VisionForge o que você já faz, o que o projeto faz de diferente, as cinco tarefas e a linha de comando) e **O que o VisionForge faz** (cada funcionalidade com a tela dela). O índice de `docs/gui/README.md` começa por eles. `scripts/capture_docs_images.py` passa a gerar 15 imagens e a animação de um treino (`vf-training-film.gif`) (ADR-207).
+- O detalhe de uma execução ganha o bloco **E agora?**, logo abaixo das métricas: no máximo duas sugestões, uma frase cada, com o botão que o painel já tinha para aquilo. As regras leem só o que a execução registrou: treino que não terminou (Retomar, quando dá), melhor época igual à última (treinar por mais épocas), nenhum resultado no split de teste (Testar) e treino único (repetir com outras seeds). Sem regra aplicável, o bloco não aparece (ADR-206).
+- Sob o seletor de estratégia, uma frase **Quando usar** diz em que situação cada estratégia serve (treino simples, K-fold, grid, random, sweep, réplicas, comparação de arquiteturas e comparação replicada), na classificação e nas outras tarefas. O Histórico vazio diz o que vai aparecer ali e oferece o guia do primeiro treino (ADR-206).
+- A tela de treino junta as abas "Como funciona" e "Código" em **Código ao vivo**: o treino em passos (dados, modelo, loss, época de treino, validação, teste e relatório), cada um com uma frase simples, e ao lado o código real do passo. Enquanto o treino roda, o passo em execução fica marcado e o código acompanha; clicar em outro passo pausa, e **voltar ao que está rodando** retoma. A posição vem dos eventos do treino, por passo e nunca por linha. As notas abrem com um clique na margem (ADR-204).
+- **Ver resultados**, ao fim de um treino, abre a execução no Histórico, que passa a ser a página de resultados: métricas no topo com a principal em destaque, curvas de treino e validação por época, gráficos gravados, ações agrupadas (Reusar, Baixar, Publicar, Usar o modelo) com ícone e a marca de cada serviço, e os blocos de referência recolhidos. Um job que o Histórico não consegue nomear continua abrindo a tela de resultados (ADR-201).
+- Os gráficos por época do treino ao vivo, da comparação entre execuções e do detalhe de uma execução usam o mesmo componente: grade, marcas nos eixos e um balão com o valor exato de cada linha na época sob o mouse, também por toque e pelas setas do teclado. As linhas ligam os pontos medidos, sem suavização. Valores abaixo de 5e-4 saem em notação exponencial (ADR-201).
+- No painel do Colab, **Escolher pasta no Drive** navega pelas pastas do "Meu Drive" deste computador e mostra o caminho já traduzido para o Colab. O painel ficou em três seções com menos texto, o seletor de GPU usa o controle do projeto, e sem o Drive para desktop aparecem três passos e o campo para digitar a pasta. Rotas novas `GET /api/colab/drive/folders` e `POST /api/colab/drive/open`, só para este computador (ADR-203).
+- As integrações de um perfil (MLflow, Weights & Biases, Comet) saem da tela "Quem é você?" e viram interruptores no menu do perfil, no cabeçalho, junto de **Trocar nome** e **Trocar de perfil** (ADR-202).
+- As ferramentas de dataset abrem num **laboratório** em tela cheia: a janela fica só com a escolha do dataset e um resumo, e o laboratório mostra uma ferramenta por vez (Visão geral, Refazer divisão, Incorporar imagens, Juntar datasets, COCO), com uma frase do que cada uma faz e o resto em "Saiba mais".
+- Mais três guias com prints em `docs/gui/`: **Datasets na interface** (explorar, auditar, refazer divisão, incorporar, juntar, COCO), **Imagem e aumento** (filtros, normalização, augmentation) e **Modelo e transfer learning**. O script de captura gera treze imagens.
+- Guias da interface com prints em `docs/gui/`: um índice por tarefa do usuário, **Primeiro treino**, **Estratégias** e **Depois do treino**. O script `scripts/capture_docs_images.py` passa a gerar dez imagens, seis delas novas (estratégias, menu de guias, revisão, painel de treino, resultados e detalhe da execução).
+- A aba **Código** mostra o código real, lido do pacote instalado, também para regressão, segmentação, anomalia (autoencoder e PatchCore) e detecção torchvision (Faster R-CNN, SSD, RetinaNet), com o caminho de cada execução marcado. A detecção com Ultralytics explica por que não há código do VisionForge para mostrar (ADR-181).
+- Perfis podem ativar o MLflow local para acompanhar treinos de classificação. O Histórico permite repetir uma exportação que falhou (ADR-170).
+- O Histórico envia o checkpoint de uma execução, um model card e as métricas para um repositório privado do Hugging Face Hub, com prévia local antes do envio e token salvo por perfil (ADR-171).
+- Perfis podem enviar treinos de classificação ao Weights & Biases, num projeto privado da conta: config pública e métricas por época, sem dataset, caminhos, código ou dados da máquina. A chave de API fica salva por perfil e o Histórico repete um envio que falhou (ADR-172).
+- A tela de treino ganha a aba **Código**: as funções reais que treinam uma classificação (dados, modelo, loss, treino, validação e teste), lidas do pacote instalado, com notas em português e inglês e o caminho que as configurações do treino seguem marcado (ADR-173).
+- O Histórico cria no Zenodo um rascunho com o bundle de uma execução, para publicar com DOI quando a pessoa quiser: prévia dos arquivos antes do envio, `run.json` sem caminhos da máquina, token salvo por perfil e Sandbox de teste separado. Nada é publicado pela GUI (ADR-174).
+- O Histórico envia o relatório de uma execução a um repositório privado do GitHub, numa pasta própria e num commit só: README com métricas, tabela por época e gráficos, mais o `run.json` sem caminhos da máquina. Pesos não vão; o repositório precisa existir e ser privado (ADR-175).
+- O Histórico versiona uma execução com DVC num repositório git deste computador: a pasta da execução vai para o git com README, `run.json`, gráficos e os arquivos que o DVC compara (`params.yaml`, `metrics.json`, `history.csv`, `dvc.yaml`), e os pesos vão para o DVC, com `dvc push` quando há remoto padrão. "Preparar pasta" roda `git init` e `dvc init`. Só funciona na máquina do servidor (ADR-176).
+- As figuras de uma execução podem sair também em PDF e SVG, vetoriais, com `output.figure_formats` (padrão `[png]`) e `output.figure_dpi` (padrão 300, antes 150). Réplicas ganham `replicates_strip` ao lado da tabela `.tex`. A GUI ainda não oferece o seletor (ADR-183, #198).
+- Uma página curta por exportador em `docs/gui/` (MLflow, Weights & Biases, Zenodo, GitHub e DVC): o que é enviado e o que não é, token e escopo mínimo, o que acontece se falhar e repetir, e o que não foi verificado com conta real (#213).
+
+- **Converter YOLO e COCO** (ADR-169, fase 4b da issue #117): na aba Explorar,
+  "Exportar para COCO" (com um dataset de detecção aberto) e "Importar COCO"
+  (sempre visível) escrevem sempre um dataset novo, numa pasta irmã
+  (`<nome>-coco`, `<nome>-yolo`). A origem não é alterada.
+  - **Exportar:** `images/<divisão>/` e um `annotations/instances_<divisão>.json`
+    por divisão, com caixas `[x, y, w, h]` em pixels, `categories` com id = id YOLO + 1
+    e `info` com versão, data e impressão digital da origem. Imagem que não abre
+    ou com linha de rótulo malformada fica de fora e é listada; imagem sem rótulo
+    é mantida sem anotações.
+  - **Importar:** detecta os `.json` de anotações, a divisão pelo nome
+    (`instances_val2017.json` vira `val`; nome sem divisão pede que você escolha ou
+    ignore) e a pasta das imagens. Só as caixas entram (segmentação é ignorada);
+    `iscrowd` é pulado, caixas são recortadas na imagem e as sem área saem; ids
+    de categoria viram 0..N-1 em ordem crescente e nomes repetidos ganham
+    `_<id>`. Tudo que ficou de fora aparece na prévia, por motivo.
+  - **Seguro:** pasta temporária e renomeação atômica (cancelar ou falhar não
+    deixa nada), 409 se a origem mudou depois da prévia, um trabalho por vez e
+    `visionforge_dataset.json` (`kind: "coco_export"` / `"coco_import"`).
+    Ida e volta YOLO, COCO, YOLO mantém nomes e caixas dentro de 1e-5.
+
+- **Refazer divisão** (ADR-168, fase 4a da issue #117): na aba Explorar, o botão
+  "Refazer divisão" cria um dataset novo, numa pasta irmã do aberto, com as
+  imagens de treino e validação redistribuídas. O original não é alterado.
+  - **Teste travado:** por padrão o teste fica exatamente como está (mesmos
+    caminhos e bytes), para os resultados continuarem comparáveis com runs
+    antigas. Desmarcar a opção junta todas as divisões.
+  - **Proporção e seed:** a atual das divisões redistribuídas ou a escolhida;
+    zero tira a divisão do resultado, e uma divisão que o dataset não tinha só
+    nasce se ganhar valor maior que zero. Estratificada por classe (detecção:
+    classe mais frequente da imagem, imagens sem caixas à parte) e semeada: o mesmo
+    resultado para qualquer ordem de arquivos.
+  - **Sem vazamento:** cópias exatas (SHA-256) ficam sempre na mesma divisão;
+    cópias de imagens do teste travado e grupos que tocam o teste são
+    descartados e listados com o motivo.
+  - **Grupos (opcional):** CSV `path,group` (formato da ADR-150, não precisa
+    cobrir todas as imagens); cada grupo vai inteiro para uma divisão.
+  - **Prévia:** tabela antes e depois por classe e divisão, proporção pedida e
+    obtida, quantas imagens mudam, avisos (divisão nova, vazia, que some,
+    classe ausente de uma divisão). Mudar proporção, seed ou opções recalcula na
+    hora, sem reler as imagens.
+  - **Escrita segura e registro:** como nas fases 2 e 3, pasta temporária e um
+    único rename; `visionforge_dataset.json` com `kind: "resplit"`. O apply é
+    recusado (409) se o dataset ou o arquivo de grupos mudou desde a prévia.
+- As rotas de incorporar, juntar e refazer divisão declaram `responses=` com
+  chaves literais (Sonar S8415). O painel de junção passou a usar o singular
+  correto em "Uma delas estava em divisões diferentes".
+
+- **Juntar com outro dataset** (ADR-167, fase 3 da issue #117): na aba Explorar,
+  o botão "Juntar com outro dataset" cria um dataset novo, numa pasta irmã do
+  aberto, a partir dele e de outro. Nenhum dos dois é alterado.
+  - **Mapeamento de classes:** uma tabela com todas as classes dos dois
+    datasets. Cada uma mantém o próprio nome (classes de mesmo nome se juntam
+    sozinhas), pode ser renomeada, juntada a outra pelo mesmo destino ou
+    descartada. Nomes que só diferem por maiúsculas ou espaços viram uma dica,
+    nunca uma junção automática. A ordem final é a das classes de A e depois as
+    novas de B, com ids renumerados a partir de 0.
+  - **Divisões:** cada imagem fica na divisão em que estava; o resultado tem uma
+    divisão se algum dos dois a tem, e a prévia diz quais vêm de um só.
+  - **Cópias exatas:** por SHA-256 entre os dois. Fica a cópia de A, a de B sai
+    da lista e é contada, com aviso quando as duas estavam em divisões
+    diferentes (vazamento evitado).
+  - **Detecção:** caixas de classes descartadas somem e os ids são remapeados;
+    imagem que perdeu todas as caixas sai, imagem sem caixas desde o início
+    fica. Rótulos sem mudança de id seguem byte a byte.
+  - **Escrita segura:** como na incorporação, tudo vai para uma pasta temporária
+    e termina num único rename; cancelar não deixa nada. O código comum
+    (hardlink ou cópia, rename atômico, registro) agora está em
+    `core/dataset_derived.py`.
+  - **Registro:** `visionforge_dataset.json` com `kind: "merged"`, as duas
+    origens e seus fingerprints, o mapeamento, as classes finais e as contagens.
+- **Incorporar imagens a um dataset** (ADR-166, fase 2 da issue #117): na aba
+  Explorar, o botão "Incorporar imagens" cria um dataset novo, numa pasta irmã,
+  com as imagens de uma pasta nova. O original não é alterado.
+  - **Prévia antes de aplicar:** quantas imagens entram por classe e divisão e
+    quantas ficam de fora, com o motivo (não abre, cópia exata por SHA-256 de uma
+    imagem do dataset ou de outra nova, sem `.txt`, `.txt` inválido, fora de uma
+    pasta de classe). Classes novas só entram se forem marcadas e vão para o fim
+    da lista, sem renumerar as que existem.
+  - **Divisão:** as imagens que já existem ficam onde estão. As novas são
+    distribuídas por classe na proporção do dataset ou na que você escolher,
+    com seed registrada; um dataset sem test continua sem test.
+  - **Escrita segura:** hardlink quando a pasta está no mesmo volume, cópia
+    quando não está; tudo vai para uma pasta temporária e termina num único
+    rename. Cancelar não deixa nada no destino.
+  - **Registro:** o dataset novo leva `visionforge_dataset.json` com a origem,
+    o fingerprint do dataset base, a pasta incorporada, a seed, a proporção e as
+    contagens.
+- **Dataset do Google Drive no Colab** (ADR-164): um treino no Colab usa a
+  pasta do dataset do formulário quando ela está no Google Drive para desktop,
+  sem upload.
+  - **Caminho:** a pasta local vira `/content/drive/MyDrive/...` na VM. A
+    pasta "Meu Drive"/"My Drive" é achada sozinha (numa letra de unidade, no
+    perfil do usuário ou pelo `DefaultMountPoint`), ou informada no formulário.
+  - **Permissão pela tela:** o Google pede permissão a cada runtime. A folha de
+    treino mostra "Permitir acesso ao Drive", que abre a página numa aba nova,
+    e o treino segue quando a janela volta ao foco. "Já permiti" é o reserva.
+    Sem a permissão, a tela pede de novo, até 3 vezes.
+  - **Cópia conferida:** a VM copia o dataset para o disco dela e confere a
+    contagem de arquivos com a deste computador antes de treinar.
+  - **Export opcional:** o run também pode ser gravado em
+    `MyDrive/VisionForge/runs/`, além do download.
+- **Explorador de datasets** (fase 1 da issue #117, ADR-165): uma aba
+  "Explorar" no botão **Datasets**, só leitura, para classificação (pastas por
+  classe) e detecção (YOLO).
+  - **Distribuição:** imagens por classe e split; na detecção, caixas por
+    classe e imagens sem caixas.
+  - **Galeria:** paginada, com filtro por split e classe, e miniaturas
+    reduzidas no servidor (com as caixas desenhadas na detecção).
+  - **Varredura de integridade:** em segundo plano, com progresso e botão de
+    cancelar. Acha imagens que não abrem, cópias exatas (SHA-256), a mesma
+    imagem em splits diferentes e mede tamanhos e proporções. O limite padrão
+    é de 20.000 imagens; acima dele a varredura lê uma amostra e o relatório
+    diz isso.
+  - **API:** `/api/explorer/summary`, `/images`, `/thumb` e `/scan`.
+- Teste de paridade de `transforms.augment`: classificação, K-fold, regressão, segmentação, anomalia e detecção leem a mesma amostra sob seeds diferentes e devem dar tensores idênticos com `augment=false` e variar com `augment=true` (#163).
+- Novo guia `docs/gui/tokens.md`: onde ficam as chaves de datasets e os tokens por perfil, texto puro e permissões no Windows, variáveis de ambiente, como remover e revogar, escopo mínimo por serviço e o aviso de servidor exposto (#187).
+- Novos guias `docs/gui/codigo.md` (as funções reais de cada roteiro da aba Código, uma lista por tarefa) e `docs/gui/colab.md` (treino no Colab: rotas, login por perfil, Drive e o que não foi verificado com conta real), com teste que exige cada função de `TOURS` e cada rota `/api/colab` citadas (#195).
+- `paper/check_submission.py` lista placeholders (`<...>`, `TODO`) e `\todo{}` pendentes no paper; com `--strict` falha apontando arquivo:linha. O workflow Draft PDF o roda só em branches `submission/**`; o desenvolvimento normal não é bloqueado (#228).
+- A SPA sai dividida em chunks: Histórico (com detalhe e exportações), conteúdo de Datasets, aba **Código** e "Como funciona" carregam na primeira abertura, e React e js-yaml ficam em chunks próprios; o entry cai de 1 074 390 para 378 062 bytes e nenhum chunk passa de 500 kB (#203)
+- `visionforge run` aceita um YAML com `strategy:` + `config:` e roda réplicas, comparação pareada, sweep e K-fold como a GUI, gravando o relatório com a tabela `.tex` e a entrada no Histórico; sem `strategy` nada muda (ADR-184) (#199).
+- A aba **Classificação** ganha **Réplicas** na estratégia: a mesma config com N seeds pela rota de réplicas que já existia, média ± IC 95% com acurácia como métrica destaque e `block` mantido em `classification`. Transfer learning fica travado enquanto Réplicas está escolhida, e o botão do Colab fica desligado com o motivo (ADR-056) (#190).
+- No **Histórico**, o detalhe de um run e o de um grupo ganham **Carregar no formulário** e **Repetir com 3 seeds**: a config do `run.json` vai para a aba da tarefa pelo mesmo import do botão de YAML, com os mesmos avisos, e Repetir abre **Réplicas** com três seeds que o run não usou. Tarefa própria removida deixa as duas ações desligadas com o motivo escrito ao lado (ADR-156) (#200).
+- `THIRD_PARTY_NOTICES.md` lista as dependências copyleft (Ultralytics AGPL-3.0, pi-heif, text-unidecode, certifi, tqdm) e as fontes OFL da interface, e vai no wheel; README e `docs/INSTALL.md` ganham as seções de licenças de terceiros e de rede e privacidade, com cada conexão de saída e `VISIONFORGE_NO_UPDATE_CHECK` (#176).
+- O Ultralytics (AGPL-3.0) sai da instalação padrão e vira o extra `detection` (`pip install "visionforge-studio[detection]"`): sem ele, treinar, testar ou exportar YOLO/RT-DETR e o submit com backend `ultralytics` param com a linha de instalação, o formulário de detecção mostra essa linha e o backend torchvision ganha o selo "sem AGPL"; o install-smoke instala as duas variantes (ADR-195) (#223).
+- `scripts/check_licenses.py` e o job `licenses` do CI falham quando uma dependência de runtime declara licença copyleft fora de `scripts/license_allowlist.toml`, quando a licença de uma delas ganha outra família, ou quando a tabela de `THIRD_PARTY_NOTICES.md` não bate com a lista (`--write` a refaz) (#225).
+- A aba **Código** da detecção com Ultralytics deixa de dizer só que o laço é da biblioteca: mostra a camada do VisionForge (parâmetros do `YOLO.train`, augmentation, o callback por época) com notas testadas e, em seguida, o `BaseTrainer._do_train` do Ultralytics instalado, com versão, aviso de licença AGPL-3.0 e notas tolerantes (`notes_resolved`/`notes_total`); sem o extra `detection`, só a camada do VisionForge (ADR-194) (#224).
+- GPU da Apple (MPS), **experimental** enquanto não for validada num Mac de verdade: `device.kind: mps`, o padrão `cuda` cai para o MPS antes da CPU numa máquina sem CUDA (o rótulo do dispositivo no `run.json` diz que foi fallback, também na detecção), `run.json` ganha um aviso quando `deterministic` está ligado no MPS, `/api/device/info` informa `mps_available`, o seletor de dispositivo oferece **GPU da Apple (MPS)** e o `visionforge doctor` reconhece a GPU do Mac em vez de recomendar o torch de CPU (ADR-192) (#227).
+- Todas as abas de tarefa ganham **Comparação replicada** na estratégia: o formulário é a baseline, um campo recebe de 1 a 3 outros valores e cada variante treina nas mesmas seeds (até 20), com teste pareado e correção de Holm. O card mostra o custo (variantes × seeds) e avisa quando, com menos de 6 seeds, o Wilcoxon não pode dar p abaixo de 0,05 (ADR-193) (#201).
+- Arquivos de comunidade do repositório: `SECURITY.md` (denúncia privada pelo GitHub), `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1), `.github/CODEOWNERS`, modelo de pull request com a checklist e `ISSUE_TEMPLATE/config.yml` apontando para Discussions; o CONTRIBUTING linka a política e o código de conduta (#183).
+- CONTRIBUTING sem afirmações falsas e com a seção Branch
+- `.github/dependabot.yml`: atualizações mensais e agrupadas de github-actions, npm (`/frontend`) e pip, no máximo 3 PRs por ecossistema, contra `development`, com prefixo `chore(deps)` e torch/torchvision ignorados (#175).
+- `docs/dev/DECISIONS.md` abre com o processo de ADR (quando é obrigatória, campos e os status válidos), com `docs/dev/ADR-TEMPLATE.md` e um teste que confere o título e o prefixo do status de cada entrada; o CONTRIBUTING linka o template (#214).
+- `frontend/README.md` descreve pré-requisitos, `visionforge gui --no-browser` + `npm run dev`, e2e e o rebuild do SPA; `package.json` declara `engines.node`, e o proxy do Vite lê `VF_API_URL` (#215).
+- `scripts/sync_site_release.py --dry-run` consulta PyPI, GitHub Release e Zenodo e imprime a versão que falta no site, no `CITATION.cff` e no `docs/INSTALL.md`, sem escrever nada; o RELEASING.md ganha a checklist pós-release com um comando por item e o `cd.yml` o passo não bloqueante `site-version-check`, que só emite `::warning::` (#189).
+- Os guias `docs/custom/TASKS.md` e `MODELS.md` ganham a seção **Stability**: os hooks de `TaskSpec`, `register_task`, `register_model` e o `ctx` do Nível 2 só mudam numa versão minor, com entrada no CHANGELOG. `tests/tasks/test_task_api_contract.py` trava as assinaturas (ADR-190) (#216).
+- O hook `pytest` do pre-commit passa para o estágio `pre-push` (a suíte leva de 5 a 8 min por commit); o CONTRIBUTING documenta `pre-commit install --hook-type pre-commit --hook-type pre-push` e a tabela de hooks mostra o estágio de cada um (ADR-186) (#173).
+- Modo offline garantido: `--offline` em `visionforge gui` e `visionforge run`, ou `VISIONFORGE_OFFLINE=1`, liga `HF_HUB_OFFLINE`, `YOLO_OFFLINE` e `VISIONFORGE_NO_UPDATE_CHECK` e recusa no processo toda conexão e consulta de nome para fora do loopback; um teste treina 1 época de classificação em CPU com a trava ligada (ADR-189) (#226)
+- MLflow local e Weights & Biases recebem também regressão, segmentação, anomalia, detecção e tarefas próprias: ao fim do treino, o `run.json` vai com a config pública, o histórico de cada época e as métricas finais com os nomes do `run.json`; o **repetir** do Histórico vale para qualquer tarefa (ADR-197) (#286)
+- As imagens do README saem de `scripts/capture_docs_images.py`: a GUI deste checkout num workspace isolado, `--offline` e sem GPU, com a versão do cabeçalho oculta (checado no DOM), capturando classificação, Réplicas, a aba **Código** e o canto do Colab; `docs/images/README.md` registra commit, versão, data e dimensões, e `--check` falha se faltar imagem (#221).
+- Perfis podem enviar treinos ao Comet, num projeto privado da conta, no mesmo contrato do Weights & Biases: config pública e métricas por época (classificação ao vivo, as outras tarefas ao fim do treino), sem dataset, caminhos, código, git, console, pacotes ou dados da máquina; o auto-log, o Sentry e os relatórios do SDK ficam desligados. A chave de API fica salva por perfil e o Histórico repete um envio que falhou. Extra `visionforge-studio[comet]` (ADR-200) (#287)
+
+### Security
+
+- O torch sai das faixas com alerta: o lock resolve um torch por extra de hardware (antes era um só, 2.7.1+cu118, para todas), com piso 2.13 em `cpu`, `cu126` e na nova `cu130`, e 2.10 em `cu128`. As extras `cu118`, `cu121` e `cu124` ficam como legado, porque seus índices pararam antes das correções. O `doctor` recomenda `cu130` a drivers com CUDA 13 (ADR-198, #302).
+- Dependências sem as faixas vulneráveis apontadas pelo Dependabot: anyio, datasets, filelock, fsspec, idna, mako, multidict, pydantic-settings, pygments, pytest, setuptools, virtualenv e werkzeug no `uv.lock`; brace-expansion no `package-lock.json` (#300). O torch fica para uma issue própria, porque trocar a versão exige validar a build CUDA na GPU.
+
+### Changed
+
+- `POST /api/sample-dataset` responde 200 com `existed: true` quando `datasets/exemplo-<tarefa>/` já existe e 201 quando cria a pasta. Antes respondia 409, que o navegador registrava como erro no console a cada clique em **usar dataset de exemplo** numa pasta já criada (ADR-206).
+- O último batch de cada época é sempre emitido no stream de eventos do treino, também em épocas mais curtas que o intervalo de progresso. Com isso a aba **Código ao vivo** marca a validação sozinha depois dele; antes mostrava treino e validação juntos, ou seguia em "treino" durante a validação (ADR-205).
+- Preprint do estudo de variância por seed: o trabalho relacionado ganha a literatura 2023-2026 (11 referências, cada uma conferida na fonte, com a URL e a data no `refs.bib` e em `LITERATURE_2023_2026.md`). Seguem pendentes a data e o DOI do depósito no Zenodo (#230).
+- Protocolo de usabilidade, antes do primeiro participante: o facilitador cronometra em segundos; "concluiu com ajuda" passa a ser 1 ou mais intervenções contadas, com a mesma definição no PROTOCOL, no RUNBOOK e no formulário; efeito de prática do quiz e facilitador-autor entram como limitações; as decisões que dependem do orientador ficam listadas (#229).
+
+### Fixed
+
+- Em telas estreitas o cabeçalho quebra linha em vez de cortar idioma, tema, guia e perfil, que ficavam fora da tela. Abaixo de 1100 px o relógio some e o chip do perfil mostra só o nome, o que mantém o cabeçalho em uma linha até 1024 px. Na etapa Dados, o campo de pasta, **Escolher pasta** e as três subpastas cabem em 375 px, e no celular a dica de um campo ocupa a própria linha em vez de terminar em reticências.
+- No tema escuro, as miniaturas dos gráficos gravados (PNG de fundo branco) ficam atenuadas e voltam ao normal sob o mouse ou o foco. O arquivo e as cores não mudam.
+- A barra de progresso do treino não chega mais a 100% antes da validação da última época: o último batch fica meio batch antes do fim da época.
+- As explicações de K-fold, grid search e random search, na etapa Estratégia da classificação, passam de 10 px para 12 px.
+- A interface não mostra mais um perfil "padrão": o primeiro perfil aparece só pelo nome. A primeira entrada pede nome e pronome e nada mais; com um perfil só, entra direto; com mais de um, a escolha aparece em toda carga da página, com o último usado marcado (antes, uma vez por aba) (ADR-202).
+- Os valores extras de um campo no grid search têm a altura e a largura do campo original, e **+ valor** ocupa a linha inteira.
+- No Histórico em português, o estado da execução aparece como "concluído", "em andamento" ou "falhou", e as métricas como "Melhor época" e "Épocas treinadas".
+- Com **Transfer learning** ligado na etapa Modelo, os campos de modo, camada a descongelar e LR do backbone não apareciam: o schema do campo é opcional (`anyOf` com `null`) e o painel só seguia `$ref` direto. Fine-tuning só podia ser escolhido por YAML.
+- Os resultados de um treino ficam na aba da tarefa que o rodou: abrir outra aba mostra o formulário dela, e voltar mostra os resultados de novo. No detalhe de uma execução, os quatro painéis de publicação (Hub, Zenodo, GitHub, DVC) têm aparência de botão; a porcentagem do treino não sai mais do cartão quando o nome é longo; e o botão "···" da barra de tarefas, que não fazia nada, foi removido.
+- Com `deterministic=True`, duas execuções na GPU com a mesma seed dão os mesmos números também na segmentação: além do cuDNN, o PyTorch passa a usar seus kernels determinísticos (`use_deterministic_algorithms(True, warn_only=True)`). Antes, o backward da interpolação bilinear variava na 4ª casa decimal do mIoU. Duas operações sem versão determinística (`nll_loss2d` e o `roi_align` da detecção) seguem com aviso (ADR-199, #305).
+- A tabela de testes pareados de uma comparação mostra o IC 95% da diferença a−b, que o backend já calculava (ADR-187), com o método (t de Student ou Hodges-Lehmann), o ponto central e a cobertura real na dica. Um extremo que os dados não limitam aparece como "aberto".
+- `docs/custom/TASKS.md` descrevia um `ctx.write_run_json` que não existe; o `CONTRIBUTING.md` mandava pôr as rotas de uma tarefa nova em `routes.py`, que hoje só junta os routers por domínio.
+- `POST /api/credentials` deixa de devolver a chave no corpo do 422 quando o pedido vem malformado; a resposta é uma mensagem fixa em português e inglês (#155).
+- A GUI recusa pedidos cujo `Host` não é um nome deste servidor (400, contra DNS rebinding) e pedidos que mudam estado vindos de página de outro site (`Origin` estrangeiro, 403), em todas as rotas. `visionforge gui --allowed-host NOME` acrescenta um nome; com `--host 0.0.0.0` o nome e os IPs da máquina continuam aceitos (ADR-178).
+- A GUI manda Content-Security-Policy, X-Frame-Options, X-Content-Type-Options e Referrer-Policy em toda resposta e não faz mais preconnect ao Google Fonts. `/docs` e `/redoc` ficam desligados, a menos que `VISIONFORGE_DOCS=1`; `/openapi.json` continua (ADR-179).
+- A telemetria de terceiros fica desligada: ultralytics (só dentro do processo, sem gravar nas configurações globais dele), Hugging Face, MLflow e DVC. Um valor que a pessoa já definiu é mantido (ADR-180).
+- Exportar ONNX de detecção não deixa mais o ultralytics instalar pacotes no ambiente da pessoa: o export roda com `simplify=False` (#159).
+- O `npm audit --omit=dev` do frontend passa de 25 vulnerabilidades (1 crítica) para 0: as ferramentas de build vão para `devDependencies` e três fontes sem uso saem (#161).
+- Segmentação respeita `transforms.augment: false`: o treino ficava com flip, rotação e jitter mesmo desligado, e o `run.json` dizia o contrário (ADR-177).
+- O K-fold de classificação usa as mesmas transformações de um treino simples: respeita `augment` e roda o pré-processamento configurado, que antes era ignorado nos folds. As estatísticas de cada fold são medidas na imagem redimensionada que o modelo vê, e datasets com imagens de tamanhos diferentes deixam de quebrar o K-fold (ADR-177).
+- Fine-tuning põe em taxa cheia só a última camada linear: em VGG e AlexNet o classificador inteiro de 119M e 54M parâmetros recebia a taxa da cabeça, e no ViT o token de classe ficava fora do otimizador (ADR-177).
+- A comparação pareada com Wilcoxon calcula o menor p possível sem os pares empatados, que o teste descarta: seis seeds com três empates agora aparecem como sem poder para α = 0,05 (ADR-177).
+- O download de dataset do Hugging Face fixa a revisão: resolve o SHA do commit, passa `revision` ao `load_dataset`, devolve `revision` na resposta e grava `.visionforge-source.json` na pasta; se o SHA não for resolvido, o erro é traduzido e nada é baixado (#165).
+- `POST /api/dataset/download` deixa de devolver `api_key` e `token` no corpo do 422 quando o pedido vem malformado; a resposta é uma mensagem fixa em português e inglês (#234).
+- Uma métrica de validação NaN ou infinita (loss que diverge) para o treino na própria época, com um erro que cita `non-finite`, a métrica e a época, e deixa um `run.json` com `status: failed` e o aviso `non_finite_metric`; antes o treino seguia até o fim sem checkpoint e falhava com `FileNotFoundError`, e a segmentação salvava pesos NaN como melhores (ADR-182).
+- A `val_loss` da detecção com torchvision deixa de atualizar `running_mean` e `running_var` do BatchNorm (SSDLite e detectores `pretrained=False`): só essas camadas ficam em `eval()` durante a passada (#233).
+- O gate de cobertura passa de 70% para 93% (medido: 95%) e fica num só lugar, o job `tests` do `ci.yml`; uma rodada parcial do pytest local não é reprovada por ele (#182).
+- O benchmark de workflow alterna a ordem nativo/VisionForge por seed (par começa pelo nativo, ímpar pelo VisionForge) em classificação, segmentação e detecção, e registra a ordem de cada par em `execution_order`: o cache quente do segundo caminho deixa de favorecer sempre o mesmo lado (#167).
+- `uv.lock` atualizado: pillow 13.0.0, onnx 1.23.2, starlette 1.10.0, aiohttp 3.14.5, filelock 3.32.7 e urllib3 2.8.0, que corrigem avisos de segurança conhecidos, mais as dependências que o lock ainda não tinha (ele estava na 0.12.0). `pyproject.toml` ganha os pisos `onnx>=1.21` e `pillow>=12.2`. torch e torchvision não mudam (#160).
+- `execution_order` do benchmark pareado tem uma só definição, em `phase_contract.py`; classificação, segmentação e detecção a importam (#249).
+- `visionforge --help` sai em UTF-8 também no console cp1252 (a reconfiguração vinha depois do `parse_args`) e o `doctor` cita `CUDA_VISIBLE_DEVICES` quando ele está vazio ou em `-1` e esconde a GPU (#209).
+- A mesma parada por métrica NaN ou infinita vale agora para a detecção com torchvision, o autoencoder de anomalia e as tarefas customizadas: o treino termina na época do problema, o `run.json` sai com `status: failed`, `error` e o aviso `non_finite_metric` (#248).
+- Os testes que rodam git partem de uma fixture `clean_git_env` que tira as variáveis locais do git (`GIT_DIR`, `GIT_WORK_TREE`…) herdadas de um hook, e um teste garante que um `GIT_DIR` herdado não leva `git init` ao repositório real (#211).
+- A GUI ganha o link "Pular para o conteúdo" (primeiro foco da página), alvos de toque de 44 px no cabeçalho e nas abas em telas pequenas, e as metas `description`, `theme-color` e `color-scheme` no `index.html` (#207)
+- Os testes que esperam trabalho em segundo plano usam `wait_until` (`tests/helpers.py`) em vez de `time.sleep` em laço: no timeout falham com `AssertionError` em vez de ler um estado velho (#210)
+- Importar o servidor da GUI deixa de carregar torch, torchvision, ultralytics e matplotlib: `import visionforge.gui.server` cai de ~5,1 s para ~1,9 s (4336 → 1351 módulos). `visionforge.core` e `visionforge.blocks` resolvem os nomes públicos sob demanda e cada endpoint importa o bloco ou runner que roda; o servidor continua desligando a telemetria das SDKs ao ser importado (#202).
+- Os smells de teste do Sonar (S5778, S9073, S1515, S6353) saem: uma única chamada dentro de `pytest.raises`, um `assert` por condição, o `key` de `max` do reparticionamento sem lambda em laço e a regex do `repo_id` do Hub em `\w` com `re.ASCII`; sem mudança de comportamento (#206).
+- O mapa de módulos e a política de extras do `docs/dev/ARCHITECTURE.md` voltam a bater com o código (27 módulos sem menção, `routes.py` com grupos que migraram, extras `mlflow`/`wandb`/`dvc`/`hub` que instalam algo), e `tests/docs/test_architecture_map.py` falha quando um módulo novo fica fora do mapa (#186)
+- O primeiro treino de cada processo deixa de travar a GUI por ~3 s: torch, torchvision e o plotter são importados numa thread antes do bloco ou runner (fila e endpoints de comparação, sweep e réplicas), e a checagem do contexto CUDA não importa mais o torch; a maior pausa do event loop no primeiro treino cai de ~2–3 s para <0,1 s. `visionforge gui` deixa de carregar o ultralytics (inicialização 3,0 s → 1,7 s, 2140 → 1354 módulos): só as variáveis de telemetria são definidas na largada, e cada import do ultralytics desliga os eventos antes (ADR-180) (#258).
+- O OpenAPI da GUI agrupa as 157 operações em tags por domínio (`openapi_tags` no app) e cada rota declara em `responses=`, com chave literal, todo status de `HTTPException` que ela ou seus helpers levantam: 2 status que faltavam (503 do treino no Colab, 400 de `/api/explorer/images`) entram no contrato; é o que o Sonar python:S8415 lê (#205).
+- Os guias `QUICKSTART`, `custom/MODELS`, `custom/TASKS`, `DATASETS` e `INSTALL` voltam a dizer o que o produto faz: `resnet18` e 20 épocas por padrão, as seis etapas da configuração, `custom_model` só pelo YAML, `replicated-comparison` e ocultar/apagar tarefas próprias, os 160/40/200 imagens de `limit=20` no MNIST e a verificação de instalação sem versão fixa; `tests/test_docs_pinned_facts.py` prende esses fatos ao código (#197).
+- As rotas de avaliação de uma execução (testar em outro dataset, Grad-CAM, predição em lote e exportar ONNX) saem de `routes.py` para `evaluation_routes.py`, sem mudar o contrato HTTP; `routes.py` cai de 4410 para 3620 linhas e `tests/test_module_size.py` impede que volte a crescer (#204).
+- `visionforge run` com `strategy:` recusa, com código 2 e a mensagem da GUI, uma variante da comparação pareada ou um espaço de varredura que altere `output.*`; antes o treino começava e escrevia fora da pasta do perfil (#264).
+- A fila de execução e o estado de cada job iniciado (log de eventos, token de parada, resultado) saem de `routes.py` para `execution.py`, seu único dono, junto com `_execute_experiment` (complexidade cognitiva abaixo de 15); as rotas de status, eventos, resultado e fila vão para `execution_routes.py`, sem mudar o contrato HTTP; `routes.py` cai de 3612 para 3202 linhas (ADR-185) (#204).
+- Um erro 500 inesperado das ações de uma execução e do download de dataset passa a vir numa frase no idioma da página, com `Tipo: mensagem` da exceção no fim, e o 422 de validação traduz para o português as mensagens dos 14 tipos mais comuns do Pydantic (`greater_than_equal`, `missing`, `literal_error`...) quando `X-VF-Lang` é `pt`; em inglês fica o texto original (ADR-191) (#208).
+- O estudo de variância de seeds publica os 270 `run.json` em `research/seed_variance/runs/` (sem caminhos da máquina, 1,7 MB), e `summarize.py` lê dali: num clone limpo o `summary.json` sai idêntico, com o ruído de avaliação que antes vinha vazio (#166).
+- As quatro séries do benchmark de fluxo citadas no artigo (linha de comando, navegador, diagnóstico e navegador após a correção) saem do repositório privado para `research/workflow_benchmark/results/`, sem caminhos da máquina, e `make_paper_numbers.py` recalcula dos registros por execução cada número da seção, conferido por teste (#181).
+- O artigo relata a H3 rejeitada, define a reversão e cita o único contraste Holm-significativo (160 px contra sem aumento, USK-Coffee/ResNet-18, p = 0,0072) como exploratório; `summarize.py` grava esses contrastes em `summary.json`, `numbers.tex` ganha as macros e a legenda da tabela declara o IC percentil (#179).
+- O Software design do artigo restringe o K-fold a classificação, regressão e segmentação, troca "nada sai da máquina" por "local por padrão" com os envios opcionais listados, cita a AGPL-3.0 do Ultralytics e atualiza as contagens de testes (7.937 Python e 1.427 frontend em 2026-11-11) (#178).
+- `paper.bib` ganha Holm (pela URL do JSTOR, já que o DOI 10.2307 não resolve; idem em `refs.bib`), USK-Coffee, Beans, ResNet, ConvNeXt, Swin, Ultralytics Platform, FiftyOne e deep-significance, cada entrada conferida na fonte em 2026-11-11; o State of the field cita os três vizinhos e `research/test_paper_bib.py` exige entrada para toda citação dos dois artigos (#180).
+- `.mailmap` une as duas identidades de commit em `Marcus Vinícius Reis <marcusvinicius0083@gmail.com>` (`git shortlog -sne` passa a listar uma) e um teste confere o mapa e que `paper.md` e `CITATION.cff` declaram só a UFSCar (#231).
+- `_write` (incorporar ao dataset), `scan_integrity` (Explorar) e `_prepare` (exportação ao Hub) ficam com complexidade cognitiva abaixo de 15: os laços de link e de cópia, a contagem de tamanhos e a cópia verificada do checkpoint viram helpers no mesmo arquivo, sem mudar saída, mensagens nem ordem de escrita (#86).
+- Seis funções da API da GUI voltam a ter complexidade cognitiva até 15 (Sonar python:S3776): `_drivemount` e `_exec` do Colab (vigias e desfecho em funções próprias), `build_colab_router`, `build_hub_router`, `update_profile` e a tabela de métricas do model card, sem mudar mensagens, ordem dos efeitos nem o contrato OpenAPI; testes novos cobrem os ramos reorganizados (#86).
+- A direção (maior ou menor é melhor) e o domínio de uma métrica sem direção declarada saem de um vocabulário único em `core/metric_vocabulary.py`, espelhado pela GUI e comparado por teste: `mape`, `smape`, `msle`, `rmsle`, `nll`, `bce`, `huber`, `perplexity`, `wer`, `cer`, `hd95`, `fid`, `eer`, `fpr`, `ece` e `brier` deixam de ser ranqueadas ao contrário em varredura, comparação e `model_comparison`, e o IC de `mape` volta a ser cortado em zero; tokens curtos casam só por palavra, então `power` e `confidence` continuam "maior é melhor" (#168).
+- O intervalo da diferença pareada passa a ser o dual do teste ao lado: IC t de Student da média para o teste t pareado e IC de Hodges-Lehmann pelas médias de Walsh com valor crítico exato para o Wilcoxon, em vez do bootstrap percentil que, com 10 seeds, excluía zero ao lado de p>0,05; o relatório grava `ci_method`, `ci_estimate` e `ci_confidence`, abaixo de 6 pares o IC de Hodges-Lehmann fica `null`, e a legenda LaTeX nomeia o método (ADR-187) (#162).
+- A AUROC da anomalia com uma só classe no teste deixa de valer 0,5: `compute_auroc` devolve `None`, `val_auroc`/`best_auroc`/`test_auroc` vão como `null` ao `run.json`, `image_f1` também fica `null` sem imagem anômala, o run ganha o aviso `single_class_test_split`, e réplicas e comparação pareada deixam o valor fora da média e do IC (#170).
+- A legenda LaTeX do K-fold (EN e PT), o README e `docs/dev/VALIDATION.md` declaram que a época de cada fold é escolhida no próprio fold de validação que a avalia, um viés otimista sem divisão aninhada (#212).
+- O `README.md` e o `docs/INSTALL.md` deixam de prometer "no cloud" / "sem nuvem" e declaram a fronteira real de rede: a plataforma é local-first, roda na máquina da pessoa e nada sai dela sem ela pedir (downloads de dataset, treino no Colab e exportadores são opt-in, com prévia local), com `tests/test_public_claims.py` (#171).
+- O `README.md` passa a usar URLs absolutas do GitHub em todos os links (para não quebrar na página do PyPI), mostra o fluxo de `visionforge run` a partir de um YAML exportado ou ajustado, atualiza os limites de fila paralela com o Colab e de download pelo Roboflow, e inclui `configs/baseline.yaml` em `tests/test_example_configs.py`, com `tests/test_readme_pypi.py` (#184).
+- O `README.md` (em inglês e português espelhados, com `## Como citar` e o parágrafo para contribuidores em PT) e o `docs/INSTALL.md` passam a descrever o treino no Colab, o exportador para o Hugging Face Hub, as abas Resultados e Código, o explorador e as operações de datasets, os subcomandos `new-task`, `audit-data`, `bundle` e `verify-bundle`, e a execução via Docker, marcando o que está só em `development` como próxima release, com `tests/test_readme_parity.py` (#196).
+- Novo `docs/ROADMAP.md` (sem prazos, com o que está em `development`, próximos passos e critérios para a 1.0) linkado no `README.md`, e cabeçalho de `docs/archive/ROADMAP.md` atualizado para apontar para `ROADMAP.md` e `CHANGELOG.md` em vez de `TASKS.md` e `RELEASE_NOTES.md` (#218).
+- O bundle público (rascunho do Zenodo) deixa de levar o nome da conta: os checkpoints `weights/*.pt` ficam fora, porque o ultralytics grava neles os `train_args` com caminhos absolutos, e `config.json`/`config.yaml` saem com cada caminho local reduzido ao nome final; o manifesto anota o que ficou fora ou foi reescrito (ADR-188) (#164)
+- O `ultralytics-platform` (AGPL-3.0-only), que as versões novas do ultralytics passaram a instalar, entra na allowlist de licenças e no THIRD_PARTY_NOTICES.md; os testes do tour de código contam as notas toleradas do ultralytics contra as declaradas, sem número fixo que mudava com a versão instalada (ADR-194) (#294).
+- O início de uma execução sai de `routes.py`: `_submit_job` e a carga da pilha de treino vão para `submission.py`; `POST /api/experiment/run`, o esquema e o `run` de cada tarefa standalone, as checagens do dataset no envio e os executores para `training_routes.py`; a execução no Colab e os objetos do Colab para `colab_run_routes.py`; a lista de tarefas e `/api/custom/{key}` para `custom_task_routes.py`, sem mudar o contrato HTTP nem a ordem das rotas; `routes.py` cai de 3202 para 2066 linhas (ADR-196) (#204).
+- As estratégias saem de `routes.py`: compare, sweep, K-fold, réplicas e comparação pareada (também das tarefas customizadas) vão para `strategy_routes.py`, e a validação, a fila e a execução de cada uma para `strategies.py`, sem estado e com o laço de job em comum; `/api/update` vai para `update_routes.py`; a prévia do pré-processamento e o dataset de exemplo para `dataset_tools_routes.py`; sem mudar o contrato HTTP nem a ordem das rotas; `routes.py` cai de 2066 para 609 linhas (#204).
+
 ## [0.21.0] — 2026-11-05
 
 ### Added

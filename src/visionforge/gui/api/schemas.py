@@ -5,9 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
-from visionforge.gui.api.profiles import Pronoun
+from visionforge.gui.api.profiles import (
+    ProfileSettings,
+    ProfileSettingsUpdate,
+    Pronoun,
+)
 
 
 class RunStatus(BaseModel):
@@ -61,6 +65,7 @@ class ProfileInfo(BaseModel):
     is_default: bool = False
     # "ele" / "ela" / "neutro": how the welcome greets (ADR-126); None when unset.
     pronoun: Pronoun | None = None
+    settings: ProfileSettings = Field(default_factory=ProfileSettings)
 
 
 class ProfileListResponse(BaseModel):
@@ -81,6 +86,7 @@ class ProfileUpdateRequest(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=60)
     pronoun: Pronoun | None = None
+    settings: ProfileSettingsUpdate | None = None
 
 
 class QueueLane(BaseModel):
@@ -376,8 +382,44 @@ class DeviceInfoResponse(BaseModel):
 
     cuda_available: bool
     cuda_version: str | None = None
+    # Apple's Metal GPU, experimental (ADR-192). A flag rather than an entry in
+    # ``gpus``: it has no index, memory figure or compute capability to show.
+    mps_available: bool = False
     cpu_name: str
     gpus: list[GPUInfo] = []
+
+
+class MlflowStatus(BaseModel):
+    """Public export diagnostics from a local classification run."""
+
+    state: Literal["running", "finished", "disabled", "failed"]
+    status: Literal["RUNNING", "FINISHED", "KILLED", "FAILED"]
+    error: str | None = None
+    run_id: str | None = None
+
+
+class WandbStatus(BaseModel):
+    """Public Weights & Biases export diagnostics of one run (ADR-172)."""
+
+    state: Literal["running", "finished", "disabled", "failed"]
+    status: Literal["RUNNING", "FINISHED", "KILLED", "FAILED"]
+    error: str | None = None
+    # Only an https link reaches the page, never a scheme a click would run.
+    url: str | None = Field(default=None, pattern=r"^https://\S+$", max_length=2048)
+    project: str | None = None
+    entity: str | None = None
+
+
+class CometStatus(BaseModel):
+    """Public Comet export diagnostics of one run (ADR-200)."""
+
+    state: Literal["running", "finished", "disabled", "failed"]
+    status: Literal["RUNNING", "FINISHED", "KILLED", "FAILED"]
+    error: str | None = None
+    # Only an https link reaches the page, never a scheme a click would run.
+    url: str | None = Field(default=None, pattern=r"^https://\S+$", max_length=2048)
+    project: str | None = None
+    workspace: str | None = None
 
 
 class RunDetail(BaseModel):
@@ -385,6 +427,10 @@ class RunDetail(BaseModel):
 
     Mirrors run.json on disk plus a few computed convenience fields.
     """
+
+    tracking: MlflowStatus | None = None
+    wandb: WandbStatus | None = None
+    comet: CometStatus | None = None
 
     run_id: str
     experiment_name: str
@@ -871,6 +917,10 @@ class SystemInfo(BaseModel):
     platform: str
     # Shown in the header so a screenshot of a bug carries its own version.
     version: str
+    # The `detection` extra (ADR-195): the form shows the install line when the
+    # Ultralytics backend is chosen and this is False.
+    ultralytics_installed: bool
+    detection_install_command: str
 
 
 class DatasetStatsRequest(BaseModel):
@@ -921,8 +971,8 @@ class DatasetDownloadRequest(BaseModel):
     out_dir: str
     splits: list[str] = ["train", "test"]
     limit: int | None = Field(default=None, ge=1)
-    api_key: str | None = None
-    token: str | None = None
+    api_key: SecretStr | None = None
+    token: SecretStr | None = None
     version: int | None = Field(default=None, ge=1)  # Roboflow dataset version
     dataset_format: str | None = None  # Roboflow export format (e.g. folder, yolov8)
 
@@ -936,6 +986,7 @@ class DatasetDownloadResponse(BaseModel):
     total_images: int
     splits: dict[str, int] = {}
     classes: list[str] = []
+    revision: str | None = None  # commit SHA a Hugging Face download was pinned to
 
 
 class SampleDatasetRequest(BaseModel):
@@ -955,6 +1006,8 @@ class SampleDatasetResponse(BaseModel):
     image and mask pairs); ``classes`` is what the layout declares (class folders,
     ``classes.txt`` names, mask pixel values, or the ``test/`` subfolders of an
     anomaly dataset); ``targets`` is the CSV target columns of a regression one.
+    ``existed`` is true when the folder was already there and is reused as it
+    is (ADR-206): it is not read, so ``classes`` and ``counts`` come empty.
     """
 
     task: str = "classification"
@@ -962,6 +1015,7 @@ class SampleDatasetResponse(BaseModel):
     classes: list[str]
     counts: dict[str, int]
     targets: list[str] = []
+    existed: bool = False
 
 
 __all__ = [
@@ -1007,7 +1061,7 @@ class CredentialSaveRequest(BaseModel):
     """One provider's API key, on its way to the local store."""
 
     provider: Literal["roboflow", "kaggle", "huggingface"]
-    value: str = Field(min_length=1)
+    value: SecretStr = Field(min_length=1)
 
 
 class CredentialEntry(BaseModel):
@@ -1078,6 +1132,20 @@ class ColabProviderSource(BaseModel):
     limit: int | None = Field(default=None, ge=1)
 
 
+class ColabDriveSource(BaseModel):
+    """The form's own dataset folder, inside Google Drive for desktop (ADR-164).
+
+    The server translates ``data.base_dir`` to the VM's
+    ``/content/drive/MyDrive/...``; ``my_drive_root`` is this computer's "My
+    Drive" folder when the automatic detection does not find it.
+    """
+
+    kind: Literal["drive"] = "drive"
+    my_drive_root: str | None = Field(default=None, max_length=1024)
+    # The folder picked in the panel's Drive browser; None keeps ``data.base_dir``.
+    path: str | None = Field(default=None, max_length=1024)
+
+
 class ColabRunRequest(BaseModel):
     """A classification experiment to train on Colab (ADR-163, phase 2).
 
@@ -1087,8 +1155,45 @@ class ColabRunRequest(BaseModel):
     """
 
     config: dict[str, Any]
-    source: ColabUrlSource | ColabProviderSource = Field(discriminator="kind")
+    source: ColabUrlSource | ColabProviderSource | ColabDriveSource = Field(
+        discriminator="kind"
+    )
     accelerator: Literal["T4", "L4", "A100", "H100", "G4"] = "T4"
+    # Also save the run's bundle to MyDrive/VisionForge/runs/ (ADR-164).
+    drive_export: bool = False
+
+
+class ColabDriveContinueRequest(BaseModel):
+    """The person says the Drive access was granted for this job's consent page."""
+
+    run_id: str = Field(min_length=1, max_length=256)
+
+
+class ColabDriveFolders(BaseModel):
+    """One folder of this computer's "My Drive", to pick a Colab dataset (ADR-164).
+
+    ``root`` is None when no "My Drive" folder was found here: the page then
+    explains Google Drive for desktop instead of browsing. ``rel`` is the folder
+    under the root, ``/``-separated; ``path`` is it on this machine and
+    ``remote`` on the VM. ``folders`` holds names only, sorted, hidden ones left
+    out, cut at a cap that ``truncated`` reports.
+    """
+
+    root: str | None = None
+    rel: str = ""
+    path: str | None = None
+    remote: str | None = None
+    folders: list[str] = Field(default_factory=list)
+    truncated: bool = False
+    # Whether "open in the file manager" works on this machine.
+    can_open: bool = False
+
+
+class ColabDriveOpenRequest(BaseModel):
+    """A folder under "My Drive" to show in the file manager of this machine."""
+
+    rel: str = Field(default="", max_length=1024)
+    my_drive_root: str | None = Field(default=None, max_length=1024)
 
 
 class ColabSessionInfo(BaseModel):

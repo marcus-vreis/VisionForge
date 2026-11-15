@@ -28,7 +28,12 @@ TOLERANCES = {
     "metrics_abs": METRIC_ABS_TOLERANCE,
 }
 _METRIC_KEYS = ("val_miou", "val_dice", "val_pixel_acc")
-EXECUTION_ORDER = ["native_pytorch", "visionforge_trainer"]
+EXECUTION_ORDER = list(phase_contract.EXECUTION_ORDER)
+
+
+execution_order = phase_contract.execution_order
+
+
 VISIONFORGE_INCLUDES = {
     "setup": [
         "SegmentationConfig validation",
@@ -380,13 +385,14 @@ def run_pair(
         "device": device,
         "parity_atol": parity_atol,
     }
+    order = execution_order(seed)
     report: dict[str, Any] = {
         "purpose": "engineering_parity_only",
         "task": "segmentation",
         "status": "running",
         "failed_phase": None,
         "phase_contract": phase_contract.contract_header(),
-        "execution_order": EXECUTION_ORDER,
+        "execution_order": order,
         **options,
         "tolerances": {
             **TOLERANCES,
@@ -406,7 +412,7 @@ def run_pair(
         "visionforge_trainer": ("visionforge", run_visionforge),
     }
     try:
-        for workflow in EXECUTION_ORDER:
+        for workflow in order:
             key, runner = runners[workflow]
             try:
                 report[key] = runner(dataset, initial_weights, output / key, **options)

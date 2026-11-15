@@ -82,6 +82,7 @@ export type NameStrategy =
   | "random"
   | "replicates"
   | "compare"
+  | "replicatedComparison"
   | "transfer";
 
 export interface NameParts {
@@ -114,6 +115,8 @@ function strategyPart(p: NameParts): string | null {
       return "rep";
     case "compare":
       return "compare";
+    case "replicatedComparison":
+      return "paired";
     case "transfer":
       return "tl";
     default:

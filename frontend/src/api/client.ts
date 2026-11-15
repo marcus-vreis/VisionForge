@@ -8,6 +8,38 @@ import {
 import { pt, type Dict } from "../i18n/pt";
 import type { TaskDescriptor } from "../lib/custom-tasks";
 import {
+  explorerBody,
+  type ExplorerForm,
+  type ExplorerSummary,
+  type ScanJob,
+} from "../lib/dataset-explorer";
+import type {
+  IncorporateJob,
+  IncorporatePlan,
+  IncorporatePreview,
+  IncorporateResult,
+  PlanBody,
+} from "../lib/dataset-incorporate";
+import type {
+  MappingBody,
+  MergePlan,
+  MergePreview,
+  MergeResult,
+} from "../lib/dataset-merge";
+import type {
+  CocoExportPreview,
+  CocoExportResult,
+  CocoImportPlan,
+  CocoImportPreview,
+  CocoImportResult,
+} from "../lib/dataset-coco";
+import type {
+  ResplitBody,
+  ResplitPlan,
+  ResplitPreview,
+  ResplitResult,
+} from "../lib/dataset-resplit";
+import {
   activeProfileSlug,
   profileHeaders,
   type ProfileInfo,
@@ -149,15 +181,18 @@ export function withLang(
   return { ...init, headers };
 }
 
-/** Every call carries the chosen profile and the language on screen. */
-function withContext(init?: RequestInit): RequestInit {
-  return withLang(withProfile(init));
+/**
+ * Every call carries the chosen profile and the language on screen. `profile`
+ * names another one, for a setting edited in a profile's own row.
+ */
+function withContext(init?: RequestInit, profile?: string): RequestInit {
+  return withLang(withProfile(init, profile));
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, profile?: string): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${BASE}${path}`, withContext(init));
+    res = await fetch(`${BASE}${path}`, withContext(init, profile));
   } catch (e) {
     throw new ApiError(
       0,
@@ -359,6 +394,19 @@ export async function runReplicates(
   });
 }
 
+/** Compare variants of one config over the same seeds, with paired tests and
+ *  Holm correction (ADR-061); the GUI form is ADR-193. */
+export async function runReplicatedComparison(
+  task: string,
+  payload: Record<string, unknown>,
+): Promise<RunResponse> {
+  return request<RunResponse>(`/${task}/replicated-comparison`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 /** Every renderable task: the five built-ins + registered custom tasks
  *  (ADR-058). The backend rescans user_tasks/ per call, so a freshly dropped
  *  file appears on reload without restarting the server. */
@@ -401,6 +449,18 @@ export async function runCustomReplicates(
   payload: Record<string, unknown>,
 ): Promise<RunResponse> {
   return request<RunResponse>(`/custom/${key}/replicates`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+/** The paired comparison for a custom task (ADR-061, ADR-193). */
+export async function runCustomReplicatedComparison(
+  key: string,
+  payload: Record<string, unknown>,
+): Promise<RunResponse> {
+  return request<RunResponse>(`/custom/${key}/replicated-comparison`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -460,7 +520,14 @@ export async function createProfile(name: string, pronoun?: Pronoun): Promise<Pr
 /** Novo nome e/ou pronome de um perfil, o padrão inclusive (ADR-126). */
 export async function updateProfile(
   slug: string,
-  change: { name?: string; pronoun?: Pronoun },
+  change: {
+    name?: string; pronoun?: Pronoun;
+    settings?: {
+      mlflow?: { enabled: boolean };
+      wandb?: Partial<WandbSettings>;
+      comet?: Partial<CometSettings>;
+    };
+  },
 ): Promise<ProfileInfo> {
   return request<ProfileInfo>(`/profiles/${encodeURIComponent(slug)}`, {
     method: "PUT",
@@ -516,32 +583,21 @@ export interface SampleDataset {
   existed: boolean;
 }
 
-/** Create `datasets/exemplo-<task>/` on the server. A 409 means the folder is
- *  already there: the call then resolves with `existed: true` and its path, so the
- *  guide can use it. Any other failure rejects. */
+/** Create `datasets/exemplo-<task>/` on the server, or get the one already
+ *  there: the server answers 200 with `existed: true` for a folder it reuses
+ *  and 201 for one it wrote now (ADR-206). A failure rejects. */
 export async function createSampleDataset(
   task = "classification",
 ): Promise<SampleDataset> {
-  try {
-    const made = await request<Omit<SampleDataset, "existed">>(
-      "/sample-dataset",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ task }),
-      },
-    );
-    return { ...made, existed: false };
-  } catch (e) {
-    const path =
-      e instanceof ApiError && e.status === 409
-        ? (e.body as { path?: unknown } | null | undefined)?.path
-        : undefined;
-    if (typeof path === "string" && path !== "") {
-      return { task, path, classes: [], targets: [], counts: {}, existed: true };
-    }
-    throw e;
-  }
+  const made = await request<Omit<SampleDataset, "existed"> & { existed?: boolean }>(
+    "/sample-dataset",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ task }),
+    },
+  );
+  return { ...made, existed: made.existed === true };
 }
 
 export interface DatasetDownloadRequest {
@@ -922,6 +978,8 @@ export interface GPUInfo {
 export interface DeviceInfoResponse {
   cuda_available: boolean;
   cuda_version: string | null;
+  // Apple's Metal GPU, experimental (ADR-192).
+  mps_available: boolean;
   cpu_name: string;
   gpus: GPUInfo[];
 }
@@ -1000,6 +1058,10 @@ export interface SystemInfo {
   suggested_workers: number;
   platform: string;
   version: string;
+  /** The optional `detection` extra (ultralytics, AGPL-3.0) is importable (ADR-195). */
+  ultralytics_installed: boolean;
+  /** The line that installs that extra for this kind of install. */
+  detection_install_command: string;
 }
 
 /** What was measured for an architecture's family at Adam 1e-3 (ADR-099/100):
@@ -1081,7 +1143,171 @@ export async function fetchSystemInfo(): Promise<SystemInfo> {
   return request<SystemInfo>("/system/info");
 }
 
+/** A profile's Weights & Biases destination (ADR-172); `entity` empty = the key's user. */
+export interface WandbSettings {
+  enabled: boolean;
+  project: string;
+  entity: string;
+}
+
+/** What the History knows about one run's W&B copy. `url` is always https. */
+export interface WandbExportStatus {
+  state: "running" | "finished" | "disabled" | "failed";
+  status: "RUNNING" | "FINISHED" | "KILLED" | "FAILED";
+  error?: string | null;
+  url?: string | null;
+  project?: string | null;
+  entity?: string | null;
+}
+
+/** Whether `profile` has a saved W&B key; the key itself never comes back. */
+export async function fetchWandbToken(profile: string): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/wandb/token", undefined, profile);
+}
+
+/** Save the W&B API key of `profile` on the server. */
+export async function saveWandbToken(profile: string, token: string): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/wandb/token", {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  }, profile);
+}
+
+/** Forget the W&B API key of `profile`. */
+export async function deleteWandbToken(profile: string): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/wandb/token", { method: "DELETE" }, profile);
+}
+
+/** Send a finished run to its W&B run again, with the active profile's key. */
+export async function retryWandbExport(runId: string): Promise<WandbExportStatus> {
+  return request<WandbExportStatus>(`/wandb/runs/${encodeURIComponent(runId)}/retry`, { method: "POST" });
+}
+
+/** A profile's Comet destination (ADR-200); `workspace` empty = the key's default. */
+export interface CometSettings {
+  enabled: boolean;
+  project: string;
+  workspace: string;
+}
+
+/** What the History knows about one run's Comet copy. `url` is always https. */
+export interface CometExportStatus {
+  state: "running" | "finished" | "disabled" | "failed";
+  status: "RUNNING" | "FINISHED" | "KILLED" | "FAILED";
+  error?: string | null;
+  url?: string | null;
+  project?: string | null;
+  workspace?: string | null;
+}
+
+/** Whether `profile` has a saved Comet key; the key itself never comes back. */
+export async function fetchCometToken(profile: string): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/comet/token", undefined, profile);
+}
+
+/** Save the Comet API key of `profile` on the server. */
+export async function saveCometToken(profile: string, token: string): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/comet/token", {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  }, profile);
+}
+
+/** Forget the Comet API key of `profile`. */
+export async function deleteCometToken(profile: string): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/comet/token", { method: "DELETE" }, profile);
+}
+
+/** Send a finished run to its Comet experiment again, with the active profile's key. */
+export async function retryCometExport(runId: string): Promise<CometExportStatus> {
+  return request<CometExportStatus>(`/comet/runs/${encodeURIComponent(runId)}/retry`, { method: "POST" });
+}
+
+/** The settings that pick a branch in a run's code (ADR-173); a missing one is undecided.
+ *  Each task reads its own (`GET /api/code-tour` lists them); `model` is a model
+ *  name the server turns into the setting it decides. */
+export interface CodeSettings {
+  kind?: "binary" | "multiclass";
+  amp?: boolean;
+  augment?: boolean;
+  model?: string;
+  loss?: string;
+  method?: "autoencoder" | "patchcore";
+  backend?: "torchvision" | "ultralytics";
+}
+
+/** A task "Como funciona" has a code tour for, and the values of each setting it reads. */
+export interface CodeTourTask {
+  task: string;
+  settings: Record<string, string[]>;
+}
+
+/** Lines `first`..`last` (0-based) of a section and what they do. */
+export interface CodeNote {
+  first: number;
+  last: number;
+  text: string;
+  /** true: this run's path; false: a branch it does not take; null: unconditional or unknown. */
+  active: boolean | null;
+}
+
+/** The third-party library a section's code belongs to (ADR-194). */
+export interface CodeLibrary {
+  name: string;
+  version: string;
+  license: string;
+}
+
+/** One real function of the training, read from the installed package. */
+export interface CodeSection {
+  id: string;
+  /** The step of the run it belongs to (`code_tour.STEPS`). */
+  step: "data" | "model" | "loss" | "train" | "validate" | "test";
+  /** What it does, in one plain sentence, in the page's language. */
+  summary: string;
+  name: string;
+  file: string;
+  first_line: number;
+  lines: string[];
+  notes: CodeNote[];
+  /** Notes that found their line, out of those written for this section. */
+  notes_resolved: number;
+  notes_total: number;
+  /** Set when the code is a library's, not VisionForge's. */
+  library?: CodeLibrary | null;
+}
+
+/** The annotated training code of `task`, with this run's branches marked. */
+export async function fetchCodeTour(task: string, settings: CodeSettings): Promise<CodeSection[]> {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(settings)) {
+    if (value !== undefined) query.set(key, String(value));
+  }
+  const suffix = query.size ? `?${query}` : "";
+  return request<CodeSection[]>(`/code-tour/${encodeURIComponent(task)}${suffix}`);
+}
+
+/** The tasks whose training code "Como funciona" can show. */
+export async function fetchCodeTourTasks(): Promise<CodeTourTask[]> {
+  return request<CodeTourTask[]>("/code-tour");
+}
+
+export interface MLflowTrackingStatus {
+  state: string;
+  error?: string | null;
+  run_id?: string | null;
+  status?: string | null;
+}
+
+/** Replay the local record into its original MLflow run. */
+export async function retryMLflowExport(runId: string): Promise<MLflowTrackingStatus> {
+  return request<MLflowTrackingStatus>(`/runs/${encodeURIComponent(runId)}/mlflow/retry`, { method: "POST" });
+}
+
 export interface RunDetail {
+  tracking?: MLflowTrackingStatus | null;
+  wandb?: WandbExportStatus | null;
+  comet?: CometExportStatus | null;
   run_id: string;
   experiment_name: string;
   status: string;
@@ -1306,7 +1532,10 @@ export async function fetchColabUsage(): Promise<ColabUsage> {
  *  public dataset it downloads itself. No credential leaves this machine. */
 export type ColabDatasetSource =
   | { kind: "url"; url: string }
-  | { kind: "provider"; provider: "torchvision" | "huggingface"; dataset: string; limit?: number };
+  | { kind: "provider"; provider: "torchvision" | "huggingface"; dataset: string; limit?: number }
+  // A folder inside Google Drive for desktop (ADR-164): `path` is the one picked
+  // in the panel's Drive browser; without it, the form's own dataset folder.
+  | { kind: "drive"; my_drive_root?: string; path?: string };
 
 export type ColabAccelerator = "T4" | "L4" | "A100" | "H100" | "G4";
 
@@ -1314,6 +1543,47 @@ export type ColabAccelerator = "T4" | "L4" | "A100" | "H100" | "G4";
 export interface ColabLaunch {
   source: ColabDatasetSource;
   accelerator: ColabAccelerator;
+  /** Also save the run to MyDrive/VisionForge/runs/ (ADR-164). */
+  drive_export?: boolean;
+}
+
+/** Tell a Colab job that the Drive access was granted, so it answers the CLI (ADR-164). */
+export async function continueDriveConsent(runId: string): Promise<{ sent: boolean }> {
+  return request<{ sent: boolean }>("/colab/drive/continue", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId }),
+  });
+}
+
+/** One folder of this computer's "My Drive" (ADR-164). `root` is null when no
+ *  "My Drive" folder was found; `rel` is the folder under it, `/`-separated;
+ *  `path` is it on this machine and `remote` on the Colab VM. */
+export interface ColabDriveFolders {
+  root: string | null;
+  rel: string;
+  path: string | null;
+  remote: string | null;
+  folders: string[];
+  truncated: boolean;
+  can_open: boolean;
+}
+
+export async function fetchDriveFolders(rel: string, myDriveRoot?: string): Promise<ColabDriveFolders> {
+  const query = new URLSearchParams();
+  if (rel) query.set("rel", rel);
+  if (myDriveRoot?.trim()) query.set("my_drive_root", myDriveRoot.trim());
+  const suffix = query.size ? `?${query}` : "";
+  return request<ColabDriveFolders>(`/colab/drive/folders${suffix}`);
+}
+
+/** Show a folder of "My Drive" in this machine's file manager. */
+export async function openDriveFolder(rel: string, myDriveRoot?: string): Promise<{ path: string }> {
+  return request<{ path: string }>("/colab/drive/open", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rel, my_drive_root: myDriveRoot?.trim() || null }),
+  });
 }
 
 export async function runColabExperiment(body: Record<string, unknown>): Promise<RunResponse> {
@@ -1410,4 +1680,491 @@ export async function fetchServerVersion(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+// ── dataset explorer (ADR-165) ───────────────────────────────────────────────
+
+const JSON_HEADERS = { "Content-Type": "application/json" };
+
+export async function explorerSummary(
+  form: ExplorerForm,
+): Promise<ExplorerSummary> {
+  return request<ExplorerSummary>("/explorer/summary", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(explorerBody(form)),
+  });
+}
+
+export interface ExplorerImageItem {
+  split: string;
+  path: string;
+  label_path: string | null;
+  classes: string[];
+  boxes: number;
+}
+
+export interface ExplorerImagesPage {
+  total: number;
+  offset: number;
+  limit: number;
+  items: ExplorerImageItem[];
+}
+
+export async function explorerImages(
+  form: ExplorerForm,
+  filter: { split: string | null; className: string | null },
+  offset: number,
+  limit: number,
+): Promise<ExplorerImagesPage> {
+  return request<ExplorerImagesPage>("/explorer/images", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({
+      ...explorerBody(form),
+      split: filter.split,
+      class_name: filter.className,
+      offset,
+      limit,
+    }),
+  });
+}
+
+export async function explorerScanStart(
+  form: ExplorerForm,
+  maxImages: number,
+): Promise<ScanJob> {
+  return request<ScanJob>("/explorer/scan", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ ...explorerBody(form), max_images: maxImages }),
+  });
+}
+
+export async function explorerScanStatus(jobId: string): Promise<ScanJob> {
+  return request<ScanJob>(`/explorer/scan/${encodeURIComponent(jobId)}`);
+}
+
+export async function explorerScanCancel(jobId: string): Promise<void> {
+  await request<unknown>(`/explorer/scan/${encodeURIComponent(jobId)}/cancel`, {
+    method: "POST",
+  });
+}
+
+// ── incorporating images into a dataset (ADR-166) ────────────────────────────
+
+const INCORPORATE = "/explorer/incorporate";
+
+export async function incorporatePreview(
+  form: ExplorerForm,
+  sourceDir: string,
+): Promise<IncorporateJob<IncorporatePreview>> {
+  return request<IncorporateJob<IncorporatePreview>>(`${INCORPORATE}/preview`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ ...explorerBody(form), source_dir: sourceDir.trim() }),
+  });
+}
+
+export async function incorporateStatus<R>(jobId: string): Promise<IncorporateJob<R>> {
+  return request<IncorporateJob<R>>(`${INCORPORATE}/${encodeURIComponent(jobId)}`);
+}
+
+export async function incorporatePlan(
+  jobId: string,
+  body: PlanBody,
+): Promise<IncorporatePlan> {
+  return request<IncorporatePlan>(`${INCORPORATE}/${encodeURIComponent(jobId)}/plan`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(body),
+  });
+}
+
+export async function incorporateApply(
+  jobId: string,
+  body: PlanBody,
+  destName: string,
+): Promise<IncorporateJob<IncorporateResult>> {
+  return request<IncorporateJob<IncorporateResult>>(
+    `${INCORPORATE}/${encodeURIComponent(jobId)}/apply`,
+    {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ ...body, dest_name: destName.trim() }),
+    },
+  );
+}
+
+export async function incorporateCancel(jobId: string): Promise<void> {
+  await request<unknown>(`${INCORPORATE}/${encodeURIComponent(jobId)}/cancel`, {
+    method: "POST",
+  });
+}
+
+// ── merging two datasets into a new one (ADR-167) ───────────────────────────
+
+const MERGE = "/explorer/merge";
+
+/** B is read with the same split folder names the form gives A. */
+export async function mergePreview(
+  form: ExplorerForm,
+  otherDir: string,
+): Promise<IncorporateJob<MergePreview>> {
+  return request<IncorporateJob<MergePreview>>(`${MERGE}/preview`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({
+      ...explorerBody(form),
+      other_dir: otherDir.trim(),
+      other_train_dir: form.train_dir,
+      other_val_dir: form.val_dir,
+      other_test_dir: form.test_dir,
+    }),
+  });
+}
+
+export async function mergeStatus<R>(jobId: string): Promise<IncorporateJob<R>> {
+  return request<IncorporateJob<R>>(`${MERGE}/${encodeURIComponent(jobId)}`);
+}
+
+export async function mergePlan(jobId: string, mapping: MappingBody): Promise<MergePlan> {
+  return request<MergePlan>(`${MERGE}/${encodeURIComponent(jobId)}/plan`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ mapping }),
+  });
+}
+
+export async function mergeApply(
+  jobId: string,
+  mapping: MappingBody,
+  destName: string,
+): Promise<IncorporateJob<MergeResult>> {
+  return request<IncorporateJob<MergeResult>>(`${MERGE}/${encodeURIComponent(jobId)}/apply`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ mapping, dest_name: destName.trim() }),
+  });
+}
+
+export async function mergeCancel(jobId: string): Promise<void> {
+  await request<unknown>(`${MERGE}/${encodeURIComponent(jobId)}/cancel`, {
+    method: "POST",
+  });
+}
+
+// ── re-splitting a dataset into a new one (ADR-168) ─────────────────────────
+
+const RESPLIT = "/explorer/resplit";
+
+export async function resplitPreview(
+  form: ExplorerForm,
+  groupCsv: string,
+): Promise<IncorporateJob<ResplitPreview>> {
+  const csv = groupCsv.trim();
+  return request<IncorporateJob<ResplitPreview>>(`${RESPLIT}/preview`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ ...explorerBody(form), ...(csv ? { group_csv: csv } : {}) }),
+  });
+}
+
+export async function resplitStatus<R>(jobId: string): Promise<IncorporateJob<R>> {
+  return request<IncorporateJob<R>>(`${RESPLIT}/${encodeURIComponent(jobId)}`);
+}
+
+export async function resplitPlan(jobId: string, body: ResplitBody): Promise<ResplitPlan> {
+  return request<ResplitPlan>(`${RESPLIT}/${encodeURIComponent(jobId)}/plan`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(body),
+  });
+}
+
+export async function resplitApply(
+  jobId: string,
+  body: ResplitBody,
+  destName: string,
+): Promise<IncorporateJob<ResplitResult>> {
+  return request<IncorporateJob<ResplitResult>>(
+    `${RESPLIT}/${encodeURIComponent(jobId)}/apply`,
+    {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ ...body, dest_name: destName.trim() }),
+    },
+  );
+}
+
+export async function resplitCancel(jobId: string): Promise<void> {
+  await request<unknown>(`${RESPLIT}/${encodeURIComponent(jobId)}/cancel`, {
+    method: "POST",
+  });
+}
+
+// ── converting between YOLO and COCO into a new dataset (ADR-169) ───────────
+
+const COCO = "/explorer/coco";
+
+type CocoSide = "export" | "import";
+
+const cocoUrl = (side: CocoSide, rest: string) => `${COCO}/${side}${rest}`;
+const cocoJob = (side: CocoSide, jobId: string, rest = "") =>
+  cocoUrl(side, `/${encodeURIComponent(jobId)}${rest}`);
+
+function cocoPost<T>(url: string, body?: unknown): Promise<T> {
+  return request<T>(url, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(body ?? {}),
+  });
+}
+
+export async function cocoExportPreview(
+  form: ExplorerForm,
+): Promise<IncorporateJob<CocoExportPreview>> {
+  return cocoPost(cocoUrl("export", "/preview"), { base_dir: form.base_dir });
+}
+
+export async function cocoExportStatus<R>(jobId: string): Promise<IncorporateJob<R>> {
+  return request<IncorporateJob<R>>(cocoJob("export", jobId));
+}
+
+/** The preview again, with the destination name checked by the server. */
+export async function cocoExportPlan(jobId: string, destName: string): Promise<unknown> {
+  return cocoPost(cocoJob("export", jobId, "/plan"), { dest_name: destName.trim() });
+}
+
+export async function cocoExportApply(
+  jobId: string,
+  destName: string,
+): Promise<IncorporateJob<CocoExportResult>> {
+  return cocoPost(cocoJob("export", jobId, "/apply"), { dest_name: destName.trim() });
+}
+
+export async function cocoExportCancel(jobId: string): Promise<void> {
+  await cocoPost<unknown>(cocoJob("export", jobId, "/cancel"));
+}
+
+export async function cocoImportPreview(
+  sourceDir: string,
+): Promise<IncorporateJob<CocoImportPreview>> {
+  return cocoPost(cocoUrl("import", "/preview"), { source_dir: sourceDir.trim() });
+}
+
+export async function cocoImportStatus<R>(jobId: string): Promise<IncorporateJob<R>> {
+  return request<IncorporateJob<R>>(cocoJob("import", jobId));
+}
+
+export async function cocoImportPlan(
+  jobId: string,
+  splits: Record<string, string>,
+  destName?: string,
+): Promise<CocoImportPlan> {
+  return cocoPost(cocoJob("import", jobId, "/plan"), {
+    splits,
+    ...(destName ? { dest_name: destName } : {}),
+  });
+}
+
+export async function cocoImportApply(
+  jobId: string,
+  splits: Record<string, string>,
+  destName: string,
+): Promise<IncorporateJob<CocoImportResult>> {
+  return cocoPost(cocoJob("import", jobId, "/apply"), {
+    splits,
+    dest_name: destName.trim(),
+  });
+}
+
+export async function cocoImportCancel(jobId: string): Promise<void> {
+  await cocoPost<unknown>(cocoJob("import", jobId, "/cancel"));
+}
+
+
+export interface HubTokenStatus {
+  configured: boolean;
+  shared: boolean;
+}
+
+export interface HubPreview {
+  files: string[];
+  digest: string;
+  card: string;
+}
+
+/** Read this profile's token availability without returning the secret. */
+export async function fetchHubToken(): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/hub/token");
+}
+
+/** Save a Hub token for the active profile on the server. */
+export async function saveHubToken(token: string): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/hub/token", {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+}
+
+/** Remove the active profile's saved Hub token. */
+export async function deleteHubToken(): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/hub/token", { method: "DELETE" });
+}
+
+/** Preview the exact files and card before an explicit Hub upload. */
+export async function fetchHubPreview(runId: string): Promise<HubPreview> {
+  return request<HubPreview>(`/hub/preview?run_id=${encodeURIComponent(runId)}`);
+}
+
+/** Upload the previously reviewed snapshot to the requested Hub repository. */
+export async function exportRunToHub(runId: string, repoId: string, digest: string): Promise<{ url: string }> {
+  return request<{ url: string }>("/hub/export", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId, repo_id: repoId, digest }),
+  });
+}
+
+/** Which Zenodo receives a draft: the real one or its test sandbox (ADR-174). */
+export type ZenodoSite = "zenodo" | "sandbox";
+
+export interface ZenodoPreview {
+  name: string;
+  size: number;
+  files: string[];
+  notes: { artifact: string; reason: string }[];
+  digest: string;
+}
+
+export interface ZenodoDraft {
+  id: number | null;
+  url: string;
+  sandbox: boolean;
+  name: string;
+}
+
+const zenodoToken = (site: ZenodoSite) => (site === "sandbox" ? "/zenodo/sandbox/token" : "/zenodo/token");
+
+/** Whether this profile has a token for `site`; the token never comes back. */
+export async function fetchZenodoToken(site: ZenodoSite): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>(zenodoToken(site));
+}
+
+/** Save this profile's token for `site` on the server. */
+export async function saveZenodoToken(site: ZenodoSite, token: string): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>(zenodoToken(site), {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+}
+
+/** Forget this profile's token for `site`. */
+export async function deleteZenodoToken(site: ZenodoSite): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>(zenodoToken(site), { method: "DELETE" });
+}
+
+/** The bundle a draft would receive, built on the server without the network. */
+export async function fetchZenodoPreview(runId: string): Promise<ZenodoPreview> {
+  return request<ZenodoPreview>(`/zenodo/preview?run_id=${encodeURIComponent(runId)}`);
+}
+
+/** Create an unpublished draft holding the previewed bundle. */
+export async function createZenodoDraft(runId: string, digest: string, site: ZenodoSite): Promise<ZenodoDraft> {
+  return request<ZenodoDraft>("/zenodo/export", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId, digest, sandbox: site === "sandbox" }),
+  });
+}
+
+export interface GitHubPreview {
+  folder: string;
+  files: { path: string; size: number }[];
+  readme: string;
+  digest: string;
+}
+
+export interface GitHubCommit {
+  url: string;
+  commit: string;
+  branch: string;
+  folder: string;
+}
+
+/** Whether this profile has a GitHub token; the token never comes back. */
+export async function fetchGitHubToken(): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/github/token");
+}
+
+/** Save this profile's GitHub token on the server. */
+export async function saveGitHubToken(token: string): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/github/token", {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+}
+
+/** Forget this profile's GitHub token. */
+export async function deleteGitHubToken(): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/github/token", { method: "DELETE" });
+}
+
+/** The folder, files and README a commit would hold, built offline (ADR-175). */
+export async function fetchGitHubPreview(runId: string): Promise<GitHubPreview> {
+  return request<GitHubPreview>(`/github/preview?run_id=${encodeURIComponent(runId)}`);
+}
+
+/** Commit the previewed files to a private repository. */
+export async function commitRunToGitHub(runId: string, repo: string, digest: string): Promise<GitHubCommit> {
+  return request<GitHubCommit>("/github/export", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId, repo, digest }),
+  });
+}
+
+export type DvcRepositoryStateName = "ready" | "missing" | "not_dir" | "not_git" | "no_dvc";
+
+export interface DvcRepositoryState {
+  path: string;
+  state: DvcRepositoryStateName;
+  remote: string | null;
+  tools: { git: boolean; dvc: boolean };
+}
+
+export interface DvcPreview {
+  folder: string;
+  files: { path: string; size: number; storage: "git" | "dvc" }[];
+  readme: string;
+  digest: string;
+  repository: DvcRepositoryState;
+}
+
+export interface DvcExportResult {
+  folder: string;
+  path: string;
+  commit: string | null;
+  remote: string | null;
+  pushed: boolean | null;
+}
+
+/** The folder, its files (git or DVC) and the repository's state (ADR-176). */
+export async function fetchDvcPreview(runId: string, repo: string): Promise<DvcPreview> {
+  const query = `run_id=${encodeURIComponent(runId)}&repo=${encodeURIComponent(repo)}`;
+  return request<DvcPreview>(`/dvc/preview?${query}`);
+}
+
+/** Make the folder a git repository with DVC (git init, dvc init). */
+export async function prepareDvcRepository(repo: string): Promise<DvcRepositoryState> {
+  return request<DvcRepositoryState>("/dvc/prepare", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ repo }),
+  });
+}
+
+/** Write the previewed folder, dvc add the weights, commit it and push them. */
+export async function versionRunWithDvc(runId: string, repo: string, digest: string): Promise<DvcExportResult> {
+  return request<DvcExportResult>("/dvc/export", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId, repo, digest }),
+  });
 }

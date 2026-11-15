@@ -287,9 +287,17 @@ def cv_to_latex(report: dict[str, Any], *, experiment: str = "") -> str:
 def comparison_to_latex(
     comparisons: list[dict[str, Any]], *, experiment: str = "", alpha: float = 0.05
 ) -> str:
-    """Paired significance matrix: difference, CI, test, p, effect size."""
+    """Paired significance matrix: difference, CI, test, p, effect size.
+
+    The caption names how each interval was built (ADR-187): the dual of the
+    row's test, or the percentile bootstrap of a report written before it.
+    """
     rows: list[list[str]] = []
+    methods: list[str] = []
     for c in comparisons:
+        method = _ci_method(c)
+        if method not in methods:
+            methods.append(method)
         star = r"$^{*}$" if c.get("significant") else ""
         rows.append(
             [
@@ -299,7 +307,7 @@ def comparison_to_latex(
                     b=escape(c.get("label_b")),
                 ),
                 f"{_num(c.get('mean_difference'))}{star}",
-                f"[{_num(c.get('ci_low'))}, {_num(c.get('ci_high'))}]",
+                _interval(c.get("ci_low"), c.get("ci_high")),
                 escape(c.get("test", "").replace("_", " ")),
                 _num(c.get("p_value"), digits=4),
                 _num(c.get("effect_size"), digits=2),
@@ -315,11 +323,16 @@ def comparison_to_latex(
         power_note = " " + tr_artifact(
             "latex.comparison_underpowered", floor=floor, alpha=alpha
         )
+    ci_note = tr_artifact(
+        "latex.comparison_ci",
+        methods="; ".join(tr_artifact(_CI_METHOD_KEYS[m]) for m in methods),
+    )
+    caption = tr_artifact(
+        "latex.comparison_caption",
+        experiment=escape(experiment or tr_artifact(LATEX_EXPERIMENT_KEY)),
+    )
     return _table(
-        caption=tr_artifact(
-            "latex.comparison_caption",
-            experiment=escape(experiment or tr_artifact(LATEX_EXPERIMENT_KEY)),
-        ),
+        caption=f"{caption} {ci_note}" if methods else caption,
         label="tab:comparison",
         column_spec="lrcccr",
         header=[
@@ -333,6 +346,28 @@ def comparison_to_latex(
         rows=rows,
         note=tr_artifact("latex.comparison_note", alpha=alpha, power_note=power_note),
     )
+
+
+# How each interval of a paired difference was built, as the caption names it.
+_CI_METHOD_KEYS = {
+    "t": "latex.ci_method_t",
+    "hodges_lehmann": "latex.ci_method_hodges_lehmann",
+    "bootstrap": "latex.ci_method_bootstrap",
+}
+
+
+def _ci_method(comparison: dict[str, Any]) -> str:
+    """How a row's interval was built; a report without the field predates
+    ADR-187 and carries the percentile bootstrap."""
+    method = comparison.get("ci_method")
+    return method if method in _CI_METHOD_KEYS else "bootstrap"
+
+
+def _interval(low: Any, high: Any) -> str:
+    """``[low, high]``, or a single dash when the data bound neither end."""
+    if low is None and high is None:
+        return "---"
+    return f"[{_num(low)}, {_num(high)}]"
 
 
 def report_to_latex(report: dict[str, Any], *, experiment: str = "") -> str | None:

@@ -1,8 +1,9 @@
 """Per-model test for detection runs: evaluate a saved checkpoint on a new set.
 
-The detection analogue of ``routes._execute_run_test`` (classification): it loads
-the run's best checkpoint, runs it over a new YOLO dataset, computes mAP@0.5, and
-appends the result to ``run.json``'s ``tests[]`` (ADR-013 test-history contract).
+The detection analogue of ``evaluation_routes._execute_run_test``
+(classification): it loads the run's best checkpoint, runs it over a new YOLO
+dataset, computes mAP@0.5, and appends the result to ``run.json``'s ``tests[]``
+(ADR-013 test-history contract).
 
 Backend split mirrors the trainer (ADR-033/034): the torchvision path rebuilds
 the detector + DataLoader and reuses ``detection_metrics`` (CPU, dependency-light);
@@ -19,6 +20,7 @@ from typing import Any
 
 from visionforge.gui.api.schemas import RunTestRequest, RunTestResponse
 from visionforge.utils.detection_config import DetectionConfig
+from visionforge.utils.doctor import ultralytics_missing_message
 from visionforge.utils.messages import tr
 
 # Preferred evaluation split order: a held-out split first, train last.
@@ -152,10 +154,7 @@ def _evaluate_ultralytics(
     from visionforge.core.detection_data import DetectionDataModule
 
     if detection_trainer.YOLO is None:
-        raise RuntimeError(
-            "ultralytics ships with VisionForge and is missing — the install "
-            "looks damaged: pip install --force-reinstall 'visionforge-studio'."
-        )
+        raise RuntimeError(ultralytics_missing_message())
 
     data_yaml = DetectionDataModule(config).resolve_data_yaml(out_dir=run_dir / "tests")
     model = detection_trainer.YOLO(str(checkpoint))

@@ -645,3 +645,132 @@ class TestRegistry:
 
         registry = BlockRegistry.discover()
         assert "CrossValidationBlock" in registry
+
+
+# ── fold transforms follow the config (ADR-083) ───────────────────────────────
+
+
+class TestFoldTransformsFollowTheConfig:
+    """A fold trains with the same pipeline as a single run of the same config.
+
+    The fold module rebuilt the transforms by hand and skipped both
+    ``transforms.augment`` and ``data.preprocessing``: a K-fold with augmentation
+    off augmented, and one with a filter configured trained without it.
+    """
+
+    def _fold(self, cv_config: ExperimentConfig, **data: Any) -> Any:
+        from torch.utils.data import Subset
+        from torchvision.datasets import ImageFolder
+
+        from visionforge.blocks.cross_validation import _FoldDataModule
+
+        raw = cv_config.model_dump(mode="json")
+        raw["data"]["transforms"].update(data.pop("transforms", {}))
+        raw["data"].update(data)
+        config = ExperimentConfig.model_validate(raw)
+        pool = ImageFolder(str(config.data.base_dir))
+        return _FoldDataModule(
+            Subset(pool, [0, 1, 6, 7]),
+            Subset(pool, [2, 8]),
+            [0.5, 0.5, 0.5],
+            [0.2, 0.2, 0.2],
+            config,
+        )
+
+    @staticmethod
+    def _steps(fold: Any, split: str) -> list[Any]:
+        ds = fold._train_ds if split == "train" else fold._val_ds
+        return list(ds.transform.transforms)
+
+    def test_augment_off_has_no_random_step(self, cv_config: ExperimentConfig) -> None:
+        fold = self._fold(
+            cv_config,
+            transforms={
+                "augment": False,
+                "horizontal_flip": True,
+                "rotation_degrees": 15,
+                "color_jitter": True,
+            },
+        )
+
+        names = [type(s).__name__ for s in self._steps(fold, "train")]
+        assert not [n for n in names if n.startswith("Random") or n == "ColorJitter"]
+
+    def test_augment_on_keeps_the_random_steps(
+        self, cv_config: ExperimentConfig
+    ) -> None:
+        fold = self._fold(
+            cv_config,
+            transforms={
+                "augment": True,
+                "horizontal_flip": True,
+                "rotation_degrees": 15,
+            },
+        )
+
+        names = [type(s).__name__ for s in self._steps(fold, "train")]
+        assert "RandomHorizontalFlip" in names
+        assert "RandomRotation" in names
+
+    @pytest.mark.parametrize("split", ["train", "val"])
+    def test_preprocessing_runs_first(
+        self, cv_config: ExperimentConfig, split: str
+    ) -> None:
+        from visionforge.core.data import _PreprocessingTransform
+
+        fold = self._fold(cv_config, preprocessing={"steps": [{"kind": "grayscale"}]})
+
+        first = self._steps(fold, split)[0]
+        assert isinstance(first, _PreprocessingTransform)
+
+    def test_the_fold_statistics_normalise_both_splits(
+        self, cv_config: ExperimentConfig
+    ) -> None:
+        fold = self._fold(cv_config)
+
+        for split in ("train", "val"):
+            normalize = self._steps(fold, split)[-1]
+            assert list(normalize.mean) == [0.5, 0.5, 0.5]
+            assert list(normalize.std) == [0.2, 0.2, 0.2]
+
+
+class TestFoldStatisticsOnMixedSizes:
+    """Fold statistics are measured on the resized view the model sees.
+
+    The pool was read with ToTensor only, so a dataset whose images differ in
+    size could not even be batched, and the statistics described pixels the
+    model never saw.
+    """
+
+    def test_images_of_different_sizes_are_measured(self, tmp_path: Path) -> None:
+        from torchvision.datasets import ImageFolder
+
+        from visionforge.blocks.cross_validation import (
+            _compute_fold_stats,
+            _statistics_view,
+        )
+
+        for cls, (width, height) in [("a", (40, 40)), ("b", (48, 40))]:
+            folder = tmp_path / cls
+            folder.mkdir()
+            for i in range(3):
+                pixels = np.full((height, width, 3), 60 * (i + 1), dtype=np.uint8)
+                Image.fromarray(pixels).save(folder / f"{i}.png")
+        config = ExperimentConfig.model_validate(
+            {
+                "name": "mixed",
+                "model": {"name": "resnet18", "num_classes": 2, "pretrained": False},
+                "data": {
+                    "base_dir": str(tmp_path),
+                    "train_dir": "",
+                    "transforms": {"image_size": 32},
+                },
+            }
+        )
+
+        pool = ImageFolder(str(tmp_path), transform=_statistics_view(config.data))
+        mean, std = _compute_fold_stats(pool, list(range(6)), 0)
+
+        assert len(mean) == 3
+        assert all(0.0 < m < 1.0 for m in mean)
+        assert all(s > 0.0 for s in std)

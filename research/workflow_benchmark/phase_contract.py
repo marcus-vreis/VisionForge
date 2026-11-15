@@ -128,6 +128,20 @@ class PhaseRecorder:
         return self.report
 
 
+# Both paths of every paired benchmark, in the order an even seed runs them.
+EXECUTION_ORDER = ("native_pytorch", "visionforge_trainer")
+
+
+def execution_order(seed: int) -> list[str]:
+    """Counterbalance a pair: even seeds run native first, odd seeds run it last.
+
+    The second path may read warm OS file caches, so alternating by seed keeps
+    that advantage from always landing on the same side (#167).
+    """
+    order = list(EXECUTION_ORDER)
+    return order if seed % 2 == 0 else order[::-1]
+
+
 def contract_header() -> dict[str, Any]:
     """Return the contract description stored in every contract report."""
     return {

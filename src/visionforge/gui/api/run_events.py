@@ -22,7 +22,9 @@ class RunEventLog:
         self._items: list[dict[str, Any] | None] = []
         self._changed = asyncio.Event()
 
-    async def put(self, item: dict[str, Any] | None) -> None:
+    # Async on purpose: worker threads hand events over with
+    # run_coroutine_threadsafe(log.put(...)), so the append runs on the loop.
+    async def put(self, item: dict[str, Any] | None) -> None:  # NOSONAR python:S7503
         """Append an event, or the ``None`` that ends the stream."""
         self._items.append(item)
         self._changed.set()

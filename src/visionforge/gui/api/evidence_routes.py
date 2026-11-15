@@ -16,6 +16,7 @@ from starlette.background import BackgroundTask
 
 from visionforge.core.dataset_audit import audit_dataset
 from visionforge.core.experiment_bundle import export_experiment_bundle
+from visionforge.gui.api.http_responses import TAG_DATASETS, TAG_RUNS
 from visionforge.gui.api.profiles import PROFILE_HEADER, Profile
 from visionforge.utils.messages import tr
 
@@ -120,7 +121,9 @@ def build_evidence_router(
     router = APIRouter()
 
     @router.post(
-        "/dataset/audit", responses={400: {"description": "Dataset audit failed"}}
+        "/dataset/audit",
+        responses={400: {"description": "Dataset audit failed"}},
+        tags=[TAG_DATASETS],
     )
     async def audit_images(req: DatasetAuditRequest) -> dict[str, Any]:
         """Read image splits without blocking status polling or changing data."""
@@ -143,6 +146,7 @@ def build_evidence_router(
             404: {"description": "Profile or run not found"},
             409: {"description": "Run is being written or exported"},
         },
+        tags=[TAG_RUNS],
     )
     async def download_bundle(
         run_id: str,

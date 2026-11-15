@@ -16,6 +16,7 @@ import yaml
 from pydantic import BaseModel
 
 from visionforge.utils.anomaly_config import AnomalyConfig
+from visionforge.utils.config import ExperimentConfig
 from visionforge.utils.detection_config import DetectionConfig
 from visionforge.utils.regression_config import RegressionConfig
 from visionforge.utils.segmentation_config import SegmentationConfig
@@ -32,6 +33,7 @@ def _load_with_base_dir(name: str, base_dir: Path) -> dict[str, Any]:
 @pytest.mark.parametrize(
     ("filename", "cls", "task"),
     [
+        ("baseline.yaml", ExperimentConfig, "binary"),
         ("detection.yaml", DetectionConfig, "detection"),
         ("regression.yaml", RegressionConfig, "regression"),
         ("segmentation.yaml", SegmentationConfig, "segmentation"),

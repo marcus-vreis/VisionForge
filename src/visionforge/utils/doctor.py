@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -13,6 +14,8 @@ from importlib.metadata import distribution
 from pathlib import Path
 from typing import TypedDict
 
+from visionforge.utils.cuda import mps_available
+
 # The PyPI distribution name, which is NOT the import name: plain `visionforge`
 # on PyPI belongs to an unrelated project.
 _DIST_NAME = "visionforge-studio"
@@ -21,7 +24,9 @@ _DIST_NAME = "visionforge-studio"
 # Each entry is (min_driver_major*10 + min_driver_minor, tag).
 # Rule: pick the highest tag whose threshold is <= driver CUDA (in major*10+minor space).
 # driver < 11.8 or None → cpu; 11.8..12.0 → cu118; 12.1..12.3 → cu121;
-# 12.4..12.5 → cu124; 12.6..12.7 → cu126; 12.8+ → cu128.
+# 12.4..12.5 → cu124; 12.6..12.7 → cu126; 12.8..12.9 → cu128; 13.0+ → cu130.
+# cu118/cu121/cu124 stay only for drivers too old for 12.6: their indexes stopped
+# at torch 2.7.1/2.5.1/2.6.0, below every security fix (ADR-198).
 #
 # cu128 matters beyond "newer is nicer": RTX 50-series (Blackwell) is compute
 # capability 12.0, and no wheel before cu128 ships an sm_120 kernel. On those
@@ -34,6 +39,7 @@ _WHEEL_THRESHOLDS: list[tuple[int, str]] = [
     (124, "cu124"),
     (126, "cu126"),
     (128, "cu128"),
+    (130, "cu130"),
 ]
 
 _INDEX_BASE = "https://download.pytorch.org/whl"
@@ -195,13 +201,37 @@ def missing_package_hint(package: str) -> str:
     return f'pip install --force-reinstall "{_DIST_NAME}"  (missing: {package})'
 
 
+def ultralytics_installed() -> bool:
+    """Whether the optional ``detection`` extra's ``ultralytics`` is importable.
+
+    ``find_spec`` instead of an import: importing ultralytics costs ~1.7 s and
+    the GUI asks this when the page loads. A ``None`` in ``sys.modules`` (how
+    tests block an import) reads as absent too.
+    """
+    return importlib.util.find_spec("ultralytics") is not None
+
+
+def detection_install_command() -> str:
+    """The line that installs the ``detection`` extra (ultralytics, ADR-195)."""
+    if installed_from_source():
+        return 'pip install -e ".[detection]"'
+    return f'pip install "{_DIST_NAME}[detection]"'
+
+
+def ultralytics_missing_message() -> str:
+    """Why an Ultralytics run cannot start, and the install line that fixes it."""
+    from visionforge.utils.messages import tr
+
+    return tr("detection.ultralytics_missing", command=detection_install_command())
+
+
 def build_install_command(tag: str) -> tuple[list[str], str]:
     """Return the commands that put the ``tag`` build of torch in place, and its index.
 
     Only torch and torchvision — the package itself is already installed, that
     is how doctor is running. And two steps, because since ADR-106 there is
-    always a torch here already: `ultralytics` pulls one from PyPI on the first
-    install, and on Windows PyPI only carries CPU builds. Asking pip to install
+    always a torch here already: `timm` (and `ultralytics`, with the `detection`
+    extra of ADR-195) pulls one from PyPI on the first install, and on Windows PyPI only carries CPU builds. Asking pip to install
     `visionforge-studio[cu128]` against the CUDA index then changed nothing —
     the CPU torch already satisfies `torch>=2.3`, so pip printed "Requirement
     already satisfied" and stopped (ADR-107).
@@ -310,8 +340,26 @@ def _run_install(tag: str) -> int:
     return subprocess.run(install, check=False).returncode
 
 
+def _report_hidden_gpu() -> None:
+    """Name CUDA_VISIBLE_DEVICES when it is set to nothing or to -1.
+
+    Either value hides every card from torch, so doctor would otherwise report a
+    missing GPU without saying that the variable, not the machine, is the cause.
+    """
+    from visionforge.utils.messages import tr
+
+    value = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if value is not None and value.strip() in {"", "-1"}:
+        print(f"[WARN] {tr('doctor.gpu_hidden', value=value)}")
+
+
 def _report_torch_issues(
-    torch_info: TorchProbe, driver_cuda: str | None, steps: str, issues: list[str]
+    torch_info: TorchProbe,
+    driver_cuda: str | None,
+    steps: str,
+    issues: list[str],
+    *,
+    mps: bool = False,
 ) -> None:
     """Print torch diagnostics and collect missing or mismatched installs."""
     if not torch_info["importable"]:
@@ -327,9 +375,11 @@ def _report_torch_issues(
         issues.append("torch-missing")
     else:
         cuda_ok = torch_info["cuda_available"]
-        torch_marker = "OK" if cuda_ok else "WARN"
+        torch_marker = "OK" if cuda_ok or mps else "WARN"
+        mps_note = "  mps_available=True" if mps else ""
         print(
-            f"[{torch_marker}] torch {torch_info['version']}  cuda_available={cuda_ok}"
+            f"[{torch_marker}] torch {torch_info['version']}  "
+            f"cuda_available={cuda_ok}{mps_note}"
         )
 
         # Flag the silent-failure case: GPU driver present but CPU-only torch wheel.
@@ -390,6 +440,61 @@ def _report_workspace() -> None:
             print(f"  {label:17}: {path.resolve()}  (create it to add your own)")
 
 
+def _report_gpu(
+    torch_info: TorchProbe, driver_cuda: str | None, on_cuda: bool, on_mps: bool
+) -> None:
+    """Say which GPU, if any, this machine can train on."""
+    if driver_cuda:
+        print(f"[OK] CUDA driver version: {driver_cuda}")
+    elif on_cuda:
+        print(
+            "[OK] GPU usable via torch "
+            f"(CUDA build {torch_info['cuda_build']}); nvidia-smi not on PATH"
+        )
+    elif on_mps:
+        print("[OK] Apple GPU usable via torch (MPS, experimental)")
+    else:
+        print("[INFO] No CUDA-capable GPU detected (nvidia-smi not found or failed)")
+    _report_hidden_gpu()
+
+
+def _print_keep_install(version: str, on_mps_only: bool) -> None:
+    """Tell the user the installed torch already drives the GPU."""
+    where = "the Apple GPU (MPS)" if on_mps_only else "GPU"
+    print("  Recommended wheel: keep the current install")
+    print(f"  Reason           : torch {version} already runs on {where}")
+
+
+def _print_install_commands(tag: str, commands: list[str]) -> None:
+    """Show the wheel this machine should run and how to install it."""
+    print(f"  Recommended wheel: {tag}")
+    print("  Install commands :")
+    for line in commands:
+        print(f"    {line}")
+
+
+def _offer_fix(
+    tag: str,
+    commands: list[str],
+    already_working: bool,
+    confirm_fn: Callable[[str], bool],
+) -> None:
+    """Offer the install, never over a torch that already drives the GPU.
+
+    On a Mac the "recommended" wheel would be the CPU one.
+    """
+    if already_working:
+        print("\nNothing to fix: torch already runs on the GPU.")
+        return
+    prompt = (
+        f"\nReplace torch with the {tag} build now? This runs:\n"
+        + "\n".join(f"  {line}" for line in commands)
+        + "\n[y/N] "
+    )
+    if confirm_fn(prompt):
+        _run_install(tag)
+
+
 def run_doctor(
     fix: bool = False,
     confirm_fn: Callable[[str], bool] = _default_confirm,
@@ -416,16 +521,11 @@ def run_doctor(
     torch_info = probe_torch()
     driver_cuda = detect_driver_cuda()
     torch_says_cuda = torch_info["importable"] and torch_info["cuda_available"]
+    # Apple Silicon: PyPI's macOS torch drives the GPU through Metal, with no
+    # CUDA and no nvidia-smi, so nothing above would ever say "GPU" (ADR-192).
+    torch_says_mps = torch_info["importable"] and mps_available()
 
-    if driver_cuda:
-        print(f"[OK] CUDA driver version: {driver_cuda}")
-    elif torch_says_cuda:
-        print(
-            "[OK] GPU usable via torch "
-            f"(CUDA build {torch_info['cuda_build']}); nvidia-smi not on PATH"
-        )
-    else:
-        print("[INFO] No CUDA-capable GPU detected (nvidia-smi not found or failed)")
+    _report_gpu(torch_info, driver_cuda, torch_says_cuda, torch_says_mps)
 
     # --- Wheel recommendation (always shown — this is doctor's primary value) ---
     tag = select_wheel_tag(driver_cuda)
@@ -434,23 +534,20 @@ def run_doctor(
     # settles it is the build — as new as the one this driver calls for, keep it.
     # This matters more since ADR-107, because the fix now *uninstalls* torch;
     # printing that to someone whose setup is already right would be sabotage.
-    already_working = _keep_installed_torch(
+    already_working = torch_says_mps or _keep_installed_torch(
         torch_info, driver_cuda, tag, torch_says_cuda
     )
     commands, _index_url = build_install_command(tag)
     steps = "\n".join(f"         {line}" for line in commands)
     print()
     if already_working:
-        print("  Recommended wheel: keep the current install")
-        print(f"  Reason           : torch {torch_info['version']} already runs on GPU")
+        on_mps_only = torch_says_mps and not torch_says_cuda
+        _print_keep_install(torch_info["version"], on_mps_only)
     else:
-        print(f"  Recommended wheel: {tag}")
-        print("  Install commands :")
-        for line in commands:
-            print(f"    {line}")
+        _print_install_commands(tag, commands)
     print()
 
-    _report_torch_issues(torch_info, driver_cuda, steps, issues)
+    _report_torch_issues(torch_info, driver_cuda, steps, issues, mps=torch_says_mps)
 
     # --- Workspace ---
     # Custom models and tasks are picked up from folders *relative to the
@@ -471,12 +568,6 @@ def run_doctor(
 
     # --- Optional install ---
     if fix:
-        prompt = (
-            f"\nReplace torch with the {tag} build now? This runs:\n"
-            + "\n".join(f"  {line}" for line in commands)
-            + "\n[y/N] "
-        )
-        if confirm_fn(prompt):
-            _run_install(tag)
+        _offer_fix(tag, commands, already_working, confirm_fn)
 
     return exit_code

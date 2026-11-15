@@ -1,12 +1,19 @@
 from __future__ import annotations
 
-import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.strategies as strategies
+from tests.helpers import wait_experiment_done, wait_until
+
 from .conftest import occupy_queue, release_queue
+
+# Any: the tests swap its orchestrators and executors for fakes.
+strategies_mod: Any = strategies
 
 
 @pytest.fixture
@@ -36,12 +43,11 @@ class TestReplicatesEndpoints:
     def test_all_five_tasks_expose_a_replicates_route(
         self, app_and_routes: tuple
     ) -> None:
-        # Probe the APIRouter directly: depending on the Starlette version,
-        # app.routes may hide included-router children entirely.
-        _, routes_mod = app_and_routes
-        # getattr: newer FastAPI keeps an included router (profiles, ADR-132) as an
-        # entry without a path of its own.
-        paths = {getattr(route, "path", None) for route in routes_mod.router.routes}
+        # The OpenAPI document of the served app lists every route however the
+        # routers are split (ADR-132); router.routes hides an included router's
+        # children on newer FastAPI versions, and CI installs the newest one.
+        app, _ = app_and_routes
+        paths = set(app.openapi()["paths"])
         for task in (
             "classification",
             "regression",
@@ -54,12 +60,16 @@ class TestReplicatesEndpoints:
 
 class TestRegressionReplicates:
     def test_replicates_dispatch_and_aggregate_report(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.replicates import ReplicateTrial
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
 
@@ -72,8 +82,7 @@ class TestRegressionReplicates:
                 ReplicateTrial(seeds[2], "success", {"r2": 1.00}, 0.1),
             ]
 
-        orig = routes_mod.run_replicates
-        routes_mod.run_replicates = fake_replicates
+        monkeypatch.setattr(strategies_mod, "run_replicates", fake_replicates)
         try:
             client = live_client
             payload = {
@@ -85,12 +94,7 @@ class TestRegressionReplicates:
             assert resp.status_code == 200, resp.text
             run_id = resp.json()["run_id"]
 
-            status = {"status": "running"}
-            for _ in range(50):
-                status = client.get("/api/experiment/status").json()
-                if status["status"] in ("completed", "failed"):
-                    break
-                time.sleep(0.05)
+            status = wait_experiment_done(client)
             assert status["status"] == "completed", status
 
             assert captured["seeds"] == [7, 8, 9]
@@ -111,16 +115,19 @@ class TestRegressionReplicates:
             assert (Path(report["report_dir"]) / "replicates_summary.json").exists()
             assert (Path(report["report_dir"]) / "replicates_ranking.csv").exists()
         finally:
-            routes_mod.run_replicates = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_seeds_derived_from_config_seed_when_omitted(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.replicates import ReplicateTrial
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
 
@@ -128,29 +135,24 @@ class TestRegressionReplicates:
             captured["seeds"] = seeds
             return [ReplicateTrial(s, "success", {"r2": 0.9}, 0.1) for s in seeds]
 
-        orig = routes_mod.run_replicates
-        routes_mod.run_replicates = fake_replicates
+        monkeypatch.setattr(strategies_mod, "run_replicates", fake_replicates)
         try:
             client = live_client
             payload = {"config": _payload(tmp_path), "n_replicates": 3}
             resp = client.post("/api/regression/replicates", json=payload)
             assert resp.status_code == 200, resp.text
 
-            for _ in range(50):
-                if "seeds" in captured:
-                    break
-                time.sleep(0.05)
+            wait_until(lambda: "seeds" in captured, message='"seeds" in captured')
             # RegressionConfig defaults training.seed to 42 → 42, 43, 44
             assert captured["seeds"] == [42, 43, 44]
         finally:
-            routes_mod.run_replicates = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_duplicate_seeds_rejected(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(
             "/api/regression/replicates",
@@ -162,7 +164,7 @@ class TestRegressionReplicates:
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(
             "/api/regression/replicates",
@@ -174,7 +176,7 @@ class TestRegressionReplicates:
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post(
@@ -184,13 +186,13 @@ class TestRegressionReplicates:
             assert resp.status_code == 200
             assert resp.json()["status"] == "queued"
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_rejects_invalid_config(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         cfg = _payload(tmp_path)
         # num_targets=2 with a single target column → invalid RegressionConfig
         cfg["model"] = {"name": "resnet18", "num_targets": 2, "pretrained": False}
@@ -211,19 +213,22 @@ class TestUnknownMetricGuard:
     """
 
     def test_replicates_reject_metric_nobody_reported(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.replicates import ReplicateTrial
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         def fake_replicates(runner, base, seeds, metric, progress_callback=None):  # type: ignore[no-untyped-def]
             # Trials succeed but report r2 — not the requested metric.
             return [ReplicateTrial(s, "success", {"r2": 0.9}, 0.1) for s in seeds]
 
-        orig = routes_mod.run_replicates
-        routes_mod.run_replicates = fake_replicates
+        monkeypatch.setattr(strategies_mod, "run_replicates", fake_replicates)
         try:
             client = live_client
             resp = client.post(
@@ -236,15 +241,9 @@ class TestUnknownMetricGuard:
             )
             assert resp.status_code == 200, resp.text
 
-            status = {"status": "running"}
-            for _ in range(50):
-                status = client.get("/api/experiment/status").json()
-                if status["status"] in ("completed", "failed"):
-                    break
-                time.sleep(0.05)
+            status = wait_experiment_done(client)
             assert status["status"] == "failed"
             assert "test_accuracy" in status["error"]
             assert "r2" in status["error"]  # names what IS available
         finally:
-            routes_mod.run_replicates = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()

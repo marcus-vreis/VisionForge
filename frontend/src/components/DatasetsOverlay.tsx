@@ -1,5 +1,17 @@
+import { lazy, useState } from "react";
 import { useT } from "../i18n/useT";
-import { DatasetDownloadCard } from "./DatasetDownloadCard";
+import { LazySurface } from "./ErrorBoundary";
+
+// The sheet itself stays in the entry, so its tab survives closing it; what it
+// holds is fetched the first time it opens (GUI-12).
+const DatasetDownloadCard = lazy(() =>
+  import("./DatasetDownloadCard").then((m) => ({ default: m.DatasetDownloadCard })),
+);
+const DatasetExplorer = lazy(() =>
+  import("./DatasetExplorer").then((m) => ({ default: m.DatasetExplorer })),
+);
+
+type Tab = "get" | "explore";
 
 interface DatasetsOverlayProps {
   open: boolean;
@@ -16,6 +28,7 @@ interface DatasetsOverlayProps {
  */
 export function DatasetsOverlay({ open, onClose }: DatasetsOverlayProps) {
   const t = useT();
+  const [tab, setTab] = useState<Tab>("get");
   if (!open) return null;
 
   return (
@@ -36,6 +49,7 @@ export function DatasetsOverlay({ open, onClose }: DatasetsOverlayProps) {
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
+          // The explorer here only chooses a dataset; its lab opens full screen.
           width: "min(760px, 100%)",
           maxHeight: "85vh",
           background: "rgb(var(--lt-surface, 12 14 18) / 0.95)",
@@ -115,8 +129,45 @@ export function DatasetsOverlay({ open, onClose }: DatasetsOverlayProps) {
           </button>
         </div>
 
+        <div
+          role="tablist"
+          aria-label={t.datasetsOverlay.tabsLabel}
+          style={{
+            display: "flex",
+            gap: 6,
+            padding: "10px 24px 0",
+            flexShrink: 0,
+          }}
+        >
+          {(["get", "explore"] as const).map((id) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => setTab(id)}
+              style={{
+                padding: "7px 14px",
+                borderRadius: 8,
+                border: `1px solid ${tab === id ? "var(--accent-vf)" : "var(--vf-panel-stroke)"}`,
+                background: tab === id ? "var(--accent-soft)" : "transparent",
+                color: tab === id ? "var(--vf-text)" : "var(--vf-text-dim)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                letterSpacing: "0.10em",
+                textTransform: "uppercase",
+                cursor: "pointer",
+              }}
+            >
+              {id === "get" ? t.datasetsOverlay.tabGet : t.datasetsOverlay.tabExplore}
+            </button>
+          ))}
+        </div>
+
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px 24px" }}>
-          <DatasetDownloadCard collapsible={false} />
+          <LazySurface>
+            {tab === "get" ? <DatasetDownloadCard collapsible={false} /> : <DatasetExplorer />}
+          </LazySurface>
         </div>
       </div>
     </div>

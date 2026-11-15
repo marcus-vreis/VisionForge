@@ -4,9 +4,13 @@
  * copy-and-paste flow, shows the account and its balance, and switches account.
  * Nothing here allocates a Colab runtime. The token stays on the server: the
  * page only ever sees the authorization URL and sends back the code.
+ *
+ * The popover is split in sections (connection, account and usage, train,
+ * runtimes), one short line per control; anything longer sits behind a
+ * closed "how it works" / "learn more" disclosure.
  */
 
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import {
   cancelColabLogin,
   fetchColabStatus,
@@ -30,51 +34,47 @@ import {
   parseDatasetSource,
   roundHours,
 } from "../lib/colab-connection";
-
-const MONO: CSSProperties = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
-  letterSpacing: "0.08em",
-};
-
-const TEXT: CSSProperties = { ...MONO, lineHeight: 1.5, color: "var(--vf-text)" };
-const ERROR: CSSProperties = {
-  ...TEXT,
-  color: "oklch(calc(0.75 - var(--lt-flip, 0) * 0.2) 0.15 25)",
-};
-
-const LINK: CSSProperties = {
-  ...MONO,
-  background: "none",
-  border: "none",
-  padding: 0,
-  color: "var(--vf-text-dim)",
-  textDecoration: "underline",
-  cursor: "pointer",
-};
-
-const ACTION: CSSProperties = {
-  ...MONO,
-  padding: "8px 12px",
-  borderRadius: 8,
-  border: "1px solid var(--accent-vf)",
-  background: "rgb(var(--lt-ink, 255 255 255) / 0.04)",
-  color: "var(--vf-text)",
-  cursor: "pointer",
-  textTransform: "uppercase",
-};
+import { loadMyDriveRoot, saveMyDriveRoot } from "../lib/drive-consent";
+import { driveLaunchSource } from "../lib/drive-folders";
+import { DrivePicker } from "./ColabDrivePicker";
+import { MenuSelect } from "./controls/MenuSelect";
+import { switchStyle } from "./trackerStyles";
+import { ACTION, BODY, CHECK_ROW, DIM, ERROR, FIELD, LABEL, LINK, MONO, STACK } from "./colabStyles";
 
 const INSTALL_POLL_MS = 2000;
 const ACCELERATORS: ColabAccelerator[] = ["T4", "L4", "A100", "H100", "G4"];
+const isAccelerator = (value: string): value is ColabAccelerator =>
+  (ACCELERATORS as string[]).includes(value);
 
-const FIELD: CSSProperties = {
-  ...MONO,
-  padding: "6px 8px",
-  borderRadius: 6,
-  border: "1px solid var(--vf-panel-stroke)",
-  background: "rgb(var(--lt-shade, 0 0 0) / 0.35)",
-  color: "var(--vf-text)",
+const SECTION_TITLE: CSSProperties = {
+  ...LABEL,
+  margin: 0,
+  fontWeight: 600,
+  color: "var(--vf-text-dim)",
 };
+
+/** One block of the popover, with a short title and a rule above it. */
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section
+      aria-label={title}
+      style={{ ...STACK, gap: 10, paddingTop: 14, borderTop: "1px solid var(--vf-panel-stroke)" }}
+    >
+      <h3 style={SECTION_TITLE}>{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+/** Longer copy, closed until asked for. */
+function More({ summary, children }: { summary: string; children: ReactNode }) {
+  return (
+    <details>
+      <summary style={{ ...LINK, display: "list-item", textDecoration: "none" }}>{summary}</summary>
+      <p style={{ ...DIM, paddingTop: 6 }}>{children}</p>
+    </details>
+  );
+}
 
 export interface ColabPanelProps {
   status: ColabStatus;
@@ -93,60 +93,125 @@ export interface ColabPanelProps {
   onStopSession: (name: string) => void;
   /** Present only when the open task can train on Colab (classification). */
   onTrain?: (launch: ColabLaunch) => void;
+  /** Why the open experiment cannot train on Colab now: the button is off. */
+  trainBlocked?: string;
 }
 
-function TrainOnColab({ busy, onTrain }: ColabPanelProps) {
+function TrainOnColab({ busy, onTrain, trainBlocked }: ColabPanelProps) {
   const t = useT();
   const c = t.colab;
   const [source, setSource] = useState("");
   const [accelerator, setAccelerator] = useState<ColabAccelerator>("T4");
   const [bad, setBad] = useState(false);
+  const [useDrive, setUseDrive] = useState(false);
+  const [driveRoot, setDriveRoot] = useState(loadMyDriveRoot);
+  const [drivePath, setDrivePath] = useState("");
+  const [driveRemote, setDriveRemote] = useState<string | null>(null);
+  const [driveExport, setDriveExport] = useState(false);
   if (!onTrain) return null;
 
   const submit = () => {
+    if (useDrive) {
+      saveMyDriveRoot(driveRoot);
+      setBad(false);
+      onTrain({
+        source: driveLaunchSource(driveRoot, drivePath),
+        accelerator,
+        drive_export: driveExport,
+      });
+      return;
+    }
     const parsed = parseDatasetSource(source);
     setBad(parsed === null);
-    if (parsed !== null) onTrain({ source: parsed, accelerator });
+    if (parsed !== null) onTrain({ source: parsed, accelerator, drive_export: driveExport });
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }} data-colab-train>
-      <div style={{ ...TEXT, fontWeight: 600 }}>{c.trainTitle}</div>
-      <label style={TEXT} htmlFor="colab-source">
-        {c.trainSource}
+    <div style={{ ...STACK, gap: 12 }} data-colab-train>
+      <label style={CHECK_ROW}>
+        <input
+          type="checkbox"
+          checked={useDrive}
+          onChange={(e) => setUseDrive(e.target.checked)}
+          style={switchStyle(useDrive)}
+        />
+        {c.driveSource}
       </label>
-      <input
-        id="colab-source"
-        type="text"
-        autoComplete="off"
-        spellCheck={false}
-        value={source}
-        placeholder={c.sourcePlaceholder}
-        onChange={(e) => setSource(e.target.value)}
-        style={FIELD}
-      />
-      {bad && <div style={ERROR}>{c.badSource}</div>}
+      {useDrive ? (
+        <>
+          <DrivePicker
+            driveRoot={driveRoot}
+            onDriveRoot={setDriveRoot}
+            folder={drivePath}
+            remote={driveRemote}
+            onPick={(folder, remote) => {
+              setDrivePath(folder);
+              setDriveRemote(remote);
+            }}
+          />
+          <More summary={c.learnMore}>{c.driveNote}</More>
+        </>
+      ) : (
+        <div style={{ ...STACK, gap: 6 }}>
+          <label style={LABEL} htmlFor="colab-source">
+            {c.trainSource}
+          </label>
+          <input
+            id="colab-source"
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            value={source}
+            placeholder={c.sourcePlaceholder}
+            onChange={(e) => setSource(e.target.value)}
+            style={FIELD}
+          />
+          {bad && <p style={ERROR}>{c.badSource}</p>}
+        </div>
+      )}
+      <label style={CHECK_ROW}>
+        <input
+          type="checkbox"
+          checked={driveExport}
+          onChange={(e) => setDriveExport(e.target.checked)}
+          style={switchStyle(driveExport)}
+        />
+        {c.driveExport}
+      </label>
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-        <label style={TEXT} htmlFor="colab-accelerator">
+        <span id="colab-accelerator-label" style={LABEL}>
           {c.accelerator}
-        </label>
-        <select
-          id="colab-accelerator"
-          value={accelerator}
-          onChange={(e) => setAccelerator(e.target.value as ColabAccelerator)}
-          style={FIELD}
+        </span>
+        <div
+          role="group"
+          aria-labelledby="colab-accelerator-label"
+          style={{ display: "flex", flex: 1, minWidth: 0 }}
         >
-          {ACCELERATORS.map((a) => (
-            <option key={a} value={a}>
-              {a}
-            </option>
-          ))}
-        </select>
-        <button type="button" style={ACTION} disabled={busy} onClick={submit}>
+          <MenuSelect
+            size="field"
+            value={accelerator}
+            title={c.accelerator}
+            options={ACCELERATORS}
+            onChange={(value) => {
+              if (isAccelerator(value)) setAccelerator(value);
+            }}
+          />
+        </div>
+        <button
+          type="button"
+          style={{ ...ACTION, padding: "12px 16px", borderRadius: 10 }}
+          disabled={busy || trainBlocked !== undefined}
+          onClick={submit}
+        >
           {c.train}
         </button>
       </div>
-      <div style={{ ...TEXT, color: "var(--vf-text-dim)" }}>{c.trainNote}</div>
+      {trainBlocked !== undefined && (
+        <p style={DIM} data-colab-train-blocked>
+          {trainBlocked}
+        </p>
+      )}
+      <More summary={c.learnMore}>{c.trainNote}</More>
     </div>
   );
 }
@@ -156,12 +221,14 @@ function Sessions({ sessions, busy, onStopSession }: ColabPanelProps) {
   const c = t.colab;
   if (sessions === null) return null;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }} data-colab-sessions>
-      <div style={{ ...TEXT, fontWeight: 600 }}>{c.sessionsTitle}</div>
-      {sessions.length === 0 && <div style={{ ...TEXT, color: "var(--vf-text-dim)" }}>{c.sessionsNone}</div>}
+    <div style={{ ...STACK, gap: 6 }} data-colab-sessions>
+      {sessions.length === 0 && <p style={DIM}>{c.sessionsNone}</p>}
       {sessions.map((s) => (
-        <div key={`${s.name}-${s.hardware}`} style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <span style={TEXT}>
+        <div
+          key={`${s.name}-${s.hardware}`}
+          style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between" }}
+        >
+          <span style={{ ...MONO, fontSize: 12, color: "var(--vf-text)" }}>
             {s.name} · {s.hardware}
           </span>
           {s.ours ? (
@@ -169,7 +236,7 @@ function Sessions({ sessions, busy, onStopSession }: ColabPanelProps) {
               {c.stopSession}
             </button>
           ) : (
-            <span style={{ ...TEXT, color: "var(--vf-text-dim)" }}>{c.sessionNotOurs}</span>
+            <span style={{ ...DIM, textAlign: "right" }}>{c.sessionNotOurs}</span>
           )}
         </div>
       ))}
@@ -185,37 +252,62 @@ export function ColabPanel(props: ColabPanelProps) {
   const stage = colabStage(status);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }} data-colab-stage={stage}>
-      <div style={{ ...TEXT, color: "var(--vf-text-dim)" }}>{c.intro}</div>
+    <div style={{ ...STACK, gap: 14 }} data-colab-stage={stage}>
+      <header style={{ ...STACK, gap: 4 }}>
+        <h2 style={{ ...BODY, fontSize: 15, fontWeight: 600 }}>{c.dialogLabel}</h2>
+        <p style={DIM}>{c.intro}</p>
+        <More summary={c.howItWorks}>{c.introMore}</More>
+      </header>
 
-      {stage === "installing" && <div style={TEXT}>{c.installing}</div>}
+      {stage !== "connected" && (
+        <Section title={c.sectionConnect}>
+          {stage === "installing" && <p style={BODY}>{c.installing}</p>}
 
-      {(stage === "not_installed" || stage === "install_failed") && (
-        <>
-          {stage === "install_failed" && status.install_error && (
-            <div style={ERROR}>
-              {c.installFailed} {status.install_error}
-            </div>
+          {(stage === "not_installed" || stage === "install_failed") && (
+            <>
+              {stage === "install_failed" && status.install_error && (
+                <p style={ERROR}>
+                  {c.installFailed} {status.install_error}
+                </p>
+              )}
+              <button
+                type="button"
+                style={{ ...ACTION, alignSelf: "flex-start" }}
+                disabled={props.busy}
+                onClick={props.onInstall}
+              >
+                {stage === "install_failed" ? c.retry : c.install(status.pinned_version)}
+              </button>
+            </>
           )}
-          <button type="button" style={ACTION} disabled={props.busy} onClick={props.onInstall}>
-            {stage === "install_failed" ? c.retry : c.install(status.pinned_version)}
-          </button>
-        </>
-      )}
 
-      {(stage === "logged_out" || stage === "login_pending") && (
-        <LoginSteps {...props} />
+          {(stage === "logged_out" || stage === "login_pending") && <LoginSteps {...props} />}
+        </Section>
       )}
 
       {stage === "connected" && (
         <>
-          <Connected {...props} />
-          <Sessions {...props} />
-          <TrainOnColab {...props} />
+          <Section title={c.sectionAccount}>
+            <Connected {...props} />
+          </Section>
+          {props.onTrain && (
+            <Section title={c.trainTitle}>
+              <TrainOnColab {...props} />
+            </Section>
+          )}
+          {props.sessions !== null && (
+            <Section title={c.sessionsTitle}>
+              <Sessions {...props} />
+            </Section>
+          )}
         </>
       )}
 
-      {props.error && <div style={ERROR}>{props.error}</div>}
+      {props.error && (
+        <p role="alert" style={ERROR}>
+          {props.error}
+        </p>
+      )}
     </div>
   );
 }
@@ -229,8 +321,8 @@ function LoginSteps({ loginUrl, busy, onLogin, onFinish, onCancel }: ColabPanelP
   if (!loginUrl) {
     return (
       <>
-        <div style={TEXT}>{c.perProfile}</div>
-        <button type="button" style={ACTION} disabled={busy} onClick={onLogin}>
+        <p style={DIM}>{c.perProfile}</p>
+        <button type="button" style={{ ...ACTION, alignSelf: "flex-start" }} disabled={busy} onClick={onLogin}>
           {c.login}
         </button>
       </>
@@ -245,11 +337,16 @@ function LoginSteps({ loginUrl, busy, onLogin, onFinish, onCancel }: ColabPanelP
 
   return (
     <>
-      <div style={TEXT}>{c.loginStep1}</div>
-      <a href={loginUrl} target="_blank" rel="noreferrer" style={{ ...LINK, color: "var(--accent-vf)" }}>
+      <p style={BODY}>{c.loginStep1}</p>
+      <a
+        href={loginUrl}
+        target="_blank"
+        rel="noreferrer"
+        style={{ ...LINK, color: "var(--accent-vf)", alignSelf: "flex-start" }}
+      >
         {c.openPage}
       </a>
-      <label style={TEXT} htmlFor="colab-auth-code">
+      <label style={BODY} htmlFor="colab-auth-code">
         {c.loginStep2}
       </label>
       <input
@@ -261,17 +358,10 @@ function LoginSteps({ loginUrl, busy, onLogin, onFinish, onCancel }: ColabPanelP
         placeholder={c.codePlaceholder}
         onChange={(e) => setCode(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && submit()}
-        style={{
-          ...MONO,
-          padding: "6px 8px",
-          borderRadius: 6,
-          border: "1px solid var(--vf-panel-stroke)",
-          background: "rgb(var(--lt-shade, 0 0 0) / 0.35)",
-          color: "var(--vf-text)",
-        }}
+        style={FIELD}
       />
-      {bad && <div style={ERROR}>{c.badCode}</div>}
-      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+      {bad && <p style={ERROR}>{c.badCode}</p>}
+      <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
         <button type="button" style={ACTION} disabled={busy} onClick={submit}>
           {c.confirm}
         </button>
@@ -289,28 +379,31 @@ function Connected({ status, usage, usageError, busy, onSwitch }: ColabPanelProp
   const units = (n: number) => n.toFixed(2);
   return (
     <>
-      <div style={TEXT}>{status.account ? c.account(status.account) : c.accountUnknown}</div>
-      {usage?.balance != null && <div style={TEXT}>{c.balance(units(usage.balance))}</div>}
+      <p style={BODY}>{status.account ? c.account(status.account) : c.accountUnknown}</p>
+      {usage?.balance != null && <p style={BODY}>{c.balance(units(usage.balance))}</p>}
       {usage?.hours_left != null && usage.rate_per_hour != null && (
-        <div style={TEXT}>{c.hoursLeft(roundHours(usage.hours_left), units(usage.rate_per_hour))}</div>
+        <p style={DIM}>{c.hoursLeft(roundHours(usage.hours_left), units(usage.rate_per_hour))}</p>
       )}
-      {usage && usage.hours_left == null && usage.balance != null && (
-        <div style={{ ...TEXT, color: "var(--vf-text-dim)" }}>{c.noRate}</div>
-      )}
-      {usageError && <div style={ERROR}>{c.usageFailed}</div>}
-      <div style={{ display: "flex", gap: 14 }}>
-        <button type="button" style={LINK} disabled={busy} onClick={onSwitch}>
-          {c.switchAccount}
-        </button>
-      </div>
+      {usage && usage.hours_left == null && usage.balance != null && <p style={DIM}>{c.noRate}</p>}
+      {usageError && <p style={ERROR}>{c.usageFailed}</p>}
+      <button type="button" style={{ ...LINK, alignSelf: "flex-start" }} disabled={busy} onClick={onSwitch}>
+        {c.switchAccount}
+      </button>
     </>
   );
 }
 
+
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** The header chip and its panel; one instance per profile (keyed by the header). */
-export function ColabConnection({ onTrain }: { onTrain?: (launch: ColabLaunch) => void } = {}) {
+export function ColabConnection({
+  onTrain,
+  trainBlocked,
+}: {
+  onTrain?: (launch: ColabLaunch) => void;
+  trainBlocked?: string;
+} = {}) {
   const t = useT();
   const [status, setStatus] = useState<ColabStatus | null>(null);
   const [usage, setUsage] = useState<ColabUsage | null>(null);
@@ -418,6 +511,7 @@ export function ColabConnection({ onTrain }: { onTrain?: (launch: ColabLaunch) =
           onTrain(launch);
         }
       : undefined,
+    trainBlocked,
   };
   const leftovers = sessions?.filter((s) => s.ours).length ?? 0;
 
@@ -462,8 +556,14 @@ export function ColabConnection({ onTrain }: { onTrain?: (launch: ColabLaunch) =
             top: "calc(100% + 8px)",
             right: 0,
             zIndex: 20,
-            width: 360,
-            padding: 14,
+            // Wide enough for a Drive path, never wider than the window; tall
+            // content scrolls inside the panel instead of running off-screen.
+            width: "min(440px, calc(100vw - 32px))",
+            maxHeight: "calc(100vh - 96px)",
+            overflowY: "auto",
+            overscrollBehavior: "contain",
+            boxSizing: "border-box",
+            padding: 18,
             borderRadius: 12,
             // Opaque, like the update notice: the panel sits over the tab bar.
             background: "rgb(var(--lt-surface, 10 12 16) / 0.97)",
@@ -471,7 +571,7 @@ export function ColabConnection({ onTrain }: { onTrain?: (launch: ColabLaunch) =
             boxShadow: "0 12px 30px rgb(var(--lt-shade, 0 0 0) / 0.5)",
           }}
         >
-          {panel ? <ColabPanel {...panel} /> : <div style={ERROR}>{error ?? t.colab.loadFailed}</div>}
+          {panel ? <ColabPanel {...panel} /> : <p style={ERROR}>{error ?? t.colab.loadFailed}</p>}
         </div>
       )}
     </div>

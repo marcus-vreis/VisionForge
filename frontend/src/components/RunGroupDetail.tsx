@@ -5,6 +5,7 @@ import {
   childTarget,
   fewestSeeds,
   formatAggregate,
+  formatDifferenceInterval,
   formatNumber,
   formatOverrides,
   formatP,
@@ -23,6 +24,8 @@ interface RunGroupDetailProps {
    *  named but not linked. */
   knownRunIds?: ReadonlySet<string>;
   onOpenRun?: (runId: string) => void;
+  /** Back to the form: load the group's config, or repeat it with new seeds (#200). */
+  actions?: ReactNode;
 }
 
 const OK_COLOR = "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)";
@@ -32,7 +35,7 @@ const thStyle: CSSProperties = {
   textAlign: "left",
   padding: "6px 8px",
   borderBottom: "1px solid var(--vf-panel-stroke)",
-  fontSize: 9,
+  fontSize: 11,
   letterSpacing: "0.14em",
   textTransform: "uppercase",
   color: "var(--vf-text-muted)",
@@ -48,7 +51,7 @@ const tdStyle: CSSProperties = {
 const tdLabelStyle: CSSProperties = {
   ...tdStyle,
   color: "var(--vf-text-muted)",
-  fontSize: 10,
+  fontSize: 13,
 };
 
 const tableBoxStyle: CSSProperties = {
@@ -63,12 +66,12 @@ const tableStyle: CSSProperties = {
   width: "100%",
   borderCollapse: "collapse",
   fontFamily: "var(--font-mono)",
-  fontSize: 11,
+  fontSize: 13,
 };
 
 const noteStyle: CSSProperties = {
   fontFamily: "var(--font-mono)",
-  fontSize: 10,
+  fontSize: 13,
   lineHeight: 1.5,
   color: "var(--vf-text-muted)",
 };
@@ -89,7 +92,7 @@ function GroupSection({ title, children }: { title: string; children: ReactNode 
       <div
         style={{
           fontFamily: "var(--font-mono)",
-          fontSize: 10,
+          fontSize: 11,
           letterSpacing: "0.18em",
           textTransform: "uppercase",
           color: "var(--vf-text-muted)",
@@ -115,7 +118,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
       <span
         style={{
           fontFamily: "var(--font-mono)",
-          fontSize: 10,
+          fontSize: 11,
           color: "var(--vf-text-muted)",
           letterSpacing: "0.10em",
           textTransform: "uppercase",
@@ -127,7 +130,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
       <span
         style={{
           fontFamily: "var(--font-mono)",
-          fontSize: 11,
+          fontSize: 13,
           color: "var(--vf-text)",
           wordBreak: "break-all",
         }}
@@ -188,7 +191,7 @@ function OpenRun({
         borderRadius: 6,
         color: "var(--vf-text)",
         fontFamily: "var(--font-mono)",
-        fontSize: 10,
+        fontSize: 11,
         letterSpacing: "0.10em",
         textTransform: "uppercase",
         cursor: "pointer",
@@ -378,6 +381,7 @@ function TestsTable({ group }: { group: RunGroup }) {
               <th style={thStyle}>{c.pair}</th>
               <th style={thStyle}>{c.pairs}</th>
               <th style={thStyle}>{c.diff}</th>
+              <th style={thStyle}>{c.ci}</th>
               <th style={thStyle}>{c.test}</th>
               <th style={thStyle}>{c.p}</th>
               <th style={thStyle}>{c.holm}</th>
@@ -394,6 +398,7 @@ function TestsTable({ group }: { group: RunGroup }) {
                   </td>
                   <td style={tdStyle}>{test.n_pairs}</td>
                   <td style={tdStyle}>{formatNumber(test.mean_difference)}</td>
+                  <DifferenceIntervalCell test={test} />
                   <td style={tdStyle} title={test.test_reason}>
                     {t.runGroup.detail.tests[test.test]}
                   </td>
@@ -437,6 +442,25 @@ function TestsTable({ group }: { group: RunGroup }) {
       </div>
       <div style={noteStyle}>{t.runGroup.detail.testsNote}</div>
     </>
+  );
+}
+
+function DifferenceIntervalCell({ test }: { test: PairedTest }) {
+  const t = useT();
+  const d = t.runGroup.detail;
+  const text = formatDifferenceInterval(test, d.ciOpen);
+  if (text === null || test.ci_method === undefined) {
+    return <td style={tdStyle}>{d.noInterval}</td>;
+  }
+  const coverage =
+    test.ci_confidence == null ? "—" : `${(test.ci_confidence * 100).toFixed(1)}%`;
+  return (
+    <td
+      style={{ ...tdStyle, cursor: "help" }}
+      title={d.ciTitle(d.ciMethods[test.ci_method], coverage, formatNumber(test.ci_estimate))}
+    >
+      {text}
+    </td>
   );
 }
 
@@ -640,6 +664,7 @@ export function RunGroupDetail(props: RunGroupDetailProps) {
         {group.stopped && (
           <div style={{ ...noteStyle, color: STOPPED_COLOR }}>■ {t.runGroup.detail.stopped}</div>
         )}
+        {props.actions}
       </GroupSection>
       {group.kind === "replicated_comparison" ? (
         <ComparisonBody {...props} />

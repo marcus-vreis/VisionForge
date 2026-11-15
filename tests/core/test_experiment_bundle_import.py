@@ -170,10 +170,9 @@ def test_an_experiment_name_that_is_not_one_folder_is_refused(
     tmp_path: Path, experiment: str
 ) -> None:
     models = tmp_path / "models"
+    bundle = _remote_bundle(tmp_path, experiment=experiment)
     with pytest.raises(ValueError, match="complete run record"):
-        import_experiment_bundle(
-            _remote_bundle(tmp_path, experiment=experiment), models
-        )
+        import_experiment_bundle(bundle, models)
     _assert_nothing_written(models)
 
 
@@ -218,8 +217,9 @@ def test_a_failure_while_unpacking_leaves_no_staging_folder(
         raise OSError("disk full")
 
     monkeypatch.setattr(eb, "_extract_members", broken)
+    bundle = _remote_bundle(tmp_path)
     with pytest.raises(OSError, match="disk full"):
-        import_experiment_bundle(_remote_bundle(tmp_path), models)
+        import_experiment_bundle(bundle, models)
     _assert_nothing_written(models)
 
 
@@ -228,8 +228,9 @@ def test_an_existing_run_is_never_replaced(tmp_path: Path) -> None:
     first = import_experiment_bundle(_remote_bundle(tmp_path), models)
     (first / "note.txt").write_text("mine", encoding="utf-8")
 
+    bundle = _remote_bundle(tmp_path)
     with pytest.raises(FileExistsError):
-        import_experiment_bundle(_remote_bundle(tmp_path), models)
+        import_experiment_bundle(bundle, models)
 
     assert (first / "note.txt").read_text(encoding="utf-8") == "mine"
     assert [p.name for p in models.parent.iterdir()] == ["models"]
@@ -237,18 +238,16 @@ def test_an_existing_run_is_never_replaced(tmp_path: Path) -> None:
 
 def test_a_run_from_a_newer_schema_is_refused(tmp_path: Path) -> None:
     config = {"name": "exp", "schema_version": 999}
+    bundle = _remote_bundle(tmp_path, config=config)
     with pytest.raises(ValueError):
-        import_experiment_bundle(
-            _remote_bundle(tmp_path, config=config), tmp_path / "models"
-        )
+        import_experiment_bundle(bundle, tmp_path / "models")
     _assert_nothing_written(tmp_path / "models")
 
 
 def test_a_record_without_its_epoch_count_is_refused(tmp_path: Path) -> None:
+    bundle = _remote_bundle(tmp_path, metrics={})
     with pytest.raises(ValueError, match="complete run record"):
-        import_experiment_bundle(
-            _remote_bundle(tmp_path, metrics={}), tmp_path / "models"
-        )
+        import_experiment_bundle(bundle, tmp_path / "models")
 
 
 def test_a_changed_member_fails_the_checksum(tmp_path: Path) -> None:

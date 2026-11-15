@@ -191,7 +191,8 @@ def test_layout_responses_preserve_roles_and_messages(
     for folder in folders:
         (tmp_path / folder).mkdir()
     response = _detect_dataset_layout(str(tmp_path))
-    assert (response.train_dir, response.val_dir, response.test_dir) == roles
+    detected_roles = (response.train_dir, response.val_dir, response.test_dir)
+    assert detected_roles == roles
     assert response.detected is detected
     assert response.candidates == sorted(folders)
     if message_key == "detect.found":

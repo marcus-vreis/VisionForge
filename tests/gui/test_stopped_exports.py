@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from visionforge.core.latex_export import cv_to_latex, replicates_to_latex
-from visionforge.gui.api.routes import _render_run_markdown, _write_advanced_summary
+from visionforge.gui.api.routes import _render_run_markdown
+from visionforge.gui.api.strategies import _write_advanced_summary
 
 
 def _rows(path: Path) -> list[dict[str, str]]:
@@ -127,3 +128,25 @@ class TestLatexNamesTheSampleSd:
 
         header = next(line for line in tex.splitlines() if "Metric &" in line)
         assert r"SD ($n-1$)" in header
+
+
+class TestReplicatesStripBesideTheTable:
+    def test_the_strip_is_written_next_to_the_tex(self, tmp_path: Path) -> None:
+        report: dict[str, Any] = {
+            "metric": "accuracy",
+            "trials": [
+                {"seed": 1, "status": "success", "metrics": {"accuracy": 0.8}},
+                {"seed": 2, "status": "success", "metrics": {"accuracy": 0.82}},
+            ],
+        }
+
+        out = _write_advanced_summary(
+            {
+                "name": "rep",
+                "output": {"reports_dir": str(tmp_path), "figure_formats": ["pdf"]},
+            },
+            "replicates",
+            report,
+        )
+
+        assert (Path(out) / "replicates_strip.pdf").read_bytes().startswith(b"%PDF")

@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { fetchSystemInfo } from "../api/client";
 import { useI18n } from "../i18n/useT";
-import { greeting } from "../lib/greeting";
 import type { GuideId } from "../lib/guides";
-import type { Pronoun } from "../lib/profile";
+import type { ProfileInfo, Pronoun } from "../lib/profile";
 import { GuideMenu } from "./GuideMenu";
+import { ProfileMenu } from "./ProfileMenu";
 import { TaskColorDot } from "./TaskColorDot";
 import { ThemeSwitch } from "./ThemeSwitch";
 import type { ColabLaunch } from "../api/client";
@@ -64,12 +64,18 @@ export function Header({
   pronoun,
   onChangeName,
   onGuide,
-  profileName,
+  onLearn,
+  profile,
+  sharedServer = false,
+  onProfileSaved,
   onChangeProfile,
+  onNewProfile,
   profileSlug,
   onTrainColab,
+  colabTrainBlocked,
   taskColor,
 }: {
+  /** O nome no chip do perfil; sem ele (antes da introdução) o chip não aparece. */
   userName?: string;
   /** Como a saudação trata quem usa (ADR-126); sem ele, a forma neutra. */
   pronoun?: Pronoun | null;
@@ -78,12 +84,19 @@ export function Header({
   profileSlug?: string;
   /** Treina o experimento aberto no Colab (ADR-163); só vem na classificação. */
   onTrainColab?: (launch: ColabLaunch) => void;
+  /** Por que o experimento aberto não treina no Colab agora (Réplicas, ADR-056). */
+  colabTrainBlocked?: string;
   /** Abre um guia escolhido no menu (ADR-104, ADR-115). */
   onGuide?: (id: GuideId) => void;
-  /** Perfil em uso (ADR-114). Só vem num servidor que tem perfis: sem ele o chip
-   *  não aparece e uma instalação de uma pessoa não vê nada novo. */
-  profileName?: string;
+  /** Opens the "Começando do zero" page from the guide menu. */
+  onLearn?: () => void;
+  /** Perfil em uso (ADR-114): o menu do chip edita as integrações dele. */
+  profile?: ProfileInfo | null;
+  /** Mais de um perfil: o menu oferece "trocar de perfil" em vez de "novo perfil". */
+  sharedServer?: boolean;
+  onProfileSaved?: (profile: ProfileInfo) => void;
   onChangeProfile?: () => void;
+  onNewProfile?: () => void;
   /** The open tab's color picker, only when it is a researcher's task (ADR-137). */
   taskColor?: {
     color: string;
@@ -121,6 +134,7 @@ export function Header({
 
   return (
     <header
+      className="vf-app-header"
       style={{
         position: "relative",
         zIndex: 4,
@@ -130,6 +144,11 @@ export function Header({
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
+        // Narrow screens: the tools drop under the brand instead of running
+        // off the right edge, where nothing could reach them.
+        flexWrap: "wrap",
+        rowGap: 12,
+        columnGap: 14,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -171,9 +190,16 @@ export function Header({
         </div>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+      <div
+        className="vf-app-header-tools"
+        style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}
+      >
         {taskColor && <TaskColorDot {...taskColor} />}
-        <ColabConnection key={profileSlug ?? "default"} onTrain={onTrainColab} />
+        <ColabConnection
+          key={profileSlug ?? "default"}
+          onTrain={onTrainColab}
+          trainBlocked={colabTrainBlocked}
+        />
         {/* Two real buttons rather than one that flips: each language is a
             target of its own, and aria-pressed says which one is on. */}
         <div
@@ -215,103 +241,21 @@ export function Header({
           ))}
         </div>
         <ThemeSwitch />
-        {onGuide && <GuideMenu onSelect={onGuide} />}
-        {profileName && (
-          <button
-            type="button"
-            onClick={onChangeProfile}
-            title={t.profile.chipTitle}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 9,
-              padding: "9px 14px",
-              background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
-              border: "1px solid var(--vf-panel-stroke)",
-              borderRadius: 10,
-              cursor: "pointer",
-              animation: "fadeUp 700ms ease both",
-            }}
-          >
-            <span style={{ fontSize: 12, lineHeight: 1, color: "var(--accent-vf)" }}>
-              ▤
-            </span>
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 11,
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                color: "var(--vf-text-dim)",
-              }}
-            >
-              {t.profile.chip}
-            </span>
-            {/* Sem text-transform: o nome aparece exatamente como foi digitado. */}
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 11,
-                letterSpacing: "0.12em",
-                color: "var(--vf-text)",
-              }}
-            >
-              {profileName}
-            </span>
-          </button>
-        )}
+        {onGuide && <GuideMenu onSelect={onGuide} onLearn={onLearn} />}
         {userName && (
-          <button
-            type="button"
-            onClick={onChangeName}
-            title={t.header.changeName}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 9,
-              padding: "9px 14px",
-              background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
-              border: "1px solid var(--vf-panel-stroke)",
-              borderRadius: 10,
-              cursor: "pointer",
-              animation: "fadeUp 700ms ease both",
-            }}
-          >
-            <span
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: "var(--accent-vf)",
-                boxShadow: "0 0 8px var(--accent-glow)",
-                animation: "pulse-dot 2.6s ease-in-out infinite",
-              }}
-            />
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 11,
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                color: "var(--vf-text-dim)",
-              }}
-            >
-              {`${greeting(t, pronoun)},`}
-            </span>
-            {/* Sem text-transform: o nome aparece exatamente como foi digitado. */}
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 11,
-                letterSpacing: "0.12em",
-                color: "var(--vf-text)",
-              }}
-            >
-              {userName}
-            </span>
-          </button>
+          <ProfileMenu
+            name={userName}
+            pronoun={pronoun}
+            profile={profile ?? null}
+            shared={sharedServer}
+            onProfileSaved={(p) => onProfileSaved?.(p)}
+            onChangeName={() => onChangeName?.()}
+            onSwitchProfile={() => onChangeProfile?.()}
+            onNewProfile={() => onNewProfile?.()}
+          />
         )}
         <div
+          className="vf-app-header-clock"
           style={{
             fontFamily: "var(--font-mono)",
             fontSize: 11,

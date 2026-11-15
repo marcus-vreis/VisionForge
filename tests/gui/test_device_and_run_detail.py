@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
 from visionforge.gui.api.routes import _find_run_dir
 from visionforge.utils.cuda import CUDAInfo, GPUDevice
 
@@ -75,6 +76,22 @@ class TestDeviceInfoEndpoint:
         assert resp.status_code == 200
         body = resp.json()
         assert body["cuda_available"] is False
+        assert body["gpus"] == []
+
+    @pytest.mark.parametrize("mps", [True, False])
+    def test_reports_the_apple_gpu(self, app_and_routes: tuple, mps: bool) -> None:
+        """A Mac has no CUDA and one MPS device, reported as a flag (ADR-192)."""
+        app, _ = app_and_routes
+        with (
+            patch(
+                "visionforge.gui.api.routes.check_cuda",
+                return_value=CUDAInfo(available=False),
+            ),
+            patch("visionforge.gui.api.system_service.mps_available", return_value=mps),
+        ):
+            body = TestClient(app).get("/api/device/info").json()
+        assert body["cuda_available"] is False
+        assert body["mps_available"] is mps
         assert body["gpus"] == []
 
     def test_returns_gpu_list_when_available(self, app_and_routes: tuple) -> None:
@@ -233,7 +250,7 @@ class TestDeleteRun:
         app, routes_mod = app_and_routes
         run_dir = _write_run(tmp_path)
         fake_run(
-            routes_mod,
+            execution_mod,
             {
                 "run_id": run_dir.name,
                 "status": "running",
@@ -247,7 +264,7 @@ class TestDeleteRun:
             assert resp.status_code == 409
             assert run_dir.exists()
         finally:
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
 
 class TestFindRunDir:

@@ -2,11 +2,14 @@ import { Chevron } from "./controls";
 import { useEffect, useRef, useState } from "react";
 import { fetchDeviceInfo, type DeviceInfoResponse, type GPUInfo } from "../api/client";
 import { useT } from "../i18n/useT";
+import {
+  acceleratorActive,
+  correctSelection,
+  selectionLabel,
+  type DeviceSelection,
+} from "../lib/device-selection";
 
-export interface DeviceSelection {
-  kind: "cpu" | "cuda" | "multi_cuda";
-  gpu_ids: number[] | null;
-}
+export type { DeviceSelection };
 
 interface DeviceSelectorProps {
   selection: DeviceSelection;
@@ -18,21 +21,6 @@ function formatMem(mb: number): string {
   if (mb <= 0) return "";
   if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
   return `${mb} MB`;
-}
-
-function labelForSelection(
-  sel: DeviceSelection,
-  info: DeviceInfoResponse | null,
-): string {
-  if (sel.kind === "cpu") return "CPU";
-  if (!info || info.gpus.length === 0) return "CUDA";
-  if (sel.kind === "multi_cuda") {
-    const ids = sel.gpu_ids ?? info.gpus.map((g) => g.index);
-    return `MULTI · ${ids.length} GPUs`;
-  }
-  const id = sel.gpu_ids?.[0] ?? 0;
-  const g = info.gpus.find((x) => x.index === id);
-  return g ? `GPU ${id}` : "CUDA";
 }
 
 /** Real device picker — fetches GPUs from the backend and stores the choice. */
@@ -51,13 +39,9 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
         if (!alive) return;
         setInfo(d);
         setLoading(false);
-        // Auto-correct invalid initial selection.
-        if (!d.cuda_available && selection.kind !== "cpu") {
-          onChange({ kind: "cpu", gpu_ids: null });
-        }
-        if (selection.kind === "multi_cuda" && d.gpus.length < 2) {
-          onChange({ kind: d.cuda_available ? "cuda" : "cpu", gpu_ids: null });
-        }
+        // Auto-correct a selection this machine cannot run.
+        const fixed = correctSelection(selection, d);
+        if (fixed) onChange(fixed);
       })
       .catch((e: unknown) => {
         if (!alive) return;
@@ -80,8 +64,8 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
     return () => window.removeEventListener("mousedown", onClick);
   }, [open]);
 
-  const cudaActive = selection.kind !== "cpu" && info?.cuda_available;
-  const label = labelForSelection(selection, info);
+  const cudaActive = acceleratorActive(selection, info);
+  const label = selectionLabel(selection, info);
 
   return (
     <div ref={wrapRef} style={{ position: "relative" }}>
@@ -95,7 +79,9 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
               ? error
               : info?.cuda_available
                 ? t.deviceSelector.cudaTitle(info.cuda_version ?? "", info.gpus.length)
-                : t.deviceSelector.cudaUnavailableTitle
+                : info?.mps_available
+                  ? t.deviceSelector.mpsTitle
+                  : t.deviceSelector.cudaUnavailableTitle
         }
         style={{
           display: "flex",
@@ -176,7 +162,9 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
                 ? t.deviceSelector.errorPrefix(error)
                 : info?.cuda_available
                   ? t.deviceSelector.cudaSummary(info.cuda_version ?? "", info.gpus.length)
-                  : t.deviceSelector.cudaNotDetected}
+                  : info?.mps_available
+                    ? t.deviceSelector.mpsSummary
+                    : t.deviceSelector.cudaNotDetected}
           </div>
 
           <DeviceOption
@@ -188,6 +176,18 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
               setOpen(false);
             }}
           />
+
+          {info?.mps_available && (
+            <DeviceOption
+              active={selection.kind === "mps"}
+              title={t.deviceSelector.mpsOption}
+              subtitle={t.deviceSelector.mpsSubtitle}
+              onClick={() => {
+                onChange({ kind: "mps", gpu_ids: null });
+                setOpen(false);
+              }}
+            />
+          )}
 
           {info?.gpus.map((g: GPUInfo) => (
             <DeviceOption

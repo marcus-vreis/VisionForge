@@ -1,0 +1,3 @@
+# One author, two commit identities (#231): `git shortlog -sne` lists one.
+Marcus Vinícius Reis <marcusvinicius0083@gmail.com> Marcus Vinicius <marcusvinicius0083@gmail.com>
+Marcus Vinícius Reis <marcusvinicius0083@gmail.com> Allinvila <marcus.diniz@pixforce.ai>

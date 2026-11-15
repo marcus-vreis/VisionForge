@@ -2,15 +2,19 @@ from __future__ import annotations
 
 import math
 import statistics
+from pathlib import Path
 from typing import Any
 
 import pytest
+from scipy import stats
 
+from visionforge.core.replicated_comparison import VariantResult
 from visionforge.core.replicates import (
     ReplicateTrial,
     aggregate_replicates,
     metric_domain,
     run_replicates,
+    write_replicates_strip,
 )
 from visionforge.core.task_runner import RunResult
 
@@ -297,3 +301,74 @@ class TestMetricDomain:
 
     def test_scores_in_the_unit_interval(self) -> None:
         assert metric_domain("val_accuracy") == (0.0, 1.0)
+
+
+class TestReplicatesStrip:
+    def test_run_replicates_writes_the_strip(self, tmp_path: Path) -> None:
+        run_replicates(
+            _FakeRunner(), _base(), [42, 43, 44], metric="score", figure_dir=tmp_path
+        )
+        assert (tmp_path / "replicates_strip.png").read_bytes().startswith(b"\x89PNG")
+
+    def test_no_figure_dir_writes_nothing(self, tmp_path: Path) -> None:
+        run_replicates(_FakeRunner(), _base(), [42, 43], metric="score")
+        assert list(tmp_path.iterdir()) == []
+
+    def test_formats_come_from_the_output_section(self, tmp_path: Path) -> None:
+        base = {**_base(), "output": {"figure_formats": ["pdf", "svg"]}}
+        run_replicates(
+            _FakeRunner(), base, [42, 43], metric="score", figure_dir=tmp_path
+        )
+        assert (tmp_path / "replicates_strip.pdf").read_bytes().startswith(b"%PDF")
+        assert b"<svg" in (tmp_path / "replicates_strip.svg").read_bytes()
+        assert not (tmp_path / "replicates_strip.png").exists()
+
+    def test_failed_seeds_have_no_point_and_all_failed_writes_nothing(
+        self, tmp_path: Path
+    ) -> None:
+        rows = [{"seed": 1, "status": "failed", "metrics": {}}]
+        assert write_replicates_strip(rows, "score", tmp_path) == []
+        assert list(tmp_path.iterdir()) == []
+
+
+def _undefined() -> dict[str, Any]:
+    """A metric the run could not define: null in run.json, None here."""
+    return {"auroc": None}
+
+
+class TestUndefinedMetric:
+    """An anomaly AUROC on a one-class test split is null (#170): it must not
+    enter the mean or the interval as a measured value."""
+
+    def test_null_stays_out_of_mean_and_interval(self) -> None:
+        trials = [
+            ReplicateTrial(seed=1, status="success", metrics={"auroc": 0.90}),
+            ReplicateTrial(seed=2, status="success", metrics={"auroc": 0.80}),
+            ReplicateTrial(seed=3, status="success", metrics=_undefined()),
+        ]
+
+        agg = aggregate_replicates(trials)["auroc"]
+
+        assert agg["n"] == 2
+        assert agg["mean"] == pytest.approx(0.85)
+        half = float(stats.t.ppf(0.975, 1)) * statistics.stdev([0.9, 0.8]) / 2**0.5
+        assert agg["ci95_high"] == pytest.approx(min(1.0, 0.85 + half))
+
+    def test_a_metric_null_everywhere_is_left_out(self) -> None:
+        trials = [
+            ReplicateTrial(seed=1, status="success", metrics=_undefined()),
+        ]
+
+        assert "auroc" not in aggregate_replicates(trials)
+
+    def test_the_paired_comparison_skips_it_too(self) -> None:
+        result = VariantResult(
+            label="a",
+            overrides={},
+            trials=[
+                ReplicateTrial(seed=1, status="success", metrics={"auroc": 0.9}),
+                ReplicateTrial(seed=2, status="success", metrics=_undefined()),
+            ],
+        )
+
+        assert result.per_seed("auroc") == {1: 0.9}

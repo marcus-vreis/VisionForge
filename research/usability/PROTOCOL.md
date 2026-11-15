@@ -35,7 +35,8 @@ See `FORM.md`, section 0. Continuing means agreeing; anyone can stop at any time
 
 1. Background (3 questions) and the **pre-quiz** (5 questions), before opening
    VisionForge.
-2. Tasks, timed by the participant (start and end clock time each):
+2. Tasks, timed by the facilitator with a stopwatch, in seconds (see
+   **Facilitation and timing**):
    1. Install VisionForge following only the README (and `docs/INSTALL.md`, which it
       links for each system), and open the interface.
    2. Open the "Primeiro treino" guide and follow it to the end with its example
@@ -45,13 +46,38 @@ See `FORM.md`, section 0. Continuing means agreeing; anyone can stop at any time
       mean ± 95% CI.
    5. In the history, open a run and download its model card.
 
-   Per task: completed / completed with help / not completed; start and end time;
-   what went wrong, if anything (free text).
+   Per task, the facilitator records the outcome, the elapsed seconds and the
+   number of interventions (`session_template.csv`); the participant answers,
+   in the form, how it went and what went wrong, if anything (free text).
 3. **Post-quiz**: the same 5 questions as the pre-quiz, in a different order.
 4. SUS (10 items) and two open questions.
 
 Participants receive only the PyPI link, the README and `docs/INSTALL.md` (added on
 2026-10-19, before the first participant): task 1 measures whether that is enough.
+
+## Facilitation and timing
+
+- **Facilitator.** One person runs every session, with the same opening script
+  and the same answer to "how do I…?": *"Faça como faria sozinho(a); se travar,
+  me diga e eu ajudo."* Who facilitates is decided with the advisor (see
+  **Pending decisions**); while the facilitator is the author, that is a stated
+  limitation.
+- **Intervention.** Any hint, answer, demonstration or action by the facilitator
+  that concerns how to do the task. Reading the task statement again, word for
+  word, and fixing the recording or the session itself are not interventions.
+  Each one is counted in `assistance_count`.
+- **Outcome**, one per task, from the facilitator's record:
+  `completed` (finished with 0 interventions), `assisted` (finished with 1 or
+  more), `failed` (not finished, or stopped by the participant, after starting),
+  `withdrawn` (the participant left the study before the task). The form's
+  "Consegui com ajuda" is kept as the participant's view, but the analysis uses
+  the facilitator's `outcome`.
+- **Time.** `elapsed_seconds` from the moment the participant has read the task
+  to the moment it is done or abandoned, on a stopwatch. Tasks 3 and 5 take
+  under a minute, so clock times in minutes would round them to 0 or 1; the
+  clock times in the form are only a cross-check.
+- During the post-quiz and the SUS the facilitator stays out of the
+  participant's view and does not comment on answers.
 
 ## Instruments
 
@@ -79,10 +105,46 @@ Participants receive only the PyPI link, the README and `docs/INSTALL.md` (added
   worse.
 
 With n ≤ 15 everything is descriptive: means are reported with their range, not
-as population estimates, and no significance test is claimed. The quiz gain has
-no control group, so it cannot separate the guide's effect from simply using the
-software for an hour; this limitation is stated wherever the gain is reported.
+as population estimates, and no significance test is claimed.
+
+- **SUS** is reported as each participant's score, plus mean, SD and range. No
+  adjective scale or percentile is attached, and the SUS is never read as a
+  task success rate.
+- **Times** are reported as median and range per task, in seconds, over the
+  participants who completed or were assisted; failures are counted, not timed.
+
+## Limitations
+
+Stated wherever the corresponding result is reported:
+
+- **No control group.** The quiz gain cannot separate the guide's effect from
+  simply using the software for an hour.
+- **Practice effect.** The post-quiz repeats the pre-quiz questions in the same
+  session, minutes later, only reordered. Part of any gain can come from having
+  seen the questions; the gain is read as an upper bound.
+- **Facilitator is the author.** While the person who built VisionForge
+  facilitates, participants may rate it more kindly (SUS) and try harder; the
+  facilitator also decides what counts as an intervention. The fixed script, the
+  definition above and staying out of view during the SUS reduce this, but do not
+  remove it.
+- **Small, invited sample.** 5–15 people invited by the author are not a random
+  sample of the target users.
+- **Concept quiz not validated** (see **Instruments**).
+
+## Pending decisions
+
+To settle with the advisor before the first participant, then record here:
+
+- Who facilitates (the author, or someone else with the same script).
+- Target n within 5–15, and the stopping rule.
+- Whether the protocol is pre-registered externally (e.g. OSF) before the first
+  session.
 
 ## Deviations
 
-None yet.
+- **2026-11-12, before the first participant** (#229): timing moved from the
+  participant's clock times (minute resolution) to the facilitator's stopwatch
+  in seconds; "completed with help" defined as 1 or more counted interventions,
+  the same field in the form, the runbook and the session sheet; the practice
+  effect and the facilitator being the author added as limitations; SUS and time
+  reporting written down; open decisions listed under **Pending decisions**.

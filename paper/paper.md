@@ -18,11 +18,10 @@ bibliography: paper.bib
 ---
 
 <!-- Draft. Every <...> must be filled before submission (Task D4 of the plan).
-     Numbers cite research/seed_variance/results/summary.json; the training
-     comparison cites results/real_summary.md, the browser series cite
-     results/gui_summary.md, results/diag_summary.md and results/gui_v2_summary.md
-     in the private research repository, whose recipes and per-run results must be
-     public before submission. -->
+     Numbers cite research/seed_variance/results/summary.json; the workflow
+     benchmark cites research/workflow_benchmark/results/, and
+     research/workflow_benchmark/make_paper_numbers.py recomputes each of its
+     numbers from the per-run records there. -->
 
 # Summary
 
@@ -33,7 +32,7 @@ detection, image regression, semantic segmentation and anomaly detection, plus
 task families a researcher defines in a Python file. Beyond training one model,
 the interface runs the experiments a result needs before it can be reported:
 the same configuration repeated over several seeds with 95% confidence
-intervals, paired comparisons between variants with Holm-corrected tests,
+intervals, paired comparisons between variants with Holm-corrected tests [@holm1979simple],
 K-fold cross-validation and hyperparameter sweeps. Every run writes a versioned
 `run.json` that records its configuration, seeds, library versions, hardware
 and dataset fingerprint, so a number in a paper can be traced to the run that
@@ -50,14 +49,20 @@ choice being tested: seed variance in deep learning is documented
 single-seed ablation remains the default way to decide whether a change helps.
 
 We measured how much this matters in small-data fine-tuning with VisionForge
-itself, in a pre-registered study (`research/seed_variance/`): three datasets,
-three architectures, two common ablations, ten paired seeds each, 270 training
+itself, in a pre-registered study (`research/seed_variance/`): three datasets
+(USK-Coffee [@febriana2022usk], a 10% subset of it, and Beans
+[@makerere2020beans]), three architectures [@he2016resnet; @liu2022convnext;
+@liu2021swin], two common ablations, ten paired seeds each, 270 training
 runs. In all 18 cells the seed standard deviation was at least half the ablation
 effect, and in 15 it exceeded the effect. Concluding from one seed would have
-pointed the wrong way in 20% to 60% of the possible single-seed experiments,
-depending on the cell (median 40%). No ablation effect survived Holm correction
-with ten seeds, and in 11 of the 18 cells even five seeds left more than a 10%
-chance of the wrong sign.
+pointed the wrong way (a difference of opposite sign to the ten-seed mean, or
+zero) in 20% to 60% of the possible single-seed experiments, depending on the
+cell (median 40%). No ablation effect survived Holm correction with ten seeds,
+and in 11 of the 18 cells even five seeds left more than a 10% chance of the
+wrong sign. The only Holm-significant contrast, 160 px against no augmentation
+on USK-Coffee with ResNet-18 (p = 0.0072), was not pre-registered and is
+exploratory. The third hypothesis, that seed variance grows on a 10% training
+subset, was rejected: the seed SD fell for ConvNeXt-T (0.021 to 0.012).
 
 VisionForge exists so that a researcher without a statistics or MLOps
 background runs the comparison that holds up, rather than the one that is easy:
@@ -76,7 +81,14 @@ data off the machine. Hyperparameter optimisers such as Optuna
 [@akiba2019optuna], which VisionForge uses for its sweeps, search for the best
 configuration but report it from one evaluation per trial. No-code tools such as
 Teachable Machine [@carney2020teachable] lower the entry barrier furthest, but
-keep no provenance and offer no statistics.
+keep no provenance and offer no statistics. Three other tools overlap with parts
+of VisionForge. Ultralytics Platform [@ultralytics2026platform] adds dataset
+management, cloud or local training and experiment comparison around the
+Ultralytics models; FiftyOne [@moore2020fiftyone] curates datasets and evaluates
+model predictions; deep-significance [@ulmer2022deep] offers significance tests
+and Bonferroni correction as a library called from the researcher's own code.
+VisionForge's paired tests overlap with the last; it differs in running the
+training and the multi-seed design behind one interface.
 
 We built VisionForge rather than contributing to one of these because the gap
 is in how the pieces are joined, not in any one of them: a local graphical
@@ -92,9 +104,9 @@ The code is layered one way, `utils` ← `core` ← `blocks` ← `gui`: the stat
 and the trainers know nothing about the interface, so the same experiment runs
 from the browser, the command line or a script. Every task family implements
 one runner contract, and the experiment strategies (replicates, paired
-comparison, K-fold, sweep) are written once against that contract, which is how
-a task a researcher adds in a single Python file gets them all without further
-code.
+comparison, sweep) are written once against that contract, which is how a task
+a researcher adds in a single Python file gets them without further code.
+K-fold cross-validation covers classification, regression and segmentation.
 
 Results are the report's numbers, copied, never recomputed for display: the
 mean on screen is the one in the report a paper table is built from. The
@@ -106,11 +118,14 @@ classifier head was once initialised before the seed was set). Confidence
 intervals are clipped to each metric's domain and flagged when clipped.
 
 Every behaviour change is recorded as an architecture decision record in
-`docs/dev/DECISIONS.md` (more than 150 so far). The project has about 5,200
-backend and 1,050 frontend tests, a `visionforge selftest` command that trains every task
-and strategy through the real API, and continuous integration on each push.
-Everything runs locally; nothing leaves the machine unless the user downloads a
-public dataset.
+`docs/dev/DECISIONS.md` (more than 150 so far). On 11 November 2026 the project
+had more than 7,900 Python and 1,400 frontend tests, a `visionforge selftest`
+command that trains every task and strategy through the real API, and continuous integration on each push.
+VisionForge is local by default: data leaves the machine only when the user
+opts in, by training on Google Colab or by sending a run to Weights & Biases,
+the Hugging Face Hub, Zenodo, GitHub or a DVC remote; pretrained weights and
+public datasets are downloaded on request. The YOLO and RT-DETR backends come
+from Ultralytics, licensed under AGPL-3.0; VisionForge's own code is MIT.
 
 # Research impact statement
 
@@ -159,7 +174,9 @@ leaves it. In the slowest classification run (ratio 1.074) other processes on th
 machine used about 1.5 times the CPU of the other two browser runs; we did not identify
 them or repeat the run, so we cannot attribute the excess to that load. Training
 through the interface left the results unchanged, and its time cost, once large, is
-now small but not shown to be within 5% for every recipe.
+now small but not shown to be within 5% for every recipe. The recipes, protocols,
+per-run records and logs of these four series, and a script that recomputes every
+number in this section from them, are in `research/workflow_benchmark/results/`.
 
 <Usability study: number of participants, mean SUS
 and task completion rate, from `research/usability/`.> Each release is

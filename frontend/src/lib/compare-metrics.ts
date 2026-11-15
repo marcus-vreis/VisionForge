@@ -37,11 +37,42 @@ const STANDALONE_TASKS = ["detection", "regression", "segmentation", "anomaly"];
  *  carries. */
 type Directions = Readonly<Record<string, string>>;
 
-/** Substrings that mark a metric as lower-is-better: the backend's rule
- *  (`infer_direction` in core/significance.py). Only the fallback for a server
- *  that does not send `metric_directions` (and for a name it did not list): the
- *  server's answer is the rule, so a ranking and this table cannot disagree. */
-const LOWER_IS_BETTER = ["loss", "mae", "mse", "rmse", "error", "err", "distance"];
+/** Which names read as lower-is-better: the backend's vocabulary
+ *  (`core/metric_vocabulary.py`, which `infer_direction` reads), copied here and
+ *  compared to it by `tests/core/test_metric_vocabulary.py`. Long tokens match
+ *  anywhere in the name; short ones only as a whole word, optionally followed by
+ *  a number, so "fid" is not read in "confidence" nor "wer" in "power". Only the
+ *  fallback for a server that does not send `metric_directions` (and for a name
+ *  it did not list): the server's answer is the rule, so a ranking and this table
+ *  cannot disagree. */
+const LOWER_IS_BETTER_SUBSTRINGS = [
+  "loss",
+  "mae",
+  "mse",
+  "rmse",
+  "error",
+  "err",
+  "distance",
+  "perplexity",
+  "huber",
+  "brier",
+];
+const LOWER_IS_BETTER_WORDS = [
+  "msle",
+  "rmsle",
+  "mape",
+  "smape",
+  "nll",
+  "bce",
+  "wer",
+  "cer",
+  "hd95",
+  "fid",
+  "eer",
+  "fpr",
+  "ece",
+];
+const LOWER_IS_BETTER_WORD = new RegExp(`^(${LOWER_IS_BETTER_WORDS.join("|")})\\d*$`);
 
 /** Bookkeeping that every run reports and that is no better for being larger. */
 const BOOKKEEPING: MetricLabelKey[] = ["best_epoch", "total_epochs"];
@@ -53,7 +84,8 @@ const NEUTRAL = new Set<string>([...BOOKKEEPING, "threshold", "test_threshold"])
  *  answer is at hand. */
 export function inferMetricDirection(name: string): MetricDirection {
   const lowered = name.toLowerCase();
-  return LOWER_IS_BETTER.some((token) => lowered.includes(token)) ? "lower" : "higher";
+  if (LOWER_IS_BETTER_SUBSTRINGS.some((token) => lowered.includes(token))) return "lower";
+  return lowered.split(/[^a-z0-9]+/).some((word) => LOWER_IS_BETTER_WORD.test(word)) ? "lower" : "higher";
 }
 
 /** The direction `name` has in `served`, or undefined when it is not a direction

@@ -20,7 +20,8 @@ Ao lado de cada campo de credencial há um botão **💾 Salvar**. Salvando, a
 chave fica guardada em `~/.visionforge/credentials.json` e nas próximas vezes o
 campo já aparece marcado como *salva*, mostrando só os últimos caracteres
 (`salva: •••••••1234`) — o suficiente para você saber qual é, sem a chave
-aparecer na tela.
+aparecer na tela. Onde o arquivo fica, como apagar e o que pedir ao criar
+cada chave: [Tokens e chaves](gui/tokens.md).
 
 - deixe o campo **em branco** para usar a salva
 - digite outra e **↻ Substituir** para trocar
@@ -46,7 +47,14 @@ amostra rápida em vez do dataset inteiro.
 python -c "from visionforge.gui.api.dataset_download import download_dataset; print(download_dataset(provider='torchvision', dataset='mnist', out_dir='datasets/mnist', limit=20))"
 ```
 
-Esperado: `total_images=400`, `splits={'train': 320, 'val': 80, 'test': 100}`.
+Esperado: `total_images=400`, `splits={'train': 160, 'test': 200, 'val': 40}`.
+
+O `limit` vale por classe **e por split**: 10 classes × 20 imagens dão 200 em
+`train` e 200 em `test` (400 no total). Os 40 de `val` saem do `train` (20% de
+cada classe), por isso `train` fica em 160 e o total continua 400. A ordem das
+chaves é a de gravação: `val` aparece por último. Estes números vêm de rodar o
+comando com um MNIST de mentira de 10 classes, sem rede; com o MNIST de
+verdade, rodar o comando é a conferência.
 
 O `val` não vem do torchvision — ele entrega só train/test. O VisionForge
 recorta 20% do treino, estratificado por classe e reprodutível entre execuções,

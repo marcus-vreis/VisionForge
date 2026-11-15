@@ -11,7 +11,8 @@ from visionforge.blocks.base import ExperimentBlock
 from visionforge.core.data import DataModule
 from visionforge.core.evaluator import EvalResult, Evaluator, bootstrap_eval_cis
 from visionforge.core.metric_ci import MetricCI
-from visionforge.core.plotter import MetricsPlotter
+from visionforge.core.plotter import MetricsPlotter, figure_graphic
+from visionforge.core.run_trackers import TrackerFactory
 from visionforge.core.trainer import Trainer, TrainResult, seed_before_building
 from visionforge.models.factory import ModelFactory
 from visionforge.utils.config import ExperimentConfig
@@ -27,6 +28,7 @@ class ClassificationBlock(ExperimentBlock):
     """
 
     def setup(self, config: ExperimentConfig) -> None:
+        self.tracker_factories: tuple[TrackerFactory, ...] = ()
         self._config = config
         self._train_result: TrainResult | None = None
         self._eval_result: EvalResult | None = None
@@ -85,8 +87,11 @@ class ClassificationBlock(ExperimentBlock):
         # The worker pools have to be stopped even when the run raises: inside
         # `visionforge gui` the traceback keeps `data` alive, so without this the
         # processes outlive the run and each retry stacks more of them.
+        trainer = Trainer(self._config)
+        trainer.tracker_factories = self.tracker_factories
+        status = "FAILED"
         try:
-            self._train_result = Trainer(self._config).fit(
+            self._train_result = trainer.fit(
                 model,
                 data,
                 progress_callback=self._progress_callback,
@@ -97,6 +102,7 @@ class ClassificationBlock(ExperimentBlock):
             # Stopped before its first epoch (ADR-111): no checkpoint exists,
             # and the run.json the trainer wrote already says 0 epochs.
             if self._train_result.total_epochs == 0:
+                status = "KILLED"
                 return
 
             # Reload best checkpoint for test-set evaluation.
@@ -112,7 +118,10 @@ class ClassificationBlock(ExperimentBlock):
             run_dir = self._train_result.model_path.parent
             graphics = self._render_plots(run_dir, data.class_names)
             self._update_run_json(run_dir, graphics)
+            status = "KILLED" if self._train_result.stopped else "FINISHED"
         finally:
+            for tracker in trainer.trackers:
+                tracker.finish(status)
             data.close()
 
     def _run_evaluate(self) -> None:
@@ -146,29 +155,43 @@ class ClassificationBlock(ExperimentBlock):
         """
         assert self._train_result is not None
         graphics: list[Path] = []
+        fmts = self._config.output.figure_formats
+        dpi = self._config.output.figure_dpi
 
         loss_path = run_dir / "loss.png"
-        MetricsPlotter.loss_curve(self._train_result.history, loss_path)
-        graphics.append(loss_path)
+        MetricsPlotter.loss_curve(
+            self._train_result.history, loss_path, formats=fmts, dpi=dpi
+        )
+        graphics.append(figure_graphic(loss_path, fmts))
 
         acc_path = run_dir / "accuracy.png"
-        MetricsPlotter.accuracy_curve(self._train_result.history, acc_path)
-        graphics.append(acc_path)
+        MetricsPlotter.accuracy_curve(
+            self._train_result.history, acc_path, formats=fmts, dpi=dpi
+        )
+        graphics.append(figure_graphic(acc_path, fmts))
 
         if self._eval_result is None:
             return graphics
 
         cm_path = run_dir / "confusion_matrix.png"
         MetricsPlotter.confusion_matrix_plot(
-            self._eval_result.confusion_matrix, class_names, cm_path
+            self._eval_result.confusion_matrix,
+            class_names,
+            cm_path,
+            formats=fmts,
+            dpi=dpi,
         )
-        graphics.append(cm_path)
+        graphics.append(figure_graphic(cm_path, fmts))
 
         cm_norm_path = run_dir / "confusion_matrix_normalized.png"
         MetricsPlotter.confusion_matrix_normalized(
-            self._eval_result.confusion_matrix, class_names, cm_norm_path
+            self._eval_result.confusion_matrix,
+            class_names,
+            cm_norm_path,
+            formats=fmts,
+            dpi=dpi,
         )
-        graphics.append(cm_norm_path)
+        graphics.append(figure_graphic(cm_norm_path, fmts))
 
         roc_path = run_dir / "roc_curve.png"
         if MetricsPlotter.roc_curve_plot(
@@ -176,8 +199,10 @@ class ClassificationBlock(ExperimentBlock):
             self._eval_result.y_proba_full,
             class_names,
             roc_path,
+            formats=fmts,
+            dpi=dpi,
         ):
-            graphics.append(roc_path)
+            graphics.append(figure_graphic(roc_path, fmts))
 
         pr_path = run_dir / "precision_recall_curve.png"
         if MetricsPlotter.precision_recall_curve_plot(
@@ -185,8 +210,10 @@ class ClassificationBlock(ExperimentBlock):
             self._eval_result.y_proba_full,
             class_names,
             pr_path,
+            formats=fmts,
+            dpi=dpi,
         ):
-            graphics.append(pr_path)
+            graphics.append(figure_graphic(pr_path, fmts))
 
         return graphics
 

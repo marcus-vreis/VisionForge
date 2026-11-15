@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 from fastapi.testclient import TestClient
 
-import visionforge.gui.api.routes as routes_mod
+import visionforge.gui.api.execution as execution_mod
 from visionforge.core.trainer import Trainer, TrainResult
 from visionforge.gui.server import app
 from visionforge.utils.config import ExperimentConfig
@@ -164,7 +164,7 @@ class TestTrainerProgressCallback:
     def test_event_order_start_epochs_end(
         self, binary_config: ExperimentConfig
     ) -> None:
-        """Callback events must arrive: start → epoch_end × N → end."""
+        """Callback events must arrive: start → (batch… → epoch_end) × N → end."""
         events: list[dict[str, Any]] = []
         Trainer(binary_config).fit(
             _Tiny(), _FakeData(), progress_callback=events.append
@@ -172,8 +172,15 @@ class TestTrainerProgressCallback:
         kinds = [e["event"] for e in events]
         assert kinds[0] == "start"
         assert kinds[-1] == "end"
-        middle = kinds[1:-1]
-        assert all(k == "epoch_end" for k in middle)
+        middle = events[1:-1]
+        assert all(e["event"] in {"batch", "epoch_end"} for e in middle)
+        # Each epoch_end follows its epoch's last batch, always reported (ADR-205).
+        for i, e in enumerate(middle):
+            if e["event"] == "epoch_end":
+                before = middle[i - 1]
+                assert before["event"] == "batch"
+                assert before["batch"] == before["total_batches"]
+                assert before["epoch"] == e["epoch"]
 
 
 # ── SSE endpoint tests ────────────────────────────────────────────────────────
@@ -192,8 +199,8 @@ class TestSSEEventQueue:
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """GET /api/experiment/events must use content-type text/event-stream."""
-        monkeypatch.setattr(routes_mod, "_JOB_STATES", {})
-        monkeypatch.setattr(routes_mod, "_latest_run_id", None)
+        monkeypatch.setattr(execution_mod, "_JOB_STATES", {})
+        monkeypatch.setattr(execution_mod, "_latest_run_id", None)
         with client.stream("GET", "/api/experiment/events") as resp:
             assert "text/event-stream" in resp.headers["content-type"]
 
@@ -201,8 +208,8 @@ class TestSSEEventQueue:
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """With no active run the stream must yield a sentinel and close cleanly."""
-        monkeypatch.setattr(routes_mod, "_JOB_STATES", {})
-        monkeypatch.setattr(routes_mod, "_latest_run_id", None)
+        monkeypatch.setattr(execution_mod, "_JOB_STATES", {})
+        monkeypatch.setattr(execution_mod, "_latest_run_id", None)
         chunks: list[str] = []
         with client.stream("GET", "/api/experiment/events") as resp:
             for line in resp.iter_lines():
@@ -259,7 +266,6 @@ class TestSSEEventQueue:
     def test_stream_event_order_via_fake_run(self, tmp_path: Path) -> None:
         """A complete fake run must produce start → epoch_end × N → end via SSE."""
         import threading
-        import time
 
         loop = asyncio.new_event_loop()
         queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
@@ -271,7 +277,6 @@ class TestSSEEventQueue:
             async def _put(item: dict[str, Any] | None) -> None:
                 await queue.put(item)
 
-            time.sleep(0.02)  # slight delay to let the consumer start
             asyncio.run_coroutine_threadsafe(
                 _put({"event": "start", "total_epochs": n_epochs}), loop
             ).result()
@@ -315,7 +320,7 @@ class TestSSEEventQueue:
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """GET /api/experiment/events must not return 404 or 405."""
-        monkeypatch.setattr(routes_mod, "_JOB_STATES", {})
-        monkeypatch.setattr(routes_mod, "_latest_run_id", None)
+        monkeypatch.setattr(execution_mod, "_JOB_STATES", {})
+        monkeypatch.setattr(execution_mod, "_latest_run_id", None)
         with client.stream("GET", "/api/experiment/events") as resp:
             assert resp.status_code not in (404, 405)

@@ -19,7 +19,7 @@ from loguru import logger
 
 from visionforge.core.cancellation import CancellationToken
 from visionforge.core.metric_ci import MetricCI, bootstrap_regression_cis
-from visionforge.core.plotter import MetricsPlotter
+from visionforge.core.plotter import MetricsPlotter, figure_graphic
 from visionforge.core.regression_data import RegressionDataModule
 from visionforge.core.regression_trainer import (
     RegressionTrainer,
@@ -132,11 +132,14 @@ class RegressionBlock:
     def _render_plots(self, run_dir: Path) -> list[Path]:
         """Render the train/val loss curve (reuses the classification plotter)."""
         assert self._train_result is not None
+        fmts = self._config.output.figure_formats
+        dpi = self._config.output.figure_dpi
         loss_path = run_dir / "loss.png"
         # RegressionEpochResult exposes epoch/train_loss/val_loss, which is all
         # loss_curve reads — duck-typed reuse of the classification plotter.
-        MetricsPlotter.loss_curve(self._train_result.history, loss_path)  # type: ignore[arg-type]
-        graphics = [loss_path]
+        history: Any = self._train_result.history
+        MetricsPlotter.loss_curve(history, loss_path, formats=fmts, dpi=dpi)
+        graphics = [figure_graphic(loss_path, fmts)]
 
         # Test-set diagnostics (ADR-077). Only meaningful once a test split has
         # been scored, so an evaluate-less run still gets its loss curve.
@@ -145,11 +148,16 @@ class RegressionBlock:
             target = ", ".join(self._config.data.target_columns)
             scatter_path = run_dir / "pred_vs_true.png"
             MetricsPlotter.regression_scatter(
-                y_true, y_pred, scatter_path, target_name=target
+                y_true, y_pred, scatter_path, target_name=target, formats=fmts, dpi=dpi
             )
             residual_path = run_dir / "residuals.png"
-            MetricsPlotter.residual_histogram(y_true, y_pred, residual_path)
-            graphics += [scatter_path, residual_path]
+            MetricsPlotter.residual_histogram(
+                y_true, y_pred, residual_path, formats=fmts, dpi=dpi
+            )
+            graphics += [
+                figure_graphic(scatter_path, fmts),
+                figure_graphic(residual_path, fmts),
+            ]
         return graphics
 
     def _update_run_json(self, run_dir: Path, graphics: list[Path]) -> None:

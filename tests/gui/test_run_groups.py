@@ -9,13 +9,15 @@ endpoints serve it as one entry.
 from __future__ import annotations
 
 import json
-import time
 from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.strategies as strategies_mod
+from tests.helpers import wait_experiment_done
 from visionforge.utils.selftest_data import build_regression_dataset
 
 
@@ -25,16 +27,16 @@ def client_and_routes(tmp_path: Path, monkeypatch):  # type: ignore[no-untyped-d
     from visionforge.gui.server import app
 
     monkeypatch.setattr(routes_mod, "_MODELS_DIR", tmp_path / "models")
-    routes_mod._JOB_STATES.clear()
+    execution_mod._JOB_STATES.clear()
     try:
         # A context manager keeps one event loop alive, which the training
         # job (a background task of the request that queued it) needs.
         with TestClient(app, raise_server_exceptions=True) as client:
             yield client, routes_mod
     finally:
-        routes_mod._RUN_QUEUE.reset()
-        routes_mod._JOB_STATES.clear()
-        routes_mod._JOB_STATES.clear()
+        execution_mod._RUN_QUEUE.reset()
+        execution_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
 
 def _config(tmp_path: Path) -> dict[str, Any]:
@@ -54,13 +56,7 @@ def _config(tmp_path: Path) -> dict[str, Any]:
 
 
 def _finish(client: TestClient) -> dict[str, Any]:
-    status: dict[str, Any] = {"status": "running"}
-    for _ in range(900):
-        status = client.get("/api/experiment/status").json()
-        if status["status"] in ("completed", "failed"):
-            return status
-        time.sleep(0.1)
-    return status
+    return wait_experiment_done(client, timeout=90.0)
 
 
 def _group_json(models: Path, run_id: str) -> dict[str, Any]:
@@ -176,14 +172,14 @@ class TestReplicates:
         self, client_and_routes: tuple, tmp_path: Path, monkeypatch
     ) -> None:
         client, routes_mod = client_and_routes
-        real = routes_mod.run_replicates
+        real = strategies_mod.run_replicates
 
         def stop_first(runner, base, seeds, metric, progress_callback=None):  # type: ignore[no-untyped-def]
             # The stop pressed while the first seed is still loading its data.
-            routes_mod._job_state(routes_mod._latest_run_id).token.cancel()
+            execution_mod._job_state(execution_mod._latest_run_id).token.cancel()
             return real(runner, base, seeds, metric, progress_callback)
 
-        monkeypatch.setattr(routes_mod, "run_replicates", stop_first)
+        monkeypatch.setattr(strategies_mod, "run_replicates", stop_first)
         run_id = client.post(
             "/api/regression/replicates",
             json={"config": _config(tmp_path), "seeds": [3, 4, 5]},

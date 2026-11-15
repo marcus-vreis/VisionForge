@@ -25,7 +25,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -40,6 +40,7 @@ from visionforge.gui.api.colab_connection import (
     cli_path,
     profile_home,
 )
+from visionforge.gui.api.colab_drive import DriveConsent, consent_url
 from visionforge.gui.api.colab_remote_runner import EVENT_PREFIX, REMOTE_ROOT
 from visionforge.utils.messages import tr
 
@@ -63,6 +64,17 @@ RUN_ATTEMPTS = 2
 # records. The ceiling is refused before downloading, and the import checks it again.
 MAX_BUNDLE_BYTES = 2 * 1024**3
 DOWNLOAD_TIMEOUT_S = 1800.0
+# The Drive mount asks for a browser consent on every runtime (ADR-164). Each
+# attempt shows one URL; an Enter sent before the consent fails with a 400 and
+# the next attempt shows a new URL. The person's time on the consent page has
+# its own deadline, apart from the CLI's silence outside it, and neither touches
+# STARTUP_TIMEOUT_S, which starts only with the runner's exec.
+DRIVE_CONSENT_ATTEMPTS = 3
+DRIVE_CONSENT_TIMEOUT_S = 600.0
+DRIVE_SILENCE_TIMEOUT_S = 120.0
+DRIVE_MOUNTED = "Mounted at"
+DRIVE_REFUSED = "Error propagating"
+_RUN_STOPPED = "colab.run_stopped"
 _RUNNER = Path(__file__).with_name("colab_remote_runner.py")
 # Session names VisionForge creates; anything else on the account is the user's.
 SESSION_PREFIX = "vf-"
@@ -150,6 +162,7 @@ class ColabJobs:
         payload: dict[str, Any],
         on_event: Callable[[dict[str, Any]], None],
         cancelled: Callable[[], bool],
+        consent: DriveConsent | None = None,
     ) -> RemoteResult:
         name = session_name()
         script = profile_home(slug) / "jobs" / f"{name}.py"
@@ -175,13 +188,21 @@ class ColabJobs:
                 }
             )
             script.parent.mkdir(parents=True, exist_ok=True)
-            script.write_text(build_script(payload), encoding="utf-8")
+            text = build_script(payload)
+            # Only the text is tainted; the path is the slug and a timestamp.
+            script.write_text(text, encoding="utf-8")  # NOSONAR pythonsecurity:S2083
             warm = self._warm_up(
                 slug, name, script.with_suffix(".warmup.py"), cancelled
             )
             if warm is not None:
                 return warm
             on_event({"event": "remote", "stage": "kernel_ready", "session": name})
+            if needs_drive(payload):
+                mounted = self._mount_drive(
+                    slug, name, on_event, cancelled, consent or DriveConsent()
+                )
+                if mounted is not None:
+                    return mounted
             result = self._run_runner(slug, name, script, on_event, cancelled)
             if result.outcome != "completed" or result.remote_bundle is None:
                 return result
@@ -229,7 +250,121 @@ class ColabJobs:
             return RemoteResult(
                 "failed", error=tr("colab.download_failed", detail=_tail(proc))
             )
-        return replace(result, bundle=local)
+        return RemoteResult(
+            result.outcome,
+            report=result.report,
+            error=result.error,
+            remote_bundle=result.remote_bundle,
+            bundle=local,
+        )
+
+    def _mount_drive(
+        self,
+        slug: str,
+        name: str,
+        on_event: Callable[[dict[str, Any]], None],
+        cancelled: Callable[[], bool],
+        consent: DriveConsent,
+    ) -> RemoteResult | None:
+        """Mount the Drive on the VM, asking for the consent through the GUI; None when mounted."""
+        on_event({"event": "remote", "stage": "drive_mount", "session": name})
+        for attempt in range(1, DRIVE_CONSENT_ATTEMPTS + 1):
+            outcome, detail = self._drivemount(
+                slug, name, attempt, on_event, cancelled, consent
+            )
+            if outcome == "mounted":
+                on_event({"event": "remote", "stage": "drive_mounted", "session": name})
+                return None
+            if outcome == "cancelled":
+                return RemoteResult("stopped", error=tr(_RUN_STOPPED))
+            if outcome == "failed":
+                return RemoteResult(
+                    "failed", error=tr("colab.drive_mount_failed", detail=detail)
+                )
+            logger.warning(
+                "Drive consent for {} not given ({}/{}): {}",
+                name,
+                attempt,
+                DRIVE_CONSENT_ATTEMPTS,
+                outcome,
+            )
+        return RemoteResult(
+            "failed",
+            error=tr("colab.drive_consent_failed", attempts=DRIVE_CONSENT_ATTEMPTS),
+        )
+
+    def _drivemount(
+        self,
+        slug: str,
+        name: str,
+        attempt: int,
+        on_event: Callable[[dict[str, Any]], None],
+        cancelled: Callable[[], bool],
+        consent: DriveConsent,
+    ) -> tuple[str, str]:
+        """One ``colab drivemount``: mounted, refused (no consent), cancelled or failed.
+
+        The URL goes to the GUI only, never to the log: the ``state`` it carries
+        holds a token.
+        """
+        proc = self._popen(
+            [str(cli_path()), "drivemount", "-s", name],
+            env=cli_env(slug),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+        )
+        clock = {"last": time.monotonic(), "consent": False}
+        killed = {"why": ""}
+        done = threading.Event()
+        threading.Thread(
+            target=_watch_drivemount,
+            args=(proc.kill, done, clock, killed, cancelled),
+            name=f"colab-drive-{name}",
+            daemon=True,
+        ).start()
+        mounted, refused, other = False, False, ""
+        try:
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                clock["last"] = time.monotonic()
+                url = consent_url(line)
+                if url is not None:
+                    clock["consent"] = True
+                    on_event(
+                        {
+                            "event": "drive_consent_required",
+                            "url": url,
+                            "attempt": attempt,
+                            "attempts": DRIVE_CONSENT_ATTEMPTS,
+                            "session": name,
+                        }
+                    )
+                    answer = consent.wait(DRIVE_CONSENT_TIMEOUT_S, cancelled)
+                    clock["last"], clock["consent"] = time.monotonic(), False
+                    if answer != "granted":
+                        killed["why"] = answer
+                        proc.kill()
+                        break
+                    on_event({"event": "remote", "stage": "drive_consent_sent"})
+                    _send_enter(proc)
+                elif DRIVE_MOUNTED in line:
+                    mounted = True
+                elif DRIVE_REFUSED in line:
+                    # Without the consent the CLI hangs after this line.
+                    refused = True
+                    proc.kill()
+                    break
+                elif line.strip() and not line.lstrip().startswith("<"):
+                    other = line.strip()
+            proc.wait()
+        finally:
+            done.set()
+        return _drive_outcome(killed["why"], mounted, refused, other, proc.returncode)
 
     def _warm_up(
         self, slug: str, name: str, path: Path, cancelled: Callable[[], bool]
@@ -238,7 +373,7 @@ class ColabJobs:
         path.write_text(f"print({WARMUP_MARKER!r}, flush=True)\n", encoding="utf-8")
         for attempt in range(1, WARMUP_ATTEMPTS + 1):
             if cancelled():
-                return RemoteResult("stopped", error=tr("colab.run_stopped"))
+                return RemoteResult("stopped", error=tr(_RUN_STOPPED))
             proc = self._cli(
                 slug,
                 WARMUP_TIMEOUT_S,
@@ -328,24 +463,12 @@ class ColabJobs:
         started = threading.Event()
         done = threading.Event()
         launched = time.monotonic()
-
-        def watch() -> None:
-            # Stopping means releasing the VM now: the local exec is killed and
-            # the `finally` of run_job stops the session.
-            while not done.wait(CANCEL_POLL_S):
-                if cancelled():
-                    stopped.set()
-                    proc.kill()
-                    return
-                if (
-                    not started.is_set()
-                    and time.monotonic() - launched > STARTUP_TIMEOUT_S
-                ):
-                    stalled.set()
-                    proc.kill()
-                    return
-
-        threading.Thread(target=watch, name=f"colab-watch-{name}", daemon=True).start()
+        threading.Thread(
+            target=_watch_exec,
+            args=(proc.kill, done, cancelled, started, stopped, stalled, launched),
+            name=f"colab-watch-{name}",
+            daemon=True,
+        ).start()
         end: dict[str, Any] | None = None
         other: list[str] = []
         try:
@@ -400,11 +523,89 @@ class ColabJobs:
             )
 
 
+def needs_drive(payload: dict[str, Any]) -> bool:
+    """Whether the job mounts the Drive: a dataset in it, or the run saved to it."""
+    source = payload.get("source") or {}
+    return source.get("kind") == "drive" or bool(payload.get("drive_export"))
+
+
+def _watch_drivemount(
+    kill: Callable[[], None],
+    done: threading.Event,
+    clock: dict[str, float],
+    killed: dict[str, str],
+    cancelled: Callable[[], bool],
+) -> None:
+    """Kill a ``drivemount`` that is cancelled or silent, never while a consent waits."""
+    while not done.wait(CANCEL_POLL_S):
+        if clock["consent"]:
+            continue
+        if cancelled():
+            killed["why"] = "cancelled"
+        elif time.monotonic() - float(clock["last"]) > DRIVE_SILENCE_TIMEOUT_S:
+            killed["why"] = "silent"
+        else:
+            continue
+        kill()
+        return
+
+
+def _drive_outcome(
+    why: str, mounted: bool, refused: bool, other: str, returncode: int | None
+) -> tuple[str, str]:
+    """``(outcome, detail)`` of one ``drivemount``, from what it printed and why it died."""
+    if why == "cancelled":
+        return "cancelled", ""
+    if mounted:
+        return "mounted", ""
+    if refused or why == "timeout":
+        return "refused", why or "400"
+    if why == "silent":
+        return "failed", f"no output in {DRIVE_SILENCE_TIMEOUT_S:.0f}s"
+    return "failed", other or f"exit {returncode}"
+
+
+def _watch_exec(
+    kill: Callable[[], None],
+    done: threading.Event,
+    cancelled: Callable[[], bool],
+    started: threading.Event,
+    stopped: threading.Event,
+    stalled: threading.Event,
+    launched: float,
+) -> None:
+    """Kill the runner's ``exec`` when stopped, or when it never started.
+
+    Stopping means releasing the VM now: the local exec is killed and the
+    ``finally`` of run_job stops the session.
+    """
+    while not done.wait(CANCEL_POLL_S):
+        if cancelled():
+            stopped.set()
+            kill()
+            return
+        if not started.is_set() and time.monotonic() - launched > STARTUP_TIMEOUT_S:
+            stalled.set()
+            kill()
+            return
+
+
+def _send_enter(proc: Any) -> None:
+    """The Enter the CLI waits for after the consent (ADR-164)."""
+    if proc.stdin is None:
+        return
+    try:
+        proc.stdin.write("\n")
+        proc.stdin.flush()
+    except (OSError, ValueError):
+        logger.warning("Could not answer the Drive consent prompt: stdin closed")
+
+
 def _result(
     end: dict[str, Any] | None, stopped: bool, other: list[str]
 ) -> RemoteResult:
     if stopped:
-        return RemoteResult("stopped", error=tr("colab.run_stopped"))
+        return RemoteResult("stopped", error=tr(_RUN_STOPPED))
     if end is None:
         detail = other[-1] if other else ""
         return RemoteResult("failed", error=tr("colab.run_no_end", detail=detail))
@@ -427,11 +628,13 @@ def _tail(proc: subprocess.CompletedProcess[str]) -> str:
 
 
 __all__ = [
+    "DRIVE_CONSENT_ATTEMPTS",
     "EXEC_TIMEOUT_S",
     "ColabJobs",
     "RemoteResult",
     "RemoteSession",
     "build_script",
+    "needs_drive",
     "parse_event",
     "parse_sessions",
     "session_name",

@@ -1,4 +1,23 @@
 {
+  "DELETE /api/comet/token": {
+    "operationId": "forget_api_comet_token_delete",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
+  },
   "DELETE /api/credentials/{provider}": {
     "operationId": "forget_credential_route_api_credentials__provider__delete",
     "parameters": [
@@ -13,7 +32,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "datasets"
+    ]
   },
   "DELETE /api/custom/{key}": {
     "operationId": "delete_custom_task_api_custom__key__delete",
@@ -32,7 +54,48 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "custom-tasks"
+    ]
+  },
+  "DELETE /api/github/token": {
+    "operationId": "forget_api_github_token_delete",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
+  },
+  "DELETE /api/hub/token": {
+    "operationId": "forget_api_hub_token_delete",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
   },
   "DELETE /api/queue/{run_id}": {
     "operationId": "cancel_queued_run_api_queue__run_id__delete",
@@ -50,7 +113,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "experiments"
+    ]
   },
   "DELETE /api/runs/{run_id}": {
     "operationId": "delete_run_api_runs__run_id__delete",
@@ -70,7 +136,67 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "runs"
+    ]
+  },
+  "DELETE /api/wandb/token": {
+    "operationId": "forget_api_wandb_token_delete",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
+  },
+  "DELETE /api/zenodo/sandbox/token": {
+    "operationId": "forget_api_zenodo_sandbox_token_delete",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
+  },
+  "DELETE /api/zenodo/token": {
+    "operationId": "forget_api_zenodo_token_delete",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
   },
   "GET /api/anomaly/schema": {
     "operationId": "get_anomaly_schema_api_anomaly_schema_get",
@@ -85,7 +211,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "anomaly"
+    ]
   },
   "GET /api/artifacts/{file_path}": {
     "operationId": "serve_artifact_api_artifacts__file_path__get",
@@ -103,7 +232,72 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "runs"
+    ]
+  },
+  "GET /api/code-tour": {
+    "operationId": "list_code_tours_api_code_tour_get",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "array[CodeTourTask]"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "system"
+    ]
+  },
+  "GET /api/code-tour/{task}": {
+    "operationId": "get_code_tour_api_code_tour__task__get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:task:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "array[CodeSection]"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "system"
+    ]
+  },
+  "GET /api/colab/drive/folders": {
+    "operationId": "colab_drive_folders_api_colab_drive_folders_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "query:my_drive_root:optional",
+      "query:rel:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "ColabDriveFolders"
+      },
+      "400": {},
+      "403": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "colab"
+    ]
   },
   "GET /api/colab/sessions": {
     "operationId": "colab_sessions_api_colab_sessions_get",
@@ -120,7 +314,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "colab"
+    ]
   },
   "GET /api/colab/status": {
     "operationId": "colab_status_api_colab_status_get",
@@ -136,7 +333,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "colab"
+    ]
   },
   "GET /api/colab/usage": {
     "operationId": "colab_usage_api_colab_usage_get",
@@ -154,7 +354,29 @@
         "application/json": "HTTPValidationError"
       },
       "502": {}
-    }
+    },
+    "tags": [
+      "colab"
+    ]
+  },
+  "GET /api/comet/token": {
+    "operationId": "status_api_comet_token_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
   },
   "GET /api/credentials": {
     "operationId": "get_credentials_api_credentials_get",
@@ -169,7 +391,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "datasets"
+    ]
   },
   "GET /api/custom/{key}/schema": {
     "operationId": "custom_task_schema_api_custom__key__schema_get",
@@ -186,7 +411,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "custom-tasks"
+    ]
   },
   "GET /api/dataset/file": {
     "operationId": "serve_dataset_file_api_dataset_file_get",
@@ -205,7 +433,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "datasets"
+    ]
   },
   "GET /api/detection/schema": {
     "operationId": "get_detection_schema_api_detection_schema_get",
@@ -220,7 +451,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "detection"
+    ]
   },
   "GET /api/device/info": {
     "operationId": "get_device_info_api_device_info_get",
@@ -235,7 +469,35 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "system"
+    ]
+  },
+  "GET /api/dvc/preview": {
+    "operationId": "preview_api_dvc_preview_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "query:repo:required",
+      "query:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "403": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "500": {}
+    },
+    "tags": [
+      "integrations"
+    ]
   },
   "GET /api/experiment/events": {
     "operationId": "experiment_events_api_experiment_events_get",
@@ -252,7 +514,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "experiments"
+    ]
   },
   "GET /api/experiment/result/{run_id}": {
     "operationId": "get_result_api_experiment_result__run_id__get",
@@ -271,7 +536,10 @@
         "application/json": "HTTPValidationError"
       },
       "500": {}
-    }
+    },
+    "tags": [
+      "experiments"
+    ]
   },
   "GET /api/experiment/status": {
     "operationId": "get_status_api_experiment_status_get",
@@ -287,7 +555,195 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "experiments"
+    ]
+  },
+  "GET /api/explorer/coco/export/{job_id}": {
+    "operationId": "coco_status_api_explorer_coco_export__job_id__get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "GET /api/explorer/coco/import/{job_id}": {
+    "operationId": "coco_status_api_explorer_coco_import__job_id__get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "GET /api/explorer/incorporate/{job_id}": {
+    "operationId": "incorporate_status_api_explorer_incorporate__job_id__get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "GET /api/explorer/merge/{job_id}": {
+    "operationId": "merge_status_api_explorer_merge__job_id__get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "GET /api/explorer/resplit/{job_id}": {
+    "operationId": "resplit_status_api_explorer_resplit__job_id__get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "GET /api/explorer/scan/{job_id}": {
+    "operationId": "explorer_scan_status_api_explorer_scan__job_id__get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "GET /api/explorer/thumb": {
+    "operationId": "explorer_thumb_api_explorer_thumb_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "query:label_path:optional",
+      "query:path:required",
+      "query:root:required",
+      "query:size:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": null
+      },
+      "400": {},
+      "403": {},
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "GET /api/github/preview": {
+    "operationId": "preview_api_github_preview_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "query:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
+  },
+  "GET /api/github/token": {
+    "operationId": "status_api_github_token_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
   },
   "GET /api/health": {
     "operationId": "health_api_health_get",
@@ -297,7 +753,50 @@
       "200": {
         "application/json": "object"
       }
-    }
+    },
+    "tags": [
+      "system"
+    ]
+  },
+  "GET /api/hub/preview": {
+    "operationId": "preview_api_hub_preview_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "query:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
+  },
+  "GET /api/hub/token": {
+    "operationId": "status_api_hub_token_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
   },
   "GET /api/profiles": {
     "operationId": "get_profiles_api_profiles_get",
@@ -312,7 +811,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "profiles"
+    ]
   },
   "GET /api/queue": {
     "operationId": "get_queue_api_queue_get",
@@ -327,7 +829,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "experiments"
+    ]
   },
   "GET /api/regression/schema": {
     "operationId": "get_regression_schema_api_regression_schema_get",
@@ -342,7 +847,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "regression"
+    ]
   },
   "GET /api/runs": {
     "operationId": "list_runs_api_runs_get",
@@ -360,7 +868,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "runs"
+    ]
   },
   "GET /api/runs/{run_id}": {
     "operationId": "get_run_detail_api_runs__run_id__get",
@@ -380,7 +891,10 @@
         "application/json": "HTTPValidationError"
       },
       "500": {}
-    }
+    },
+    "tags": [
+      "runs"
+    ]
   },
   "GET /api/runs/{run_id}/bundle": {
     "operationId": "download_bundle_api_runs__run_id__bundle_get",
@@ -398,7 +912,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "runs"
+    ]
   },
   "GET /api/runs/{run_id}/export_md": {
     "operationId": "export_run_markdown_api_runs__run_id__export_md_get",
@@ -418,7 +935,10 @@
         "application/json": "HTTPValidationError"
       },
       "500": {}
-    }
+    },
+    "tags": [
+      "runs"
+    ]
   },
   "GET /api/schema": {
     "operationId": "get_schema_api_schema_get",
@@ -433,7 +953,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "experiments"
+    ]
   },
   "GET /api/segmentation/schema": {
     "operationId": "get_segmentation_schema_api_segmentation_schema_get",
@@ -448,7 +971,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "segmentation"
+    ]
   },
   "GET /api/system/info": {
     "operationId": "get_system_info_api_system_info_get",
@@ -463,7 +989,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "system"
+    ]
   },
   "GET /api/tasks": {
     "operationId": "list_tasks_api_tasks_get",
@@ -478,7 +1007,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "experiments"
+    ]
   },
   "GET /api/update": {
     "operationId": "get_update_api_update_get",
@@ -493,7 +1025,88 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "system"
+    ]
+  },
+  "GET /api/wandb/token": {
+    "operationId": "status_api_wandb_token_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
+  },
+  "GET /api/zenodo/preview": {
+    "operationId": "preview_api_zenodo_preview_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "query:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
+  },
+  "GET /api/zenodo/sandbox/token": {
+    "operationId": "status_api_zenodo_sandbox_token_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
+  },
+  "GET /api/zenodo/token": {
+    "operationId": "status_api_zenodo_token_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
   },
   "GET /{path}": {
     "operationId": "spa_fallback__path__get",
@@ -509,7 +1122,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "spa"
+    ]
   },
   "POST /api/anomaly/compare": {
     "operationId": "compare_anomaly_api_anomaly_compare_post",
@@ -530,7 +1146,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "anomaly"
+    ]
   },
   "POST /api/anomaly/dataset/stats": {
     "operationId": "anomaly_dataset_stats_api_anomaly_dataset_stats_post",
@@ -547,7 +1166,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "datasets"
+    ]
   },
   "POST /api/anomaly/replicated-comparison": {
     "operationId": "replicated_comparison_anomaly_api_anomaly_replicated_comparison_post",
@@ -568,7 +1190,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "anomaly"
+    ]
   },
   "POST /api/anomaly/replicates": {
     "operationId": "replicates_anomaly_api_anomaly_replicates_post",
@@ -589,7 +1214,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "anomaly"
+    ]
   },
   "POST /api/anomaly/run": {
     "operationId": "run_anomaly_api_anomaly_run_post",
@@ -610,7 +1238,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "anomaly"
+    ]
   },
   "POST /api/anomaly/sweep": {
     "operationId": "sweep_anomaly_api_anomaly_sweep_post",
@@ -631,7 +1262,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "anomaly"
+    ]
   },
   "POST /api/checkpoint/pick": {
     "operationId": "pick_checkpoint_file_api_checkpoint_pick_post",
@@ -646,7 +1280,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "datasets"
+    ]
   },
   "POST /api/classification/replicated-comparison": {
     "operationId": "replicated_comparison_classification_api_classification_replicated_comparison_post",
@@ -667,7 +1304,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "experiments"
+    ]
   },
   "POST /api/classification/replicates": {
     "operationId": "replicates_classification_api_classification_replicates_post",
@@ -688,7 +1328,56 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "experiments"
+    ]
+  },
+  "POST /api/colab/drive/continue": {
+    "operationId": "continue_drive_consent_api_colab_drive_continue_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "ColabDriveContinueRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "colab"
+    ]
+  },
+  "POST /api/colab/drive/open": {
+    "operationId": "open_drive_folder_api_colab_drive_open_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "ColabDriveOpenRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "403": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "500": {}
+    },
+    "tags": [
+      "colab"
+    ]
   },
   "POST /api/colab/experiment/run": {
     "operationId": "run_colab_experiment_api_colab_experiment_run_post",
@@ -708,8 +1397,12 @@
       "409": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
-    }
+      },
+      "503": {}
+    },
+    "tags": [
+      "colab"
+    ]
   },
   "POST /api/colab/install": {
     "operationId": "colab_install_api_colab_install_post",
@@ -725,7 +1418,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "colab"
+    ]
   },
   "POST /api/colab/login/cancel": {
     "operationId": "colab_login_cancel_api_colab_login_cancel_post",
@@ -741,7 +1437,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "colab"
+    ]
   },
   "POST /api/colab/login/finish": {
     "operationId": "colab_login_finish_api_colab_login_finish_post",
@@ -760,7 +1459,10 @@
         "application/json": "HTTPValidationError"
       },
       "502": {}
-    }
+    },
+    "tags": [
+      "colab"
+    ]
   },
   "POST /api/colab/login/start": {
     "operationId": "colab_login_start_api_colab_login_start_post",
@@ -778,7 +1480,10 @@
         "application/json": "HTTPValidationError"
       },
       "502": {}
-    }
+    },
+    "tags": [
+      "colab"
+    ]
   },
   "POST /api/colab/logout": {
     "operationId": "colab_logout_api_colab_logout_post",
@@ -794,7 +1499,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "colab"
+    ]
   },
   "POST /api/colab/sessions/stop": {
     "operationId": "colab_stop_session_api_colab_sessions_stop_post",
@@ -814,7 +1522,33 @@
         "application/json": "HTTPValidationError"
       },
       "502": {}
-    }
+    },
+    "tags": [
+      "colab"
+    ]
+  },
+  "POST /api/comet/runs/{run_id}/retry": {
+    "operationId": "retry_api_comet_runs__run_id__retry_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "CometStatus"
+      },
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "500": {}
+    },
+    "tags": [
+      "integrations"
+    ]
   },
   "POST /api/credentials": {
     "operationId": "save_credential_route_api_credentials_post",
@@ -832,7 +1566,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "datasets"
+    ]
   },
   "POST /api/custom/{key}/hide": {
     "operationId": "hide_custom_task_api_custom__key__hide_post",
@@ -849,7 +1586,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "custom-tasks"
+    ]
   },
   "POST /api/custom/{key}/replicated-comparison": {
     "operationId": "replicated_comparison_custom_api_custom__key__replicated_comparison_post",
@@ -871,7 +1611,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "custom-tasks"
+    ]
   },
   "POST /api/custom/{key}/replicates": {
     "operationId": "replicates_custom_task_api_custom__key__replicates_post",
@@ -893,7 +1636,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "custom-tasks"
+    ]
   },
   "POST /api/custom/{key}/run": {
     "operationId": "run_custom_task_api_custom__key__run_post",
@@ -915,7 +1661,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "custom-tasks"
+    ]
   },
   "POST /api/custom/{key}/sweep": {
     "operationId": "sweep_custom_task_api_custom__key__sweep_post",
@@ -937,7 +1686,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "custom-tasks"
+    ]
   },
   "POST /api/custom/{key}/unhide": {
     "operationId": "unhide_custom_task_api_custom__key__unhide_post",
@@ -953,7 +1705,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "custom-tasks"
+    ]
   },
   "POST /api/dataset/audit": {
     "operationId": "audit_images_api_dataset_audit_post",
@@ -971,7 +1726,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "datasets"
+    ]
   },
   "POST /api/dataset/detect": {
     "operationId": "detect_dataset_api_dataset_detect_post",
@@ -988,7 +1746,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "datasets"
+    ]
   },
   "POST /api/dataset/download": {
     "operationId": "dataset_download_api_dataset_download_post",
@@ -1007,7 +1768,10 @@
         "application/json": "HTTPValidationError"
       },
       "500": {}
-    }
+    },
+    "tags": [
+      "datasets"
+    ]
   },
   "POST /api/dataset/pick": {
     "operationId": "pick_dataset_folder_api_dataset_pick_post",
@@ -1022,7 +1786,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "datasets"
+    ]
   },
   "POST /api/dataset/preview_augment": {
     "operationId": "preview_augment_api_dataset_preview_augment_post",
@@ -1039,7 +1806,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "datasets"
+    ]
   },
   "POST /api/dataset/preview_preprocess": {
     "operationId": "preview_preprocess_api_dataset_preview_preprocess_post",
@@ -1057,7 +1827,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "datasets"
+    ]
   },
   "POST /api/dataset/samples": {
     "operationId": "dataset_samples_api_dataset_samples_post",
@@ -1074,7 +1847,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "datasets"
+    ]
   },
   "POST /api/dataset/stats": {
     "operationId": "dataset_stats_api_dataset_stats_post",
@@ -1091,7 +1867,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "datasets"
+    ]
   },
   "POST /api/detection/compare": {
     "operationId": "compare_detection_api_detection_compare_post",
@@ -1112,7 +1891,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "detection"
+    ]
   },
   "POST /api/detection/dataset/pick_yaml": {
     "operationId": "pick_detection_yaml_api_detection_dataset_pick_yaml_post",
@@ -1127,7 +1909,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "datasets"
+    ]
   },
   "POST /api/detection/dataset/samples": {
     "operationId": "detection_dataset_samples_api_detection_dataset_samples_post",
@@ -1144,7 +1929,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "datasets"
+    ]
   },
   "POST /api/detection/dataset/stats": {
     "operationId": "detection_dataset_stats_api_detection_dataset_stats_post",
@@ -1161,7 +1949,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "datasets"
+    ]
   },
   "POST /api/detection/replicated-comparison": {
     "operationId": "replicated_comparison_detection_api_detection_replicated_comparison_post",
@@ -1182,7 +1973,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "detection"
+    ]
   },
   "POST /api/detection/replicates": {
     "operationId": "replicates_detection_api_detection_replicates_post",
@@ -1203,7 +1997,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "detection"
+    ]
   },
   "POST /api/detection/run": {
     "operationId": "run_detection_api_detection_run_post",
@@ -1224,7 +2021,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "detection"
+    ]
   },
   "POST /api/detection/sweep": {
     "operationId": "sweep_detection_api_detection_sweep_post",
@@ -1245,7 +2045,59 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "detection"
+    ]
+  },
+  "POST /api/dvc/export": {
+    "operationId": "send_api_dvc_export_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "DvcExport"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "403": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "500": {}
+    },
+    "tags": [
+      "integrations"
+    ]
+  },
+  "POST /api/dvc/prepare": {
+    "operationId": "prepare_api_dvc_prepare_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "DvcRepository"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "403": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "500": {}
+    },
+    "tags": [
+      "integrations"
+    ]
   },
   "POST /api/experiment/run": {
     "operationId": "run_experiment_api_experiment_run_post",
@@ -1266,7 +2118,594 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "experiments"
+    ]
+  },
+  "POST /api/explorer/coco/export/preview": {
+    "operationId": "coco_export_preview_api_explorer_coco_export_preview_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "CocoExportPreviewRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "403": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/coco/export/{job_id}/apply": {
+    "operationId": "coco_export_apply_api_explorer_coco_export__job_id__apply_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {
+      "application/json": "CocoApplyRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/coco/export/{job_id}/cancel": {
+    "operationId": "coco_cancel_api_explorer_coco_export__job_id__cancel_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/coco/export/{job_id}/plan": {
+    "operationId": "coco_export_plan_api_explorer_coco_export__job_id__plan_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {
+      "application/json": "CocoPlanRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/coco/import/preview": {
+    "operationId": "coco_import_preview_api_explorer_coco_import_preview_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "CocoImportPreviewRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/coco/import/{job_id}/apply": {
+    "operationId": "coco_import_apply_api_explorer_coco_import__job_id__apply_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {
+      "application/json": "CocoImportApplyRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/coco/import/{job_id}/cancel": {
+    "operationId": "coco_cancel_api_explorer_coco_import__job_id__cancel_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/coco/import/{job_id}/plan": {
+    "operationId": "coco_import_plan_api_explorer_coco_import__job_id__plan_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {
+      "application/json": "CocoImportPlanRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/images": {
+    "operationId": "explorer_images_api_explorer_images_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "ExplorerImagesRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/incorporate/preview": {
+    "operationId": "incorporate_preview_api_explorer_incorporate_preview_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "PreviewRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "403": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/incorporate/{job_id}/apply": {
+    "operationId": "incorporate_apply_api_explorer_incorporate__job_id__apply_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {
+      "application/json": "ApplyRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/incorporate/{job_id}/cancel": {
+    "operationId": "incorporate_cancel_api_explorer_incorporate__job_id__cancel_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/incorporate/{job_id}/plan": {
+    "operationId": "incorporate_plan_api_explorer_incorporate__job_id__plan_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {
+      "application/json": "PlanRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/merge/preview": {
+    "operationId": "merge_preview_api_explorer_merge_preview_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "MergePreviewRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "403": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/merge/{job_id}/apply": {
+    "operationId": "merge_apply_api_explorer_merge__job_id__apply_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {
+      "application/json": "MergeApplyRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/merge/{job_id}/cancel": {
+    "operationId": "merge_cancel_api_explorer_merge__job_id__cancel_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/merge/{job_id}/plan": {
+    "operationId": "merge_plan_api_explorer_merge__job_id__plan_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {
+      "application/json": "MergePlanRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/resplit/preview": {
+    "operationId": "resplit_preview_api_explorer_resplit_preview_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "ResplitPreviewRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "403": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/resplit/{job_id}/apply": {
+    "operationId": "resplit_apply_api_explorer_resplit__job_id__apply_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {
+      "application/json": "ResplitApplyRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/resplit/{job_id}/cancel": {
+    "operationId": "resplit_cancel_api_explorer_resplit__job_id__cancel_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/resplit/{job_id}/plan": {
+    "operationId": "resplit_plan_api_explorer_resplit__job_id__plan_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {
+      "application/json": "ResplitPlanRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/scan": {
+    "operationId": "explorer_scan_start_api_explorer_scan_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "ExplorerScanRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/scan/{job_id}/cancel": {
+    "operationId": "explorer_scan_cancel_api_explorer_scan__job_id__cancel_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/summary": {
+    "operationId": "explorer_summary_api_explorer_summary_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "ExplorerRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/github/export": {
+    "operationId": "send_api_github_export_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "GitHubExport"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "502": {}
+    },
+    "tags": [
+      "integrations"
+    ]
+  },
+  "POST /api/hub/export": {
+    "operationId": "send_api_hub_export_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "HubExport"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "502": {}
+    },
+    "tags": [
+      "integrations"
+    ]
   },
   "POST /api/model/defaults": {
     "operationId": "model_defaults_api_model_defaults_post",
@@ -1283,7 +2722,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "experiments"
+    ]
   },
   "POST /api/model/learning-rate-plan": {
     "operationId": "learning_rate_plan_api_model_learning_rate_plan_post",
@@ -1300,7 +2742,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "experiments"
+    ]
   },
   "POST /api/profiles": {
     "operationId": "add_profile_api_profiles_post",
@@ -1319,7 +2764,10 @@
         "application/json": "HTTPValidationError"
       },
       "500": {}
-    }
+    },
+    "tags": [
+      "profiles"
+    ]
   },
   "POST /api/regression/compare": {
     "operationId": "compare_regression_api_regression_compare_post",
@@ -1340,7 +2788,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "regression"
+    ]
   },
   "POST /api/regression/cv": {
     "operationId": "cv_regression_api_regression_cv_post",
@@ -1361,7 +2812,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "regression"
+    ]
   },
   "POST /api/regression/dataset/stats": {
     "operationId": "regression_dataset_stats_api_regression_dataset_stats_post",
@@ -1378,7 +2832,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "datasets"
+    ]
   },
   "POST /api/regression/replicated-comparison": {
     "operationId": "replicated_comparison_regression_api_regression_replicated_comparison_post",
@@ -1399,7 +2856,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "regression"
+    ]
   },
   "POST /api/regression/replicates": {
     "operationId": "replicates_regression_api_regression_replicates_post",
@@ -1420,7 +2880,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "regression"
+    ]
   },
   "POST /api/regression/run": {
     "operationId": "run_regression_api_regression_run_post",
@@ -1441,7 +2904,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "regression"
+    ]
   },
   "POST /api/regression/sweep": {
     "operationId": "sweep_regression_api_regression_sweep_post",
@@ -1462,7 +2928,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "regression"
+    ]
   },
   "POST /api/runs/{run_id}/batch_predict": {
     "operationId": "batch_predict_run_api_runs__run_id__batch_predict_post",
@@ -1484,7 +2953,10 @@
         "application/json": "HTTPValidationError"
       },
       "500": {}
-    }
+    },
+    "tags": [
+      "runs"
+    ]
   },
   "POST /api/runs/{run_id}/export_onnx": {
     "operationId": "export_run_to_onnx_api_runs__run_id__export_onnx_post",
@@ -1506,7 +2978,10 @@
         "application/json": "HTTPValidationError"
       },
       "500": {}
-    }
+    },
+    "tags": [
+      "runs"
+    ]
   },
   "POST /api/runs/{run_id}/gradcam": {
     "operationId": "gradcam_run_api_runs__run_id__gradcam_post",
@@ -1528,7 +3003,33 @@
         "application/json": "HTTPValidationError"
       },
       "500": {}
-    }
+    },
+    "tags": [
+      "runs"
+    ]
+  },
+  "POST /api/runs/{run_id}/mlflow/retry": {
+    "operationId": "retry_mlflow_api_runs__run_id__mlflow_retry_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "MlflowStatus"
+      },
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "500": {}
+    },
+    "tags": [
+      "runs"
+    ]
   },
   "POST /api/runs/{run_id}/resume": {
     "operationId": "resume_run_api_runs__run_id__resume_post",
@@ -1550,7 +3051,10 @@
       },
       "500": {},
       "503": {}
-    }
+    },
+    "tags": [
+      "runs"
+    ]
   },
   "POST /api/runs/{run_id}/reveal": {
     "operationId": "reveal_run_folder_api_runs__run_id__reveal_post",
@@ -1571,7 +3075,10 @@
         "application/json": "HTTPValidationError"
       },
       "500": {}
-    }
+    },
+    "tags": [
+      "runs"
+    ]
   },
   "POST /api/runs/{run_id}/test": {
     "operationId": "test_run_on_dataset_api_runs__run_id__test_post",
@@ -1593,7 +3100,10 @@
         "application/json": "HTTPValidationError"
       },
       "500": {}
-    }
+    },
+    "tags": [
+      "runs"
+    ]
   },
   "POST /api/sample-dataset": {
     "operationId": "sample_dataset_api_sample_dataset_post",
@@ -1604,16 +3114,21 @@
       "application/json": "SampleDatasetRequest"
     },
     "responses": {
+      "200": {
+        "application/json": "SampleDatasetResponse"
+      },
       "201": {
         "application/json": "SampleDatasetResponse"
       },
       "400": {},
-      "409": {},
       "422": {
         "application/json": "HTTPValidationError"
       },
       "500": {}
-    }
+    },
+    "tags": [
+      "datasets"
+    ]
   },
   "POST /api/segmentation/compare": {
     "operationId": "compare_segmentation_api_segmentation_compare_post",
@@ -1634,7 +3149,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "segmentation"
+    ]
   },
   "POST /api/segmentation/cv": {
     "operationId": "cv_segmentation_api_segmentation_cv_post",
@@ -1655,7 +3173,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "segmentation"
+    ]
   },
   "POST /api/segmentation/dataset/stats": {
     "operationId": "segmentation_dataset_stats_api_segmentation_dataset_stats_post",
@@ -1672,7 +3193,10 @@
       "422": {
         "application/json": "HTTPValidationError"
       }
-    }
+    },
+    "tags": [
+      "datasets"
+    ]
   },
   "POST /api/segmentation/replicated-comparison": {
     "operationId": "replicated_comparison_segmentation_api_segmentation_replicated_comparison_post",
@@ -1693,7 +3217,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "segmentation"
+    ]
   },
   "POST /api/segmentation/replicates": {
     "operationId": "replicates_segmentation_api_segmentation_replicates_post",
@@ -1714,7 +3241,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "segmentation"
+    ]
   },
   "POST /api/segmentation/run": {
     "operationId": "run_segmentation_api_segmentation_run_post",
@@ -1735,7 +3265,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "segmentation"
+    ]
   },
   "POST /api/segmentation/sweep": {
     "operationId": "sweep_segmentation_api_segmentation_sweep_post",
@@ -1756,7 +3289,10 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
-    }
+    },
+    "tags": [
+      "segmentation"
+    ]
   },
   "POST /api/update/apply": {
     "operationId": "apply_update_api_update_apply_post",
@@ -1774,7 +3310,120 @@
         "application/json": "HTTPValidationError"
       },
       "500": {}
-    }
+    },
+    "tags": [
+      "system"
+    ]
+  },
+  "POST /api/wandb/runs/{run_id}/retry": {
+    "operationId": "retry_api_wandb_runs__run_id__retry_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "WandbStatus"
+      },
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "500": {}
+    },
+    "tags": [
+      "integrations"
+    ]
+  },
+  "POST /api/zenodo/export": {
+    "operationId": "send_api_zenodo_export_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ZenodoExport"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "502": {}
+    },
+    "tags": [
+      "integrations"
+    ]
+  },
+  "PUT /api/comet/token": {
+    "operationId": "save_api_comet_token_put",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ProfileToken"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
+  },
+  "PUT /api/github/token": {
+    "operationId": "save_api_github_token_put",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ProfileToken"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
+  },
+  "PUT /api/hub/token": {
+    "operationId": "save_api_hub_token_put",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ProfileToken"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
   },
   "PUT /api/profiles/{slug}": {
     "operationId": "edit_profile_api_profiles__slug__put",
@@ -1795,6 +3444,72 @@
         "application/json": "HTTPValidationError"
       },
       "500": {}
-    }
+    },
+    "tags": [
+      "profiles"
+    ]
+  },
+  "PUT /api/wandb/token": {
+    "operationId": "save_api_wandb_token_put",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ProfileToken"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
+  },
+  "PUT /api/zenodo/sandbox/token": {
+    "operationId": "save_api_zenodo_sandbox_token_put",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ProfileToken"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
+  },
+  "PUT /api/zenodo/token": {
+    "operationId": "save_api_zenodo_token_put",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ProfileToken"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
   }
 }

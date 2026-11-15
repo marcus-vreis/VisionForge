@@ -1,0 +1,14 @@
+start 2026-11-01 11:07:15
+cls seed=37 side=gui exit=0 wall=1894s 2026-11-01 11:38:49
+cls seed=37 side=native exit=0 wall=1819s 2026-11-01 12:09:08
+seg seed=37 side=gui exit=0 wall=2502s 2026-11-01 12:50:50
+seg seed=37 side=native exit=0 wall=2457s 2026-11-01 13:31:47
+cls seed=38 side=native exit=0 wall=1862s 2026-11-01 14:02:49
+cls seed=38 side=gui exit=0 wall=1910s 2026-11-01 14:34:39
+seg seed=38 side=native exit=0 wall=2507s 2026-11-01 15:16:26
+seg seed=38 side=gui exit=0 wall=2545s 2026-11-01 15:58:51
+cls seed=39 side=gui exit=0 wall=1951s 2026-11-01 16:31:23
+cls seed=39 side=native exit=0 wall=1816s 2026-11-01 17:01:39
+seg seed=39 side=gui exit=0 wall=2494s 2026-11-01 17:43:13
+seg seed=39 side=native exit=0 wall=2450s 2026-11-01 18:24:03
+done 2026-11-01 18:24:03

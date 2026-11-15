@@ -7,15 +7,14 @@ import {
   DEFAULT_PROFILE_INFO,
   PRONOUNS,
   canCreateProfile,
-  chosenThisSession,
   clearProfile,
-  defaultHasName,
-  hasNamedProfiles,
+  entryStep,
   legacyDefaultName,
-  markChosenThisSession,
-  needsProfileChoice,
   normalizeProfileName,
+  offersProfileChoice,
   pickStoredProfile,
+  profileHasName,
+  profileLabel,
   readProfile,
   saveProfile,
   slugifyProfile,
@@ -35,39 +34,39 @@ type Phase = "boot" | "hello" | "ask" | "who" | "create" | "exit" | "done";
 interface WelcomeOverlayProps {
   /** Chamado quando o nome está definido (primeira visita ou visita seguinte). */
   onName: (name: string) => void;
-  /** Chamado junto com `onName`, com o perfil em uso e se o servidor tem perfis
-   *  além do padrão (é isso que faz o chip de perfil aparecer no header). */
+  /** Chamado junto com `onName`, com o perfil em uso e se há mais de um perfil
+   *  (o menu do perfil no header oferece "trocar" em vez de "novo"). */
   onProfile?: (profile: ProfileInfo, shared: boolean) => void;
   /** Força a introdução completa mesmo com nome salvo (usado pelo "trocar nome"). */
   forceAsk?: boolean;
-  /** Vai direto a "Quem é você?" (usado pelo chip de perfil do header). */
+  /** Vai direto a "Quem é você?" (usado pelo "trocar de perfil" do header). */
   forcePick?: boolean;
+  /** Vai direto a "Novo perfil" (usado pelo "novo perfil" do header). */
+  forceCreate?: boolean;
 }
 
 /** Introdução de primeira execução (ADR-090), com a escolha de perfil (ADR-114).
  *
- * Primeira visita: a tela escurece, "Bem-vindo" entra, sai, e "Qual é o seu
- * nome?" abre uma linha no meio para digitar. O nome é salvo e passa a
- * aparecer no header.
+ * A tela escurece e a saudação entra; depois dela, `entryStep` decide:
+ * - primeira vez (nenhum perfil tem nome): "Qual é o seu nome?" com o pronome,
+ *   e nada mais; o nome vai para o perfil que o servidor já tem (ADR-126);
+ * - um perfil só: entra direto, a cada carga;
+ * - mais de um: "Quem é você?" lista os perfis a cada carga da página, com o
+ *   último usado marcado e focado, para Enter continuar. Escolher um perfil
+ *   também diz quem você é.
  *
- * Visitas seguintes: só o cumprimento "Bem-vindo, {Nome}" por ~2s e entra —
- * nunca pergunta de novo. Quem quiser trocar clica no chip do header.
- *
- * Num servidor com perfis além do padrão, "Quem é você?" lista os perfis e
- * ocupa o lugar do nome: escolher um perfil também diz quem você é. A pergunta
- * volta a cada aba nova, com o último perfil já marcado (ADR-126). Uma
- * instalação sem perfis segue o fluxo de sempre, com um "criar perfil" opcional
- * sob o campo do nome. O nome e o pronome dados aqui vão para o perfil em uso,
- * o padrão inclusive, e a saudação segue o pronome.
+ * As integrações (MLflow, W&B, Comet) ficam no menu do perfil no header, não
+ * aqui. A saudação segue o pronome.
  */
 export function WelcomeOverlay({
   onName,
   onProfile,
   forceAsk = false,
   forcePick = false,
+  forceCreate = false,
 }: WelcomeOverlayProps) {
   const t = useT();
-  const saved = forceAsk || forcePick ? "" : readUserName();
+  const saved = forceAsk || forcePick || forceCreate ? "" : readUserName();
   const [phase, setPhase] = useState<Phase>("boot");
   const [name, setName] = useState(saved);
   // "Trocar nome" abre o campo já com o nome atual, para corrigir em vez de redigitar.
@@ -104,8 +103,9 @@ export function WelcomeOverlay({
   const [createDraft, setCreateDraft] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  // De onde veio "criar perfil", para o "voltar" voltar para lá.
-  const createFrom = useRef<"ask" | "who">("who");
+  // De onde veio "criar perfil", para o "voltar" voltar para lá; "none" é o
+  // menu do header, e voltar fecha a tela no perfil em uso.
+  const createFrom = useRef<"who" | "none">(forceCreate ? "none" : "who");
 
   // Termina a introdução: some a tela e entrega nome e perfil ao App.
   const finish = (finalName: string) => {
@@ -115,12 +115,32 @@ export function WelcomeOverlay({
       if (!aliveRef.current) return;
       setPhase("done");
       const chosen = chosenRef.current;
+      // Estar num perfil criado já prova que existe outro além do do servidor.
       handlers.current.onProfile?.(
         chosen,
-        hasNamedProfiles(listRef.current) || !chosen.is_default,
+        offersProfileChoice(listRef.current) || !chosen.is_default,
       );
       handlers.current.onName(finalName);
     }, 850);
+  };
+
+  /** O nome de quem está no perfil em uso: o do perfil, ou o deste navegador. */
+  const currentName = () => {
+    const chosen = chosenRef.current;
+    return profileHasName(chosen) ? normalizeUserName(chosen.name) : readUserName();
+  };
+
+  /** Um perfil só: entra nele direto, com o nome dele. */
+  const enterOnly = () => {
+    const own = currentName();
+    if (!own) {
+      setPhase("ask");
+      return;
+    }
+    saveUserName(own);
+    const chosen = chosenRef.current;
+    if (chosen.pronoun) saveUserPronoun(chosen.pronoun);
+    finish(own);
   };
 
   useEffect(() => {
@@ -180,44 +200,38 @@ export function WelcomeOverlay({
         if (aliveRef.current) setProfiles(listRef.current);
         if (chosenRef.current.is_default) chosenRef.current = named;
       } catch {
-        /* sem servidor, o rótulo segue "Padrão" até a próxima visita */
+        /* sem servidor, o perfil segue "Sem nome" na lista até a próxima visita */
       }
     };
 
-    if (forcePick) {
+    /** Depois da saudação: o nome, a entrada direta ou a lista (`entryStep`). */
+    const proceed = (list: ProfileInfo[]) => {
+      if (!aliveRef.current) return;
+      settle(list);
+      // "Trocar nome" é sobre o perfil em uso: vai direto ao campo.
+      if (forceAsk) {
+        setPhase("ask");
+        return;
+      }
+      const step = entryStep(list, readUserName());
+      if (step === "choose") setPhase("who");
+      else if (step === "name") setPhase("ask");
+      else enterOnly();
+    };
+
+    if (forcePick || forceCreate) {
       at(
         120,
         () =>
-          void load.then(() => {
-            if (aliveRef.current) setPhase("who");
-          }),
-      );
-    } else if (returning) {
-      at(60, () => setPhase("hello"));
-      at(
-        2100,
-        () =>
           void load.then((list) => {
             if (!aliveRef.current) return;
-            if (needsProfileChoice(list, settle(list), chosenThisSession())) {
-              setPhase("who");
-              return;
-            }
-            finish(saved);
+            settle(list);
+            setPhase(forceCreate ? "create" : "who");
           }),
       );
     } else {
-      at(160, () => setPhase("hello"));
-      at(
-        2300,
-        () =>
-          void load.then((list) => {
-            if (!aliveRef.current) return;
-            const asks = needsProfileChoice(list, settle(list), chosenThisSession());
-            // "Trocar nome" é sobre o perfil em uso: vai direto ao campo.
-            setPhase(asks && !forceAsk ? "who" : "ask");
-          }),
-      );
+      at(returning ? 60 : 160, () => setPhase("hello"));
+      at(returning ? 2100 : 2300, () => void load.then(proceed));
     }
     return () => {
       aliveRef.current = false;
@@ -251,7 +265,6 @@ export function WelcomeOverlay({
     }
     saveUserName(value);
     saveUserPronoun(pronoun);
-    markChosenThisSession();
     // O nome e o pronome são do perfil em uso, o padrão inclusive (ADR-126).
     if (profilesOk) {
       try {
@@ -268,29 +281,36 @@ export function WelcomeOverlay({
   const choose = (profile: ProfileInfo) => {
     chosenRef.current = profile;
     saveProfile({ slug: profile.slug, name: profile.name });
-    markChosenThisSession();
     if (profile.pronoun) {
       saveUserPronoun(profile.pronoun);
       setPronoun(profile.pronoun);
     }
-    if (!profile.is_default || defaultHasName(profile)) {
+    if (profileHasName(profile)) {
       // Escolher um perfil já diz quem você é: uma pergunta só, não duas.
       const own = normalizeUserName(profile.name);
       saveUserName(own);
       finish(own);
       return;
     }
-    // Um padrão sem nome ainda: quem já tem um salvo o mantém.
-    const kept = readUserName();
-    if (kept) finish(kept);
-    else setPhase("ask");
+    // Um perfil antigo sem nome: pergunta, com o nome deste navegador já no campo.
+    setDraft(readUserName());
+    setPhase("ask");
   };
 
-  const openCreate = (from: "ask" | "who") => {
-    createFrom.current = from;
-    setCreateDraft(from === "ask" ? draft : "");
+  const openCreate = () => {
+    createFrom.current = "who";
+    setCreateDraft("");
     setCreateError(null);
     setPhase("create");
+  };
+
+  const leaveCreate = () => {
+    if (createFrom.current === "who") {
+      setPhase("who");
+      return;
+    }
+    // Veio do menu do header: volta ao perfil em uso, sem mudar nada.
+    finish(currentName());
   };
 
   const submitCreate = async (e: React.FormEvent) => {
@@ -363,10 +383,10 @@ export function WelcomeOverlay({
     border: "none",
     padding: "4px 8px",
     fontFamily: "var(--font-mono)",
-    fontSize: 11,
-    letterSpacing: "0.14em",
+    fontSize: 13,
+    letterSpacing: "0.1em",
     textTransform: "uppercase",
-    color: "var(--vf-text-muted)",
+    color: "var(--vf-text-dim)",
     textDecoration: "underline",
     textUnderlineOffset: 4,
     cursor: "pointer",
@@ -420,7 +440,7 @@ export function WelcomeOverlay({
         <div
           style={{
             fontFamily: "var(--font-mono)",
-            fontSize: 11,
+            fontSize: 12,
             letterSpacing: "0.3em",
             textTransform: "uppercase",
             color: "var(--vf-text-muted)",
@@ -525,16 +545,6 @@ export function WelcomeOverlay({
             {t.welcome.enter}
           </button>
         </form>
-
-        {profilesOk && (
-          <button
-            type="button"
-            onClick={() => openCreate("ask")}
-            style={{ ...linkStyle, marginTop: 22 }}
-          >
-            {t.profile.createLink}
-          </button>
-        )}
       </div>
 
       <div style={layer(whoOn)} inert={!whoOn}>
@@ -564,7 +574,7 @@ export function WelcomeOverlay({
                 aria-current={profile.slug === lastSlug ? "true" : undefined}
                 onClick={() => choose(profile)}
                 style={{
-                  padding: "13px 18px",
+                  padding: "14px 18px",
                   background:
                     profile.slug === lastSlug
                       ? "var(--accent-soft)"
@@ -575,17 +585,15 @@ export function WelcomeOverlay({
                   borderRadius: 12,
                   color: "var(--vf-text)",
                   fontFamily: "var(--font-display)",
-                  fontSize: 19,
+                  fontSize: 20,
                   letterSpacing: "-0.01em",
                   textAlign: "left",
                   cursor: "pointer",
+                  // "Sem nome" descreve um estado, não é um nome: vai em itálico.
+                  fontStyle: profileHasName(profile) ? "normal" : "italic",
                 }}
               >
-                {profile.is_default
-                  ? defaultHasName(profile)
-                    ? t.profile.defaultNamed(profile.name)
-                    : t.profile.defaultName
-                  : profile.name}
+                {profileLabel(profile, t.profile.unnamed)}
               </button>
             );
           })}
@@ -593,7 +601,7 @@ export function WelcomeOverlay({
 
         <button
           type="button"
-          onClick={() => openCreate("who")}
+          onClick={openCreate}
           style={{ ...linkStyle, marginTop: 22 }}
         >
           {t.profile.create}
@@ -601,11 +609,11 @@ export function WelcomeOverlay({
 
         <div
           style={{
-            marginTop: 26,
-            maxWidth: 380,
+            marginTop: 22,
+            maxWidth: "min(520px, 86vw)",
             textAlign: "center",
             fontFamily: "var(--font-mono)",
-            fontSize: 11,
+            fontSize: 12,
             lineHeight: 1.6,
             color: "var(--vf-text-muted)",
           }}
@@ -676,7 +684,7 @@ export function WelcomeOverlay({
                 marginTop: 12,
                 minHeight: 18,
                 fontFamily: "var(--font-mono)",
-                fontSize: 11,
+                fontSize: 12,
                 letterSpacing: "0.06em",
                 color: "var(--vf-text-muted)",
               }}
@@ -693,7 +701,7 @@ export function WelcomeOverlay({
                 minHeight: 18,
                 marginTop: 4,
                 fontFamily: "var(--font-mono)",
-                fontSize: 11,
+                fontSize: 12,
                 color: "oklch(calc(0.82 - var(--lt-flip, 0) * 0.34) 0.14 22)",
               }}
             >
@@ -729,7 +737,7 @@ export function WelcomeOverlay({
 
         <button
           type="button"
-          onClick={() => setPhase(createFrom.current)}
+          onClick={leaveCreate}
           style={{ ...linkStyle, marginTop: 18 }}
         >
           {t.profile.back}
@@ -757,7 +765,7 @@ function PronounPicker({
       <div
         style={{
           fontFamily: "var(--font-mono)",
-          fontSize: 11,
+          fontSize: 12,
           letterSpacing: "0.14em",
           textTransform: "uppercase",
           color: "var(--vf-text-muted)",

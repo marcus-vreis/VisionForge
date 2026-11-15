@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import type { PanelStrategy } from "./ExperimentHeader";
 import { LanguageContext } from "../i18n/context";
 import { pt } from "../i18n/pt";
 import { taskDefinitions } from "../types/tasks";
@@ -160,10 +161,127 @@ describe("classification steps (ADR-156)", () => {
     expect(section(html, "strategy")).toMatch(/background:var\(--accent-soft\)[^>]*>Treino simples</);
   });
 
+  it("renders the transfer-learning fields with the real nullable Pydantic schema", () => {
+    // `transfer_learning: TransferLearningConfig | None` reaches the form as anyOf.
+    const nullable: JsonSchema = {
+      ...stepSchema,
+      properties: {
+        ...stepSchema.properties,
+        transfer_learning: {
+          anyOf: [{ $ref: "#/$defs/TransferLearningConfig" }, { type: "null" }],
+          default: null,
+        },
+      },
+    };
+    const html = renderToStaticMarkup(
+      <LanguageContext.Provider value={{ lang: "pt", t: pt, locale: "pt-BR", setLang: () => {} }}>
+        <ParamPanel
+          task={taskDefinitions(pt)[0]}
+          schema={nullable}
+          formData={{ ...baseForm, block: "transfer_learning", transfer_learning: { mode: "fine_tuning", backbone_lr_multiplier: 0.1 } }}
+          setFormData={() => {}}
+          validationErrors={[]}
+        />
+      </LanguageContext.Provider>,
+    );
+    const model = section(html, "model");
+    expect(model).toContain("// transfer learning");
+    expect(model).toContain("LR do backbone");
+  });
+
   it("locks the transfer-learning switch while a multi-run strategy is chosen", () => {
     const html = renderSteps({ ...baseForm, block: "grid_search", grid_search: { hyperparameters: {} } });
     const model = section(html, "model");
     expect(model).toMatch(/<fieldset disabled=""/);
     expect(model).toContain("um bloco por vez");
+  });
+});
+
+function renderWithReplicates(
+  data: Record<string, unknown>,
+  strategy: PanelStrategy,
+  onReplicates: ((payload: unknown) => void) | null = () => {},
+): string {
+  return renderToStaticMarkup(
+    <LanguageContext.Provider value={{ lang: "pt", t: pt, locale: "pt-BR", setLang: () => {} }}>
+      <ParamPanel
+        task={taskDefinitions(pt)[0]}
+        schema={stepSchema}
+        formData={data}
+        setFormData={() => {}}
+        validationErrors={[]}
+        strategy={strategy}
+        onReplicates={onReplicates ?? undefined}
+      />
+    </LanguageContext.Provider>,
+  );
+}
+
+describe("classification Réplicas (ADR-056)", () => {
+  it("lists Réplicas on the strategy step", () => {
+    const strategy = section(renderWithReplicates(baseForm, "simple"), "strategy");
+    expect(strategy).toContain(`>${pt.taskPanel.replicates}</button>`);
+    expect(strategy).not.toContain(pt.replicatesCard.title);
+  });
+
+  it("renders the replicates card with accuracy once Réplicas is picked", () => {
+    const strategy = section(renderWithReplicates(baseForm, "replicates"), "strategy");
+    // The picked option is the one drawn with the accent.
+    expect(strategy).toMatch(/background:var\(--accent-soft\)[^>]*>Réplicas</);
+    expect(strategy).toContain(pt.replicatesCard.title);
+    expect(strategy).toContain(pt.runDetail.metrics.labels.accuracy);
+  });
+
+  it("locks transfer learning while Réplicas is picked", () => {
+    const model = section(renderWithReplicates(baseForm, "replicates"), "model");
+    expect(model).toMatch(/<fieldset disabled=""/);
+  });
+
+  it("offers no Réplicas when nothing can launch it", () => {
+    const strategy = section(renderWithReplicates(baseForm, "replicates", null), "strategy");
+    expect(strategy).not.toContain(`>${pt.taskPanel.replicates}</button>`);
+    expect(strategy).not.toContain(pt.replicatesCard.title);
+  });
+});
+
+function renderWithComparison(
+  strategy: PanelStrategy,
+  onReplicatedComparison: ((payload: unknown) => void) | null = () => {},
+): string {
+  return renderToStaticMarkup(
+    <LanguageContext.Provider value={{ lang: "pt", t: pt, locale: "pt-BR", setLang: () => {} }}>
+      <ParamPanel
+        task={taskDefinitions(pt)[0]}
+        schema={stepSchema}
+        formData={baseForm}
+        setFormData={() => {}}
+        validationErrors={[]}
+        strategy={strategy}
+        onReplicatedComparison={onReplicatedComparison ?? undefined}
+      />
+    </LanguageContext.Provider>,
+  );
+}
+
+describe("classification replicated comparison (ADR-193)", () => {
+  it("lists the comparison on the strategy step and renders its card once picked", () => {
+    const off = section(renderWithComparison("simple"), "strategy");
+    expect(off).toContain(`>${pt.taskPanel.replicatedComparison}</button>`);
+    expect(off).not.toContain(pt.replicatedComparisonCard.title);
+
+    const on = section(renderWithComparison("replicatedComparison"), "strategy");
+    expect(on).toMatch(/background:var\(--accent-soft\)[^>]*>Comparação replicada</);
+    expect(on).toContain(pt.replicatedComparisonCard.title);
+  });
+
+  it("locks transfer learning while the comparison is picked", () => {
+    const model = section(renderWithComparison("replicatedComparison"), "model");
+    expect(model).toMatch(/<fieldset disabled=""/);
+  });
+
+  it("offers no comparison when nothing can launch it", () => {
+    const strategy = section(renderWithComparison("replicatedComparison", null), "strategy");
+    expect(strategy).not.toContain(`>${pt.taskPanel.replicatedComparison}</button>`);
+    expect(strategy).not.toContain(pt.replicatedComparisonCard.title);
   });
 });

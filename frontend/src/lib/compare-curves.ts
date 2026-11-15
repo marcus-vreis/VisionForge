@@ -163,3 +163,11 @@ export function toggleCurve(current: ReadonlyArray<string>, key: string): string
   if (!current.includes(key)) return [...current, key];
   return current.length > 1 ? current.filter((k) => k !== key) : [...current];
 }
+
+/** A value of the comparison charts: three decimals, or an exponent for a
+ *  nonzero value that three decimals would show as 0.000 (a learning rate). */
+export function formatCurveValue(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  if (value !== 0 && Math.abs(value) < 5e-4) return value.toExponential(2);
+  return value.toFixed(3);
+}

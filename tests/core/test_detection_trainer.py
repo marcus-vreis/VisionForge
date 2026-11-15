@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,7 @@ from visionforge.core.detection_trainer import (
     _is_worker_spawn_crash,
 )
 from visionforge.core.resume import RESUME_FILENAME, ResumeStateError
+from visionforge.core.training_loop import NonFiniteMetricError
 from visionforge.utils.detection_config import DetectionConfig
 
 
@@ -140,7 +142,7 @@ class TestBackendGuards:
     ) -> None:
         monkeypatch.setattr(dt_mod, "YOLO", None)
         trainer = DetectionTrainer(_config(tmp_path))
-        with pytest.raises(RuntimeError, match="ultralytics"):
+        with pytest.raises(RuntimeError, match=r"\[detection\]"):
             trainer.fit()
 
 
@@ -382,7 +384,7 @@ class TestTorchvisionPath:
         )
         monkeypatch.setattr(dt_mod.training_loop, "BATCH_PROGRESS_INTERVAL_S", 0.0)
         cfg = _tv_config(tmp_path)
-        # A second training image: one batch alone is all epoch_end.
+        # A second training image: a middle batch besides the last one.
         train_images = tmp_path / "ds" / "images" / "train"
         Image.new("RGB", (32, 32), (90, 90, 90)).save(train_images / "b.jpg")
         (tmp_path / "ds" / "labels" / "train" / "b.txt").write_text(
@@ -392,7 +394,7 @@ class TestTorchvisionPath:
         DetectionTrainer(cfg).fit(progress_callback=events.append)
 
         batches = [(e["epoch"], e["batch"]) for e in events if e["event"] == "batch"]
-        assert batches == [(1, 1), (2, 1)]
+        assert batches == [(1, 1), (1, 2), (2, 1), (2, 2)]
         rates = [e["lr"] for e in events if e["event"] == "epoch_end"]
         assert rates == pytest.approx([0.005, 0.005])
 
@@ -408,7 +410,8 @@ class TestTorchvisionPath:
         )
 
         kinds = [e["event"] for e in events]
-        assert kinds == ["start", "epoch_end", "epoch_end", "end"]
+        # One training batch per epoch, always reported as its last (ADR-205).
+        assert kinds == ["start", "batch", "epoch_end", "batch", "epoch_end", "end"]
         assert result.total_epochs == 2
         assert result.model_path.exists()  # best.pt saved
 
@@ -548,6 +551,38 @@ class TestStoppedBeforeTheFirstEpoch:
         run_json = json.loads((result.run_dir / "run.json").read_text("utf-8"))
         assert run_json["metrics"]["total_epochs"] == 0
         assert run_json["artifacts"]["model"] is None
+
+
+class _NaNDetector(_FakeDetector):
+    """A detector whose loss is NaN from the first forward pass."""
+
+    def forward(self, images: Any, targets: Any = None) -> Any:
+        out = super().forward(images, targets)
+        if self.training:
+            return {"loss_box_reg": out["loss_box_reg"] * float("nan")}
+        return out
+
+
+class TestTorchvisionNonFinite:
+    def test_nan_loss_stops_in_epoch_one_and_marks_the_run_failed(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A NaN loss used to train every epoch and finish as a completed run."""
+        monkeypatch.setattr(
+            dt_mod, "build_torchvision_detector", lambda *a, **k: _NaNDetector()
+        )
+        trainer = DetectionTrainer(_tv_config(tmp_path))
+        with pytest.raises(NonFiniteMetricError, match="non-finite") as caught:
+            trainer.fit()
+        assert "val_loss" in str(caught.value)
+        assert caught.value.epoch == 1
+
+        run_dir = next((tmp_path / "models" / "det_tv").iterdir())
+        assert not (run_dir / "weights" / "best.pt").exists()
+        data = json.loads((run_dir / "run.json").read_text("utf-8"))
+        assert data["status"] == "failed"
+        assert "non-finite" in data["error"]
+        assert [w["code"] for w in data["warnings"]] == ["non_finite_metric"]
 
 
 class TestUltralyticsResume:
@@ -839,8 +874,10 @@ def test_ultralytics_batches_are_counted_per_epoch() -> None:
     assert [(e["epoch"], e["batch"]) for e in events] == [
         (1, 1),
         (1, 2),
+        (1, 3),
         (2, 1),
         (2, 2),
+        (2, 3),
     ]
     assert all(e["total_batches"] == 3 and e["total_epochs"] == 5 for e in events)
 
@@ -859,3 +896,89 @@ def test_epoch_event_leaves_out_an_unknown_rate() -> None:
     )
     assert "lr" not in dt_mod._epoch_event(result, 3)
     assert dt_mod._epoch_event(result, 3, lr=0.01)["lr"] == 0.01
+
+
+# ── validation loss must not touch BatchNorm statistics (STAT-8) ──────────────
+
+_BN_BUILDERS = ["ssdlite320_mobilenet_v3_large", "fasterrcnn_resnet50_fpn"]
+
+
+def _bn_state(model: nn.Module) -> dict[str, torch.Tensor]:
+    return {
+        f"{name}.{key}": buf.clone()
+        for name, module in model.named_modules()
+        if isinstance(module, nn.modules.batchnorm._BatchNorm)
+        for key, buf in (
+            ("running_mean", module.running_mean),
+            ("running_var", module.running_var),
+            ("num_batches_tracked", module.num_batches_tracked),
+        )
+    }
+
+
+def _tiny_loader() -> list[tuple[list[torch.Tensor], list[dict[str, torch.Tensor]]]]:
+    gen = torch.Generator().manual_seed(0)
+    images = [torch.rand(3, 64, 64, generator=gen) for _ in range(2)]
+    targets = [
+        {
+            "boxes": torch.tensor([[8.0, 8.0, 40.0, 40.0]]),
+            "labels": torch.tensor([1]),
+        }
+        for _ in images
+    ]
+    return [(images, targets)]
+
+
+@pytest.mark.parametrize("name", _BN_BUILDERS)
+def test_val_loss_leaves_batchnorm_statistics_untouched(
+    tmp_path: Path, name: str
+) -> None:
+    from visionforge.models.detection_factory import build_torchvision_detector
+
+    torch.manual_seed(0)
+    model = build_torchvision_detector(name, num_classes=2, pretrained=False)
+    model.train()
+    modes_before = {n: m.training for n, m in model.named_modules()}
+    before = _bn_state(model)
+    assert before  # the model really has BatchNorm layers
+
+    trainer = DetectionTrainer(_tv_config(tmp_path))
+    val_loss = trainer._eval_torchvision_loss(
+        model,
+        _tiny_loader(),  # type: ignore[arg-type]
+        torch.device("cpu"),
+    )
+
+    after = _bn_state(model)
+    assert after.keys() == before.keys()
+    for key, tensor in before.items():
+        assert torch.equal(tensor, after[key]), key
+    assert math.isfinite(val_loss)
+    assert {n: m.training for n, m in model.named_modules()} == modes_before
+
+
+def test_val_loss_restores_each_modules_previous_mode(tmp_path: Path) -> None:
+    model = nn.Sequential(nn.BatchNorm2d(2), nn.BatchNorm2d(2))
+    model[1].eval()  # a layer the caller had already frozen stays in eval
+
+    class _Det(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.body = model
+            self.seen: list[bool] = []
+
+        def forward(self, images: Any, targets: Any = None) -> Any:
+            self.seen = [m.training for m in self.body]
+            return {"loss": self.body[0].weight.sum()}
+
+    det = _Det()
+    det.train()
+    model[1].eval()
+    DetectionTrainer(_tv_config(tmp_path))._eval_torchvision_loss(
+        det,
+        _tiny_loader(),  # type: ignore[arg-type]
+        torch.device("cpu"),
+    )
+    assert det.seen == [False, False]  # BN in eval during the pass
+    assert det.training is True
+    assert [m.training for m in model] == [True, False]

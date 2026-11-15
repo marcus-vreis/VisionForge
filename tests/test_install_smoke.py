@@ -11,6 +11,8 @@ import yaml
 _WORKFLOW = Path(__file__).resolve().parents[1] / ".github/workflows/install-smoke.yml"
 _SPEC = "visionforge-studio==0.18.1"
 _EXPRESSION = "${{ steps.pick.outputs.spec }}"
+_VARIANT = "${{ matrix.variant }}"
+_CHECK = ["python", "-c"]
 _LOG_COMMAND = """\
 { printf '%s' "${0##*/}"; printf '\\t%s' "$@"; printf '\\n'; } >> "$STUB_LOG"
 """
@@ -43,6 +45,8 @@ def _run_workflow(
     succeed_after: int,
     stale_index: bool = False,
     spec: str = _SPEC,
+    variant: str = "plain",
+    ultralytics: bool = False,
 ) -> tuple[subprocess.CompletedProcess[str], list[list[str]]]:
     stub_dir = tmp_path / "bin"
     stub_dir.mkdir()
@@ -51,6 +55,8 @@ def _run_workflow(
 if [ "$*" = '-m venv .venv' ]; then
   mkdir -p .venv/bin
   : > .venv/bin/activate
+elif [ "$1" = '-c' ]; then
+  [ "$STUB_ULTRALYTICS" = 1 ]
 elif [ "$*" != '-m pip install --upgrade pip' ]; then
   exit 99
 fi
@@ -90,6 +96,7 @@ fi
         STUB_COUNT=(tmp_path / "attempts").as_posix(),
         STUB_SUCCEED_AFTER=str(succeed_after),
         STUB_STALE_INDEX=str(int(stale_index)),
+        STUB_ULTRALYTICS=str(int(ultralytics)),
     )
     workflow = yaml.safe_load(_WORKFLOW.read_text(encoding="utf-8"))
     steps = workflow["jobs"]["install"]["steps"]
@@ -100,7 +107,7 @@ fi
     )
     for index, step in enumerate(steps[install_index:]):
         step_environment = environment | {
-            name: value.replace(_EXPRESSION, spec)
+            name: value.replace(_EXPRESSION, spec).replace(_VARIANT, variant)
             for name, value in step.get("env", {}).items()
         }
         script = tmp_path / f"step-{index}.sh"
@@ -131,11 +138,13 @@ def test_smoke_runs_cli_only_after_install(tmp_path: Path, succeed_after: int) -
     assert [call for call in calls if call[0] == "sleep"] == [["sleep", "60"]] * (
         succeed_after - 1
     )
-    assert calls[-3:] == [
+    assert [call[:2] for call in calls[-4:]] == [
         ["visionforge", "--version"],
+        _CHECK,
         ["visionforge", "doctor"],
-        ["visionforge", "selftest", "--quick"],
+        ["visionforge", "selftest"],
     ]
+    assert calls[-1] == ["visionforge", "selftest", "--quick"]
 
 
 def test_smoke_refreshes_stale_index_after_publication(tmp_path: Path) -> None:
@@ -169,3 +178,73 @@ def test_smoke_passes_spec_as_one_literal_argument(tmp_path: Path) -> None:
     install = next(call for call in calls if call[0] == "pip")
     assert install[-1] == spec
     assert not (tmp_path / "injected").exists()
+
+
+def _pick_spec(tmp_path: Path, variant: str, version: str) -> str:
+    """Run the workflow's "Pick the version" step and return the spec it chose."""
+    workflow = yaml.safe_load(_WORKFLOW.read_text(encoding="utf-8"))
+    step = next(
+        s
+        for s in workflow["jobs"]["install"]["steps"]
+        if s.get("name") == "Pick the version"
+    )
+    output = tmp_path / "github-output"
+    script = tmp_path / "pick.sh"
+    script.write_text(step["run"], encoding="utf-8")
+    environment = os.environ | {
+        "INPUT": version,
+        "TAG": "",
+        "VARIANT": step["env"]["VARIANT"].replace(_VARIANT, variant),
+        "GITHUB_OUTPUT": output.as_posix(),
+    }
+    subprocess.run(
+        [_bash(), "--noprofile", "--norc", "-e", str(script)],
+        cwd=tmp_path,
+        env=environment,
+        check=True,
+        timeout=15,
+    )
+    return output.read_text(encoding="utf-8").strip().removeprefix("spec=")
+
+
+@pytest.mark.parametrize(
+    "variant, version, spec",
+    [
+        ("plain", "0.22.0", "visionforge-studio==0.22.0"),
+        ("detection", "0.22.0", "visionforge-studio[detection]==0.22.0"),
+        ("detection", "", "visionforge-studio[detection]"),
+    ],
+)
+def test_each_variant_installs_its_own_line(
+    tmp_path: Path, variant: str, version: str, spec: str
+) -> None:
+    """ADR-195: the plain line and the `detection` extra are both installed."""
+    workflow = yaml.safe_load(_WORKFLOW.read_text(encoding="utf-8"))
+    assert workflow["jobs"]["install"]["strategy"]["matrix"]["variant"] == [
+        "plain",
+        "detection",
+    ]
+    assert _pick_spec(tmp_path, variant, version) == spec
+
+
+@pytest.mark.parametrize(
+    "variant, ultralytics, passes",
+    [
+        ("plain", False, True),
+        ("plain", True, False),
+        ("detection", True, True),
+        ("detection", False, False),
+    ],
+)
+def test_ultralytics_is_present_only_with_the_detection_extra(
+    tmp_path: Path, variant: str, ultralytics: bool, passes: bool
+) -> None:
+    """The AGPL backend must arrive with the extra and never without it."""
+    result, calls = _run_workflow(
+        tmp_path, succeed_after=1, variant=variant, ultralytics=ultralytics
+    )
+
+    assert (result.returncode == 0) is passes, result.stdout + result.stderr
+    assert [call[:2] for call in calls].count(_CHECK) == 1
+    ran_selftest = ["visionforge", "selftest", "--quick"] in calls
+    assert ran_selftest is passes

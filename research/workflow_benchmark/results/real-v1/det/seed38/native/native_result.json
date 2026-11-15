@@ -1,0 +1,7 @@
+{
+ "train_seconds": 2666.5586497000186,
+ "task": "det",
+ "seed": 38,
+ "epochs": 100,
+ "torch": "2.11.0+cu128"
+}

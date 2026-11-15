@@ -29,7 +29,11 @@ from visionforge.core.cancellation import (
     is_cancelled,
     job_was_stopped,
 )
-from visionforge.core.data import resolve_num_workers
+from visionforge.core.data import (
+    _build_transforms,
+    _make_preprocessing_transform,
+    resolve_num_workers,
+)
 from visionforge.core.dataset_audit import load_group_manifest
 from visionforge.core.evaluator import Evaluator
 from visionforge.core.replicates import sample_std
@@ -95,33 +99,18 @@ class _FoldDataModule:
         config: ExperimentConfig,
         num_workers: int = 0,
     ) -> None:
-        tc = config.data.transforms
-        train_transform = T.Compose(
-            [
-                T.Resize(tc.image_size),
-                T.CenterCrop(tc.image_size),
-                *([T.RandomHorizontalFlip()] if tc.horizontal_flip else []),
-                *(
-                    [T.RandomRotation(tc.rotation_degrees)]
-                    if tc.rotation_degrees > 0
-                    else []
-                ),
-                *(
-                    [T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2)]
-                    if tc.color_jitter
-                    else []
-                ),
-                T.ToTensor(),
-                T.Normalize(mean=fold_mean, std=fold_std),
-            ]
+        # The same builder as a single run (core.data._build_transforms), so the
+        # fold honours `transforms.augment` and `data.preprocessing` (ADR-083);
+        # only the normalisation is the fold's own, measured on its train split.
+        tc = config.data.transforms.model_copy(
+            update={"normalize_mean": list(fold_mean), "normalize_std": list(fold_std)}
         )
-        val_transform = T.Compose(
-            [
-                T.Resize(tc.image_size),
-                T.CenterCrop(tc.image_size),
-                T.ToTensor(),
-                T.Normalize(mean=fold_mean, std=fold_std),
-            ]
+        preprocessing = config.data.preprocessing
+        train_transform = _build_transforms(
+            tc, is_train=True, preprocessing=preprocessing
+        )
+        val_transform = _build_transforms(
+            tc, is_train=False, preprocessing=preprocessing
         )
 
         # Rebind transforms on the underlying ImageFolder via index remapping.
@@ -178,13 +167,28 @@ class _FoldDataModule:
         return self._class_names
 
 
+def _statistics_view(data_cfg: DataConfig) -> T.Compose:
+    """The view the fold statistics are measured on: what the model is fed.
+
+    Preprocessing, resize and centre crop, then ToTensor, without augmentation
+    or normalisation. Reading the pool with ToTensor alone measured pixels the
+    model never sees and could not batch images of different sizes.
+    """
+    size = data_cfg.transforms.image_size
+    steps: list[Callable[..., Any]] = []
+    if data_cfg.preprocessing.steps:
+        steps.append(_make_preprocessing_transform(data_cfg.preprocessing))
+    steps += [T.Resize(size), T.CenterCrop(size), T.ToTensor()]
+    return T.Compose(steps)
+
+
 def _compute_fold_stats(
     dataset: ImageFolder, train_indices: list[int], num_workers: int
 ) -> tuple[list[float], list[float]]:
     """Compute per-channel mean and std from train-fold images only.
 
     Args:
-        dataset: full ImageFolder loaded with T.ToTensor() only.
+        dataset: full ImageFolder loaded with ``_statistics_view``.
         train_indices: indices belonging to this fold's training set.
 
     Returns:
@@ -250,8 +254,9 @@ class CrossValidationBlock(ExperimentBlock):
         data_cfg = self._config.data
         pool_dir = data_cfg.base_dir / data_cfg.train_dir
 
-        # Load without normalization — only used to get targets and for stat computation.
-        raw_dataset = ImageFolder(str(pool_dir), transform=T.ToTensor())
+        # Read in the model's view without normalisation: used for the targets
+        # and the fold statistics; each fold rebinds its own transforms.
+        raw_dataset = ImageFolder(str(pool_dir), transform=_statistics_view(data_cfg))
         split_iter = _split_pool(raw_dataset, data_cfg, cv)
 
         base_name = self._config.name

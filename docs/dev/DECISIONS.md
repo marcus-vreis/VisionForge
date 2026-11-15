@@ -1,5 +1,24 @@
 # Architecture Decision Records
 
+How to read and write this file.
+
+**When an ADR is required.** Write one when a change picks between real alternatives that a later reader would otherwise re-debate: a new dependency or a removed one, a public contract (CLI, `run.json`, task or model extension point), a module boundary, a statistical or reproducibility rule, or a change to the repo's own process. A bug fix, a refactor that keeps the boundaries, and a doc edit do not need one.
+
+**Fields.** Copy `docs/dev/ADR-TEMPLATE.md`. Each entry is `## ADR-NNN — Title`, then `**Date:**`, `**Status:**`, optionally `**Relates to:**`, then Context, Decision, Consequences and Alternatives considered (the older entries use Decision and Reason). Numbers are sequential; take the next free one and append at the end of the file.
+
+**Status.** The line after `**Status:**` starts with exactly one of these:
+
+- `Proposed`: written, not yet agreed.
+- `Accepted`: in force. A note after a dash is allowed (`Accepted — shipped 2026-08-05`).
+- `Superseded by ADR-NNN`: replaced as a whole by a later ADR.
+- `Superseded in part by ADR-NNN`: still in force except for the part the later ADR replaces; say which part.
+- `Amended by ADR-NNN`: still in force, with a change recorded in the later ADR.
+- `Rejected`: considered and not adopted; kept so the question is not reopened.
+
+An accepted ADR is not rewritten. To change a decision, add a new ADR and move the old one's status to one of the `Superseded` or `Amended` forms. Older entries are not rewritten to this layout; `tests/test_decisions_format.py` checks the heading and the status prefix of every entry.
+
+---
+
 ## ADR-001 — src/ layout
 
 **Date:** 2026-03  
@@ -990,6 +1009,16 @@ sweep/comparison report pipeline means persistence and GUI wiring cost nothing
 new. Replicates are deliberately not ranked: they are samples of one
 distribution, and sorting them would invite exactly the cherry-picking the
 feature exists to prevent.
+
+**Update (2026-11-10, amendment, #190):** the Classification tab now offers
+**Replicates** on its strategy step, launched through the existing
+`POST /api/classification/replicates`; the backend did not change. It is a state
+of the GUI, not a block: `config.block` stays `"classification"` (the replicate
+runner trains each seed with the plain `ClassificationBlock`), so transfer
+learning is locked while it is picked, as with the multi-run blocks. The card is
+the shared `ReplicatesCard`, headline metric `accuracy`. Colab (ADR-163) trains
+one `config.block`, so its train button is off, with the reason shown, while
+Replicates is picked.
 
 ## ADR-057 — CUDA/cuDNN/GPU recorded in run.json environment
 
@@ -3678,6 +3707,8 @@ implying the backbone is untouched — the distinction matters in a paper, where
 **Date:** 2026-08-28
 **Status:** Accepted
 **Supersedes:** the per-feature extras of ADR-005 (the hardware extras stay)
+**Amended by:** ADR-170/171/172/176 (`mlflow`, `hub`, `wandb` and `dvc` are optional extras that install something; the seven extras named here stay empty)
+**Superseded in part by:** ADR-195 (`ultralytics`, AGPL-3.0, is again the `detection` extra; the other six stay in `dependencies`)
 
 **Context:** seven capabilities were optional extras — `detection`, `timm`,
 `optuna`, `tensorboard`, `roboflow`, `kaggle`, `huggingface`. The reasoning was
@@ -6536,6 +6567,20 @@ locked until the last step, and a suggested experiment name on that step.
 - *Treinar enabled from step one when the data is set.* The user asked for the
   review to be the gate, so a run is never started from a half-checked screen.
 
+**Update (2026-11-11, amendment, #200):** a run comes back to the form from
+History. The run and group details offer *Carregar no formulário* and *Repetir
+com 3 seeds*. App keeps one pending import per task, switches to the run's tab
+and the panel applies it through the handler its YAML button calls
+(`reviewImportedConfig` in classification, the schema check in the standalone
+panels, the plain load in a researcher's task), so the warnings and refusals
+are the YAML import's, shown on the Revisão name card. Loading lands on
+Revisão as a single run; repeating selects Réplicas with explicit seeds after
+the largest one the run or its replicate set used, and lands on Estratégia
+unless the import reported something. A sweep, K-fold or comparison group only
+loads: it has no one config to repeat. A researcher's task that no longer has
+a tab keeps both actions on screen, off, with the reason beside them. The
+decisions live in `lib/history-rerun.ts` so they are tested without a DOM.
+
 ## ADR-157 — Looping animations end while a job runs
 
 **Date:** 2026-11-01
@@ -6944,3 +6989,1319 @@ The numbers and the code reading behind this ADR are in the design doc's
 - *`colab run` instead of `new` + `exec` + `stop`.* Its exit code is
   reliable, but it creates and releases a VM per call, which breaks a job
   that uploads, trains and downloads on the same machine.
+
+## ADR-164 — Colab datasets from the user's Google Drive, with the consent in the GUI
+
+**Date:** 2026-11-06
+**Status:** Accepted — implemented (classification, like ADR-163 phase 2)
+**Extends:** ADR-163 (training on Colab through the official CLI)
+
+**Context:** a Colab run takes its dataset from a public zip or a public
+dataset. Many users keep theirs in Google Drive, synced to the PC by Google
+Drive for desktop, so VisionForge already reads it as a local folder. Two
+spikes on 2026-11-05 (CPU runtimes, `google-colab-cli` 0.7.5, design doc)
+measured `colab drivemount`:
+- it asks for a browser consent and then waits for Enter on stdin. With the
+  consent, the mount sees the files that were already in the Drive (50 of 50
+  top-level entries older than 7 days);
+- the consent is not kept: a new runtime asks again. The credential is
+  ephemeral, per VM (`authorize-for-drive-credentials-ephem`);
+- an Enter sent before the consent gives `Error propagating: 400`, and the CLI
+  then hangs.
+
+Marcus decided that the user must never touch a terminal: the GUI only, and
+opening another tab to allow the Drive is fine.
+
+**Decision:**
+- **The source.** A `drive` source means "the form's own dataset folder". The
+  server translates `data.base_dir` to `/content/drive/MyDrive/...`
+  (`gui/api/colab_drive.py`). It finds "My Drive" in this order:
+  - the folder the user typed;
+  - the `DefaultMountPoint` of Drive for desktop in the registry;
+  - a "My Drive"/"Meu Drive" component right under a drive letter or under
+    the home folder.
+  It sends the local file count along. A folder outside the Drive, or an empty
+  one, is refused before a VM is paid for.
+- **The mount.** It runs after the kernel warm-up and before the runner,
+  whenever the job reads from the Drive or exports to it.
+  - The consent URL becomes a `drive_consent_required` event, and never a log
+    line, because its `state` carries a token.
+  - The job thread waits in a `DriveConsent` until
+    `POST /api/colab/drive/continue` arrives, then writes the Enter itself.
+  - A 400 kills the hung CLI and the mount is tried again with a new URL, up
+    to 3 times.
+  - The person's wait (600 s per attempt) and the CLI's silence (120 s) have
+    deadlines of their own. Neither counts against the runner's startup
+    watchdog.
+- **The copy.** The runner copies the folder to the VM's disk (reading
+  through the FUSE mount is slow) and fails when it finds fewer files than
+  this machine has, which is what a folder still uploading looks like.
+- **The GUI.** The training sheet shows "Allow Drive access", which opens the
+  page in a new tab. The return of the window answers the server (focus, or
+  the tab visible again, only after the window lost it). "I already allowed"
+  is the fallback when the focus never fires.
+- **Export (optional).** The run's bundle is also copied to
+  `MyDrive/VisionForge/runs/`, on top of the phase 3 download. A failure there
+  does not fail the run.
+
+**Consequences:**
+- No upload and no Drive API of our own: the CLI's credential propagation is
+  the only path to the Drive, and the token stays on the server.
+- Every Colab run that uses the Drive needs one click from the person, per
+  runtime. A queued job that reaches the mount while nobody is at the screen
+  waits up to 3 × 10 min, and then fails and releases the VM.
+- "My Drive" in a language other than English or Portuguese, and the mirror
+  mode outside the home folder, need the folder typed by hand.
+
+**Risks:**
+- The flow reads the CLI's English output ("Please visit", "Error
+  propagating", "Mounted at"). A CLI release that rewords it breaks the mount.
+  The pin and the fake-CLI tests are the guard.
+- The detection was never run on a machine with Drive for desktop installed.
+- Answering on focus can send the Enter before the person has finished on
+  Google's page. That costs one attempt (a 400 and a new URL), not the run.
+
+**Alternatives considered:**
+- *Uploading the dataset with `colab upload`.* It works for any folder, but it
+  costs the upload time on every run, which is what the Drive avoids.
+- *Our own OAuth client and the Drive API.* Rejected in ADR-163 for the same
+  reasons: app verification, support, and a token of our own.
+- *Showing the CLI in a terminal for the Enter.* It was the spike's setup, and
+  Marcus ruled it out for users.
+
+## ADR-165 — A read-only dataset explorer in the Datasets surface
+
+**Date:** 2026-11-05
+**Status:** Accepted — phase 1 of issue #117 (classification and detection, read only) implemented
+**Extends:** ADR-132 (routes split by area), ADR-153 (dataset inspection)
+
+**Context:** the Datasets button of the bottom bar only downloaded data and kept credentials. Before a training run the researcher still had no way to look at a dataset: the stats probes (`/dataset/stats`, `/<task>/dataset/stats`) return counts and a few sample crops, and `audit_dataset` (ADR-153) is a CLI-shaped report over a whole tree with no progress and no way to stop it. Issue #117 proposes a data-tools surface in phases; this is phase 1, the explorer. Editing, merging and re-splitting are not part of it, and so the dataset fingerprint (ADR-129), the filtered datasets (ADR-130) and the group manifest (ADR-150) are not touched here: they matter once a tool creates a new dataset version, which is where the issue recommends a new folder or a manifest so that old `run.json` fingerprints stay valid.
+
+**Decision:**
+
+- **Where.** A second tab, "Explore", in the existing `DatasetsOverlay`, next to the download tab. It is not a new tab beside the tasks: a dataset is not owned by a task (ADR-132's reason for the overlay).
+- **Scope.** Classification (ImageFolder, with the same configurable `train`/`val`/`test` folder names the task panels use) and detection (YOLO, with the split resolution the trainer uses, `resolve_yolo_split`). Class names for YOLO come from `classes.txt`/`names.txt` and, new here, from the `names` of `data.yaml`. The explorer never writes inside the dataset.
+- **Two passes with different costs.**
+  - `core/dataset_explorer.build_index` only lists directories and reads label files. It feeds the per-class and per-split counts, the boxes per class and the gallery, and is cheap enough to rerun on every open or refresh.
+  - `scan_integrity` opens every image: it verifies it (Pillow `verify`), hashes the bytes (SHA-256, the same as `audit_dataset`, by reusing its `_verified_image_digest`), and reads the size. From that it reports images that do not open, exact copies, the same content in more than one split (leakage) and the size and aspect-ratio distributions. A copy whose copies carry different class labels is flagged as a label conflict.
+- **The scan cannot hang the server.** It runs in a worker thread (`gui/api/explorer_jobs.ScanJobs`) with progress and the existing `CancellationToken` (`core/cancellation.py`). One scan at a time (409 otherwise): it is disk-bound. A hard limit (`max_images`, 20,000 by default, 500,000 at most): above it the scan reads an evenly spaced sample, and the report says `sampled` and tells the user that a copy or leak found is real while finding none proves nothing. Cancelling returns the partial report, marked `cancelled`.
+- **No full-resolution image reaches the page.** `GET /api/explorer/thumb` resizes on the server (32–512 px, JPEG), and draws the YOLO boxes for detection. It takes the dataset root and a path relative to it; the root must be one the explorer already opened (the allow-list of `/dataset/file`), and the relative path may not contain `..` or leave the root through a link.
+- **The gallery is paginated** (48 per page, 200 at most) and filtered by split and class on the server from an in-memory index (last four datasets). A detection class filter matches the images that have a box of that class.
+- **Where the code lives.** Logic in `core/dataset_explorer.py` (no `gui` import); the thread registry in `gui/api/explorer_jobs.py`; the routes in `gui/api/explorer_routes.py` (`/api/explorer/{summary,images,thumb,scan}`); on the page, the pure helpers in `lib/dataset-explorer.ts` and the view in `components/DatasetExplorer.tsx`. All texts are in the dictionaries (pt-BR and English).
+
+**Consequences:**
+
+- The OpenAPI snapshot gains the six explorer operations; no existing endpoint changed.
+- The scan's hash is the same SHA-256 as the audit's, so the two reports agree on what an exact copy is. Visual near-duplicates are not detected (as in the audit).
+- The index of a big dataset is held in memory per opened dataset (a few hundred bytes per image). The cache keeps four.
+- `datasets_routes._read_yolo_class_names` still reads only the `.txt` files. The explorer's reader also understands `data.yaml`; folding the two into one is left for later so this change does not touch the stats probes.
+
+**Risks:**
+
+- A sampled scan can give the false impression of a clean dataset. The report and the page both say that a sample proves nothing about absence, and the default limit is high enough for the usual datasets to be scanned whole.
+- Thumbnails of very large images still decode them (JPEG is decoded at reduced scale, other formats are not). Pillow's decompression-bomb guard applies and a file that fails answers 422, shown as a broken tile.
+
+**Alternatives considered:**
+
+- *Reuse `audit_dataset` for the scan.* It walks the tree recursively with its own rules, has no progress, no cancel and no per-class view, and returns one big report at the end. Its digest function is reused; its walk is not.
+- *A scan inside the request.* Simple, but a dataset with tens of thousands of images would hold a worker for minutes and give the page nothing to show.
+- *Serving the original files for the gallery (`/dataset/file`).* No resizing, so a page of 48 photographs could move hundreds of megabytes.
+- *A new tab beside the tasks.* Rejected in issue #117's discussion: the explorer is not a task.
+
+## ADR-166 — Incorporating new images writes a new dataset, never an edit
+
+**Date:** 2026-11-06
+**Status:** Accepted — phase 2 of issue #117 (classification and detection) implemented
+**Extends:** ADR-165 (explorer), ADR-129 (fingerprint), ADR-130 (materialized copies), ADR-136 (content audit), ADR-153 (dataset inspection)
+
+**Context:** a researcher collects more images after a first training and wants them in the dataset. Writing them into the folder would change its fingerprint (ADR-129), and every earlier `run.json` remembers the fingerprint of the folder as it was: the runs would then point at data they did not train on. Issue #117 recommends a new folder for any tool that creates a dataset version; this is that tool, for the two layouts of the explorer.
+
+**Decision:**
+
+- **Never in place.** The result is a sibling folder (`<name>-v2` by default, or the name the user types, validated by `validate_path_component`) with the same structure. The original is not opened for writing at any point. A test hashes the whole tree (paths and bytes) before and after.
+- **How it is written.** Under `.<name>.tmp-<id>` in the same parent, then one `os.rename`. Cancellation, an error, or a destination that appeared meanwhile removes the temporary folder, so nothing is left at the destination. Files of the original are hardlinked when the volume allows it and copied when it does not (`link_or_copy`: any `OSError` falls back to a copy; symbolic links are copied). `materialized_dataset.py` has no such mechanism (it re-encodes every image), so this is new, and small. New images are always copied: the folder of new images is the user's scratch space and must not share bytes with the dataset. The copy is hashed while it is written and must match the digest of the preview, so an image replaced between the preview and the write is refused.
+- **Existing images do not move.** The mirror is made first; only then new files are placed.
+- **Splits of the new images.** Stratified by class, by largest remainder, seeded (`random.Random(f"{seed}|{class}")` over images sorted by content hash, so the file order does not matter). The proportion is the dataset's own (images per split) or one the user types; a split the dataset does not have gets zero and a positive ratio for it is refused, so `test` is never created. The seed (default 0) is recorded. Detection stratifies by the most frequent class of the image; an image without boxes is its own stratum.
+- **Checks before applying** (all listed in a preview the user confirms). Classification: `<class>/<image>`, anything loose is out. Detection: the image with a `.txt` next to it or in a sibling `labels` tree, five numeric fields per row, integer id >= 0. Images that do not open (Pillow `verify`, the digest function of the audit) are out. Exact copies by SHA-256 against the dataset and among the new images (first kept) are out. Every exclusion keeps its reason and detail.
+- **New classes.** A folder name the dataset lacks (classification) or an id beyond its list (detection) is a new class and its images stay out unless the user ticks it. When the new folder has its own `classes.txt`/`data.yaml`, its labels are read through that list and matched by name, so a `0` there need not be a `0` here; the label files are rewritten only if an id moves. Without a list, ids are the dataset's own and an unknown id `N` is the class `class_N`. Accepted classes are appended; existing ids never change. Where a bare id leaves a gap, the gap is filled with `class_<i>` placeholders. The result's `classes.txt`/`names.txt` and `data.yaml` (`names`, `nc`, and an absolute `path` that pointed at the original) are written anew, never through a hardlink.
+- **Record.** No convention existed (the group manifest of ADR-150 is another thing), so the new dataset gets `visionforge_dataset.json` (`schema_version` 1): the origin path and manifest fingerprint of the base, the folder incorporated, seed, requested and effective ratios, split folder names, final classes, accepted new classes, counts (base, found, added, per split and class, excluded by reason) and how many files were linked or copied. The explorer opens the result unchanged; the extra file is just a file of the dataset.
+- **Jobs.** `gui/api/incorporate_jobs.py`, one at a time, thread plus `CancellationToken`, progress counter. The preview (read, verify, hash both sides) keeps its analysis in memory so changing a checkbox, the ratios or the seed re-plans through `POST .../plan` without hashing again, and the apply writes exactly what was shown. If the original changed (manifest fingerprint) or a new image changed since the preview, the apply is refused (409) and the user redoes the preview.
+- **API.** `POST /api/explorer/incorporate/preview` (the dataset must be one the explorer opened: 403 otherwise, the allow-list of thumbnails), `GET .../{job_id}`, `POST .../{job_id}/plan`, `.../apply`, `.../cancel`. The source folder may not be inside the dataset nor contain it. Errors are documented with `responses=` from `http_responses.py` (which gains `FORBIDDEN`) and job errors are translated when the job is read.
+- **Page.** A button "Incorporar imagens" inside the Explore tab, once a dataset is open: source folder (the existing picker), preview (counts per class and split, exclusions with reasons, ticks for new classes, ratio, seed), destination name, apply with progress and cancel, then "open in the explorer". Texts in both dictionaries; pure logic in `lib/dataset-incorporate.ts`.
+
+**Consequences:**
+
+- The OpenAPI snapshot gains five operations; no existing endpoint changed. `DatasetExplorer` shares its inline styles through `datasetExplorerStyles.ts`.
+- A hardlinked file is the same file: editing an image of the new dataset in place, with a tool that writes through the existing inode, also changes the original. Tools that save a new file and rename (most editors) are safe. The record says how many files were linked.
+- The preview hashes the whole dataset (SHA-256 of every existing image) to find copies; that is the cost of comparing by content, as in ADR-136.
+- Near-duplicates are not detected (as in the audit). Symbolic links to folders inside the original are not followed by the mirror, as the explorer does not follow them.
+
+**Risks:**
+
+- A crash (process killed) between the first write and the rename leaves a hidden `.<name>.tmp-*` folder next to the dataset; nothing sweeps it yet. It never has the real name, so no run can pick it up by mistake.
+- The ratio is respected per class, but not corrected across classes: many classes with few new images each can drift a little from the overall proportion.
+
+**Alternatives considered:**
+
+- *Edit in place with a backup.* Breaks the fingerprint of every old run before the user decides anything.
+- *A manifest layer over the original (no copy).* Cheap, but no trainer reads it and every consumer would have to learn it.
+- *Reusing `materialized_dataset`.* It re-encodes images and owns a cache with leases; copying a dataset byte for byte is a different job.
+- *Moving existing images to rebalance.* Out of scope (phase 4, re-splitting) and it would make results incomparable with old runs.
+
+
+## ADR-167 — Merging two datasets writes a new one, with a class mapping
+
+**Date:** 2026-11-06
+**Status:** Accepted — phase 3 of issue #117 (classification and detection) implemented
+**Extends:** ADR-166 (incorporate), ADR-165 (explorer), ADR-129 (fingerprint), ADR-136 (content audit)
+
+**Context:** two datasets of the same problem (two collection campaigns, a public set and the lab's own) have to become one before training, and their classes rarely agree: `Cat` and `cat`, `car` and `vehicle`, a class one side never needed. As with ADR-166, writing into either folder would change a fingerprint that old `run.json` files remember, so the result is a new dataset. Phase 4 (re-splitting) stays separate: a merge that also reshuffles would make results incomparable with both sources.
+
+**Decision:**
+
+- **Never in place, shared mechanics.** The result is a sibling of dataset A (`A.parent/<name>`), built under `.<name>.tmp-<id>` and published with one `os.rename`; cancellation, an error or a destination that appeared meanwhile removes the temporary folder. B is only read. What ADR-166 had inside `dataset_incorporate.py` moved to `core/dataset_derived.py` and both features use it: `link_or_copy`, `free_name`/`claim_name`, the temporary-folder-plus-rename wrapper (`prepare_destination`, `publish`), the fingerprint re-check, the progress counter, the registry writer and the class-file writers (`classes.txt`, `names.txt`, `data.yaml`). The jobs got the same treatment (`gui/api/derived_jobs.py`). Incorporate behaves as before; its tests ran unchanged. `IncorporateError` now derives from `DerivedError`, and `link_or_copy` is still importable from `dataset_incorporate`.
+- **Tasks.** Classification (ImageFolder) and detection (YOLO); both datasets are read as the task of the open one. A source that has no images, that is not a folder, that equals the other or contains it is refused (400).
+- **Class mapping.** One row per class of A and of B (origin, image count), each with a target name or "discard". A class the mapping does not mention keeps its own name, so classes that share a name merge without asking, and two rows with the same target merge. Targets are stripped and must be non-empty; for classification they must be a valid folder name (`validate_path_component`), and two targets that differ only by case are refused (`Cat`/`cat` would be one folder on Windows and two on Linux, so VisionForge does not guess); for detection a target may not contain a line break. Names that differ only by case, spacing, `_` or `-` are reported as a hint and never merged by themselves.
+- **Final order.** A's surviving targets in A's order, then the targets B adds in B's order; ids are renumbered from 0 and the registry records the whole mapping. A label whose ids all stay and whose boxes all survive is linked byte for byte; any other label (an id moved, or a box of a discarded class removed) is written fresh, never through a hardlink, as are `classes.txt`/`names.txt` and `data.yaml` (`names`, `nc`, an absolute `path` that pointed at A, and the folder of a split only B has when A's file did not name it).
+- **Splits.** Each image keeps its own split. The result has a split if either source has it; the preview lists the splits that come from one source only. Detection puts B's images in A's layout for that split (`resolve_yolo_split`: `images/<s>` or `<s>/images`), and in the standard `images/<s>` + `labels/<s>` when A lacks it. Classification uses A's split folder names; the nested folders an image had inside its class are kept.
+- **Duplicates.** SHA-256 of every image of both sources. If the bytes are in both, A's copy stays and B's is dropped and listed; it is flagged when the two copies are in different splits (leakage the merge avoids). If A's copy does not survive the mapping (its class was discarded) B's copy is kept, so nothing is lost to a copy of something the user threw away. Duplicates inside one source are kept and only counted: removing them is the audit's job, not this tool's.
+- **Detection labels.** Boxes of discarded classes are removed and ids remapped. An image that had boxes and lost all of them is dropped and counted; an image that was already empty (background) is kept, with its label. Only valid rows (five numeric fields, integer id >= 0) count, as in the explorer.
+- **What is carried.** Images, YOLO labels, the class list and the registry. Other files of the sources are not copied: in a renamed class folder they would leave a stray folder that looks like a class.
+- **Names.** A file whose name is taken in its target folder becomes `stem-<sha8>` (with a counter if needed); for YOLO the `.txt` stem must be free too and the label follows the image.
+- **Record.** `visionforge_dataset.json` (`schema_version` 1, `kind: "merged"`): both sources (path and manifest fingerprint), the mapping as resolved, the final classes, counts (found per source, images, per split, per class and split with boxes, dropped by reason, duplicates dropped and across splits, repeated inside one source) and files linked or copied. The apply is refused (409) if either fingerprint changed since the preview, and again inside the write; an image whose size or mtime changed is refused too.
+- **API.** `POST /api/explorer/merge/preview` (A must be a dataset the explorer opened, 403 otherwise; B is the user's own pick in the local GUI and is only read), `GET .../{job_id}`, `POST .../{job_id}/plan` (instant: counts per final class and split, dropped images, no hashing), `.../apply`, `.../cancel`. One job at a time. The suggested name is `<A>-<B>`, then `-2`, `-3`.
+- **Page.** A button "Juntar com outro dataset" beside "Incorporar imagens" in the Explore tab: pick the other folder, preview, the mapping table (target box with a datalist of existing names, a discard checkbox, a "merged" mark), live counts through `/plan`, what is dropped and why, destination name, apply with progress and cancel, "open in the explorer". Logic in `lib/dataset-merge.ts`; the progress bar and the polling hook are shared with the incorporate panel.
+
+**Consequences:**
+
+- The OpenAPI snapshot gains five operations; the request models are named `Merge*` so the schemas of the incorporate endpoints keep their names.
+- The preview hashes both datasets completely, the cost of comparing by content (as in ADR-136 and ADR-166).
+- Hardlinks mean the result and the sources share bytes; a tool that rewrites an image in place through the existing inode changes both. The registry says how many files were linked.
+- Near-duplicates are not detected.
+
+**Risks:**
+
+- A crash between the first write and the rename leaves a hidden `.<name>.tmp-*` next to dataset A (same as ADR-166).
+- Class identity is by name. Two datasets that use the same name for different things merge them unless the user renames one; the preview shows the counts so this can be seen, but nothing can check meaning.
+
+**Alternatives considered:**
+
+- *Merge into A in place.* Breaks the fingerprint of every old run.
+- *Automatic merge of names that differ by case or spacing.* A wrong guess is silent and irreversible in the result; a hint costs one click.
+- *Dropping B's copy and A's copy alike when they are in different splits.* Loses data to avoid a problem that keeping A's copy already avoids.
+- *Re-splitting while merging.* That is phase 4 and would make results incomparable with both sources.
+
+
+## ADR-168 — Re-splitting a dataset writes a new one, with the test split locked by default
+
+**Date:** 2026-11-06
+**Status:** Accepted — phase 4a of issue #117 (classification and detection) implemented
+**Extends:** ADR-167 (merge), ADR-166 (incorporate), ADR-165 (explorer), ADR-150 (group manifests), ADR-129 (fingerprint), ADR-136 (content audit)
+
+**Context:** the split a dataset came with is often wrong for the experiment (a validation set of 3 images, a class missing from the test set, copies of one photo on both sides). Fixing it by moving files inside the folder would change a fingerprint that old `run.json` files remember, and re-splitting everything would make a new run incomparable with the old ones, which were evaluated on the old test set. So the result is a new dataset, and the test split is kept as it is unless the user says otherwise.
+
+**Decision:**
+
+- **Never in place, shared mechanics.** The result is a sibling of the opened dataset, built under `.<name>.tmp-<id>` and published with one `os.rename` (`core/dataset_derived.py`: `link_or_copy`, `claim_name`, `publish`, `ensure_unchanged`, registry). Images and labels are hardlinked (copied when linking fails); cancellation, an error or a destination that appeared meanwhile leaves nothing. Class files (`classes.txt`, `names.txt`) are linked unchanged: no class changes here. The YOLO `data.yaml` is re-written (never linked) so its absolute `path` points at the new folder and its split keys follow the splits that exist; `names` are not touched.
+- **What is re-split.** By default the train and val images are pooled and redistributed and test stays exactly as it is (same paths, same bytes). The option "keep the test as it is" is on by default and only counts when the dataset has a test split; with it off, every split is pooled. A positive ratio for the test while it is locked is refused (400).
+- **Ratios.** Per split, relative weights, normalised. Without a request: the current proportions of the pooled splits. A ratio of 0 means the split does not exist in the result (its folder is not created and, for YOLO, its key leaves the yaml). A split the dataset lacked is created only when the user gives it a positive ratio (`images/<split>` + `labels/<split>` for YOLO); the preview says it is new. The ratios must sum to more than zero.
+- **Stratified and seeded.** The stratum is the class (classification: the folder; detection: the most frequent class of the image, ties by name, and images without boxes form their own background stratum, as in ADR-166; the dominant-class rule and the largest-remainder allocation moved to `dataset_derived` and both features use them). The quota of every stratum per split comes from the largest-remainder method; leftovers and equal candidates are ordered with `random.Random(f"{seed}|{stratum}…")` over items sorted by SHA-256, so the result depends on the seed and the content, never on the order of the files. The seed is exposed and recorded.
+- **Units that cannot be split.** Images with the same SHA-256 are always in the same split. With a group file, the images of a group are too. Both relations are joined (a connected set of "same bytes" and "same group" is one unit), so a re-split never creates leakage. Units are placed greedily, largest first, equal sizes in seeded order, each into the split with the largest remaining deficit for its dominant stratum and, when that class is full everywhere, for the images overall. Without groups and without copies every unit is one image and the greedy fill gives exactly the quotas.
+- **Leakage with the locked test.** A pooled image that is an exact copy of a locked image, or that is in a unit that touches the locked split (same group, or a copy of a copy), is dropped from the result and listed with its reason (`duplicate_of_test`, `group_in_test`): moving it would put test content into training. The preview reports how many copy sets were kept together and how many of them were spread over several splits before.
+- **Groups.** A `path,group` CSV (ADR-150 format, UTF-8, paths relative to the dataset root) picked by the user, who may be anywhere on disk because it is only read. Unlike the audit it need not cover every image: an image the file does not list is its own group (counted), and rows naming no image of the dataset are ignored (counted). A repeated path or an empty group is an error. The file's SHA-256 is part of the analysis; the group choice (`by_group`) is a plan option, so switching it needs no new analysis, but a different file does (a new preview).
+- **Preview.** Counts per class and split before and after, images that change split, achieved against requested share per split, dropped images with the reason, copies kept together, and warnings: a new split, an empty split, a split that disappears, a class absent from a split. Changing the ratios, the seed, the lock or the group switch re-plans through `/plan` in milliseconds without hashing again.
+- **Names.** A moved file whose name is taken in its new folder becomes `stem-<sha8>` (with a counter if needed); the YOLO `.txt` follows the image and its stem must be free too. Classification moves go to `<split folder>/<class>/`, so a nested subfolder an image had inside its class is not kept for moved images.
+- **Record.** `visionforge_dataset.json` (`schema_version` 1, `kind: "resplit"`): source path and fingerprint, seed, requested and achieved ratios, the lock, the group file (path, SHA-256, groups, images without a group, ignored rows), counts before and after (per split and per class and split), images moved, dropped by reason with the first 200 listed, copy sets, and files linked or copied. The apply is refused (409) if the dataset fingerprint or the group file changed since the preview, and again inside the write.
+- **API.** `POST /api/explorer/resplit/preview` (the dataset must have been opened in the explorer, 403 otherwise; optional `group_csv`), `GET .../{job_id}`, `POST .../{job_id}/plan` (`ratios`, `seed`, `lock_test`, `by_group`), `.../apply` (+ `dest_name`), `.../cancel`. One job at a time (409 busy). The suggested name is `<name>-resplit`, then `-2`, `-3`.
+- **Page.** A button "Refazer divisão" beside "Incorporar imagens" and "Juntar com outro dataset": optional group file, analysis with progress, lock and group switches, current proportion or custom percentages, seed, before/after table, requested against achieved share, warnings, what was dropped and why, destination name, apply with progress and cancel, "open in the explorer". Logic in `lib/dataset-resplit.ts`; progress bar and polling hook are shared.
+- **Route documentation.** The three derived-dataset routers (incorporate, merge, re-split) now spell their `responses=` out with literal status keys (`{400: {"description": BAD_REQUEST_TEXT}}`) instead of spreading the dicts of `http_responses.py`: Sonar S8415 reads the keys of a literal and does not follow a spread of an imported dict. The OpenAPI snapshot only records paths, so it gains the re-split operations and nothing else.
+
+**Consequences:**
+
+- The OpenAPI snapshot gains five operations; request models are named `Resplit*`.
+- The preview hashes every image once (the cost of comparing by content, as in ADR-136, 166 and 167); everything after it is in memory.
+- A re-split with the test unlocked is a different experiment: its numbers are not comparable with runs that used the old test set. The page says so next to the option.
+- Hardlinks mean the result and the source share bytes (as in ADR-166 and 167).
+- Near-duplicates are not detected; only identical bytes are kept together.
+- With large groups the ratios are approximate: a group is never cut, and the preview shows how far the achieved share is from the requested one.
+
+**Risks:**
+
+- A crash between the first write and the rename leaves a hidden `.<name>.tmp-*` next to the dataset (as in ADR-166 and 167).
+- A class that ends up absent from a split (few images, big groups) breaks per-split class indexing in ImageFolder training; the preview warns, nothing prevents it.
+
+**Alternatives considered:**
+
+- *Re-split in place.* Breaks the fingerprint of every old run and the comparison with them.
+- *Re-split everything by default.* Makes a new run incomparable with the old ones; it stays one click away.
+- *Moving the copies of a locked-test image to the test too.* It would grow the test set the user asked to keep untouched.
+- *Reading the group file with the audit's reader.* It demands one row per image and a file inside the dataset; a re-split is more useful when a partial, external file is enough.
+
+
+## ADR-169 — Detection datasets convert between YOLO and COCO by writing a new dataset
+
+**Date:** 2026-11-06
+**Status:** Accepted — phase 4b of issue #117 (detection only) implemented
+**Extends:** ADR-168 (re-split), ADR-167 (merge), ADR-166 (incorporate), ADR-165 (explorer), ADR-129 (fingerprint)
+
+**Context:** detection data arrives in two formats. VisionForge trains and explores YOLO; most public datasets and annotation tools speak COCO. Converting by hand is where boxes go wrong (centre against corner, normalized against pixels, ids that start at 1, crowd boxes, boxes that leave the image). As with the other derived-dataset tools, the conversion must not touch its source: a changed folder would change a fingerprint that old `run.json` files remember.
+
+**Decision:**
+
+- **Never in place, shared mechanics.** Both directions write a sibling folder under `.<name>.tmp-<id>` and publish it with one rename (`core/dataset_derived.py`: `link_or_copy`, `claim_name`, `publish`, `ensure_unchanged`, registry). Images are hardlinked (copied when linking fails); cancellation, an error or a destination that appeared meanwhile leaves nothing. The apply is refused (409) if the fingerprint of the source folder changed since the preview, and again inside the write.
+- **Two named conversions.** `yolo_to_coco_bbox` (centre and size normalized to `[0, 1]` → top-left corner and size in absolute pixels, rounded to 6 decimals) and `coco_bbox_to_yolo` (its inverse, after clipping the box to the image). The convention is in the docstring; both are pure and tested on hand-computed values.
+- **Export YOLO → COCO** (`<name>-coco`). `images/<split>/` plus `annotations/instances_<split>.json` per existing split. `images` carry the real width and height (read with PIL), `categories` use `id = yolo id + 1` and `supercategory ""`, `annotations` use `iscrowd 0`, `segmentation []`, `area = w*h`; image and annotation ids are unique across the splits. `info` records the VisionForge version, the date and the source fingerprint. An image that does not open, or whose label has a malformed line (not five fields, a non-numeric or non-finite value, a negative or fractional class id, a width or height ≤ 0) is **excluded and reported**: an image is never half-converted. A background image (no label, or an empty one) is kept with no annotations.
+- **Import COCO → YOLO** (`<name>-yolo`). The folder the user picks is only read. Annotation files are `*.json` at the top and in `annotations/`; a JSON without the `images`, `annotations` and `categories` lists is listed as ignored. The split of each file comes from its name (`train`, `val`/`valid`/`validation`, `test`, with digits such as `val2017`); a name that says none is *unassigned* and the page asks for a split or to skip the file. Two files on one split are refused in the plan (400). The images folder of a file is the first of `images/<token>`, `<token>` (`val2017` as written, then the canonical split), the same with the file stem, folders named like a split (only for files with no detected split), `images`, the folder itself, that holds any of the first 20 `file_name`s; if none does the images are reported missing. A `file_name` that is absolute or contains `..` is refused.
+- **What the import does to boxes and ids.** Boxes only; segmentation is ignored and the preview says so. `iscrowd` boxes are skipped; boxes are clipped to the image, and one with width or height ≤ 0 afterwards is dropped; annotations of an unknown image or category and malformed `bbox`es are skipped; the real image size replaces the JSON one when they differ. Everything is counted by reason and the first 200 are listed. YOLO values are written with 6 decimals; images without annotations get an empty label file. Category ids become `0..N-1` in ascending COCO id; two categories with the same name are both kept and the later one becomes `name_<coco id>` (reported); one id with two different names in two files is refused (400). Blank or multi-line names are normalized so `classes.txt` keeps every id in place. The result has `classes.txt` and a `data.yaml` (`path`, the splits, `names`, `nc`). A file name already taken in a split (subfolders are flattened) becomes `stem-<sha8>`.
+- **Preview does the conversion.** The import preview opens each image (header only) and converts every box, so what the page shows is exactly what the apply writes; the plan (split per file, destination name) is instant and only decides which files feed which split and numbers the classes. The apply links and writes labels.
+- **Record.** `visionforge_dataset.json` (`schema_version` 1, `kind: "coco_export"` or `"coco_import"`): source path and fingerprint, classes, the id mapping (import), counts per split, everything left out or changed by reason with the first 200 listed, and files linked or copied.
+- **API.** `POST /api/explorer/coco/export/preview` (the dataset must have been opened in the explorer, 403 otherwise), `GET .../{job_id}`, `POST .../{job_id}/plan` (checks `dest_name`), `.../apply`, `.../cancel`; the same under `/import/` with `source_dir` instead (no allow-list: the folder is the user's own pick in the local GUI) and `splits` in plan and apply. Export and import share one job registry: one conversion at a time (409 busy). Suggested names are `<name>-coco` and `<name>-yolo`, then `-2`, `-3`. Every raised status is documented with literal keys in `responses=`.
+- **Page.** In the Explorar tab, "Exportar para COCO" (with a detection dataset open: counts per split, what is left out, destination, progress and cancel, the result path; no "open in the explorer", which does not read COCO) and "Importar COCO" (always visible: folder picker, a card per JSON with its split select, images folder, counts and reasons, the COCO id → YOLO id table, destination, apply, then "Abrir no explorador"). Logic in `lib/dataset-coco.ts`; progress bar and polling hook are shared.
+
+**Consequences:**
+
+- The OpenAPI snapshot gains the COCO operations; request models are named `Coco*`.
+- A round trip YOLO → COCO → YOLO keeps class names and boxes within 1e-5 (normalized); it is a test.
+- The import preview keeps the converted boxes of the whole folder in memory and opens every image once; for a very large COCO this is the cost of showing exact numbers.
+- The source fingerprint (manifest method, ADR-129) is "unavailable" above 200 000 files, in which case the "folder changed" check cannot detect anything.
+
+**Risks:**
+
+- A file that says no split is searched for its images only by the folders named like a split, its own stem, `images` and the root; an unusual layout shows every image as missing in the preview.
+- A crash between the first write and the rename leaves a hidden `.<name>.tmp-*` next to the source (as in ADR-166 to 168).
+
+**Alternatives considered:**
+
+- *`pycocotools`.* A new dependency for a format that is plain JSON, and the tool's own readers do more than this needs.
+- *Converting at the apply.* The preview could not then show what is left out and why.
+- *Importing crowd boxes and polygons.* YOLO detection has no crowd flag, and a polygon's bounding box is a different annotation from the one the author drew.
+
+## ADR-170 — Classification runs can export to local MLflow by profile
+
+**Date:** 2026-11
+**Status:** Accepted
+**Extends:** ADR-013, ADR-054, ADR-114, ADR-135
+
+**Decision:** A profile can enable MLflow for locally submitted classification
+training. Submission captures that choice and the profile slug. The optional
+MLflow client writes epoch metrics to a local SQLite store under
+`outputs/mlflow`, groups runs by profile and exports the final `run.json`
+after evaluation. History exposes export failures and lets the operator retry.
+
+**Reason:** Researchers can compare their runs in the MLflow UI while the
+training record and TensorBoard remain available independently. Retrying a
+metric with a fresh timestamp can duplicate its history in SQLite. Re-export
+therefore reconciles the stored epoch values before writing missing metrics.
+
+## ADR-171 — Explicit private Hugging Face Hub export from History
+
+**Date:** 2026-11
+**Status:** Accepted
+**Extends:** ADR-114, ADR-135, ADR-170
+
+**Context:** A researcher sharing a VisionForge server may select any profile.
+The profile picker scopes files (ADR-114); it does not authenticate anyone.
+
+**Decision:** Store the Hub write credential separately for each workspace and
+profile under the server user's VisionForge configuration directory. Never use
+the dataset-download credential, ambient SDK login or a browser-stored token.
+Return only whether a credential exists. Warn when the bind address is external
+or unknown: anyone who can select that profile can use or replace its token.
+History previews a limited package; explicit submission identifies its digest
+and a private model repository. Training never publishes a run.
+
+**Consequences:** The server account can read the secret. Use a narrowly scoped
+Hub token. A change to a previewed file requires a fresh preview. Visibility
+can still change remotely after the final repository check.
+
+**Alternatives considered:** A process-wide Hub login would let profiles use
+one another's credentials. Sending the entire run directory would disclose
+configuration, dataset paths and unrelated outputs.
+
+## ADR-172 — Private Weights & Biases export of classification runs
+
+**Date:** 2026-11-08
+**Status:** Accepted
+**Extends:** ADR-170 (MLflow export), ADR-171 (profile tokens)
+
+**Context:** phase 3 of #118. MLflow (ADR-170) keeps a run on this machine; a
+research group that already follows its runs on Weights & Biases wants them
+there too, without the export deciding anything about the training and without
+anything private leaving the computer. `wandb.init` creates a missing project
+with the account's default visibility, which may be public, and the SDK sends
+the git remote, the code, the console, the package list, the host name and the
+command line unless told not to.
+
+**Decision:**
+
+- A profile setting `wandb: {enabled, project, entity}`, off by default; an
+  empty `entity` is the key owner's user. The API key is saved like the Hub
+  token (ADR-171), in `<config>/wandb-tokens/<hash of profile>`, and the page
+  only learns whether one exists. `gui/api/profile_tokens.py` now holds both.
+- Classification training only, as for MLflow. The trainer and the block take a
+  list of trackers (`core/run_trackers.py`) instead of the MLflow-only fields, so
+  both exporters ride on the same calls: start when the run folder exists, one
+  call per epoch, finish on every exit path. Every call is a best-effort
+  boundary; a failure is written to `wandb.json` beside the run.
+- **Private before the first upload.** Through W&B's GraphQL API, with only
+  the profile's key, the project is created with `access: "PRIVATE"`, or an
+  existing one is read. Any other visibility is refused and left as it is; the
+  run is not sent. The call goes over HTTPS with Basic auth and never through a
+  saved `wandb login`.
+- **What leaves:** the public parameters (the same projection as MLflow, now
+  shared in `core/tracking_privacy.py`), the epoch metrics at `step=epoch`, and
+  the final public metrics (the Hub's list) as the run summary. Not `run.json`,
+  which carries the dataset path. The settings turn off git, code, console,
+  system stats, host metadata and `requirements.txt`, and the mode is forced to
+  `online`, so an ambient `WANDB_MODE` cannot silently drop the export.
+- The W&B run id is the first 32 hex digits of the hash of profile and run
+  folder, with `resume="allow"`: the History's retry reopens the same run, and
+  W&B drops the steps it already has, so only missing epochs are added.
+- Optional extra `visionforge-studio[wandb]`, pinned like `mlflow`.
+
+**Consequences:** checked against the real `wandb` 0.31.0 in offline mode with
+a real one-epoch run: the record holds the chart keys, `test_*` metrics and
+`model.name`; no file of the run holds the user's home folder, the dataset path
+or `base_dir`; `files/` is empty; and `WANDB_MODE=disabled` did not stop it. The
+online path (the GraphQL calls, the private project and the upload) is covered
+only by fakes: it needs a real key. The W&B log `logs/debug.log` stays local and
+names the user's folder. A project made private here can still be made public
+on W&B later. A self-hosted W&B server is not supported: the address is the
+SDK's default.
+
+**Alternatives considered:**
+
+- *Let `wandb.init` create the project.* Its visibility would be the account's
+  default, which this code cannot see beforehand.
+- *Set an existing project to private.* It would change a project the user
+  configured on purpose; refusing says what is wrong without touching it.
+- *Read the visibility through the SDK.* Its public `Project` has no access
+  field in 0.31; the private GraphQL helpers it uses can change in any release.
+- *Upload `run.json` as a file, as MLflow does.* MLflow keeps it on this
+  machine; on W&B it would publish the dataset path and the config's folders.
+
+## ADR-173 — The "Code" tab: the real training code, annotated
+
+**Date:** 2026-11-08
+**Status:** Accepted
+**Extends:** ADR-118 (the training sheet's tabs and "it must never teach
+wrong"), ADR-160 (the Results tab)
+
+**Context:** the user wants people who do not program yet to see the code
+behind a training: the data pipeline, the model, the loop, validation and the
+test. "How it works" (ADR-118) draws the idea; it does not show code. A
+hand-written, simplified copy would drift from what trains and could teach
+something the tool does not do.
+
+**Decision:**
+
+- A fourth tab on the training sheet, **Code**, after "How it works". It shows
+  six functions of a classification training as they are in the installed
+  package: `_build_transforms` (data), `replace_final_layer` (model),
+  `Trainer._build_criterion` (loss), `Trainer._train_epoch`,
+  `Trainer._eval_epoch` and `Evaluator.evaluate`.
+- The server reads them with `inspect` on each request
+  (`GET /api/code-tour/{task}`, `core/code_tour.py`) and sends the source, the
+  first line number and the file path inside the package, never the absolute
+  path of the install.
+- **Notes point at lines by text, never by number.** Each note names the text
+  of its first line (and of the first line after it). A test resolves every
+  note against the real source, so changing the trainer in a way that loses a
+  commented line fails CI instead of pointing at the wrong place. The texts are
+  in the message catalog, in Portuguese and English.
+- **This run's path.** A note can depend on a setting: binary or multiclass,
+  mixed precision, augmentation, the model family. The page sends what the
+  submitted form decides and the server marks each such note as this run's
+  path, a branch it does not take, or undecided. A setting the form does not
+  decide is left out rather than guessed: mixed precision is marked on only
+  where the trainer would turn it on (`mixed_precision` and a real CUDA
+  device), so from the form it is only ever "off" (turned off, or CPU) or
+  undecided.
+- No line-by-line live tracking: the stream reports per epoch, so the tab says
+  which path the code takes, not which line runs now.
+- Classification only; other tasks say so. Detection runs inside Ultralytics,
+  whose loop is not this project's code.
+
+**Consequences:** renaming or rewriting a commented line means updating its
+note in the same change. The functions shown are private ones
+(`_build_transforms`, `_train_epoch`); the tab is a reason to keep them
+readable. A run reattached after a page reload has no form settings, so its
+branches show as undecided.
+
+**Alternatives considered:**
+
+- *A simplified, standalone PyTorch script.* Easier to read, but a second copy
+  of the training that can drift, and that never ran.
+- *Line numbers in the notes.* Any edit above a note would move it silently.
+- *Notes in the frontend.* The anchors could not be checked against the Python
+  source in one test.
+
+## ADR-174 — A run's bundle goes to Zenodo as an unpublished draft
+
+**Date:** 2026-11-08
+**Status:** Accepted
+**Extends:** ADR-135 (experiment bundle), ADR-171 (profile tokens)
+
+**Context:** phase 4 of #118. A paper cites an experiment by DOI, and Zenodo
+mints one when a record is published. Publishing is permanent: a published
+record and its files cannot be deleted, only versioned. The experiment bundle
+(ADR-135) already holds what a reader needs to check a run (run.json, the
+checkpoint, conventional records, a SHA-256 manifest), but its run.json names
+this machine's folders by absolute path, and a path under the home folder
+carries the account name.
+
+**Decision:**
+
+- History gets a "Create a Zenodo draft" panel beside the Hub one. The server
+  builds the bundle, the page shows its file name, size, members and what was
+  left out, and the upload must match the previewed manifest digest, as with the
+  Hub.
+- **Draft only.** The export creates an empty deposition
+  (`POST /api/deposit/depositions`) and puts the bundle in its file bucket. It
+  never sends metadata and never calls `actions/publish`. Title, authors,
+  license and publishing happen on Zenodo. The page recommends a token with
+  `deposit:write` only: without `deposit:actions` the token cannot publish.
+- **A public run.json.** `export_experiment_bundle(..., public=True)` writes the
+  record with `run_dir` as `.`, the artifacts named as bundle members, and every
+  other local path reduced to its final name (`core/public_run_record.py`):
+  whole-value paths, and drive, UNC and home-like POSIX paths inside text. The
+  manifest notes the rewrite; the run on disk is untouched, and the bundle still
+  verifies and imports (the model comes back).
+- **Two sites, two tokens.** zenodo.org and sandbox.zenodo.org have separate
+  accounts. The profile keeps one token for each (`zenodo`, `zenodo-sandbox`,
+  ADR-171's storage), and the page picks the site, so a test token never reaches
+  the real Zenodo.
+- The token travels only as a Bearer header over HTTPS, and only to links on the
+  chosen site's host: a bucket link on another host is refused before the
+  upload. Zenodo's answer body is never shown; a 401 or 403 becomes "Zenodo
+  refused the token" and anything else a generic failure.
+
+**Consequences:** an export creates a new draft every time; a researcher who
+sends twice has two drafts to keep or discard on Zenodo. The bundle carries what
+ADR-135 allows (graphics are not members), and a checkpoint goes as it was saved.
+A record that names a local path inside some other kind of text (not a drive,
+UNC or home-like path) keeps it; the preview is where it shows.
+
+**Alternatives considered:**
+
+- *Publishing from the GUI.* One click short of a permanent DOI, with nothing
+  to undo a wrong file or author list.
+- *Filling the draft metadata from the profile.* The profile name is a label,
+  not an author list (ADR-114), and a license is a decision the tool cannot
+  infer.
+- *The raw bundle.* It would put the account name into a permanent archive.
+
+## ADR-175 — A run's record, without weights, committed to a private GitHub repository
+
+**Date:** 2026-11-08
+**Status:** Accepted
+**Extends:** ADR-171 (profile tokens, private destinations), ADR-174 (public run.json)
+
+**Context:** the last destination of #118. Code and configuration already live
+on GitHub; a group that keeps one repository of experiments wants each run there
+too, as text it can diff and review, next to its code. Git is a poor place for
+weights (Git LFS has a small free quota), and the Hub (ADR-171) and Zenodo
+(ADR-174) already take them.
+
+**Decision:**
+
+- History gets "Send the report to GitHub". A run becomes one folder,
+  `runs/<experiment>/<run>/`, holding a README report generated from run.json
+  (summary, final metrics, a table per epoch capped at 200 rows, the charts
+  embedded), the public run.json of ADR-174 (`artifacts.model` is `null`) and
+  the run's charts under `figures/` (PNG and JPEG, 5 MB each, at most 20).
+  No weights, ever.
+- **Preview, then one commit.** The page shows the folder, each file with its
+  size and the README; the commit must match the previewed digest. All files go
+  in one commit on the default branch through the Git Data API (blobs, a tree on
+  top of the branch's, a commit, a fast-forward of the ref, never forced). An
+  empty repository first gets the README through the contents API, which is the
+  only way to make a first commit.
+- **An existing, private repository only.** The export reads the repository
+  first and refuses one that is not private before writing anything. It never
+  creates a repository: that needs a token allowed to administer the account.
+  The page asks for a fine-grained token limited to the experiments repository
+  with Contents read and write.
+- The token is saved per profile like the others (ADR-171, service `github`)
+  and goes only to `https://api.github.com`, as a Bearer header. GitHub's answer
+  is never shown: 401, 403 and 404 each have their own message (404 also means
+  the token cannot see a private repository), the rest is a generic failure.
+
+**Consequences:** sending a run again replaces its folder's files in a new
+commit; files removed from a run stay in the repository until someone deletes
+them. A history longer than 200 epochs keeps every value in run.json but not in
+the README table. Only github.com: GitHub Enterprise hosts are not supported.
+
+**Alternatives considered:**
+
+- *One commit per file through the contents API.* Works on any repository, but
+  a run of six charts would leave eight commits.
+- *Creating the repository when missing.* Saves a step, but needs a token with
+  account administration, much more than writing one repository.
+- *Weights through Git LFS.* Small free quota, and the weights already have two
+  better homes.
+
+
+## ADR-176 — A run versioned with DVC in a local repository of experiments
+
+**Date:** 2026-11-08
+**Status:** Accepted
+**Extends:** ADR-174 (public run.json), ADR-175 (one folder per run, README report)
+
+**Context:** the DVC item of #118, deferred until the other destinations were
+done. DVC keeps data and weights next to git: git holds small pointer files,
+DVC keeps the content in its cache and in a remote (S3, Google Drive, a shared
+folder). A group that already versions its code with git wants each run's
+weights versioned the same way, and wants to compare runs with
+`dvc metrics show`, `dvc params diff` and `dvc plots show`.
+
+**Decision:**
+
+- History gets "Version with DVC". The researcher names a folder on this
+  computer that is a git repository with DVC initialized at its root. "Prepare
+  folder" makes one: it creates the folder when its parent exists, runs
+  `git init` when needed and `dvc init`, and commits only the three files
+  `dvc init` writes.
+- A run becomes `runs/<experiment>/<run>/`, the same folder as ADR-175. Git
+  gets the README report, the public run.json (`artifacts.model` names the
+  weights), the charts, and the files DVC compares: `params.yaml` (the run's
+  config, local paths reduced), `metrics.json` (final numeric metrics),
+  `history.csv` (every epoch, every numeric column) and a `dvc.yaml` that
+  declares them at the top level, with no stages. DVC gets the weights,
+  `model.<ext>`, through `dvc add`; git gets `model.<ext>.dvc`.
+- **Preview, then one commit.** The page lists every file and whether git or
+  DVC keeps it, plus the repository's state and default remote. The export must
+  match the previewed digest, which covers the repository path and the weights'
+  SHA-256. The commit is `git commit -- <folder>`: whatever the researcher had
+  staged elsewhere stays staged. A run exported again with no change makes no
+  commit.
+- `dvc push` of that run's pointer runs when the repository has a default
+  remote. A failed push keeps the commit and the page says so; exporting again
+  retries the push. `git push` never runs: publishing the repository stays with
+  the researcher.
+- The real tools run, not a reimplementation of DVC's formats: DVC from the
+  `[dvc]` extra (`python -m dvc`, pinned to 3.67.1) or from the PATH, git from
+  the PATH. They run without a terminal or prompt, with `DVC_NO_ANALYTICS=1`.
+  Their output goes to the server log only; the page names the tool and the
+  step that failed.
+- **This machine only.** Every route takes a server folder from the request and
+  runs git and DVC there, including the repository's own hooks, so it answers
+  only a loopback client and refuses a page of another site, like "open
+  folder". The folder is remembered in the browser, not in the profile.
+- The dataset does not go: run.json already carries its fingerprint and origin.
+
+**Consequences:** the weights are copied into the repository's folder and into
+DVC's cache, so a run takes its checkpoint's size twice on disk until DVC's
+cache link type is changed. A remote is configured with DVC itself (`dvc remote
+add`); the page only uses the default one. Files removed from a run stay in the
+repository until someone deletes them, as in ADR-175.
+
+**Alternatives considered:**
+
+- *Writing `.dvc` files and the cache without DVC.* No dependency, but it
+  copies a format DVC owns and can change, and a push still needs DVC.
+- *A `dvc.yaml` stage per run.* `dvc repro` would need the dataset and the
+  training command on the machine, and a run already happened: the record is
+  the result, not a pipeline to rerun.
+- *Configuring the remote from the page.* Each storage has its own credentials
+  and login; DVC already does that well.
+
+---
+
+## ADR-177 — Four places where a result did not match its config
+
+**Date:** 2026-11-09
+**Status:** Accepted
+**Fixes:** ADR-083 (`transforms.augment`), ADR-101 (the head is the final Linear), ADR-061 (paired tests and their power floor)
+
+**Context:** the 2026-11-09 audit (`docs/dev/AUDIT-2026-11-09.md`, R1–R5) reran
+the statistics and the data pipelines against real tensors. The formulas were
+right; four places around them made a run differ from what its `run.json`
+records, which is the one thing the project promises not to do.
+
+**Decision:**
+
+- **Segmentation honours `augment`.** `SegmentationDataset` read the flip,
+  rotation and jitter fields and never the flag, so the baseline arm of an
+  augmentation ablation trained augmented. The flag now gates all three, the
+  same rule as `core/data._build_transforms`.
+- **A fold trains with the single-run pipeline.** `_FoldDataModule` rebuilt the
+  transforms by hand, without `augment` and without `data.preprocessing`. It now
+  calls `_build_transforms` with the fold's own normalisation. The fold
+  statistics are measured on `_statistics_view`: preprocessing, resize and
+  centre crop, as the model is fed. Reading the pool with `ToTensor` alone
+  measured pixels the model never sees and could not batch images of different
+  sizes.
+- **Fine-tuning's full-rate group is the final Linear.** ADR-101 moved feature
+  extraction to `final_linear`, but fine-tuning still took the last named child:
+  119M parameters on VGG and 54M on AlexNet trained at the head's rate. The
+  same loop over named children also missed parameters the model holds
+  directly, so ViT's class token was never optimised (its position embedding
+  belongs to the `encoder` child and was).
+  The groups are now the final Linear and every other trainable parameter.
+- **The Wilcoxon floor counts the pairs the test uses.** scipy drops zero
+  differences (`zero_method="wilcox"`), so six seeds with three ties is a
+  three-pair test whose smallest p is 0.25; the floor said 0.031 and the result
+  was not flagged as underpowered.
+
+**Consequences:** runs made before this change keep their numbers; a
+segmentation run with `augment: false`, a K-fold with augmentation off or with
+preprocessing, or a fine-tuning on VGG, AlexNet, ViT or ConvNeXt trains
+differently now. Each fix has a test that failed before it
+(`TestAugmentFlag`, `TestFoldTransformsFollowTheConfig`,
+`TestFoldStatisticsOnMixedSizes`, `test_the_full_rate_group_is_exactly_the_final_linear`,
+`TestFloorWithTiedPairs`).
+
+---
+
+## ADR-178 — The GUI answers only to its own names (Host and Origin guard)
+
+**Date:** 2026-11-09
+**Status:** Accepted
+**Extends:** ADR-114 (lab server via `--host`), ADR-120 (open folder / update refuse a foreign Origin)
+
+**Context:** the server answered any `Host`. Its only middleware was CORS for the Vite dev server, which hides an answer from another site's page but does not stop the request. Two attacks follow from a page the user merely visits. *DNS rebinding:* the attacker's name resolves first to their machine, then to 127.0.0.1, so the browser treats the local server as the attacker's site and reads every answer (reproduced: `Host: evil.example` got 200 on `/api/health`). *Cross-site requests:* a page posts to localhost. Only four routes checked `Origin` (reveal, update/apply, DVC); the other ~62 state-changing routes did not.
+
+**Decision:**
+
+- An ASGI middleware, `gui/security.py` (`HostOriginGuard`), runs before CORS and every route.
+- **Host:** a request whose `Host` (port removed, brackets around IPv6 removed, case and trailing dot ignored) is not an accepted name is refused with 400 and a pt/en message. A missing or malformed `Host` is refused too.
+- **Origin:** a request whose method is not GET/HEAD/OPTIONS/TRACE, and every WebSocket handshake, is refused (403, or close code 1008) when it carries an `Origin` that is neither loopback nor an accepted name. `null` and unparsable origins are refused. A missing `Origin` stays allowed: that is a same-origin navigation or a client that is not a browser.
+- **Accepted names.** Bound to loopback (the default): `localhost` and the loopback addresses (`127.0.0.1`, `[::1]`, reusing `is_loopback_host`). Bound to any other address (lab server, ADR-114): also the machine's hostname, its FQDN, the addresses they resolve to, and the bind address unless it is a wildcard. Behind a DNS alias or a reverse proxy's public name, the person starting the server adds names with `--allowed-host NAME` (repeatable), which works in both modes.
+- With `--host 0.0.0.0` the browser tab opens `http://127.0.0.1:<port>`. The wildcard is neither reachable nor an accepted Host.
+- The route-level checks in reveal, update/apply and DVC stay. They are stricter (loopback only) and still apply on a lab server, where the page's own origin is the machine's name.
+- The policy lives on `app.state.host_policy`, set by `start_server`. Without it (`uvicorn ...:app`, tests), the default is loopback only.
+
+**Consequences:** reaching a lab server by a name the machine does not resolve for itself (a DNS alias, a proxy) needs `--allowed-host`. Until then the page gets a 400 that names the flag. The updater's relaunch (ADR-120) passes only `--host/--port`, taken from the socket that served the request, so `--allowed-host` values are not carried across an update.
+
+**Alternatives considered:**
+
+- *Starlette's TrustedHostMiddleware.* It checks Host only, not Origin, and has no notion of "this machine's names when bound to 0.0.0.0".
+- *Accepting any Host in lab mode.* That leaves every lab user exposed to rebinding through their own browser.
+- *Requiring `--allowed-host` for every non-loopback bind.* Safer, but it breaks every lab already reaching the server by hostname or IP.
+- *A per-route Origin dependency.* Each new route would have to remember it. The middleware covers routes that do not exist yet.
+## ADR-179 — Security headers on every response, API docs only on request
+
+**Date:** 2026-11-09
+**Status:** Accepted
+**Builds on:** ADR-125 (inline theme script), the Host/Origin guard of SEC-1
+
+**Context:** the 2026-11-09 audit (`docs/dev/AUDIT-2026-11-09.md`, finding 6, R8) found that no response set a Content-Security-Policy, `X-Frame-Options`, `X-Content-Type-Options` or `Referrer-Policy`. A script that reached the page could load and send anything, and another site could frame the GUI. `index.html` also preconnected to `fonts.googleapis.com` and `fonts.gstatic.com`, which it never used because the fonts come from `@fontsource`, so every visit told Google the GUI was opened. `/docs` and `/redoc` were public, and their pages load JavaScript from `cdn.jsdelivr.net`.
+
+**Decision:**
+
+- **One middleware, outermost.** `gui/security.py:SecurityHeaders` adds the headers to every HTTP response, including the 400/403 refusals of `HostOriginGuard`.
+- **SPA policy:** `default-src 'self'; script-src 'self' 'sha256-…'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`.
+  - The hash is that of the inline theme script. It is computed from the `index.html` on disk, with line endings normalised as the HTML parser does. It is computed again when the file's size or mtime changes, so a rebuild under a running server keeps the theme script allowed.
+  - `style-src` has no `'unsafe-inline'`. Evidence: React sets the `style` prop through the CSSOM (`el.style[x] = …`, `style.setProperty`), which CSP does not govern. The bundle's only `createElement("style")` is React's `<style precedence>` hoisting, which the app does not use. The e2e test sees no violation.
+  - `data:` images are needed because dataset crops arrive as data URIs, and the CSS noise texture is one. `blob:` covers downloads.
+- **Fixed headers:** `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`. `same-origin` was chosen over `no-referrer`. Both send nothing to other sites. Under `no-referrer`, though, the Fetch standard has a POST carry `Origin: null`, which the guard refuses. Chromium was checked and sends the real origin on same-origin fetches anyway. Other engines were not checked, and `same-origin` does not depend on that behaviour.
+- **No preconnect** in `frontend/index.html`. A test fails if either `index.html` names `googleapis`, `gstatic` or any absolute `src`/`href`.
+- **API docs off by default.** `FastAPI(docs_url=None, redoc_url=None)`. `/docs`, `/docs/oauth2-redirect` and `/redoc` answer 404, not the SPA. `VISIONFORGE_DOCS=1` (or `true`/`yes`/`on`) brings them back with a policy of their own, sent only on those paths: `'unsafe-inline'` and `https://cdn.jsdelivr.net` for scripts and styles, Google Fonts for ReDoc, `blob:` workers, and `frame-ancestors 'none'`. `/openapi.json` stays: it is the API contract that tests and clients read.
+
+**Consequences:** a third-party script or style cannot be added to the SPA without changing this policy, and the e2e test `frontend/e2e/csp.e2e.ts` fails on any violation or on any request to another host. A change to the inline theme script needs no manual hash update. Anyone who used `/docs` now sets `VISIONFORGE_DOCS=1`. Tests: `tests/gui/test_security_headers.py`, `frontend/e2e/csp.e2e.ts`.
+## ADR-180 — Third-party telemetry is switched off in one module
+
+**Date:** 2026-11-09
+**Status:** Accepted
+**Extends:** ADR-120, ADR-170
+
+**Context:** the README promises that nothing leaves this computer unless the user asks for it. The audit of 2026-11-09 (finding 9) found that only the DVC export disabled analytics (`DVC_NO_ANALYTICS` in `dvc_export.py`). ultralytics ships with `settings['sync']=True` and reports train/val/export events. huggingface_hub reports download telemetry. MLflow has collected usage data since 3.2.
+
+**Decision:** `visionforge/utils/third_party_privacy.py` exposes an idempotent `apply_opt_outs()`. It sets `HF_HUB_DISABLE_TELEMETRY`, `DO_NOT_TRACK`, `MLFLOW_DISABLE_TELEMETRY` and `DVC_NO_ANALYTICS` with `os.environ.setdefault`, so a value the user already set is kept. It also sets `enabled = False` on ultralytics' process-wide `events` instance (`ultralytics.utils.events.events`), inside try/except so a missing or broken SDK never stops the app. `settings.update({'sync': False})` was rejected: it writes the user's global ultralytics settings file and would silence every other project on the machine (it did, during development, and was restored). It runs in `main()` before any SDK is imported, on import of `detection_trainer`, and before the MLflow import in `MlflowTracker._start`. `YOLO_OFFLINE` is not used because it would also block the weights download the user asks for. `NETWORK_SDKS` documents how each network-capable dependency is covered, and a guard test fails when `pyproject.toml` gains a known network SDK with no entry there.
+
+**Consequences:** a new network SDK has to be added to `NETWORK_SDKS` (and opted out if it reports). The environment variables are process-wide, so they also reach subprocesses. The guard only knows the SDKs on its own list of known network names, so a new SDK outside that list is not caught.
+
+**Amended 2026-11-10: `visionforge gui` sets only the environment switches up front (#258).** `apply_opt_outs()` imports `ultralytics.utils.events` (~1.7 s with torch) just to switch the events off, and the GUI does not need Ultralytics until a run does. `main()` now calls `apply_env_opt_outs()` before parsing and `apply_opt_outs()` after it for every command except `gui`. In the GUI the events are switched off where Ultralytics is first imported: on import of `detection_trainer` (every `YOLO` goes through it) and in `routes._has_detection_image` before `ultralytics.data.utils`. Both run before any train/val/export event can be sent. `tests/utils/test_third_party_privacy.py` parses `src/` and fails when an `ultralytics` import has no `apply_opt_outs()` call before it in the same function or module.
+## ADR-181 — The "Code" tab for every task (amends ADR-173)
+
+**Date:** 2026-11-09
+**Status:** Accepted
+**Amends:** ADR-173 (the "Code" tab: the real training code, annotated)
+
+**Context:** ADR-173 showed the annotated training code for classification only: one global set of settings, a route with fixed query parameters (`kind`, `amp`, `augment`, `model`) and a page that decided support with `taskKey === "classification"`. The user asked for the real code of what runs in the other tasks too. Regression, segmentation, anomaly detection and torchvision detection all train with this project's code; only detection on the Ultralytics backend runs inside the library.
+
+**Decision:**
+
+- **One tour per task, same contract.** `core/code_tour.py` keeps `Section` and `Note` (anchors by text, never by line number; source read with `inspect` on each request) and adds `TOURS[task]` with `TOUR_SETTINGS[task]`: the settings each task's notes depend on and the values they take. Tours now exist for classification, regression (loss mse/mae/huber), segmentation (loss cross_entropy/dice/combined; architecture unet/torchvision), anomaly (method autoencoder/patchcore) and detection (backend; detector faster_rcnn/ssd/retinanet).
+- **Generic, validated settings.** `GET /api/code-tour/{task}` reads its query through `tour_settings(task, query)`: a key the task does not know, or a value it does not take, is dropped and its notes stay undecided. `true`/`false` read as `on`/`off`; `model` is a model name turned into the setting it decides (classification family, segmentation architecture, detector). A section may be shown whole while its notes are all off this run's path (the PatchCore coreset in an autoencoder run): the page fades them instead of hiding code.
+- **The list comes from the server.** `GET /api/code-tour` lists the tasks with a tour and each one's settings; the page decides support from it, so a new tour needs no frontend change beyond its section titles. `codeSettingsFor(taskKey, payload)` reads each task's settings from the submitted form.
+- **Unavailable tour.** A task without a tour, or a run whose training is not this project's code, is a 404 whose `detail` says why, in the request's language; the page shows that text rather than "failed". Detection has a tour only when the run says `backend=torchvision`; a run without a backend gets the reason too, because Ultralytics is the default backend.
+- Shared code is shown once per tour where it runs: regression and segmentation show `training_loop.train_epoch`, with notes that say which hooks (`validate_targets`, `outputs_transform`) each task passes.
+
+**Consequences:** each task's commented lines are now under the same test (every note resolves against the installed source, every key has pt and en text, every `when` value is declared in `TOUR_SETTINGS`), so renaming one in the regression, segmentation, anomaly or detection trainers means updating its note in the same change. The route's OpenAPI contract changed: the explicit query parameters were replaced by the generic query. Notes teach what each task does differently (best checkpoint by val mIoU in segmentation, by train reconstruction loss for the autoencoder, by val mAP@0.5 in torchvision detection), so a change to those rules must update the note.
+
+**Alternatives considered:**
+
+- *Explicit query parameters per setting on the route.* Typed in OpenAPI, but the route would grow with every task and could not reject a value that belongs to another task.
+- *Sections chosen by setting (show only the active builder).* Less noise, but undecided runs would need a fallback and a run's page would hide code it could take; faded notes keep one rule for every tour.
+- *A tour for Ultralytics detection.* Its loop is the library's code, not this project's; tracked separately (GUI-8).
+
+## ADR-182 — A non-finite validation metric stops the run
+
+**Date:** 2026-11-09
+**Status:** Accepted
+**Amends:** ADR-099 (training health warnings); extends the `run.json` contract of ADR-013 with `status: "failed"` and an `error` field
+
+**Context:** `save_epoch_checkpoint` compared `metric < best`. NaN never compares as an improvement, so a run whose validation loss became NaN saved no `best_model.pth`, counted every epoch against patience, trained to the end, and then the block failed with a `FileNotFoundError` that named neither the epoch nor the metric. Segmentation was worse: it ranks by mIoU, which stays a finite number for NaN logits (argmax picks class 0), so epoch 1 was saved as the "best" with NaN weights.
+
+**Scope:** classification, regression, segmentation, torchvision detection, the anomaly autoencoder and `GenericTaskEngine` (custom tasks, Level 1 loop). Each of the last three checks through `training_loop.require_finite` and writes its own failed `run.json` through `record_non_finite_failure`: detection checks `val_loss` and `map50`, the autoencoder `train_loss` (its only loss), the engine `train_loss` and the task's primary metric. They check before the epoch is added to the history, so the failed epoch is not counted in `total_epochs`. Ultralytics detection is out: the library owns that loop. PatchCore has no epoch loop.
+
+**Decision:** `save_epoch_checkpoint` raises `NonFiniteMetricError(name, epoch, value)` when the ranking metric is not finite, and `run_epochs` raises it for a non-finite `val_loss` when the ranking metric is another one. `run_epochs` first lets a pending best-checkpoint write finish. The fit of each task (`Trainer.fit` and `fit_training`, which serves regression and segmentation) writes the run's `run.json` with the epochs done and a `non_finite_metric` health warning (pt/en), then `record_non_finite_failure` sets `status: "failed"` and `error`, and replaces NaN/inf by null so the file stays valid JSON. The exception message always contains "non-finite", the metric and the epoch, and says whether a checkpoint exists: when an earlier epoch improved, `best_model.pth` of that epoch (`best_epoch`) is kept and the message and warning say so (`health.non_finite_metric_kept`); otherwise no checkpoint was saved. `ensure_checkpoint` is never reached, so it writes no weights. Both fits close the TensorBoard writer in a `finally`, even if writing `run.json` fails.
+
+**Consequences:** a diverged run stops in the epoch it diverged instead of spending the remaining epochs. The last resume state is the previous epoch's. The block needs no change: the exception reaches it with its own message.
+
+**Alternatives considered:**
+
+- *Keep training and warn at the end.* Wastes the remaining epochs and still leaves no checkpoint.
+- *Treat NaN as the worst possible score.* Keeps the run alive but would pick whatever finite epoch came before, hiding that the later epochs diverged.
+
+## ADR-183 — Figures in PDF/SVG and PNG at 300 dpi
+
+**Date:** 2026-11-10
+**Status:** Accepted
+**Amends:** ADR-116 (figure language); extends `OutputConfig`
+
+**Context:** `core/plotter.py` saved every figure as a 150 dpi PNG, which a journal rejects for line art, and replicate sets drew no figure at all although they already wrote a `.tex` table.
+
+**Decision:** `OutputConfig` gains `figure_formats` (subset of `png`, `pdf`, `svg`, deduplicated, never empty, default `["png"]`) and `figure_dpi` (72 to 1200, default 300). Every `MetricsPlotter` method takes keyword-only `formats` and `dpi` and saves through `save_figure`, which writes one file per format next to the given path (suffix replaced); dpi only affects PNG. The classification, regression, segmentation and anomaly blocks pass the config values; the `graphics` list of `run.json` names one file per figure (the PNG, else the first format asked). `MetricsPlotter.replicates_strip` draws one point per finished seed with the mean, and `write_replicates_strip` writes it beside the replicates `.tex` and from `run_replicates(figure_dir=...)`. No `schema_version` bump: both fields have defaults and a config without them loads as before.
+
+**Consequences:** the default PNG is now 300 dpi (larger files). Detection, the generic engine and the GUI test endpoint use the plotter defaults (PNG, 300 dpi) and do not read the new fields yet; the GUI has no selector or download for PDF/SVG. The heatmap of adjusted p-values for the paired matrix is left out.
+
+**Alternatives considered:**
+
+- *Bump `schema_version`.* No shape changes for old files, so a migration step would be empty.
+- *Keep 150 dpi by default.* Preserves file size but misses the paper-ready goal of the issue.
+## ADR-184 — `visionforge run` runs the GUI's multi-run strategies
+
+**Date:** 2026-11-10
+**Status:** Accepted
+**Relates to:** ADR-056 (replicates), ADR-061 (replicated comparison), ADR-045/052 (sweeps), ADR-050 (task K-fold), ADR-113/123/124 (run groups)
+
+**Context:** `visionforge run` trained one config. Replicates, the paired comparison, the standalone sweeps and the regression/segmentation K-fold existed only behind the GUI's HTTP routes, so the number a paper cites (mean ± CI, Holm-corrected paired tests) and its `.tex` table could not be produced from a script. The steps after the orchestrator (stopped/failed decision, report shape, summary files, History group) lived in private functions of `gui/api/routes.py`.
+
+**Decision:** a YAML whose top level is `strategy:` + `config:` is a strategy envelope. `strategy.kind` is `replicates`, `replicated_comparison`, `sweep` or `cv`; its other keys are validated by the same request model the matching route uses (`ReplicatesRequest`, `ReplicatedComparisonRequest`, `SweepRequest`, `TaskCvRequest`), and `config` is the task config unchanged. `cli_strategies.py` picks the task's `TaskRunner` (or K-fold function) and calls the orchestrator in `core`. The post-orchestrator step moved from the routes to `core/run_groups.py` (`finish_replicates`, `finish_replicated_comparison`, `finish_sweep`, `finish_kfold`, `resolve_seeds`, `write_group_summary`); the routes and the CLI both call it, and the routes keep their behaviour. A YAML without `strategy` takes the old path. Sweeps cover the tasks the GUI sweeps through a runner (detection, regression, segmentation, anomaly) and K-fold covers regression and segmentation; any other task fails before training with a message that names the alternative (the classification blocks). An invalid envelope or option exits with status 2, a job with no result with 1.
+
+**Consequences:** the CLI has no statistics of its own, so it cannot drift from the GUI. The CLI has no stop button and no profile: the token is `None` and the config's own `output` paths are used, with `outputs/models` for the group when the config names none. Custom tasks are not covered yet.
+
+**Update (#264):** a variant of the paired comparison or a sweep space that overrides `output.*` is refused by the CLI with status 2 and the GUI's message, through `core.run_groups.refuse_output_paths`, the check the routes now call too (ADR-114).
+
+**Alternatives considered:**
+
+- *A `strategy` key inside the task config.* Every task config loader would have to ignore it, and the options would mix with the task's fields.
+- *New subcommands (`visionforge replicates ...`).* Options on the command line instead of in the versioned YAML, and four parsers to keep in sync with the request models.
+
+## ADR-185 — The run queue and the started jobs' state have one owner: `gui/api/execution.py`
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Relates to:** ADR-132 (splitting `routes.py`), ADR-075 (run queue), ADR-163 phase 4 (lanes and per-job state), ADR-159 (event log)
+
+**Context:** ADR-132 asked for the queue and the running job's state to get "one explicit owner that routers command through methods". They still lived in `gui/api/routes.py`, next to 150 endpoints: `_JOB_STATES`, `_latest_run_id`, the lanes (`_RUN_QUEUE`, `_LANES`), the queue callbacks, the stop points, the SSE reader and the classification executor. Any handler in the file could assign them, and tests replaced them on `routes` (#204).
+
+**Decision:** `gui/api/execution.py` owns that state and has no FastAPI import. Only the queue adds or drops a job's state, through `_begin_job` and `_finish_job` (the lanes' `on_start`/`on_finish`); an executor writes only its own job's `run` and log, reached through `_job_state(run_id)`; everything else reads through `_run_state`, `_sse_generator` and `_LANES`, and commands the lanes through their methods. `_execute_experiment` moves with it and is split into `_block_types`, `_wire_block`, `_run_dir_of` and `_failed_run` (Sonar S3776), with the block imports still before the `try`. The routes that only read that state or command the lanes (`GET /api/experiment/{status,events,result/{id}}`, `GET /api/queue`, `DELETE /api/queue/{id}`) move to `gui/api/execution_routes.py`, included by `routes.py` where they used to be defined, so the OpenAPI document and the route order are unchanged. `routes.py` keeps submission (`_submit_job`, which reads `_MODELS_DIR`) and the other executors, which import `_job_state` from `execution.py`.
+
+**Consequences:** `routes.py` no longer defines or assigns the queue or a job's state; `routes.py` drops from 3612 to 3202 lines. A test that replaces `_JOB_STATES`, `_latest_run_id`, `_MAX_FINISHED_STATES` or `_execute_experiment` patches `execution`, and the `tests/gui/conftest.py` helpers take that module. `run_experiment` and `resume_run` look `execution._execute_experiment` up when the job starts, so a patch there reaches them. The other executors (detection, regression, segmentation, anomaly, groups, Colab, custom tasks) stay in `routes.py` for a later step.
+
+**Alternatives considered:**
+
+- *Keep re-exports in `routes.py`.* `routes._JOB_STATES.clear()` would still work, but `monkeypatch.setattr(routes, "_JOB_STATES", {})` would silently patch a name nobody reads.
+- *A class holding the state.* A cleaner interface, but a behaviour-bearing rewrite inside what should be a move; the module boundary already gives the single owner.
+
+## ADR-195 — Ultralytics (AGPL-3.0) is the optional `detection` extra
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Supersedes in part:** ADR-106 (for `ultralytics` only; the other six stay in `dependencies`)
+
+**Context:** ADR-106 made `ultralytics` a base dependency of an MIT package. It
+and `ultralytics-thop` are AGPL-3.0, so every `pip install visionforge-studio`
+installed AGPL code, and an organisation that does not accept the AGPL could
+not adopt VisionForge at all, even for classification, without buying
+Ultralytics' Enterprise License (#223). The code already tolerated its absence:
+`detection_trainer` binds `YOLO = None` when the import fails, and the
+`torchvision` detection backend (Faster R-CNN, RetinaNet, SSD, SSDlite) uses no
+AGPL code. The maintainer chose option B+C of #223.
+
+**Decision:**
+
+- `ultralytics>=8.3` leaves `dependencies` and becomes the only content of the
+  `detection` extra: `pip install "visionforge-studio[detection]"` (from a
+  checkout, `pip install -e ".[detection]"`).
+- Every path that needs it fails with one message (`detection.ultralytics_missing`,
+  pt/en) naming that install line and the `torchvision` alternative: training,
+  testing and ONNX export of an Ultralytics run, and the submit of a detection
+  config with `backend: ultralytics`, which is refused with 422 before it enters
+  the queue. The dataset check at submit no longer needs `ultralytics` for its
+  list of image formats.
+- `GET /api/system/info` reports `ultralytics_installed` and
+  `detection_install_command`. The detection form shows the install line under
+  the backend choice when Ultralytics is selected and absent, and the
+  `torchvision` option carries a "sem AGPL" / "no AGPL" badge.
+- The install smoke installs both variants (plain and `[detection]`) and checks
+  that only the second brings `ultralytics`; the wheel smoke checks the plain
+  wheel does not. The CI jobs that run the test suite install `[detection]`, as
+  they had `ultralytics` before.
+
+**Consequences:** the default backend in the detection form stays `ultralytics`
+(its configs and run records are unchanged), so a plain install sees the install
+line until the user picks `torchvision` or installs the extra. A plain install
+still brings torch, through `timm`, so `doctor --fix` keeps swapping an existing
+torch as ADR-107 describes.
+
+**Alternatives considered:**
+
+- *A: keep it a base dependency and only document the AGPL.* Leaves the
+  adoption problem in place.
+- *B without the badge.* The GUI would not tell which detection backend is free
+  of the AGPL; the badge costs one label.
+
+## ADR-194 — The "Code" tab for Ultralytics detection: our layer, then the library's loop (amends ADR-173)
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Amends:** ADR-173 (and ADR-181, which left detection on Ultralytics without a tour)
+
+**Context:** YOLO / RT-DETR is the default detection backend, and its "Code" tab
+said only that the loop is the library's. VisionForge still writes real code
+around it: the form becomes `YOLO.train` arguments, augmentation is switched
+off with neutral values, a callback records each epoch and honours the stop
+button. The library's own loop (`BaseTrainer._do_train`) is readable with
+`inspect`, but it is AGPL-3.0 code (ADR-195) and Ultralytics has no upper
+version bound here, so a release can move any line a note points at (#224,
+option b).
+
+**Decision:**
+
+- `GET /api/code-tour/detection` with `backend=ultralytics`, or no backend
+  (Ultralytics is the default), returns the tour `ULTRALYTICS_DETECTION`:
+  four sections of VisionForge's layer (`_ultralytics_train_kwargs`,
+  `_augmentation_kwargs`, `_fit_ultralytics`, `_record_ultralytics_epoch`)
+  whose notes are tested like every other tour, then `BaseTrainer._do_train`
+  of the installed Ultralytics.
+- A `Section` can name a `library`. Such a section carries
+  `library: {name, version, license}` (version from `ultralytics.__version__`,
+  license as its metadata declares it), and its notes are tolerant: a note
+  whose line this version lacks is dropped instead of failing. Every section
+  reports `notes_resolved` and `notes_total`. Without the `detection` extra the
+  library section is left out and the layer is still shown.
+- The page shows, above a library section, whose code it is, the version, the
+  license and how many notes found their line. The "only torchvision" reason
+  (`code.detection.only_torchvision`) is gone.
+
+**Consequences:** a test pins that every library note resolves on the installed
+version, so a bump that moves a line fails CI and names the note to fix, while
+users on another version still get the section with fewer notes. The source
+shown is read from the user's own install, so nothing of Ultralytics is
+redistributed.
+
+**Alternatives considered:**
+
+- *(a) Only VisionForge's layer.* Hides the loop where the epoch actually
+  happens, which is what the tab exists to show.
+- *(c) (b) plus an upper version bound on `ultralytics`.* Ties every user to
+  one release for the sake of the notes; the tolerant notes already degrade
+  gracefully.
+## ADR-191 — Unexpected 500s and validation 422s carry the page's language; what stays English on purpose
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Amends:** ADR-116 ("Still as written, on purpose or not yet")
+
+**Context:** after the four slices of ADR-116, two kinds of error still reached the page in a language nobody chose: the `500` of an action that failed unexpectedly (testing a run, Grad-CAM, batch prediction, ONNX export, a dataset download) was the bare `RuntimeError: x`, and every `422` carried Pydantic's English sentence. ADR-116 also left a list whose items were a mix of "on purpose" and "not yet".
+
+**Decision:** `gui/api/error_messages.py` owns both frames. `unexpected_error(exc, detail=None)` words a `500` as `errors.unexpected` (a sentence in the page's language ending in `Type: message`, or in the caller's already-redacted detail); the two remaining `HTTPException(500, f"...")` sites use it. An app-level handler for `RequestValidationError` reads `X-VF-Lang` from the request itself (a body that fails validation may never reach the router dependency that binds the language) and, for Portuguese, replaces the `msg` of 14 common Pydantic error types with a catalog sentence (`validation.<type>`) filled from the error's `ctx`; `type`, `loc` and `input` are unchanged, and a type not listed, or a `ctx` missing a value the sentence needs, keeps Pydantic's text. English keeps Pydantic's text as is. The response shape is FastAPI's, so the OpenAPI document does not change.
+
+**Closes the ADR-116 list.** Stay in English on purpose, with no further slice planned: the trainers' `logger.*` lines, the epoch and trial lines of the sheet, `STOPPED_NOTE`, the `description` of the schema fields, and the text of an exception raised by a library (it is the technical part of the `500` frame and of a failed run's `error`). Pydantic's messages outside the 14 types stay English too. The LaTeX captions and the Markdown export already follow `tr_artifact` (fourth slice).
+
+**Consequences:** a test that compared a `500` detail to `Type: message` now compares it to the framed sentence. A script without the header reads the Portuguese frame and Portuguese 422 messages; one that parses `msg` should send `X-VF-Lang: en` or read `type`.
+
+**Alternatives considered:**
+
+- *Translate every Pydantic error type.* Around a hundred, most of which no form in the page can produce; an untranslated `msg` is still correct English and its `type` is stable.
+- *Let the page word the 422 from `type` and `ctx`.* Every client of the API would need its own table; the catalog already exists on the server.
+
+## ADR-192 — Apple's GPU (MPS) is an experimental device
+
+**Date:** 2026-11-11
+**Status:** Accepted (experimental, not announced)
+**Relates to:** ADR-098 (determinism cost), ADR-099 (training-health warnings), ADR-107 (doctor never swaps a working torch)
+
+**Context:** on a Mac with Apple Silicon, PyPI's torch drives the GPU through Metal (MPS), but `DeviceConfig.kind` only knew `cpu`, `cuda` and `multi_cuda`: every Mac run trained on the CPU, and `visionforge doctor` recommended the CPU build of torch. Nobody on the project has a Mac to validate a run end to end.
+
+**Decision:** `DeviceConfig.kind` gains `"mps"`, probed by `utils.cuda.mps_available()` (never raises; only a real `True` counts, so a mocked torch never reads as a Mac). `resolve_device` honours it (`mps (Apple GPU)`, or `cpu (fallback: MPS unavailable)`), and `cuda`/`multi_cuda` on a machine without CUDA now fall back to MPS before the CPU, with the label `mps (fallback: CUDA unavailable)`. Detection uses the same order through one `DetectionTrainer._effective_kind()` for both backends; this also fixes `kind: cuda` on a CPU-only machine reaching Ultralytics as GPU `0`. `deterministic: true` on MPS adds the `mps_not_deterministic` warning to `run.json`, because the switch configures cuDNN and MPS kernels have no deterministic mode. `/api/device/info` reports `mps_available` (a flag, not an entry in `gpus`: no index or memory to show), the device selector offers "Apple GPU (MPS)" marked experimental, and the doctor counts MPS as a working GPU; its `--fix` no longer offers to replace a torch that already runs on the GPU (CUDA or MPS).
+
+Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS ignores it with a warning); `PYTORCH_ENABLE_MPS_FALLBACK` is not set, so an operator without an MPS kernel raises instead of running silently on the CPU; no MPS cache release between sweep runs. Regression, segmentation and anomaly runs pick the device through `resolve_device` but do not carry the determinism warning yet.
+
+**Consequences:** verified only with mocks (`torch.backends.mps.is_available`, `mps_available`, `torch.cuda.is_available`) on Windows; CI has no Mac. The feature is experimental and stays out of the README and the site until a run on a real Apple Silicon Mac is recorded here. A config that asked for `cuda` on a Mac now trains on the GPU instead of the CPU, and its numbers may differ between runs.
+
+**Alternatives considered:**
+
+- *Map `cuda` to `mps` silently.* The label would claim a device the run did not get; the `fallback` wording keeps `run.json` honest.
+- *Wait for a tester before merging.* The code paths are testable without a Mac, and keeping the feature unannounced costs nothing to people without one.
+## ADR-193 — The replicated comparison in the GUI: one axis, the form as baseline
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Relates to:** ADR-061 (replicated comparison), ADR-056 (replicates), ADR-044 (single-seed model comparison), ADR-114 (output paths), ADR-156 (strategy step), ADR-184 (CLI strategies)
+
+**Context:** every task had `POST /api/{task}/replicated-comparison` (and `/api/custom/{key}/replicated-comparison`), and `visionforge run` reached it from YAML, but no panel had a form for it and `frontend/src/api/client.ts` had no function for the route. The Holm-corrected paired matrix could only be started over HTTP or from the CLI. The panels' "compare" strategy is the single-seed model comparison of ADR-044.
+
+**Decision:** the strategy step of the six task panels (classification, detection, regression, segmentation, anomaly and custom tasks) offers **Comparação replicada** (`PanelStrategy` `"replicatedComparison"`), drawn by the reusable `ReplicatedComparisonCard`. The variants lie on one axis: one dot-path and 1 to 3 values besides the form's own, so 2 to 4 variants. The form as it stands is the variant `baseline`, with no overrides; each other variant is named `<last path segment>=<value>`, with characters outside `[A-Za-z0-9._-]` turned into `-`, because the backend suffixes the label to the run name and it becomes a folder. A value that parses as a number is sent as one, otherwise as text (the sweep editor's rule). Seeds are a count (2 to 20) or an explicit list (2 to 20, no repeats); 20 is the backend's `n_replicates` cap, held for the explicit list too since the cost is variants × seeds. The card shows that cost and, when Wilcoxon's floor `2 / 2**n` is above alpha 0.05 (fewer than 6 seeds), says no difference could come out significant: the condition `significance.min_achievable_p` and the report's `underpowered` use. Alpha stays the backend default and the metric list is the one Réplicas offers (accuracy for classification). `buildReplicatedComparisonPayload` validates and shapes the request, mirroring the backend's 422s (fewer than 2 variants, repeated seeds, an `output.*` path); `runReplicatedComparison` and `runCustomReplicatedComparison` post it, and App queues it with `blockKind: "replicated-comparison"`, the strategy name the queue reports. Classification sends `block: "classification"`, as Réplicas does, and Colab stays off with the reason while the comparison is picked. The backend is unchanged.
+
+**Consequences:** when the job ends, the results view reads the report as the History group it becomes (`comparisonGroupFromReport`, a port of `_copy_comparison_group`) and draws it with `RunGroupDetail`, the component of the group's detail in History: variants with mean ± CI95, the paired tests with the Holm verdict and the power flag, and the seeds. Its button opens the group in History (the group's id is the job's run id), and a seed's button opens that seed. A value equal to the form's own is not caught: it trains a copy of the baseline. A path the config lacks is caught only by the backend's 422. Variants that change several fields at once are left to the YAML of `visionforge run` and to HTTP.
+
+**Alternatives considered:**
+
+- *Free variants, several fields each.* More general, but a table of variants × fields is a second editor to validate, and one axis covers the paper's ablations one factor at a time.
+- *Expose alpha.* The report records the alpha used, but a GUI knob invites tuning it after seeing the p-values; 0.05 stays the default of the route.
+## ADR-190 — The user-task and user-model extension API is stable within a minor release, and a test pins its signatures
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Relates to:** ADR-058 (custom tasks), ADR-048/049 (custom models), ADR-039 (config schema versions)
+
+**Context:** `TaskSpec`, `register_task`, `register_model` and the Level 2 `ctx` are the extension points a researcher writes code against (ADR-058, ADR-048). The built-in tests exercise them only through the toy specs in `tests/tasks`, so renaming `compute_loss`'s `model` parameter, or dropping a hook, would keep every built-in test green and break every custom task in the wild. The guides in `docs/custom/` said nothing about how long these names hold.
+
+**Decision:** Before 1.0 the listed names, parameters and defaults may change only in a minor release, with a "Changed" entry in the CHANGELOG, never in a patch. `docs/custom/TASKS.md` and `MODELS.md` get a Stability section that lists them. `tests/tasks/test_task_api_contract.py` locks them with `inspect.signature`, `TaskSpec.__abstractmethods__`, the dataclass fields of `TaskInfo` and `TaskRunContext`, and `BaseTaskConfig.model_fields`; annotations are not locked. Changing the API means editing that test and the guides in the same commit. No `TASK_API_VERSION` constant is added: with one maintainer and a CHANGELOG entry per change, a number would be a second place to forget; it can be added with 1.0 if third-party task packages appear.
+
+**Consequences:** A rename fails CI with the old and new signature side by side. Adding an optional parameter with a default or a new optional hook is still a change to the test, so it is a visible decision. The engine's internals and any name not listed stay free to change.
+
+**Alternatives considered:**
+
+- *A `TASK_API_VERSION` integer checked at load time.* Useful once packages are installed by others; today it only adds a number to bump.
+- *Only the prose promise.* Nothing would fail when the prose and the code drift.
+
+## ADR-186 — The pytest hook runs on `git push`, not on every commit
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Relates to:** ADR-060 (the `slow` marker and the fast suite kept "seconds-fast" for the pre-commit hook)
+
+**Context:** The local `pytest` hook in `.pre-commit-config.yaml` has `always_run: true` and no `stages`, so every `git commit`, including a docs-only one, ran the whole fast suite: 329 s in the 2026-11-09 audit, 5 to 8 minutes in practice. ADR-060 assumed that suite stayed seconds-fast. The cost pushes contributors to `--no-verify`, which skips ruff, codespell and mypy as well. CI already skips the hook (`SKIP: pytest`) and runs the suite in its own job.
+
+**Decision:** The `pytest` hook gets `stages: [pre-push]`. ruff, ruff-format, codespell and mypy stay on `pre-commit`. This supersedes in part ADR-060: the fast suite is still the one the hook runs, but it runs on push, not on commit. CONTRIBUTING documents `pre-commit install --hook-type pre-commit --hook-type pre-push`, to be run in every clone and worktree, because hooks are installed per checkout.
+
+**Consequences:** A commit takes seconds and a push takes the suite's time. A clone that ran only `pre-commit install` never runs the tests locally; CI still does. The release bump (`bump-my-version`) commits through the commit stage only, so it no longer waits for the suite.
+
+**Alternatives considered:**
+
+- *Keep the hook on commit but filter by changed files.* A change to any `src/` file still runs everything, and the filter has to track which paths affect which tests.
+- *Remove the hook and rely on CI.* The suite would then run first on GitHub, after a push, which is a slower loop than a local one.
+## ADR-187 — The interval of a paired difference inverts the test beside it
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Amends:** ADR-061 (item 1: "a bootstrap CI of the difference")
+
+**Context:** `paired_comparison` reported a percentile bootstrap interval of the paired differences next to a paired t or Wilcoxon p-value. With few seeds the percentile bootstrap under-covers (it can only resample the values it has), so the two disagreed: in `research/seed_variance/results/summary.json` four cells have an interval excluding zero beside p between 0.06 and 0.09 (n = 10). The GUI report, `run.json` and the LaTeX comparison table showed both (#162).
+
+**Decision:** the interval is the dual of the test that produced the p-value, at 95% (the comparison's alpha = 0.05). `paired_t`: the Student-t interval of the mean difference, `mean ± t(0.975, n-1)·sd/√n`. `wilcoxon`: the Hodges-Lehmann interval, `[W(k), W(M+1-k)]` over the `M = n(n+1)/2` sorted Walsh averages, with `k` the largest integer such that `P(T+ ≤ k-1) ≤ 0.025` under the exact null distribution of the signed-rank statistic (built by convolution, no ties). `PairedComparison` gains `ci_method` (`"t"` or `"hodges_lehmann"`), `ci_estimate` (the mean, or the Hodges-Lehmann pseudo-median the interval brackets) and `ci_confidence` (the coverage actually attained: the exact distribution is discrete, so it is at least 95%). Below 6 pairs no Hodges-Lehmann interval reaches 95% (`2/2^n > 0.05`), so `ci_low`/`ci_high` are `null`, the same reason the test is flagged underpowered. The LaTeX caption names the method of each interval; a report written before this ADR has no `ci_method` and is labelled percentile bootstrap. `bootstrap_ci` stays for the replicate aggregates (ADR-061 item 2), and the seed-variance study keeps its pre-registered percentile interval.
+
+**Consequences:** the interval excludes zero exactly when p < 0.05 for the paired t, and for the Wilcoxon when there are no ties or zero differences (scipy's p is then exact). With ties or zero differences scipy's p uses the normal approximation while the interval keeps the exact critical value; the test suite accepts disagreement in at most 5% of tied samples (measured: 1.7% with differences rounded to one decimal). Numbers already shown for a comparison change when it is recomputed. `paired_comparison` and `comparison_matrix` no longer take a `seed`.
+
+**Alternatives considered:**
+
+- *BCa or bootstrap-t for every test.* Better coverage than the percentile bootstrap, but still not the dual of the test: the disagreement shrinks without disappearing, and it remains stochastic.
+- *Keep the bootstrap with an under-coverage warning below 20 pairs.* Leaves the contradiction on screen for every realistic seed count.
+## ADR-188 — A public bundle leaves out `weights/*.pt` and rewrites `config.*`
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Amends:** ADR-174 (public run.json), ADR-175 (no local path leaves the computer)
+
+**Context:** ADR-174 cleaned only run.json in a public bundle. Ultralytics pickles its `train_args` (`data`, `project`, absolute paths) into `weights/best.pt` and `weights/last.pt`, and `config.json`/`config.yaml` went in as written, so a Zenodo draft could still carry the account name (#164).
+
+**Decision:** `export_experiment_bundle(..., public=True)` leaves out every `.pt` under a `weights/` folder and notes each one in the manifest ("checkpoint left out of a public bundle: it may embed local paths"); run.json then names the model as `null`. A member named `config.json`, `config.yaml` or `config.yml` is parsed and written back through `without_local_paths`, with a manifest note; one that does not parse or exceeds 16 MB is left out with its own note. The files on disk are untouched, the private bundle is unchanged, and the manifest keeps `format_version` 1, so earlier bundles still verify. A test exports a run whose checkpoints and configs name the home folder and greps every member of the zip for it.
+
+**Consequences:** a public bundle of a detection run carries no checkpoint; whoever needs the weights shares the private bundle or the Hub export. State-dict checkpoints (`best_model.pth`, the other tasks) still go: they hold tensors only. History, predictions and other members are not rewritten.
+
+**Alternatives considered:**
+
+- *Rewriting `train_args` and keeping the checkpoint.* Needs unpickling a checkpoint to edit it, and any other path ultralytics adds later would leak again.
+
+## ADR-189 — Offline mode refuses every non-loopback socket
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Extends:** ADR-120 (update check), ADR-180 (third-party telemetry in one module)
+
+**Context:** the README promises that nothing leaves the computer unless the researcher asks, but that held only by reading the code: no switch made it a guarantee and no test trained a model with the network cut off (#226).
+
+**Decision:** `visionforge gui --offline`, `visionforge run --offline` or `VISIONFORGE_OFFLINE=1` (any value but empty or `0`) call `third_party_privacy.enable_offline_mode()` right after parsing, before `apply_opt_outs` imports ultralytics. It sets `HF_HUB_OFFLINE`, `YOLO_OFFLINE` and `VISIONFORGE_NO_UPDATE_CHECK` to `1`, overriding the user (a guarantee, not a default), sets `VISIONFORGE_OFFLINE=1` for child processes, and installs a socket guard: `socket.socket.connect`, `connect_ex` and `sendto` refuse an `AF_INET`/`AF_INET6` destination that is not a loopback address or `localhost`, and `getaddrinfo`, `gethostbyname` and `gethostbyname_ex` refuse a name other than an IP literal, `localhost` or this machine's own name, so no DNS query leaves either. A refusal raises `NetworkBlockedError`, a `ConnectionRefusedError`, so network clients handle it as any failed connection. `tests/integration/test_offline_guard.py` trains one epoch of classification on CPU (resnet18 without pretrained weights, a synthetic dataset) under the guard, checks that external connections fail and loopback works, and starts `visionforge gui --offline` and reads `/api/health`.
+
+**Consequences:** with offline mode on, downloads of weights or datasets fail at once with a connection error instead of hanging. The guard covers this Python process; a child process inherits the environment switches and, if it is VisionForge's CLI, turns the guard on itself, but a native library that opens its own sockets, or asyncio's Windows proactor connecting to an IP literal, is not intercepted.
+
+**Alternatives considered:**
+
+- *Only the environment switches.* Each SDK honours its own, and a new dependency would reach the network unnoticed; the guard makes the promise checkable.
+- *A firewall rule.* Stronger, but needs administrator rights and differs per OS.
+
+## ADR-197 — MLflow and W&B export every task from its finished run.json
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Amends:** ADR-170 (MLflow), ADR-172 (Weights & Biases)
+
+**Context:** #286. Both exporters took classification training only. Regression, segmentation, anomaly, detection and custom tasks run their own trainers, which have no tracker hooks, but all of them write the ADR-013 `run.json` with `config`, `metrics` and per-epoch `history`.
+
+**Decision:**
+
+- The profile switches are unchanged. A single training of any other task (`/regression/run`, `/segmentation/run`, `/anomaly/run`, `/detection/run`, `/custom/{key}/run`) is sent once its executor ends (`gui/api/tracker_exports.exported`): `core/run_trackers.export_run_record` opens each tracker on the run folder, replays every `history` row as one epoch with the `run.json` names (`train_loss`/`val_loss` keep the chart keys `loss/train`/`loss/val` of ADR-170) and closes it as `FINISHED`, or `KILLED` when the stop cut it. Classification keeps its live per-epoch export.
+- MLflow attaches the `run.json` as before. The W&B summary is the final `metrics` under their `run.json` names: the shared public list, plus `best_val_miou` and `box_loss`, which only the private trackers show (the Hub card keeps its list), and, for a custom task, every finite number under a plain `[A-Za-z0-9_]` name, since the task's own code names them and the history already carries them.
+- The History retry no longer refuses a non-classification run: the exporter's sidecar already proves it was exported.
+
+**Consequences:** the other tasks reach the trackers after the run, not live; a run that raises is not exported (no sidecar, so nothing to retry); sweeps, K-fold, comparisons and resumed runs of the other tasks are not exported, as for classification. The live events end before the upload, but the next queued job waits for it (a stuck W&B call, up to its timeout).
+
+**Alternatives considered:**
+
+- *Tracker hooks in each task trainer.* Live charts, but five trainers and the custom-task engine change, for the same final record.
+- *Widening the shared public list.* The Hub card would publish `box_loss`, which it leaves out on purpose.
+## ADR-196 — Starting a run leaves `routes.py`: submission, the single-run endpoints and the Colab objects
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Relates to:** ADR-132 (splitting `routes.py`), ADR-185 (queue and job state in `execution.py`), ADR-163 (Colab), ADR-164 (Drive consent), ADR-058 (custom tasks)
+
+**Context:** After ADR-185, `gui/api/routes.py` still held everything that starts one run: `_submit_job` and the training-stack preload, `POST /api/experiment/run`, the standalone tasks' schema and `run` endpoints with their submit-time dataset checks and executors, the Colab run with its executor, and the custom-task endpoints. It also created and owned the Colab objects (`_COLAB_CLI`, `_COLAB_LOGINS`, `_COLAB_JOBS`, `_DRIVE_CONSENTS`). The file was 3202 lines (#204).
+
+**Decision:** `gui/api/submission.py` holds `_submit_job`, `_task_label_from_config`, the training stack (`_TRAINING_STACK`, `_DETECTION_STACK`, `_TASK_STACK`, `load_training_stack`) and `profile_dependency`, which turns the resolver `routes.py` owns into the `X-VF-Profile` dependency of a split-out router; it holds no state. A job submitted without a profile is labelled with the default profile's slug, which is all `default_profile(_MODELS_DIR)` gave it, so `_submit_job` no longer reads `_MODELS_DIR`. `gui/api/training_routes.py` holds `POST /api/experiment/run`, `/api/{detection,regression,segmentation,anomaly}/{schema,run}`, the `_check_*` dataset checks and the four executors, which now share `_execute_block`. `gui/api/colab_run_routes.py` holds `POST /api/colab/experiment/run`, `/api/colab/drive/continue`, `_execute_colab` and becomes the owner of the Colab objects; `routes.py` passes three of them to `build_colab_router`. `gui/api/custom_task_routes.py` holds `GET /api/tasks`, `/api/custom/{key}` (hide, unhide, delete, schema, run), `GenericTaskEngine` and `_execute_custom_task`. `routes.py` includes these routers where the routes used to be defined, so the OpenAPI document and the route order are unchanged; it keeps the profile resolution and `_tracker_factories` (both read `_PROFILES_DIR`/`_MODELS_DIR`) and passes them in.
+
+**Consequences:** `routes.py` drops from 3202 to 2066 lines and keeps the strategies (sweep, compare, K-fold, replicates, replicated comparison) and the per-run actions. Every caller, `routes.py` included, looks `submission._submit_job` up at call time, and `resume_run` looks the executors up in `training_routes`, so a test patches the module that defines a name: `submission` for `_submit_job`, `cuda_context_broken` and the stack; `training_routes` for the executors; `colab_run_routes` for the Colab objects, `_execute_colab`, `_drive_source` and `_colab_lane_of`; `custom_task_routes` for `GenericTaskEngine`, `_execute_custom_task` and `_get_custom_task_or_404`. `routes.py` re-exports none of them. The check that no route imports training code before `load_training_stack` now reads the three new route modules too.
+
+**Alternatives considered:**
+
+- *Keep the Colab run in `routes.py`.* No state would change owner, but `run_experiment` and the task runs sit on both sides of it, so the split would need one more include and the Colab executor would stay behind; the Colab objects belong with the code that drives them.
+- *Keep re-exports in `routes.py`.* As in ADR-185: `monkeypatch.setattr(routes, "_submit_job", ...)` would silently patch a name nobody reads.
+
+## ADR-198 — Torch floors per hardware extra, a cu130 extra, and one lock fork per extra
+
+**Date:** 2026-11-12
+**Status:** Accepted
+**Amends:** ADR-005 (hardware extras)
+
+**Context:** #302. The lock held a single torch, 2.7.1+cu118, for every extra: the extras had no declared conflict, so uv resolved them together and kept the first index. Dependabot flags torch below 2.10 (remote code execution through an untrusted checkpoint, GHSA-63cw-57p8-fm3p), below 2.9.1 and up to 2.12.1 (memory corruption, low). The PyTorch indexes stop at different versions: cu118 at 2.7.1, cu121 at 2.5.1, cu124 at 2.6.0, cu128 at 2.11.0, cu126 and cu130 at 2.14.1, cpu at 2.15.0.
+
+**Decision:**
+
+- `[tool.uv] conflicts` declares the seven hardware extras mutually exclusive, and `[tool.uv.sources]` maps each extra to its index (`extra = "cu130"`), so the lock resolves one torch per extra. CUDA sources apply on Linux and Windows only; a Mac with a CUDA extra, or any install with no extra, takes torch from PyPI.
+- Floors: `cpu`, `cu126` and the new `cu130` require torch>=2.13 (no open advisory); `cu128` requires torch>=2.10, the highest floor its index can meet, leaving only the low `torch.jit.script` advisory. `cu118`, `cu121` and `cu124` keep torch>=2.3: no fixed wheel exists on their indexes, so they stay as legacy extras for drivers too old for CUDA 12.6, and the README says what they miss.
+- `constraint-dependencies = ["setuptools>=84.1"]`: the old torch forks otherwise pull setuptools 81, which has its own advisory.
+- `visionforge doctor` recommends `cu130` for a driver that reports CUDA 13.0 or newer; 12.8 and 12.9 keep `cu128`.
+
+**Consequences:** verified on the RTX 5060 Ti (driver 621.01, sm_120) with torch 2.14.1+cu130: every task trained one epoch on cuda (6/6) and `visionforge selftest` passed every case on CPU. The lock records old torch versions for the legacy extras, so Dependabot keeps those alerts open; they describe what those extras install. Two GPU runs of the same segmentation config differ in the fourth decimal of mIoU even with `deterministic=True`: the project sets `cudnn.deterministic`, not `torch.use_deterministic_algorithms`, and the bilinear upsampling backward is not deterministic on CUDA (tracked separately; REPRODUCIBILITY.md already makes no GPU bit-identity claim).
+
+**Alternatives considered:**
+
+- *Dropping cu118/cu121/cu124.* Clears every alert, but leaves machines whose driver predates CUDA 12.6 with CPU only.
+- *A torch>=2.10 floor for every extra.* Unsatisfiable on the legacy indexes, and it leaves the 2.12.1 advisory open on the indexes that can clear it.
+
+## ADR-199 — `deterministic=True` also turns on PyTorch's deterministic kernels
+
+**Date:** 2026-11-12
+**Status:** Accepted
+**Amends:** ADR-098 (the determinism switch), ADR-121 (rejected strict mode)
+
+**Context:** #305. On the RTX 5060 Ti with torch 2.14.1+cu130, two runs of one segmentation config with seed 0 and `deterministic=True` gave mIoU 0.4779 and 0.4780. `_seed_everything` set only `cudnn.deterministic`; the CUDA backward of bilinear upsampling (the segmentation decoder) accumulates with `atomicAdd`, and five backward passes of the same input gave different gradients. Under `torch.use_deterministic_algorithms(True)` they were identical. ADR-121 rejected strict mode because it raises on operations without a deterministic kernel; it had measured classification only.
+
+**Decision:** with `deterministic=True`, `_seed_everything` also calls `torch.use_deterministic_algorithms(True, warn_only=True)` and sets `CUBLAS_WORKSPACE_CONFIG=:4096:8` unless the user set it; with `False` it turns strict mode off. `warn_only` keeps an op that has no deterministic kernel running, with a PyTorch warning, instead of stopping the run.
+
+**Consequences:** the six tasks trained one epoch on cuda twice gave the same metrics both times (they did not for segmentation before). Two ops still warn: `nll_loss2d_forward` (segmentation's cross-entropy) and torchvision's `roi_align` backward (Faster R-CNN detection); their runs repeated here, but nothing guarantees it, and REPRODUCIBILITY.md says so. Strict mode is process-wide, so the GUI server sets it again at the start of every run. A test fails if the switch stops turning strict mode on or off, and, on a CUDA machine, if bilinear gradients stop repeating.
+
+**Alternatives considered:**
+
+- *Strict mode without `warn_only`.* Detection would stop at the first `roi_align` backward.
+- *Replacing bilinear upsampling with a deterministic layer.* Changes the model, and every past segmentation result with it.
+
+## ADR-200 — Private Comet export, on the W&B contract
+
+**Date:** 2026-11-12
+**Status:** Accepted
+**Extends:** ADR-172 (Weights & Biases export), ADR-197 (every task from run.json)
+
+**Context:** #287. Groups that follow their runs on Comet want the same opt-in, private export W&B has. `comet_ml` 3.58.12 collects far more by default than `wandb`: importing it hooks the import of torch and other frameworks, starts Sentry error reports (with `sys.executable` and the installed packages) for half of the processes, and replaces `sys.excepthook`; a new `Experiment` logs code, git metadata and patch, console, CLI arguments, packages, host, user, IP, CPU, GPU, disk and network; its `end()` posts a summary notification titled with `getpass.getuser()`; on comet.com its internal reporting posts SDK tracebacks. A missing project is created with the server's default visibility.
+
+**Decision:**
+
+- A profile setting `comet: {enabled, project, workspace}`, off by default; an empty `workspace` is the key's default one. Names are lower-case `[a-z0-9][a-z0-9._-]{0,99}`, since Comet keeps project names in lower case. The API key is saved like the W&B key (ADR-171/172), in `<config>/comet-tokens/<hash of profile>`; the page only learns whether one exists.
+- Same contract as W&B: classification live per epoch through `core/run_trackers.py`, the other tasks from `run.json` when the job ends (ADR-197), every call a best-effort boundary, failures in `comet.json` beside the run, and the History's retry at `POST /api/comet/runs/{run_id}/retry`.
+- **Private before the first upload.** With `comet_ml.API(api_key=<profile key>, cache=False)`, the project is read with `get_project`, or created with `create_project(..., public=False)` and read again; anything but `isPublic: false` is refused and left as it is.
+- **Nothing ambient.** Before the import the process gets `COMET_DISABLE_AUTO_LOGGING=1`, `COMET_ERROR_TRACKING_ENABLE=false` and `COMET_INTERNAL_REPORTING=false`. `comet_ml.start(api_key=..., workspace=..., project_name=..., experiment_key=..., mode="get_or_create", online=True, experiment_config=ExperimentConfig(...))` gets every collector as an explicit `False` (`log_code`, `log_graph`, `parse_args`, `log_git_metadata`, `log_git_patch`, `log_env_details`, `log_env_gpu/host/cpu/network/disk`, `auto_output_logging`, `auto_param_logging`, `auto_metric_logging`, `auto_log_co2`, the histograms), `display_summary_level=0` and `disabled=False`: an explicit argument wins over `COMET_*` variables and `.comet.config` in the SDK's own precedence. The experiment's `send_notification` is replaced with a no-op before `end()`.
+- **What leaves:** the public parameters, the epoch metrics at `step=epoch`, the final public metrics (the W&B list) and `visionforge_status`. The SDK adds `curr_step`, `curr_epoch` and `process duration`.
+- The experiment key is the first 32 hex digits of the hash of profile and run folder. Comet keeps a repeated step, unlike W&B, so `comet.json` records `synced_epoch`, the last epoch Comet confirmed with `flush()` at the end; a retry sends only later epochs.
+- The SDK keeps one live experiment per process and ends the previous one when another starts, so a second Comet export while one is open fails with `CometBusyError` and waits for the retry.
+- Optional extra `visionforge-studio[comet]`, pinned to `comet-ml==3.58.12`; like the other exporter extras it stays out of the license gate.
+
+**Consequences:** checked with the real `comet_ml` 3.58.12 offline, with the same `ExperimentConfig`: the archive held only the parameters, metrics, name and status, without user, host or path; Sentry was not initialised and no import hook was installed. The online path (account calls, private project, upload, retry) is covered only by an in-memory fake: it needs a real key. If the server dies between an epoch and the final flush, a retry sends those epochs again and Comet shows them twice. The three environment switches stay set for the whole process. The server address is the SDK's (`COMET_URL_OVERRIDE` moves it); a self-hosted Comet was not tried. `comet_ml` pulls `sentry-sdk`, `dulwich` and `everett` (MPL-2.0) into the environment of whoever installs the extra.
+
+**Alternatives considered:**
+
+- *Let `comet_ml.start` create the project.* Its visibility would be the workspace default, which this code cannot see beforehand.
+- *Set an existing public project to private.* It would change a project the user configured on purpose, as in ADR-172.
+- *Ask Comet which steps it already has before a retry.* More of the private REST surface for each retry; the sidecar is local and enough.
+- *`Experiment`/`ExistingExperiment` directly.* `start(mode="get_or_create")` already picks between them by key and passes the same explicit settings to both.
+
+## ADR-201 — A run's History entry is its results page
+
+**Date:** 2026-11-12
+**Status:** Accepted
+**Amends:** ADR-193 (the results view sends to History), ADR-113 (run groups in History)
+
+**Context:** a finished training had two places that showed its numbers: the results view the training sheet opened ("Ver resultados") and the run's detail in History. The first had the numbers and nothing to do with them; the second had every action (rerun, bundle, publish, ONNX, tests) under a wall of paths and library versions, with the metrics at the bottom. Charts were drawn by two separate hand-written SVGs with only the min and max labelled, and no way to read a value.
+
+**Decision:**
+
+- "Ver resultados" opens History on the finished job. `lib/history-target.ts` names the entry from the result the server sent: the folder of `report.train` / `report.detection` / a custom task's `run_dir`; the job id for a strategies job (its report carries `report_dir`); and for classification's K-fold, search and model comparison, whose group id carries a stamp the result does not have, the group of one of its units. History retries the lookup four times, 750 ms apart, since the entry is written as the job closes.
+- A job History cannot name (no folder in the report, a group that was not written, a search run on Colab whose units stayed on the VM) keeps the results view. The view is not removed.
+- The run detail reads as a results page (`lib/run-detail-layout.ts`): header, metrics with the task's headline number first, charts, actions, tests, then the reference blocks folded. Dataset and training start open; location, environment and pipeline wait for a click.
+- Actions are grouped by intent (reuse, download, publish, use the model) and every one has an icon; the publish targets carry their brand marks (`components/ui/BrandIcons.tsx`, paths from simple-icons 16.37.0, CC0; Comet has no mark there and uses a generic one).
+- One line chart (`components/ui/LineChart.tsx`, pure SVG, no dependency) for the live tab, the comparison and the run detail. It joins the measured points as they are, with no smoothing or interpolation, and breaks where a value is missing. Hover, touch or the arrow keys snap to the nearest epoch and show each series' exact value. The run detail charts train against validation for the quantities its task leads with (`lib/run-curves.ts`); the matplotlib figures stay below, as the files a paper uses.
+- A value under 5e-4 is written with an exponent, so a learning rate is not shown as `0.000`.
+- Text in History is at least 13 px, mono labels at least 11 px.
+
+**Consequences:** one place to read a run and act on it. The results view remains for the jobs above and for a server whose History write failed.
+
+**Alternatives considered:**
+
+- *Keep the results view and add the actions to it.* Two copies of the same page to maintain, and History would still open on the old layout.
+- *A charting library.* The charts need lines, a grid and a tooltip; a dependency of several hundred kB for that is not justified in a bundle that is committed.
+- *Smooth the lines.* A smoothed curve shows values the run never measured.
+
+## ADR-202 — Profiles: no "default" in the interface, the picker on every load, integrations inside the profile
+
+**Date:** 2026-11-12
+**Status:** Accepted
+**Amends:** ADR-126 (the picker asks once per session), ADR-114 (profiles are output folders)
+
+**Context:** the welcome showed the legacy-layout profile as "Padrão" / "<name> (padrão)", which read as a profile somebody else had created. The picker asked once per browser tab, so a shared machine reloaded into the last person's profile. Each profile row in the picker carried the MLflow, W&B and Comet checkboxes with their paragraphs, which buried the one question the screen asks. A fresh install creates nothing on disk and reports one unnamed profile; that part was already right.
+
+**Decision:**
+
+- The storage of ADR-114 does not change: the first person's profile is still the legacy layout (`outputs/` itself), which is what lets runs made with the CLI show up in History. `is_default` stays in the API as a storage detail.
+- The interface never says "default". That profile is shown by its name like any other. One with no name beside named profiles (older data) is listed as "Sem nome", and choosing it asks for the name.
+- Entry rules (`entryStep` in `lib/profile.ts`): no profile has a name → name and pronoun, nothing else on the screen; exactly one profile → straight in; more than one → the picker on every page load, with the last one used preselected and focused. The per-tab memory is removed.
+- The picker lists names only. A profile is created from the picker, or from the profile menu when there is only one.
+- The header has one profile chip, present on a single-profile install too. Its menu holds the integrations as switches (MLflow, Weights & Biases, Comet, each with its fields when on), "Trocar nome", and "Trocar de perfil" or "Novo perfil". The settings calls and their validation are the ones of ADR-170, ADR-172 and ADR-200.
+
+**Consequences:** reloading on a shared server costs one click or Enter. A browser that had a name saved and picks an unnamed profile is now asked to confirm the name instead of entering silently.
+
+**Alternatives considered:**
+
+- *Give the first profile its own folder under `outputs/profiles/`.* It would hide every CLI run from the GUI's History and needs a data migration; the request was about what the screen says.
+- *Hide the unnamed profile when others exist.* Its runs would become unreachable from the interface.
+
+## ADR-203 — Colab: the Drive dataset folder is chosen in the panel
+
+**Date:** 2026-11-12
+**Status:** Accepted
+**Extends:** ADR-164 (Colab datasets from the user's Google Drive)
+
+**Context:** in Drive mode the dataset path came from the form's `data.base_dir` and the user had to know how a local Drive for desktop path maps to `/content/drive/MyDrive/...`. The panel explained it in paragraphs. The accelerator was a native `<select>`.
+
+**Decision:**
+
+- `GET /api/colab/drive/folders?rel=&my_drive_root=` lists the sub-folders of a folder inside the local "Meu Drive" root: directory names only, sorted, at most 500 with a `truncated` flag; files, links, junctions, dot-folders and Windows hidden or system folders are left out. The answer carries the local path and the Colab path it translates to (`remote_path`). With no root found it answers `root: null` and an empty list.
+- `rel` is refused when it has `..`, `.`, `:` or is absolute, and the path is resolved before the containment check. Both routes take requests from this machine only, with the Origin check the folder opener uses (403 otherwise). 400 outside the Drive, 404 missing, 409 unreadable.
+- `POST /api/colab/drive/open` opens that folder in the file manager through the existing opener.
+- `ColabDriveSource` gains an optional `path`; empty keeps `data.base_dir`, so older requests behave as before.
+- The panel has three titled sections (account and usage, train on Colab, runtimes), one line per control and the longer explanations behind a closed disclosure. The folder browser is in the panel: breadcrumb from "Meu Drive", click to enter, "Usar esta pasta". With no Drive found it shows three steps and the typed-root fallback of ADR-164.
+- No Google Drive API and no new OAuth scope: browsing Drive on the web would need access the project does not ask for (ADR-164).
+
+**Consequences:** the root search probes `X:\My Drive` and `X:\Meu Drive` on every drive letter, so a disconnected network drive can delay the answer. Detection on a machine with Drive for desktop installed is still not exercised: the browser was checked with a typed root pointing at a local folder. The typed root of ADR-164 is whatever folder the person names, so the listing is confined to that folder, not to a verified Drive; what keeps another site or machine out is the loopback and Origin check, the same trust the dataset picker and explorer already have.
+
+**Alternatives considered:**
+
+- *The native folder dialog (tkinter), as the dataset picker uses.* It opens anywhere on the disk and says nothing about the Colab path; the browser is confined to the Drive and shows the translation.
+
+## ADR-204 — One "live code" tab: the run as steps, with the real code of the step it is in
+
+**Date:** 2026-11-12
+**Status:** Accepted
+**Amends:** ADR-118 (the training story tab), ADR-173 and ADR-181 (the "Code" tab)
+
+**Context:** the training sheet had two tabs for the same question. "Como funciona" drew an illustration with the stage and the live numbers; "Código" listed every function of the training with all its notes open, in a fixed order, with no relation to what the run was doing. A newcomer had to connect the two alone, and a specialist had to scroll to the function that mattered.
+
+**Decision:**
+
+- The two tabs become one ("Código ao vivo"; the tab id stays `story`, so anything that stored it keeps working). Left: the run as steps (data, model, loss, train epoch, validation, test and report), one plain sentence each, with the live figures on the running step. Right: the real code of the selected step, read from the installed package as before (ADR-173).
+- Every tour section declares its `step` and a one-sentence `summary` in both languages (`core/code_tour.py`, `STEPS`); the API sends both, and a test requires every section of every task to have them.
+- **Following.** While the run goes, the running step is selected and its code is marked "trecho em execução". Choosing another step or function pauses following; "voltar ao que está rodando" resumes it. After the run ends nothing is marked.
+- **The position is what the event stream proves** (`lib/run-steps.ts`), as in ADR-118, and never a line: a loop passes its lines thousands of times a second and no tracer runs. Queued, finished, interrupted or failed marks nothing. Before `start`, or between two units of a job, the group data + model + loss is marked, since the stream cannot tell them apart. After `start` or a non-final `epoch_end`, the group train + validation; while `batch` is the newest event, train alone. The last epoch, `end`, or the last unit closed marks test. PatchCore's phases map to train (features, memory bank) and validation (scoring).
+- Notes are closed by default: a quiet marker in the gutter opens the note in place. Branches the run does not take stay dimmed, and the library notice of ADR-194 stays.
+- The illustration of ADR-118 remains as a compact element of the left column on wide screens. The stage strip, the caption and the replay of the old tab are removed; the overfitting hint stays on "Resultados".
+
+**Consequences:** the tab answers "what is running now and what does that code do" on one screen. The granularity is the step: `BatchProgressReporter.batch_done` does not emit the last batch, so after it the tab still says "train" for the rest of the epoch including its validation, and an epoch shorter than the batch reporter's interval (about 2 s) never emits `batch` and shows the train + validation group. Emitting the final batch would let validation be marked on its own; it is not done here because it changes what trainers emit. During PatchCore's feature extraction the code shown is the coreset function, since extraction has no tour section. Checked in the browser with classification only; PatchCore, YOLO, segmentation and detection were not watched live.
+
+**Alternatives considered:**
+
+- *A line pointer driven by a tracer (`sys.settrace` / `sys.monitoring`).* It slows the training it describes, and at loop speed the pointer would be noise.
+- *Animate the pointer through the loop on a timer.* It would look like tracing while being invented, which ADR-118 rules out.
+- *Keep two tabs and link them.* The link is the thing the user had to make; one screen removes it.
+
+## ADR-205 — The last batch of every epoch is always reported
+
+**Date:** 2026-11-14
+**Status:** Accepted
+**Amends:** ADR-204
+
+**Context:** ADR-204 left a known gap: `BatchProgressReporter.batch_done` skipped an epoch's last batch, leaving it to `epoch_end`. Validation runs between the two, so the "Código ao vivo" tab kept saying "train" through it, and an epoch shorter than the reporter's interval (about 2 s) sent no `batch` at all and showed the train + validation group for the whole run.
+
+**Decision:**
+
+- `batch_done` reports the epoch's last batch (`index >= total`) always, whatever the interval; the batches before it are still limited by the interval. This holds for the loops VisionForge owns (`BatchProgressLoader`) and for Ultralytics' (its `on_train_batch_end` fires for the last batch too).
+- `lib/run-steps.ts`: when the newest event is a `batch` with `batch >= total_batches`, the position is validation alone, with no pinned function; a smaller `batch` is still train alone in the loop function. Everything else of ADR-204 stays, PatchCore's phases included.
+
+**Consequences:** every epoch now adds one `batch` event to the stream, also in short runs whose streams used to hold only `start`, `epoch_end` and `end`; tests that pinned the old sequences were updated to the new contract. The progress bar holds an epoch's last batch half a batch short of the epoch's end (`lib/training-progress.ts`), because the validation still runs: it neither steps back nor says 100% before the last `epoch_end`. Every tour has a validation step. For Ultralytics it is VisionForge's record of the epoch (`yolo_epoch`); the library's own `validate()` call sits in `yolo_loop`, which belongs to the train step, so YOLO's validation is shown through the code that reads its metrics. A run stopped mid-epoch does not report a last batch and keeps showing training until the stop.
+
+**Alternatives considered:**
+
+- *A dedicated `validation_start` event.* Clearer, but every trainer (and Ultralytics' callback) would need a new emission point and the frontend a new event type; the last `batch` already marks the same instant.
+- *Infer validation from time since the last `batch`.* It would guess, which ADR-118 rules out.
+
+## ADR-206 — The sample dataset that already exists answers 200, and three small layers of in-app help
+
+**Date:** 2026-11-14
+**Status:** Accepted
+**Amends:** ADR-115 and ADR-117 (the sample dataset), ADR-156 (the strategy step), ADR-201 (the History entry as the results page)
+
+**Context:** two things left over from the interface review. `POST /api/sample-dataset` answered 409 when `datasets/exemplo-<tarefa>/` already held files, and the client turned that 409 into success with `existed: true`. Every caller treated it as success, yet the browser logged a failed request each time, which reads as a bug to anyone with the console open. And the interface said what each thing does, in the terms of someone who already knows it, but not when to pick it or what to do after: a strategy selector listed six strategies with a one-line recipe each, a finished run showed its metrics and stopped, and the empty History said only that it was empty.
+
+**Decision:**
+
+- `POST /api/sample-dataset` answers **200** with `existed: true`, the path and empty `classes` and `counts` when the folder is already there, and **201** with `existed: false` when it wrote it. The folder is still never read or touched (it may hold the researcher's own files). 409 leaves the route's contract; the client reads `existed` from the body and treats any error status as a failure.
+- **When to use.** Under every strategy selector, one sentence says when that strategy is the right choice (`components/WhenToUse.tsx`, `whenToUse` in the dictionaries): the classification block selector and the strategy card of the other tasks. The selectors' existing hints stay: they say what the strategy does.
+- **What next.** The run detail shows, under the top metrics, at most two suggestions with one sentence and at most one action each (`lib/next-steps.ts`, `components/NextSteps.tsx`). The rules read only what the run recorded; where none applies the block is absent. No rule diagnoses from a new heuristic.
+- **The empty History** says what will appear there and offers the "first training" guide.
+- Each of the three is one sentence where the decision is made. No panel, tour or modal was added.
+
+**Consequences:** a second click on "usar dataset de exemplo" logs nothing in the console. A client written against the 409 (none is known outside this repository) would now read a 200 it may not expect; `existed` tells the two cases apart. The "when to use" sentences are advice, not rules: they are in the dictionaries so a reviewer can correct one without touching code.
+
+**Alternatives considered:**
+
+- *Keep the 409 and silence it in the client.* A browser logs a failed request whatever the page does with it.
+- *A help panel or a longer tour.* The complaint that started the interface work was too much text on the screen; a sentence where the choice happens costs one line.
+
+## ADR-207 — Guides by reader, and a full-screen page for someone who has never trained a model
+
+**Date:** 2026-11-15
+**Status:** Accepted
+**Amends:** ADR-115 (the guide menu and the first-visit invitation), ADR-206 (in-app help); the capture script of issue #221
+
+**Context:** the guides in `docs/gui/` answer "I want to do X" and assume the reader knows what an epoch is. Three readers were not served: someone new to the field, someone who trains models already and only needs to learn this tool, and someone who wants to see what the tool does before installing it. For the first one a tour card is the wrong size: the tours point at the screen, and this reader needs the field explained, with pictures, before the screen means anything.
+
+**Decision:**
+
+- **Three entry pages in `docs/guias/`**, one per reader, linked from the top of `docs/gui/README.md`: `comecando-do-zero.md`, `ja-treino-modelos.md` and `o-que-o-visionforge-faz.md`. They point at the task pages instead of repeating them.
+- **"Começando do zero" is also a page inside the interface** (`components/learn/`, `lib/learn.ts`, `learn` in the dictionaries): full screen, eight chapters read top to bottom, a rail that follows the reader, the new terms of each chapter in one line each. It opens from the guide menu, where it is the first entry, and from a link on the first-visit invitation. It is not in the guide registry, which holds scripts of steps; nothing else opens it.
+- **Three kinds of figure, each labelled for what it is.** The network drawing is the component the training sheet already has (ADR-118), running on its own. The split, batches, loss curves and confusion matrix are drawn from closed formulas and fixed numbers in `lib/learn.ts`, and the page says they are illustrative. The screens are captured from the interface: two stills and the film of a real run.
+- **The film is made by the capture script.** `capture_docs_images.py` trains a second run of eight epochs on the sample dataset and saves the screen as frames in a smaller window; Pillow assembles `docs/images/vf-training-film.gif` for the pages on GitHub and an animated WebP for the interface (`frontend/src/assets/learn/`, with the two stills). `--check` requires the GIF and its provenance line. The three WebP files add about 200 kB to the package.
+- **The page links out**: to the documentation of the libraries the project is built on and to seven free courses and books, each checked to answer on the day this was written. Every link opens in a new tab with `rel="noopener noreferrer"`; the page says they need a connection. The links to the project's own pages point at `main`, and a test checks that each file exists in the repository.
+
+**Consequences:** the guide menu has three entries and the invitation one more line. A release that ships this page before `docs/guias/` reaches `main` would link to pages that are not there yet: both land together in the next release. The screens inside the page are in Portuguese and in the dark theme whatever the reader's language and theme are, and the English captions say so. The stills and the film go stale when the interface changes, like every image in `docs/images`; the same command refreshes them. The external links can rot: nothing checks them after today.
+
+**Alternatives considered:**
+
+- *A longer guided tour.* A card beside a control cannot hold a figure or three paragraphs, and it would make the reader click through an explanation that is better scrolled.
+- *Only a page in `docs/`.* The reader who needs it most is the one least likely to look for documentation on GitHub; the interface is where they already are.
+- *A recorded video file.* Playwright records WebM, which GitHub does not show inline in a Markdown page, and a video in the wheel is heavier than a few dozen frames. Frames assembled by Pillow need no encoder beyond what the project already depends on.
+- *Figures as images.* A drawn figure follows the theme and the language, can be tried (the learning rate switch), and costs no bytes.

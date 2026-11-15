@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or idea
+    url: https://github.com/marcus-vreis/VisionForge/discussions
+    about: Ask a usage question or float an idea in Discussions before opening an issue.
+  - name: Report a security vulnerability
+    url: https://github.com/marcus-vreis/VisionForge/security/advisories/new
+    about: Report vulnerabilities privately. Do not open a public issue.

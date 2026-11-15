@@ -20,13 +20,15 @@ import gc
 import math
 import re
 import statistics
-from collections.abc import Callable
-from dataclasses import dataclass, field
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any
 
 from loguru import logger
 
 from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, is_cancelled
+from visionforge.core.metric_vocabulary import is_absolute_error, metric_words
 from visionforge.core.significance import bootstrap_ci, infer_direction
 from visionforge.core.task_runner import (
     RunResult,
@@ -35,11 +37,6 @@ from visionforge.core.task_runner import (
     discard_cut_unit_resume,
     runner_cancel_token,
 )
-
-try:  # torch is the heavy hardware extra; the cache flush is best-effort.
-    import torch
-except ImportError:  # pragma: no cover - torch is always present in practice
-    torch = None  # type: ignore[assignment]
 
 
 @dataclass
@@ -89,26 +86,14 @@ def metric_domain(metric: str) -> tuple[float | None, float | None]:
     better" yet can be negative, so the floor is kept for names that are
     absolute by construction, not for every "lower" metric.
     """
-    words = re.split(r"[^a-z0-9]+", metric.lower())
-    if infer_direction(metric) == "lower" and _is_absolute_error(words):
+    words = metric_words(metric)
+    if infer_direction(metric) == "lower" and is_absolute_error(metric):
         return 0.0, None
     if any(_UNIT_INTERVAL_WORD.match(w) for w in words):
         return 0.0, 1.0
     if "r2" in words or ("r" in words and "squared" in words):
         return None, 1.0
     return None, None
-
-
-_ABSOLUTE_ERROR_WORDS = frozenset(
-    {"mae", "mse", "rmse", "msle", "rmsle", "mape", "smape", "loss"}
-)
-
-
-def _is_absolute_error(words: list[str]) -> bool:
-    """A name whose values are non-negative by construction (MAE, MSE, a loss)."""
-    if _ABSOLUTE_ERROR_WORDS.intersection(words):
-        return True
-    return "error" in words and ("absolute" in words or "squared" in words)
 
 
 def _clip_to_domain(
@@ -164,7 +149,11 @@ def aggregate_replicates(
 
     aggregates: dict[str, dict[str, float | int | bool | None]] = {}
     for key in keys:
-        values = [t.metrics[key] for t in successful if key in t.metrics]
+        # An undefined metric (an anomaly AUROC on a one-class test split,
+        # #170) is null: it stays out of the mean and the interval.
+        values = [t.metrics[key] for t in successful if t.metrics.get(key) is not None]
+        if not values:
+            continue
         n = len(values)
         mean = statistics.fmean(values)
         boot_low: float | None = None
@@ -203,6 +192,30 @@ def aggregate_replicates(
     return aggregates
 
 
+def _record_result(
+    trial: ReplicateTrial, result: RunResult, runner: TaskRunner, metric: str
+) -> None:
+    """Copy a replicate's run result into ``trial``; a cut run becomes ``stopped``."""
+    trial.status = result.status
+    trial.metrics = runner.metrics(result)
+    trial.training_time_s = result.training_time_s
+    trial.error = result.error
+    trial.run_dir = str(result.run_dir) if result.run_dir else ""
+    if result.stopped and result.status == "success":
+        trial.status = STOPPED
+        trial.error = STOPPED_NOTE
+        discard_cut_unit_resume(result)
+    elif result.status == "success":
+        logger.info(
+            "Replicate seed={} ok — {}={}",
+            trial.seed,
+            metric,
+            trial.metrics.get(metric),
+        )
+    else:
+        logger.warning("Replicate seed={} failed — {}", trial.seed, result.error)
+
+
 def run_replicates(
     runner: TaskRunner,
     base_config_dict: dict[str, Any],
@@ -213,6 +226,7 @@ def run_replicates(
     progress: UnitProgress | None = None,
     unit_offset: int = 0,
     unit_overrides: dict[str, Any] | None = None,
+    figure_dir: Path | None = None,
 ) -> list[ReplicateTrial]:
     """Train ``base_config_dict`` once per seed and return the trials in seed order.
 
@@ -233,6 +247,9 @@ def run_replicates(
     starts no further seed. A replicate the runner reports as cut is recorded
     as ``stopped``, outside the aggregate, whose ``n`` then counts only the
     replicates that ran to the end.
+
+    With ``figure_dir`` the set also leaves ``replicates_strip`` there, in the
+    formats and dpi of the config's ``output`` section (``write_replicates_strip``).
     """
     token = runner_cancel_token(runner)
     trials: list[ReplicateTrial] = []
@@ -253,24 +270,7 @@ def run_replicates(
             }
             cfg = runner.config_type.model_validate(trial_dict)
             result: RunResult = runner.run(cfg)
-            trial.status = result.status
-            trial.metrics = runner.metrics(result)
-            trial.training_time_s = result.training_time_s
-            trial.error = result.error
-            trial.run_dir = str(result.run_dir) if result.run_dir else ""
-            if result.stopped and result.status == "success":
-                trial.status = STOPPED
-                trial.error = STOPPED_NOTE
-                discard_cut_unit_resume(result)
-            elif result.status == "success":
-                logger.info(
-                    "Replicate seed={} ok — {}={}",
-                    seed,
-                    metric,
-                    trial.metrics.get(metric),
-                )
-            else:
-                logger.warning("Replicate seed={} failed — {}", seed, result.error)
+            _record_result(trial, result, runner, metric)
         except Exception as exc:  # noqa: BLE001
             trial.error = str(exc)
             logger.warning("Replicate seed={} failed — {}", seed, exc)
@@ -286,13 +286,67 @@ def run_replicates(
     if owns_stream:
         stream.end(len(trials))
 
+    if figure_dir is not None:
+        write_replicates_strip(
+            [asdict(t) for t in trials], metric, figure_dir, base_config_dict
+        )
     return trials
+
+
+def write_replicates_strip(
+    rows: Sequence[Mapping[str, Any]],
+    metric: str,
+    out_dir: Path,
+    config_dict: Mapping[str, Any] | None = None,
+) -> list[Path]:
+    """Draw ``replicates_strip`` (one point per finished seed) into ``out_dir``.
+
+    ``rows`` are the trials as dicts (``seed``, ``status``, ``metrics``); a seed
+    that did not finish or did not report ``metric`` has no point. Formats and
+    dpi come from ``config_dict["output"]`` (``figure_formats``/``figure_dpi``),
+    PNG at 300 dpi by default. Returns the files written, none when no seed
+    reported the metric.
+    """
+    # Imported here: the plotter pulls matplotlib, seaborn and sklearn, which
+    # the GUI must not load at startup (GUI-11, #202).
+    from visionforge.core.plotter import (
+        DEFAULT_DPI,
+        DEFAULT_FORMATS,
+        MetricsPlotter,
+        figure_paths,
+    )
+
+    points = [
+        (int(r["seed"]), float(r["metrics"][metric]))
+        for r in rows
+        if r.get("status") == "success" and metric in (r.get("metrics") or {})
+    ]
+    if not points:
+        return []
+    output = (config_dict or {}).get("output") or {}
+    formats = output.get("figure_formats") or DEFAULT_FORMATS
+    dpi = int(output.get("figure_dpi") or DEFAULT_DPI)
+    base = out_dir / "replicates_strip.png"
+    MetricsPlotter.replicates_strip(
+        [p[0] for p in points],
+        [p[1] for p in points],
+        base,
+        metric=metric,
+        formats=formats,
+        dpi=dpi,
+    )
+    return figure_paths(base, formats)
 
 
 def _release_replicate_memory() -> None:
     """Release unused CPU and available CUDA memory between seeds."""
     gc.collect()
-    if torch is not None and torch.cuda.is_available():
+    # torch is imported here, not at module load, so the GUI starts without it (#202).
+    try:  # torch is the heavy hardware extra; the cache flush is best-effort.
+        import torch
+    except ImportError:  # pragma: no cover - torch is always present in practice
+        return
+    if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
 
@@ -302,4 +356,5 @@ __all__ = [
     "metric_domain",
     "run_replicates",
     "sample_std",
+    "write_replicates_strip",
 ]

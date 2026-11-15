@@ -4,22 +4,20 @@ import {
   DEFAULT_PROFILE_INFO,
   activeProfileSlug,
   canCreateProfile,
-  chosenThisSession,
   clearProfile,
   defaultHasName,
-  hasNamedProfiles,
+  entryStep,
   isProfileStorageKey,
   isValidProfileSlug,
   legacyDefaultName,
-  markChosenThisSession,
+  offersProfileChoice,
+  profileHasName,
   profileLabel,
   jobProfileLabel,
-  needsProfileChoice,
   normalizeProfileName,
   pickStoredProfile,
   profileAfterStorageChange,
   profileHeaders,
-  profileIsTheName,
   queueShowsProfiles,
   readProfile,
   saveProfile,
@@ -180,39 +178,43 @@ describe("who is asked", () => {
     expect(pickStoredProfile(null, listed)).toBeNull();
   });
 
-  it("asks where there are profiles to choose from, once per browser session", () => {
-    expect(needsProfileChoice(listed, null, false)).toBe(true);
-    // A stored choice no longer skips the question in a new session (ADR-126)...
-    expect(needsProfileChoice(listed, ana, false)).toBe(true);
-    // ...but answering it once lasts until the tab is closed.
-    expect(needsProfileChoice(listed, ana, true)).toBe(false);
-    expect(needsProfileChoice(listed, null, true)).toBe(true);
-    // A one-person install never sees the question.
-    expect(needsProfileChoice([DEFAULT_PROFILE_INFO], null, false)).toBe(false);
-    expect(needsProfileChoice([], null, false)).toBe(false);
-  });
-
-  it("tells a server with profiles from one without", () => {
-    expect(hasNamedProfiles([DEFAULT_PROFILE_INFO])).toBe(false);
-    expect(hasNamedProfiles(listed)).toBe(true);
+  it("never offers a choice with a single profile, and always with two or more", () => {
+    const marcus = { ...DEFAULT_PROFILE_INFO, name: "Marcus" };
+    expect(offersProfileChoice([marcus])).toBe(false);
+    expect(offersProfileChoice([])).toBe(false);
+    expect(offersProfileChoice([marcus, ana])).toBe(true);
+    // An unnamed default beside a named profile (old data) still makes two.
+    expect(offersProfileChoice([DEFAULT_PROFILE_INFO, ana])).toBe(true);
   });
 });
 
-describe("the header", () => {
-  it("lets the profile chip stand for the name chip when they say the same thing", () => {
-    expect(profileIsTheName(ana, "Ana")).toBe(true);
-    // A name past the chip's 32 characters is compared as it was stored.
-    const long: ProfileInfo = { slug: "x", name: "N".repeat(50), is_default: false };
-    expect(profileIsTheName(long, "N".repeat(32))).toBe(true);
+describe("the entry", () => {
+  const marcus = { ...DEFAULT_PROFILE_INFO, name: "Marcus" };
+
+  it("asks only the name on the first run, when no profile has one yet", () => {
+    expect(entryStep([DEFAULT_PROFILE_INFO], "")).toBe("name");
+    // A list that could not be read and nothing saved here: the same first run.
+    expect(entryStep([], "")).toBe("name");
   });
 
-  it("keeps both when the names differ, for the default profile, or with no profile", () => {
-    expect(profileIsTheName(ana, "Marcus")).toBe(false);
-    expect(profileIsTheName(DEFAULT_PROFILE_INFO, "default")).toBe(false);
-    // The default named in the welcome (ADR-126) is the name, like any profile.
-    expect(profileIsTheName({ ...DEFAULT_PROFILE_INFO, name: "Marcus" }, "Marcus")).toBe(true);
-    expect(profileIsTheName(null, "Ana")).toBe(false);
-    expect(profileIsTheName(ana, "")).toBe(false);
+  it("goes straight in with exactly one profile, on every load", () => {
+    expect(entryStep([marcus], "")).toBe("enter");
+    expect(entryStep([marcus], "Marcus")).toBe("enter");
+    // The name this browser kept is handed to the unnamed default (legacyDefaultName).
+    expect(entryStep([DEFAULT_PROFILE_INFO], "Marcus")).toBe("enter");
+  });
+
+  it("always shows the choice with more than one profile, also on a reload", () => {
+    expect(entryStep([marcus, ana], "Marcus")).toBe("choose");
+    expect(entryStep([marcus, ana, bob], "")).toBe("choose");
+    expect(entryStep([DEFAULT_PROFILE_INFO, ana], "")).toBe("choose");
+  });
+
+  it("tells a named profile from the default that still has none", () => {
+    expect(profileHasName(ana)).toBe(true);
+    expect(profileHasName(marcus)).toBe(true);
+    expect(profileHasName(DEFAULT_PROFILE_INFO)).toBe(false);
+    expect(profileHasName({ ...DEFAULT_PROFILE_INFO, name: "" })).toBe(false);
   });
 });
 
@@ -277,15 +279,18 @@ describe("the queue", () => {
     expect(queueShowsProfiles([{ profile: "default" }, { profile: "ana" }])).toBe(true);
   });
 
-  it("labels a job with the display name, and the default with the interface's word", () => {
-    expect(jobProfileLabel({ profile: "ana", profile_name: "Ana Souza" }, "Padrão")).toBe(
+  it("labels a job with the display name, the default too, and an unnamed one as such", () => {
+    expect(jobProfileLabel({ profile: "ana", profile_name: "Ana Souza" }, "Sem nome")).toBe(
       "Ana Souza",
     );
-    expect(jobProfileLabel({ profile: "default", profile_name: "default" }, "Padrão")).toBe(
-      "Padrão",
+    expect(jobProfileLabel({ profile: "default", profile_name: "Marcus" }, "Sem nome")).toBe(
+      "Marcus",
     );
-    expect(jobProfileLabel({}, "Padrão")).toBe("Padrão");
-    expect(jobProfileLabel({ profile: "ana" }, "Padrão")).toBe("ana");
+    expect(jobProfileLabel({ profile: "default", profile_name: "default" }, "Sem nome")).toBe(
+      "Sem nome",
+    );
+    expect(jobProfileLabel({}, "Sem nome")).toBe("Sem nome");
+    expect(jobProfileLabel({ profile: "ana" }, "Sem nome")).toBe("ana");
   });
 });
 
@@ -293,9 +298,9 @@ describe("the default profile's name (ADR-126)", () => {
   const marcus = { ...DEFAULT_PROFILE_INFO, name: "Marcus" };
 
   it("labels the default by the welcome's name once it has one", () => {
-    expect(profileLabel(marcus, "Padrão")).toBe("Marcus");
-    expect(profileLabel(DEFAULT_PROFILE_INFO, "Padrão")).toBe("Padrão");
-    expect(profileLabel(ana, "Padrão")).toBe("Ana");
+    expect(profileLabel(marcus, "Sem nome")).toBe("Marcus");
+    expect(profileLabel(DEFAULT_PROFILE_INFO, "Sem nome")).toBe("Sem nome");
+    expect(profileLabel(ana, "Sem nome")).toBe("Ana");
     expect(defaultHasName(marcus)).toBe(true);
     expect(defaultHasName(DEFAULT_PROFILE_INFO)).toBe(false);
     expect(defaultHasName(ana)).toBe(false);
@@ -313,36 +318,5 @@ describe("the default profile's name (ADR-126)", () => {
     expect(legacyDefaultName([DEFAULT_PROFILE_INFO, ana], { slug: "ana", name: "Ana" }, "Ana")).toBeNull();
     // A list that could not be read says nothing about the default.
     expect(legacyDefaultName([], null, "Marcus")).toBeNull();
-  });
-
-  it("remembers the session's answer apart from the stored profile", () => {
-    const session: Record<string, string> = {};
-    vi.stubGlobal("sessionStorage", {
-      getItem: (k: string) => session[k] ?? null,
-      setItem: (k: string, v: string) => {
-        session[k] = v;
-      },
-      removeItem: (k: string) => {
-        delete session[k];
-      },
-    });
-    expect(chosenThisSession()).toBe(false);
-    markChosenThisSession();
-    expect(chosenThisSession()).toBe(true);
-    vi.unstubAllGlobals();
-  });
-
-  it("treats a blocked session storage as not asked yet", () => {
-    vi.stubGlobal("sessionStorage", {
-      getItem: () => {
-        throw new Error("blocked");
-      },
-      setItem: () => {
-        throw new Error("blocked");
-      },
-    });
-    expect(chosenThisSession()).toBe(false);
-    expect(() => markChosenThisSession()).not.toThrow();
-    vi.unstubAllGlobals();
   });
 });

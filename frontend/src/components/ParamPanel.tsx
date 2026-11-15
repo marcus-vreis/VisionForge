@@ -1,10 +1,16 @@
 import { createContext, useContext, useMemo, useState } from "react";
 import { pickCheckpointFile } from "../api/client";
 import { humanizeFieldPath, type ValidationError } from "../hooks/useExperiment";
+import { usePendingImport, type PendingImportProps } from "../hooks/usePendingImport";
 import { useT } from "../i18n/useT";
+import { resolveSchema as resolveNullableSchema } from "../lib/schema-form";
 import type { JsonSchema } from "../types/schema";
 import type { TaskDefinition } from "../types/tasks";
-import { exportConfigToYaml, reviewImportedConfig } from "../lib/yaml-config";
+import {
+  exportConfigToYaml,
+  importReviewMessage,
+  reviewImportedConfig,
+} from "../lib/yaml-config";
 import {
   datasetLabel,
   suggestExperimentName,
@@ -27,6 +33,11 @@ import { pickerCancelText } from "../lib/picker-feedback";
 import { AdvancedFields } from "./AdvancedFields";
 import { ModelAdvice } from "./ModelAdvice";
 import { ReviewStep, type ReviewRow, type ReviewSection } from "./ReviewStep";
+import { ReplicatesCard } from "./ReplicatesCard";
+import { ReplicatedComparisonCard } from "./ReplicatedComparisonCard";
+import type { PanelStrategy } from "./ExperimentHeader";
+import type { ReplicatesPayload } from "../lib/replicates-form";
+import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-form";
 import { Rich } from "./Rich";
 import { StepShell, type StepDef } from "./StepShell";
 import {
@@ -39,6 +50,7 @@ import {
   withLrMultiplier,
 } from "../lib/grid-axis";
 import { learningRatePlanRequest, rateIsPerModel } from "../lib/lr-plan";
+import { WhenToUse, type WhenToUseKey } from "./WhenToUse";
 import {
   MenuSelect,
   NumberField,
@@ -49,12 +61,25 @@ import {
   WorkersField,
 } from "./controls";
 
-interface ParamPanelProps {
+interface ParamPanelProps extends PendingImportProps {
   task: TaskDefinition;
   schema: JsonSchema | null;
   formData: Record<string, unknown>;
   setFormData: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
   validationErrors: ValidationError[];
+  /** A run is being submitted: the replicates card waits. */
+  busy?: boolean;
+  /** The strategy App mirrors for Treinar. Only "replicates" and
+   *  "replicatedComparison" are read here: every other strategy is
+   *  `config.block` (ADR-056 amendment, ADR-193). */
+  strategy?: PanelStrategy;
+  onStrategyChange?: (strategy: PanelStrategy) => void;
+  /** Launches a replicate set; without it, Réplicas is not offered. */
+  onReplicates?: (payload: ReplicatesPayload) => void;
+  /** Launches the paired comparison (ADR-193); without it, it is not offered. */
+  onReplicatedComparison?: (payload: ReplicatedComparisonPayload) => void;
+  /** Incremented by Treinar so the replicates card runs. */
+  runSignal?: number;
 }
 
 /** Section labels for config sub-models. */
@@ -417,6 +442,16 @@ function WeightsPathField({
 }
 
 
+/** The "when to use" sentence of each entry of the block selector. */
+const WHEN_TO_USE: Record<string, WhenToUseKey | undefined> = {
+  classification: "simple",
+  cross_validation: "cv",
+  grid_search: "grid",
+  random_search: "random",
+  replicates: "replicates",
+  replicatedComparison: "replicatedComparison",
+};
+
 /** Block selector — the first card of the Estratégia step.
  *
  * Transfer learning is not offered here: it is a single run with a frozen
@@ -426,9 +461,15 @@ function WeightsPathField({
 function BlockSelector({
   value,
   onChange,
+  replicates,
+  comparison,
 }: {
   value: string;
   onChange: (v: string) => void;
+  /** Offers Réplicas, a strategy of the GUI and not a block (ADR-056). */
+  replicates?: boolean;
+  /** Offers the replicated comparison, also a strategy of the GUI (ADR-193). */
+  comparison?: boolean;
 }) {
   // "Comparar modelos" saiu do seletor (ADR-059): comparar arquiteturas
   // é um grid de um eixo só sobre "Arquitetura" (+ valor ao grid) — um conceito,
@@ -440,6 +481,12 @@ function BlockSelector({
     { value: "cross_validation", label: t.paramPanel.blocks.crossValidation },
     { value: "grid_search", label: t.paramPanel.blocks.gridSearch },
     { value: "random_search", label: t.paramPanel.blocks.randomSearch },
+    ...(replicates
+      ? [{ value: REPLICATES, label: t.taskPanel.replicates }]
+      : []),
+    ...(comparison
+      ? [{ value: REPLICATED_COMPARISON, label: t.taskPanel.replicatedComparison }]
+      : []),
   ];
   return (
     <div
@@ -491,13 +538,14 @@ function BlockSelector({
           );
         })}
       </div>
+      {WHEN_TO_USE[value] && <WhenToUse strategy={WHEN_TO_USE[value]} />}
       {value === "cross_validation" && (
         <div
           style={{
             fontFamily: "var(--font-mono)",
-            fontSize: 10,
+            fontSize: 12,
             color: "var(--vf-text-muted)",
-            lineHeight: 1.5,
+            lineHeight: 1.6,
             marginTop: 2,
           }}
         >
@@ -508,9 +556,9 @@ function BlockSelector({
         <div
           style={{
             fontFamily: "var(--font-mono)",
-            fontSize: 10,
+            fontSize: 12,
             color: "var(--vf-text-muted)",
-            lineHeight: 1.5,
+            lineHeight: 1.6,
             marginTop: 2,
           }}
         >
@@ -521,9 +569,9 @@ function BlockSelector({
         <div
           style={{
             fontFamily: "var(--font-mono)",
-            fontSize: 10,
+            fontSize: 12,
             color: "var(--vf-text-muted)",
-            lineHeight: 1.5,
+            lineHeight: 1.6,
             marginTop: 2,
           }}
         >
@@ -655,13 +703,15 @@ const GridContext = createContext<GridContextValue>({
 
 const gridAddBtnStyle: React.CSSProperties = {
   marginTop: 8,
-  padding: "5px 10px",
+  width: "100%",
+  minHeight: 40,
+  padding: "10px 14px",
   background: "var(--accent-soft)",
   border: "1px solid var(--accent-vf)",
-  borderRadius: 7,
+  borderRadius: 10,
   color: "var(--vf-text)",
   fontFamily: "var(--font-mono)",
-  fontSize: 10.5,
+  fontSize: 11.5,
   letterSpacing: "0.08em",
   textTransform: "uppercase",
   cursor: "pointer",
@@ -669,24 +719,26 @@ const gridAddBtnStyle: React.CSSProperties = {
 
 const gridRowControlStyle: React.CSSProperties = {
   flex: 1,
-  padding: "8px 10px",
+  minWidth: 0,
+  padding: "12px 14px",
   background: "rgb(var(--lt-shade, 0 0 0) / 0.30)",
   border: "1px solid var(--vf-panel-stroke)",
-  borderRadius: 8,
+  borderRadius: 10,
   fontFamily: "var(--font-mono)",
-  fontSize: 12,
+  fontSize: 13,
   color: "var(--vf-text)",
   outline: "none",
 };
 
 const gridRemoveBtnStyle: React.CSSProperties = {
-  width: 30,
-  height: 30,
+  width: 44,
+  alignSelf: "stretch",
+  minHeight: 44,
   flexShrink: 0,
   padding: 0,
   background: "transparent",
   border: "1px solid var(--vf-panel-stroke)",
-  borderRadius: 8,
+  borderRadius: 10,
   color: "var(--vf-text-dim)",
   fontFamily: "var(--font-mono)",
   fontSize: 14,
@@ -702,7 +754,7 @@ const gridErrStyle: React.CSSProperties = {
 
 const gridAxisTagStyle: React.CSSProperties = {
   fontFamily: "var(--font-mono)",
-  fontSize: 10,
+  fontSize: 11,
   letterSpacing: "0.18em",
   textTransform: "uppercase",
   color: "var(--vf-text-muted)",
@@ -772,13 +824,14 @@ function GridAxisExtension({
         const err = validateGridValue(t, name, schema, v);
         return (
           <div key={i}>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
               {enumOpts ? (
                 <MenuSelect
                   value={String(v)}
                   onChange={(nv) => setExtra(i, nv)}
                   options={enumOpts.map(String)}
                   minWidth={150}
+                  size="field"
                 />
               ) : (
                 <input
@@ -793,6 +846,7 @@ function GridAxisExtension({
                 type="button"
                 onClick={() => removeExtra(i)}
                 title={t.paramPanel.grid.removeValue}
+                aria-label={t.paramPanel.grid.removeValue}
                 style={gridRemoveBtnStyle}
               >
                 ×
@@ -1389,7 +1443,9 @@ function TransferLearningFields({
   errors: ValidationError[];
 }) {
   const t = useT();
-  const resolved = resolveSchema(schema, defs);
+  // `transfer_learning` is optional in the config, so its schema arrives as
+  // anyOf [$ref, null]: the panel's own resolver follows a bare $ref only.
+  const resolved = resolveNullableSchema(schema, defs);
   if (!resolved.properties) return null;
 
   const setParam = (k: string, v: unknown) => onChange({ ...value, [k]: v });
@@ -1787,6 +1843,18 @@ const STRATEGY_BLOCKS = [
   "model_comparison",
 ];
 
+// Réplicas on the strategy step: a value of the selector, never of `block`.
+const REPLICATES = "replicates";
+// The paired comparison, likewise a value of the selector (ADR-193).
+const REPLICATED_COMPARISON = "replicatedComparison";
+
+// Suggested axes for the classification comparison.
+const CLASSIFICATION_PATH_HINTS = [
+  "training.learning_rate",
+  "training.batch_size",
+  "model.name",
+];
+
 const NAME_STRATEGY: Record<string, NameStrategy> = {
   classification: "simple",
   cross_validation: "cv",
@@ -1868,11 +1936,26 @@ export function ParamPanel({
   formData,
   setFormData,
   validationErrors,
+  busy,
+  strategy,
+  onStrategyChange,
+  onReplicates,
+  onReplicatedComparison,
+  runSignal,
+  pendingImport,
+  onImportApplied,
 }: ParamPanelProps) {
   const t = useT();
   const isClassification = task.key === "classification";
 
   const block = String(formData["block"] ?? "classification");
+  // The replicate set trains `block: "classification"` once per seed.
+  const replicatesOn = strategy === REPLICATES && onReplicates !== undefined;
+  // So does each (variant, seed) of the paired comparison.
+  const comparisonOn =
+    strategy === REPLICATED_COMPARISON && onReplicatedComparison !== undefined;
+  // Either one: a strategy of the GUI, not a `block`.
+  const guiStrategyOn = replicatesOn || comparisonOn;
   const modelData = (formData["model"] ?? {}) as Record<string, unknown>;
   const trainingData = (formData["training"] ?? {}) as Record<string, unknown>;
   const dataData = (formData["data"] ?? {}) as Record<string, unknown>;
@@ -1899,7 +1982,11 @@ export function ParamPanel({
     model: String(modelData["name"] ?? "") || undefined,
     epochs: asNumber(trainingData["epochs"]),
     learningRate: asNumber(trainingData["learning_rate"]),
-    strategy: NAME_STRATEGY[block] ?? "simple",
+    strategy: replicatesOn
+      ? REPLICATES
+      : comparisonOn
+        ? REPLICATED_COMPARISON
+        : (NAME_STRATEGY[block] ?? "simple"),
     sweepKeys,
     folds:
       block === "cross_validation" ? asNumber(cvData["n_folds"]) : undefined,
@@ -1940,31 +2027,24 @@ export function ParamPanel({
     // the wrong type: the panels call string methods on these fields, and one
     // number in `data.base_dir` blanks the whole page. A flagged value is
     // left out (as if the YAML had not set it) and reported below.
-    const { data, issues, ignored, missing } = reviewImportedConfig(
-      t,
-      raw,
-      schema,
-      schema.$defs ?? {},
-    );
-    setFormData(data);
-    if (issues.length === 0) return null;
-    const summary = issues
-      .slice(0, 5)
-      .map((iss) => `· ${humanizeFieldPath(t, iss.field)} — ${iss.message}`)
-      .join("\n");
-    // The list says what was found; the lines after it say what that
-    // leaves to do, each only when it is so.
-    const lines = [
-      t.paramPanel.importWarnings(
-        issues.length,
-        summary,
-        Math.max(0, issues.length - 5),
-      ),
-    ];
-    if (ignored > 0) lines.push(t.paramPanel.importDropped(ignored));
-    if (missing > 0) lines.push(t.paramPanel.importMissing(missing));
-    return lines.join("\n\n");
+    const review = reviewImportedConfig(t, raw, schema, schema.$defs ?? {});
+    setFormData(review.data);
+    // The file's `block` is its strategy; Réplicas and the replicated
+    // comparison are not ones it can name.
+    if (guiStrategyOn) onStrategyChange?.("simple");
+    return importReviewMessage(t, review);
   };
+  // A run sent from History goes through the same import (#200); this form
+  // loads what it can and warns, so a warning does not stop Réplicas.
+  const { notice, replicatesPreset } = usePendingImport({
+    taskKey: task.key,
+    pendingImport,
+    onImportApplied,
+    ready: isClassification && schema !== null,
+    importConfig: handleImportConfig,
+    refusesOnProblem: false,
+    onStrategy: (s) => onStrategyChange?.(s),
+  });
 
   if (!isClassification) {
     return (
@@ -2091,7 +2171,9 @@ export function ParamPanel({
   };
 
   const tlOn = block === "transfer_learning";
-  const tlLocked = STRATEGY_BLOCKS.includes(block);
+  // The replicate runner trains each seed with the plain classification
+  // block, which has no frozen backbone: transfer learning waits too.
+  const tlLocked = guiStrategyOn || STRATEGY_BLOCKS.includes(block);
 
   const changed = (paths: readonly string[]) =>
     countChanged(formData, defaults, paths);
@@ -2116,8 +2198,11 @@ export function ParamPanel({
     "data.pin_memory",
   ];
 
-  const strategyLabel =
-    block === "cross_validation"
+  const strategyLabel = replicatesOn
+    ? t.taskPanel.replicates
+    : comparisonOn
+      ? t.taskPanel.replicatedComparison
+    : block === "cross_validation"
       ? t.paramPanel.blocks.crossValidation
       : block === "grid_search"
         ? t.paramPanel.blocks.gridSearch
@@ -2160,7 +2245,10 @@ export function ParamPanel({
     {
       step: "strategy",
       rows: [
-        row(t.experimentHeader.strategyTitle, strategyLabel, tlLocked ? "block" : undefined),
+        {
+          ...row(t.experimentHeader.strategyTitle, strategyLabel, tlLocked ? "block" : undefined),
+          ...(guiStrategyOn ? { changed: true } : {}),
+        },
         ...(block === "cross_validation"
           ? [row(labels.n_folds, cvData["n_folds"], "cross_validation.n_folds")]
           : []),
@@ -2320,23 +2408,68 @@ export function ParamPanel({
     {
       id: "strategy",
       summary: strategyLabel,
-      changes: tlLocked ? changed(["block", block]) : 0,
+      changes: guiStrategyOn ? 1 : tlLocked ? changed(["block", block]) : 0,
       errors: errorsIn(["block", ...STRATEGY_BLOCKS]),
       content: (
         <div style={stepStack}>
           <BlockSelector
             // Transfer learning is a single run switched on in Modelo.
-            value={tlOn ? "classification" : block}
-            onChange={(v) =>
-              setFormData((prev) =>
-                // "Treino simples" already shows as active with transfer
-                // learning on; picking it again must not switch that off.
-                v === "classification" && prev["block"] === "transfer_learning"
-                  ? prev
-                  : withBlock(prev, v),
-              )
+            value={
+              replicatesOn
+                ? REPLICATES
+                : comparisonOn
+                  ? REPLICATED_COMPARISON
+                  : tlOn
+                    ? "classification"
+                    : block
             }
+            replicates={onReplicates !== undefined}
+            comparison={onReplicatedComparison !== undefined}
+            onChange={(v) => {
+              onStrategyChange?.(
+                v === REPLICATES
+                  ? "replicates"
+                  : v === REPLICATED_COMPARISON
+                    ? "replicatedComparison"
+                    : "simple",
+              );
+              setFormData((prev) =>
+                v === REPLICATES || v === REPLICATED_COMPARISON
+                  ? withBlock(prev, "classification")
+                  : // "Treino simples" already shows as active with transfer
+                    // learning on; picking it again must not switch that off.
+                    v === "classification" && prev["block"] === "transfer_learning"
+                    ? prev
+                    : withBlock(prev, v),
+              );
+            }}
           />
+
+          {replicatesOn && onReplicates && (
+            <ReplicatesCard
+              metrics={[
+                { value: "accuracy", label: t.runDetail.metrics.labels.accuracy },
+              ]}
+              accent={task.accent}
+              disabled={busy}
+              onReplicates={onReplicates}
+              runSignal={runSignal}
+              preset={replicatesPreset}
+            />
+          )}
+
+          {comparisonOn && onReplicatedComparison && (
+            <ReplicatedComparisonCard
+              metrics={[
+                { value: "accuracy", label: t.runDetail.metrics.labels.accuracy },
+              ]}
+              pathHints={CLASSIFICATION_PATH_HINTS}
+              accent={task.accent}
+              disabled={busy}
+              onReplicatedComparison={onReplicatedComparison}
+              runSignal={runSignal}
+            />
+          )}
 
           {/* Cross-validation fields — only when the block is K-Fold */}
           {block === "cross_validation" &&
@@ -2707,6 +2840,7 @@ export function ParamPanel({
           sweepKeys={sweepKeys}
           onExportYaml={handleExport}
           onImportConfig={handleImportConfig}
+          importNotice={notice}
           sections={reviewSections}
           learningRatePlan={learningRatePlanRequest(formData)}
           errors={validationErrors.map(

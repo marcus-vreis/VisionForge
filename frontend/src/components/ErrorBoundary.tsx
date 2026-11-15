@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Component, Suspense, type ErrorInfo, type ReactNode } from "react";
 import { useT } from "../i18n/useT";
 
 interface BoundaryProps {
@@ -117,5 +117,28 @@ export function ContentBoundary({
     >
       {children}
     </ErrorBoundary>
+  );
+}
+
+/** What a lazily loaded surface shows while its chunk arrives: nothing on the
+ *  screen (the local server answers in milliseconds, and a spinner that flashes
+ *  for one frame is noise), only a status a screen reader can announce. */
+function LoadingStatus() {
+  const t = useT();
+  return (
+    <span role="status" className="sr-only">
+      {t.common.loading}
+    </span>
+  );
+}
+
+/** Where a `React.lazy` surface mounts (GUI-12): the fallback above while its
+ *  chunk loads, and the crash notice, not a blank page, if the chunk cannot be
+ *  fetched (a server rebuilt under an open tab no longer has the old file). */
+export function LazySurface({ children }: { children: ReactNode }) {
+  return (
+    <ContentBoundary>
+      <Suspense fallback={<LoadingStatus />}>{children}</Suspense>
+    </ContentBoundary>
   );
 }

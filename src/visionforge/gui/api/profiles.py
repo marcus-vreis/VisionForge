@@ -30,14 +30,23 @@ import json
 import re
 import shutil
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, TypeVar, cast, get_args
 
-from pydantic import BaseModel
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    ValidationError,
+    field_validator,
+)
 
+from visionforge.utils.comet_names import is_valid_comet_name
 from visionforge.utils.messages import tr
+from visionforge.utils.wandb_names import is_valid_wandb_name
 
 PROFILE_FILENAME = "profile.json"
 
@@ -71,6 +80,99 @@ _RESERVED = frozenset(
 )
 
 _M = TypeVar("_M", bound=BaseModel)
+
+
+class MLflowSettings(BaseModel):
+    """Local MLflow export preference for a profile."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    enabled: StrictBool = False
+
+
+class WandbSettings(BaseModel):
+    """Weights & Biases export preference for a profile (ADR-172).
+
+    ``entity`` empty means the saved token's own user. The token itself is
+    never here: it lives in a private file of the profile.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    enabled: StrictBool = False
+    project: str = "visionforge"
+    entity: str = ""
+
+    @field_validator("project", "entity")
+    @classmethod
+    def _wandb_name(cls, value: str, info: Any) -> str:
+        value = value.strip()
+        if (value or info.field_name == "project") and not is_valid_wandb_name(value):
+            raise ValueError(tr("wandb.name_invalid"))
+        return value
+
+
+class CometSettings(BaseModel):
+    """Comet export preference for a profile (ADR-200).
+
+    ``workspace`` empty means the saved key's default workspace. The key itself
+    is never here: it lives in a private file of the profile.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    enabled: StrictBool = False
+    project: str = "visionforge"
+    workspace: str = ""
+
+    @field_validator("project", "workspace")
+    @classmethod
+    def _comet_name(cls, value: str, info: Any) -> str:
+        value = value.strip()
+        if (value or info.field_name == "project") and not is_valid_comet_name(value):
+            raise ValueError(tr("comet.name_invalid"))
+        return value
+
+
+class ProfileSettings(BaseModel):
+    """Optional exporters enabled for future profile submissions."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    mlflow: MLflowSettings = Field(default_factory=MLflowSettings)
+    wandb: WandbSettings = Field(default_factory=WandbSettings)
+    comet: CometSettings = Field(default_factory=CometSettings)
+
+
+class ProfileSettingsUpdate(BaseModel):
+    """The exporters a request changes; one left out keeps what was saved."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    mlflow: MLflowSettings | None = None
+    wandb: WandbSettings | None = None
+    comet: CometSettings | None = None
+
+
+def _saved[M: BaseModel](settings: dict[str, Any], key: str, model: type[M]) -> M:
+    """The saved block ``key`` as ``model``; its defaults when missing or invalid."""
+    block = settings.get(key, {})
+    known = {
+        name: value
+        for name, value in (block.items() if isinstance(block, dict) else ())
+        # Keys a later version wrote stay in the file and are not read here.
+        if name in model.model_fields
+    }
+    try:
+        return model.model_validate(known)
+    except ValidationError:
+        return model()
+
+
+def _meta_settings(meta: dict[str, Any]) -> ProfileSettings:
+    settings = meta.get("settings", {})
+    if not isinstance(settings, dict):
+        return ProfileSettings()
+    return ProfileSettings(
+        mlflow=_saved(settings, "mlflow", MLflowSettings),
+        wandb=_saved(settings, "wandb", WandbSettings),
+        comet=_saved(settings, "comet", CometSettings),
+    )
 
 
 class ProfileError(Exception):
@@ -117,6 +219,7 @@ class Profile:
     models_dir: Path
     root: Path | None = None
     pronoun: Pronoun | None = None
+    settings: ProfileSettings = field(default_factory=ProfileSettings)
 
     @property
     def is_default(self) -> bool:
@@ -164,6 +267,7 @@ def default_profile(models_dir: Path, profiles_dir: Path | None = None) -> Profi
         name=_meta_name(meta) or DEFAULT_SLUG,
         models_dir=models_dir,
         pronoun=_meta_pronoun(meta),
+        settings=_meta_settings(meta),
     )
 
 
@@ -252,6 +356,7 @@ def _build(slug: str, folder: Path, profiles_dir: Path) -> Profile:
         models_dir=relative_root / "models",
         root=relative_root,
         pronoun=_meta_pronoun(meta),
+        settings=_meta_settings(meta),
     )
 
 
@@ -353,6 +458,21 @@ def create_profile(
     return _build(slug, folder, profiles_dir)
 
 
+def _merged_settings(old: Any, settings: ProfileSettingsUpdate) -> dict[str, Any]:
+    """The saved ``settings`` block with the blocks the request sent merged in."""
+    old_settings = dict(old) if isinstance(old, dict) else {}
+    for key in ("mlflow", "wandb", "comet"):
+        new = getattr(settings, key)
+        if new is not None:
+            old_block = old_settings.get(key)
+            old_settings[key] = {
+                **(old_block if isinstance(old_block, dict) else {}),
+                # Only the fields the request named: the rest stay saved.
+                **new.model_dump(exclude_unset=True),
+            }
+    return old_settings
+
+
 def update_profile(
     slug: str,
     profiles_dir: Path,
@@ -360,6 +480,7 @@ def update_profile(
     *,
     name: str | None = None,
     pronoun: Pronoun | None = None,
+    settings: ProfileSettingsUpdate | None = None,
 ) -> Profile:
     """Change a profile's display name and/or pronoun; its slug never changes.
 
@@ -378,6 +499,8 @@ def update_profile(
         else profiles_dir / profile.slug / PROFILE_FILENAME
     )
     meta = _read_meta(path)
+    if settings is not None:
+        meta["settings"] = _merged_settings(meta.get("settings"), settings)
     if name is not None:
         display = normalize_display_name(name)
         if not display:

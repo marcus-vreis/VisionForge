@@ -6,6 +6,7 @@ import subprocess
 import sys
 from importlib import metadata
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -71,7 +72,10 @@ def test_native_and_platform_match_with_shared_weights(
     assert json.loads((output / "paired_result.json").read_text()) == report
     assert report["failed_phase"] is None
     assert report["phase_contract"]["version"] == phase_contract.CONTRACT_VERSION
-    assert report["execution_order"] == ["native_pytorch", "visionforge_trainer"]
+    assert report["execution_order"] == [
+        "visionforge_trainer",
+        "native_pytorch",
+    ]  # odd seed: VisionForge first
     for path in ("native", "visionforge"):
         assert report[path]["status"] == "completed"
         assert list(report[path]["phases"]) == list(phase_contract.PHASES)
@@ -243,7 +247,7 @@ def test_pair_failure_names_path_and_phase_and_embeds_partial_report(
     monkeypatch.setattr(phase_contract, "sha256_file", failing_hash)
     output = tmp_path / "pair"
     with pytest.raises(PhaseFailure):
-        run_pair(dataset, initial, output, seed=37, epochs=1, batch_size=4)
+        run_pair(dataset, initial, output, seed=36, epochs=1, batch_size=4)
     report = json.loads((output / "paired_result.json").read_text(encoding="utf-8"))
     assert report["status"] == "failed"
     assert report["failed_phase"] == "native.evidence"
@@ -251,3 +255,48 @@ def test_pair_failure_names_path_and_phase_and_embeds_partial_report(
     assert "visionforge" not in report
     assert report["phase_contract"]["version"] == phase_contract.CONTRACT_VERSION
     assert (output / "native" / "native_result.json").is_file()
+
+
+@pytest.mark.parametrize(
+    ("seed", "expected"),
+    [
+        (0, ["native_pytorch", "visionforge_trainer"]),
+        (1, ["visionforge_trainer", "native_pytorch"]),
+        (36, ["native_pytorch", "visionforge_trainer"]),
+        (37, ["visionforge_trainer", "native_pytorch"]),
+    ],
+)
+def test_execution_order_alternates_with_seed_parity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, seed: int, expected: list[str]
+) -> None:
+    """Even seeds run native first and odd seeds VisionForge first, per pair."""
+    from research.workflow_benchmark import native_classification, paired_classification
+
+    dataset, initial = _fixture(tmp_path)
+    calls: list[str] = []
+    monkeypatch.setattr(
+        native_classification,
+        "run_native",
+        _recorder(calls, "native_pytorch"),
+    )
+    monkeypatch.setattr(
+        paired_classification,
+        "run_visionforge",
+        _recorder(calls, "visionforge_trainer"),
+    )
+    output = tmp_path / "pair"
+    with pytest.raises(KeyError):  # empty stub reports fail at the comparison
+        run_pair(dataset, initial, output, seed=seed, epochs=1, batch_size=4)
+    report = json.loads((output / "paired_result.json").read_text(encoding="utf-8"))
+    assert calls == expected
+    assert report["execution_order"] == expected
+
+
+def _recorder(calls: list[str], name: str) -> Any:
+    """A stand-in that records its name and returns an empty report."""
+
+    def record(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        calls.append(name)
+        return {}
+
+    return record

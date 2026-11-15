@@ -1,7 +1,8 @@
-# baseline experiment — ResNet50 binary classification.
-# Copy and rename this file for each new experiment.
+# Example classification config (ResNet50 binary classification). Copy, point
+# `data.base_dir` at your dataset (train/val/test class subdirs), then run:
+#   visionforge run configs/baseline.yaml
 
-schema_version: 1  # config schema version (for forward migration); see DECISIONS ADR-039
+schema_version: 2  # config schema version (for forward migration); see DECISIONS ADR-039
 name: resnet50_baseline
 task: binary  # binary | multiclass
 
@@ -21,7 +22,7 @@ training:
   seed: 42
 
 data:
-  base_dir: datasets/USK-Coffee_Binary
+  base_dir: datasets/my_classification_dataset
   train_dir: train
   val_dir: val
   test_dir: test

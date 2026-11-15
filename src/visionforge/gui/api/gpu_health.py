@@ -9,6 +9,8 @@ the GUI can only stop accepting jobs and say why.
 
 from __future__ import annotations
 
+import sys
+
 from loguru import logger
 
 _CUDA_ERROR_MARKERS = ("CUDA error", "device-side assert", "cudaError")
@@ -20,10 +22,11 @@ def cuda_context_broken() -> bool:
     Never starts CUDA itself: a server that has not trained on the GPU yet has no
     context to be broken. The probe is a one-element allocation, which raises at
     once on a poisoned context and does not wait for a running job's kernels.
+    Never imports torch either: a process that has not imported it has no CUDA
+    context, and importing it here cost the first run ~3 s on the event loop.
     """
-    import torch
-
-    if not torch.cuda.is_initialized():
+    torch = sys.modules.get("torch")
+    if torch is None or not torch.cuda.is_initialized():
         return False
     try:
         torch.zeros(1, device="cuda")

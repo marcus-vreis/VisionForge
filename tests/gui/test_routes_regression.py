@@ -1,14 +1,20 @@
 from __future__ import annotations
 
-import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.strategies as strategies
+from tests.helpers import wait_experiment_done, wait_until
 from visionforge.utils.selftest_data import build_regression_dataset
 
 from .conftest import occupy_queue, release_queue
+
+# Any: the tests swap its orchestrators and executors for fakes.
+strategies_mod: Any = strategies
 
 
 @pytest.fixture
@@ -51,7 +57,7 @@ class TestRegressionRun:
         from visionforge.blocks.regression import RegressionBlock
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
         orig_setup = RegressionBlock.setup
@@ -79,11 +85,9 @@ class TestRegressionRun:
 
             # Wait for run(), not setup(): has_callback is written in run, and
             # waiting on setup's key raced the assert below.
-            deadline = time.monotonic() + 30.0
-            while time.monotonic() < deadline:
-                if "has_callback" in captured:
-                    break
-                time.sleep(0.05)
+            wait_until(
+                lambda: "has_callback" in captured, message='"has_callback" in captured'
+            )
             assert captured.get("class") == "RegressionBlock"
             assert captured.get("model") == "resnet18"
             assert captured.get("has_callback") is True
@@ -91,26 +95,26 @@ class TestRegressionRun:
             RegressionBlock.setup = orig_setup  # type: ignore[method-assign]
             RegressionBlock.run = orig_run  # type: ignore[method-assign]
             RegressionBlock.report = orig_report  # type: ignore[method-assign]
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post("/api/regression/run", json=_payload(tmp_path))
             assert resp.status_code == 200
             assert resp.json()["status"] == "queued"
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_run_rejects_invalid_config(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         payload = _payload(tmp_path)
         # num_targets (2) must equal len(target_columns) (1) -> 422
         payload["model"] = {"name": "resnet18", "num_targets": 2, "pretrained": False}
@@ -121,12 +125,16 @@ class TestRegressionRun:
 
 class TestRegressionCompare:
     def test_compare_dispatches_and_reports(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.comparison import ComparisonTrial
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         def fake_compare(
             runner, config_dict, model_names, metric, progress_callback=None
@@ -140,8 +148,7 @@ class TestRegressionCompare:
                 ),
             ]
 
-        orig = routes_mod.run_model_comparison
-        routes_mod.run_model_comparison = fake_compare
+        monkeypatch.setattr(strategies_mod, "run_model_comparison", fake_compare)
         try:
             client = live_client
             payload = {
@@ -153,12 +160,7 @@ class TestRegressionCompare:
             assert resp.status_code == 200, resp.text
             run_id = resp.json()["run_id"]
 
-            status = {"status": "running"}
-            for _ in range(50):
-                status = client.get("/api/experiment/status").json()
-                if status["status"] in ("completed", "failed"):
-                    break
-                time.sleep(0.05)
+            status = wait_experiment_done(client)
             assert status["status"] == "completed", status
 
             report = client.get(f"/api/experiment/result/{run_id}").json()["report"]
@@ -170,14 +172,13 @@ class TestRegressionCompare:
             assert (Path(report["report_dir"]) / "comparison_summary.json").exists()
             assert (Path(report["report_dir"]) / "comparison_ranking.csv").exists()
         finally:
-            routes_mod.run_model_comparison = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post(
@@ -187,13 +188,13 @@ class TestRegressionCompare:
             assert resp.status_code == 200
             assert resp.json()["status"] == "queued"
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_compare_rejects_invalid_config(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         cfg = _payload(tmp_path)
         cfg["model"] = {"name": "resnet18", "num_targets": 2, "pretrained": False}
         client = TestClient(app, raise_server_exceptions=True)
@@ -207,7 +208,7 @@ class TestRegressionCompare:
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(
             "/api/regression/compare",
@@ -218,12 +219,16 @@ class TestRegressionCompare:
 
 class TestRegressionSweep:
     def test_grid_sweep_dispatches_and_reports(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.sweep import SweepTrial
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         def fake_sweep(
             runner, base, space, *, mode, metric, n_trials, seed, progress_callback=None
@@ -233,8 +238,7 @@ class TestRegressionSweep:
                 SweepTrial(1, {"training.learning_rate": 0.1}, "success", {"r2": 0.6}),
             ]
 
-        orig = routes_mod.run_sweep
-        routes_mod.run_sweep = fake_sweep
+        monkeypatch.setattr(strategies_mod, "run_sweep", fake_sweep)
         try:
             client = live_client
             payload = {
@@ -247,12 +251,7 @@ class TestRegressionSweep:
             assert resp.status_code == 200, resp.text
             run_id = resp.json()["run_id"]
 
-            status = {"status": "running"}
-            for _ in range(50):
-                status = client.get("/api/experiment/status").json()
-                if status["status"] in ("completed", "failed"):
-                    break
-                time.sleep(0.05)
+            status = wait_experiment_done(client)
             assert status["status"] == "completed", status
 
             report = client.get(f"/api/experiment/result/{run_id}").json()["report"]
@@ -266,14 +265,13 @@ class TestRegressionSweep:
             assert report["best_trial"]["overrides"]["training.learning_rate"] == 0.05
             assert (Path(report["report_dir"]) / "sweep_summary.json").exists()
         finally:
-            routes_mod.run_sweep = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_sweep_rejects_unknown_path(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(
             "/api/regression/sweep",
@@ -289,7 +287,7 @@ class TestRegressionSweep:
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post(
@@ -302,4 +300,4 @@ class TestRegressionSweep:
             assert resp.status_code == 200
             assert resp.json()["status"] == "queued"
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)

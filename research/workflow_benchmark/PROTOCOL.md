@@ -114,8 +114,12 @@ logs and `run.json`; the native path writes only the best checkpoint.
 Each report records `conditions`: cache (local pre-staged data and weights, no
 downloads, OS file cache not controlled), library versions, CPU threads,
 `CUDA_VISIBLE_DEVICES`, process priority and the declared concurrent workload.
-The pair always runs native first, so the second path may read warm OS file
-caches; the order is recorded as `execution_order`. Phase times are machine
+The pair order is counterbalanced by seed: even seeds run native first and odd
+seeds run VisionForge first. The second path may still read warm OS file caches,
+so a timing ratio is only comparable across an even and an odd seed; the order of
+each pair is recorded as `execution_order`. Any timing ratio must therefore pool at
+least one even and one odd seed: run each command below with `--seed 36` and
+again with `--seed 37` (the examples show 37 only to stay short). Phase times are machine
 wall-clock time (`timing_kind`); human effort is not measured by this harness.
 
 A failure in any phase writes the partial report with `status: failed`,
@@ -250,7 +254,7 @@ in their manifest; absent class metadata defaults to the 20 VOC classes.
 Both paths construct/load/place the model before seeding. A scoped monkeypatch
 of `detection_trainer.build_torchvision_detector` returns the prebuilt model
 without consuming RNG after the Trainer seeds, and is restored even on failure.
-Training, validation loss in train mode (including BatchNorm updates), and
+Training, validation loss in train mode with BatchNorm in eval, and
 validation mAP each create a separate loader iterator in that order. Train and
 validation batches must have at least two images for SSDLite BatchNorm. Strict
 validation mAP improvement selects the first best checkpoint; absent test uses

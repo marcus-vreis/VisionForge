@@ -33,6 +33,21 @@ export function seedsProblem(t: Dict, seeds: number[]): string | null {
   return null;
 }
 
+/** The card's fields when it opens on given seeds (a run repeated from
+ *  History, #200): explicit seeds, written the way the field shows them, so
+ *  the set trains exactly those and no seed the run already used. */
+export function seedFieldsFor(seeds: readonly number[]): {
+  mode: ReplicatesSeedMode;
+  nReplicates: number;
+  rawSeeds: string;
+} {
+  return {
+    mode: "explicit",
+    nReplicates: Math.min(50, Math.max(2, seeds.length)),
+    rawSeeds: seeds.join(", "),
+  };
+}
+
 /** Shape the ReplicatesRequest body: explicit seeds win; otherwise the backend
  *  derives n consecutive seeds from the config's own training.seed. */
 export function buildReplicatesPayload(

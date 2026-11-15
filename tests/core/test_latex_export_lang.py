@@ -155,7 +155,10 @@ class TestPortuguese:
         with using_lang("pt"):
             tex = cv_to_latex(_cv())
 
-        assert r"\caption{Experimento: validação cruzada com 1 folds.}" in tex
+        assert r"\caption{Experimento: validação cruzada com 1 folds." in tex
+        assert "escolhida no próprio fold de validação" in tex
+        assert "estimativa otimista" in tex
+        assert "own fold" not in tex
         assert r"\textbf{Média $\pm$ DP ($n-1$)}" in tex
         assert "cross-validation" not in tex
         assert r"\textbf{Mean" not in tex
@@ -166,6 +169,7 @@ class TestPortuguese:
             tex = cv_to_latex(_cv(stopped=True))
 
         assert "1 de 5 folds concluídos (1 interrompida(s), 3 não executada(s))" in tex
+        assert "escolhida no próprio fold de validação" in tex
         assert "finished" not in tex
         assert "not run" not in tex
         _assert_braces_render(tex)
@@ -182,6 +186,16 @@ class TestPortuguese:
         assert "significant at" not in tex
         _assert_braces_render(tex)
         assert tex.count(r"$^{*}$") == 2  # the row star and the note, single braces
+
+    def test_comparison_names_the_interval_method(self) -> None:
+        rows = _comparisons()
+        rows[0]["ci_method"] = "hodges_lehmann"
+        with using_lang("pt"):
+            tex = comparison_to_latex(rows)
+
+        assert r"IC 95\% da diferença: Hodges-Lehmann" in tex
+        assert "pseudomediana" in tex
+        assert "Walsh averages" not in tex
 
     def test_underpowered_comparison(self) -> None:
         with using_lang("pt"):

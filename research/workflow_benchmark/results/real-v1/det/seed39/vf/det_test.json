@@ -1,0 +1,5 @@
+{
+ "best": "~\\vfsmoke\\real-v1\\det\\seed39\\vf\\models\\real_det_s39\\20261030_215901_382535\\weights\\best.pt",
+ "map50": 0.7746687653571547,
+ "map50_95": 0.5619878898034386
+}

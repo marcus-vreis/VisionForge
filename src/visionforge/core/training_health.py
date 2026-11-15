@@ -171,6 +171,62 @@ def no_detections(map50: float | None, epochs_done: int) -> HealthWarning | None
     )
 
 
+def non_finite_metric(
+    name: str, epoch: int, value: float, best_epoch: int = 0
+) -> HealthWarning:
+    """Warn that the metric ranking checkpoints was NaN or infinite (ADR-182).
+
+    ``best_epoch`` > 0 means an earlier epoch's best checkpoint was kept.
+    """
+    key = (
+        "health.non_finite_metric_kept"
+        if best_epoch > 0
+        else "health.non_finite_metric"
+    )
+    return HealthWarning(
+        code="non_finite_metric",
+        message=tr(key, metric=name, epoch=epoch, value=value, best_epoch=best_epoch),
+    )
+
+
+def mps_not_deterministic(
+    device_type: str, deterministic: bool
+) -> HealthWarning | None:
+    """Warn that ``deterministic`` does not pin the numbers on Apple's GPU (ADR-192).
+
+    The switch configures cuDNN; MPS kernels have no deterministic mode, so the
+    same config and seed may not reproduce the same metrics there.
+    """
+    if not deterministic or device_type != "mps":
+        return None
+    return HealthWarning(
+        code="mps_not_deterministic", message=tr("health.mps_not_deterministic")
+    )
+
+
+def single_class_test_split(labels: Sequence[int]) -> HealthWarning | None:
+    """Warn when an anomaly test split holds only one class (#170).
+
+    AUROC needs both normal and anomalous images to rank; with one class it is
+    undefined and the run reports it as null rather than a fake 0.5.
+    """
+    present = {int(label) for label in labels}
+    if len(present) >= 2:
+        return None
+    return HealthWarning(
+        code="single_class_test_split",
+        message=tr(
+            "health.single_class_test_split",
+            n=len(labels),
+            kind=tr(
+                "health.single_class_anomalous"
+                if present == {1}
+                else "health.single_class_normal"
+            ),
+        ),
+    )
+
+
 def summarize(warnings: Sequence[HealthWarning | None]) -> list[dict[str, str]]:
     """Drop the Nones and hand back what run.json should carry."""
     return [w.to_dict() for w in warnings if w is not None]
@@ -178,10 +234,13 @@ def summarize(warnings: Sequence[HealthWarning | None]) -> list[dict[str, str]]:
 
 __all__ = [
     "HealthWarning",
+    "single_class_test_split",
     "collapsed_predictions",
     "collapsed_segmentation",
     "frozen_random_backbone",
+    "mps_not_deterministic",
     "no_detections",
+    "non_finite_metric",
     "constant_predictions",
     "stagnant_loss",
     "summarize",

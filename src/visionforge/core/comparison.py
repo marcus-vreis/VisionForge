@@ -26,11 +26,6 @@ from visionforge.core.task_runner import (
     runner_metric_direction,
 )
 
-try:  # torch is the heavy hardware extra; the cache flush is best-effort.
-    import torch
-except ImportError:  # pragma: no cover - torch is always present in practice
-    torch = None  # type: ignore[assignment]
-
 
 @dataclass
 class ComparisonTrial:
@@ -126,7 +121,12 @@ def run_model_comparison(
 def _release_trial_memory() -> None:
     """Release unused CPU and available CUDA memory between architectures."""
     gc.collect()
-    if torch is not None and torch.cuda.is_available():
+    # torch is imported here, not at module load, so the GUI starts without it (#202).
+    try:  # torch is the heavy hardware extra; the cache flush is best-effort.
+        import torch
+    except ImportError:  # pragma: no cover - torch is always present in practice
+        return
+    if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
 

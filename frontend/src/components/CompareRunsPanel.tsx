@@ -11,13 +11,20 @@ import {
   runTaskKey,
   servedDirections,
 } from "../lib/compare-metrics";
-import { curveSeries, selectedCurves, toggleCurve, type CurveSeries } from "../lib/compare-curves";
+import {
+  curveSeries,
+  formatCurveValue,
+  selectedCurves,
+  toggleCurve,
+  type CurveSeries,
+} from "../lib/compare-curves";
 import { seedNote } from "../lib/compare-seeds";
 import type { TaskDescriptor } from "../lib/custom-tasks";
 import { compareDatasets } from "../lib/dataset-identity";
 import { aggregateForRow, formatAggregate } from "../lib/run-groups";
 import { accentForTask } from "../lib/task-accent";
 import { useCustomAccents } from "../lib/custom-accents";
+import { LineChart } from "./ui/LineChart";
 import { useResolvedTheme } from "./training-story/use-viewing";
 
 interface CompareRunsPanelProps {
@@ -863,13 +870,7 @@ function OverlayChart({
 }) {
   const t = useT();
   const title = t.compareRuns.curveTitle(curve.label ? t.compareRuns.curves[curve.label] : curve.key);
-  const width = 720;
-  const height = 220;
-  const padding = { top: 16, right: 16, bottom: 28, left: 44 };
-  const innerW = width - padding.left - padding.right;
-  const innerH = height - padding.top - padding.bottom;
-
-  // Collect series + ranges.
+  // One series per run; an epoch it did not measure is a gap, not a zero.
   const series = details
     .map((d, i) => {
       const points = d.history.map((h) => ({
@@ -884,19 +885,8 @@ function OverlayChart({
     return null;
   }
 
-  const allX = series.flatMap((s) => s.points.map((p) => p.x));
-  const allY = series.flatMap((s) => s.points.map((p) => p.y)).filter((v) => Number.isFinite(v));
   // Runs stopped before they measured anything have no curve to draw.
-  if (allY.length === 0) return null;
-  const xMin = Math.min(...allX);
-  const xMax = Math.max(...allX);
-  const yMin = Math.min(...allY);
-  const yMax = Math.max(...allY);
-  const yRange = yMax - yMin || 1;
-
-  const xScale = (x: number) => padding.left + ((x - xMin) / Math.max(xMax - xMin, 1)) * innerW;
-  const yScale = (y: number) =>
-    padding.top + innerH - ((y - yMin) / yRange) * innerH;
+  if (!series.some((s) => s.points.some((p) => Number.isFinite(p.y)))) return null;
 
   return (
     <div
@@ -924,80 +914,18 @@ function OverlayChart({
           </span>
         )}
       </div>
-      <svg width={width} height={height} style={{ display: "block", maxWidth: "100%" }}>
-        {/* Y-axis labels (min/max) */}
-        <text x={padding.left - 6} y={padding.top + 4} fontSize="10" fill="var(--vf-text-muted)" textAnchor="end">
-          {yMax.toFixed(3)}
-        </text>
-        <text
-          x={padding.left - 6}
-          y={padding.top + innerH}
-          fontSize="10"
-          fill="var(--vf-text-muted)"
-          textAnchor="end"
-        >
-          {yMin.toFixed(3)}
-        </text>
-        {/* X-axis labels */}
-        <text
-          x={padding.left}
-          y={height - 8}
-          fontSize="10"
-          fill="var(--vf-text-muted)"
-        >
-          {xMin}
-        </text>
-        <text
-          x={width - padding.right}
-          y={height - 8}
-          fontSize="10"
-          fill="var(--vf-text-muted)"
-          textAnchor="end"
-        >
-          {xMax}
-        </text>
-        {/* Grid */}
-        <line
-          x1={padding.left}
-          y1={padding.top + innerH}
-          x2={width - padding.right}
-          y2={padding.top + innerH}
-          stroke="var(--vf-panel-stroke)"
-          strokeWidth="1"
-        />
-        <line
-          x1={padding.left}
-          y1={padding.top}
-          x2={padding.left}
-          y2={padding.top + innerH}
-          stroke="var(--vf-panel-stroke)"
-          strokeWidth="1"
-        />
-        {/* Lines */}
-        {series.map((s) => {
-          const finite = s.points.filter((p) => Number.isFinite(p.y));
-          const path = finite
-            .map((p, i) => `${i === 0 ? "M" : "L"} ${xScale(p.x)} ${yScale(p.y)}`)
-            .join(" ");
-          return (
-            <g key={s.runId}>
-              <path
-                d={path}
-                fill="none"
-                stroke={s.color}
-                strokeWidth="2"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-                opacity={0.92}
-              />
-              {/* One epoch (PatchCore fits in one) is a point, which a line does not draw. */}
-              {finite.length === 1 && (
-                <circle cx={xScale(finite[0].x)} cy={yScale(finite[0].y)} r={3.5} fill={s.color} />
-              )}
-            </g>
-          );
-        })}
-      </svg>
+      <LineChart
+        title={title}
+        height={220}
+        width={720}
+        formatValue={formatCurveValue}
+        series={series.map((s) => ({
+          key: s.runId,
+          name: s.label,
+          color: s.color,
+          points: s.points,
+        }))}
+      />
     </div>
   );
 }

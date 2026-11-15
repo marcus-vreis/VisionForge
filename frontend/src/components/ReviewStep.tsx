@@ -2,6 +2,7 @@ import type { LearningRatePlanRequest } from "../api/client";
 import { useT } from "../i18n/useT";
 import { shortKey } from "../lib/experiment-name";
 import { useStepNav, type StepId } from "../lib/steps";
+import type { ImportNotice } from "../hooks/usePendingImport";
 import { ExperimentNameCard } from "./ExperimentHeader";
 import { LearningRatePlanCard } from "./LearningRatePlanCard";
 
@@ -29,6 +30,8 @@ interface ReviewStepProps {
   onImportConfig: (
     data: Record<string, unknown>,
   ) => string | null | Promise<string | null>;
+  /** A run loaded from History (#200), reported like an imported file. */
+  importNotice?: ImportNotice | null;
   sections: ReviewSection[];
   /** Asks for the rate of each trial; absent on a form with no such list. */
   learningRatePlan?: LearningRatePlanRequest | null;
@@ -65,6 +68,7 @@ export function ReviewStep({
   sweepKeys,
   onExportYaml,
   onImportConfig,
+  importNotice,
   sections,
   learningRatePlan,
   errors = [],
@@ -97,6 +101,7 @@ export function ReviewStep({
         }
         onExportYaml={onExportYaml}
         onImportConfig={onImportConfig}
+        importNotice={importNotice}
       />
 
       <div className="vf-review-grid">

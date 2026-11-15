@@ -10,6 +10,10 @@ from typing import Any
 
 import pytest
 
+import visionforge.gui.api.colab_run_routes as colab_run_mod
+import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.execution_routes as execution_routes
+import visionforge.gui.api.submission as submission_mod
 from visionforge.gui.api import colab_jobs as cj
 from visionforge.gui.api.run_queue import (
     LOCAL_LANE,
@@ -163,24 +167,25 @@ def test_a_local_job_and_a_colab_job_run_at_once_each_with_its_own_stream(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """The phase-4 promise end to end: two jobs, two lanes, two streams, two states."""
-    import visionforge.gui.api.routes as routes_mod
 
     colab_started = threading.Event()
     colab_may_end = threading.Event()
 
     class Jobs:
-        def run_job(self, slug, accelerator, payload, on_event, cancelled):  # type: ignore[no-untyped-def]
+        def run_job(
+            self, slug, accelerator, payload, on_event, cancelled, consent=None
+        ):  # type: ignore[no-untyped-def]
             on_event({"event": "remote", "stage": "train"})
             colab_started.set()
             assert colab_may_end.wait(5)
             on_event({"event": "epoch_end", "epoch": 1, "where": "colab"})
             return cj.RemoteResult("completed", report={"where": "colab"})
 
-    monkeypatch.setattr(routes_mod, "_COLAB_JOBS", Jobs())
+    monkeypatch.setattr(colab_run_mod, "_COLAB_JOBS", Jobs())
 
     async def local_executor(run_id: str, gate: asyncio.Event) -> None:
         # The same shape as the real executors: its own state, found by run_id.
-        state = routes_mod._job_state(run_id)
+        state = execution_mod._job_state(run_id)
         await state.log.put({"event": "epoch_end", "epoch": 1, "where": "local"})
         await gate.wait()
         state.run = {
@@ -193,45 +198,47 @@ def test_a_local_job_and_a_colab_job_run_at_once_each_with_its_own_stream(
         await state.log.put(None)
 
     async def read(run_id: str) -> list[dict[str, Any]]:
-        lines = [line async for line in routes_mod._sse_generator(run_id)]
+        lines = [line async for line in execution_mod._sse_generator(run_id)]
         return [json.loads(line[len("data: ") :]) for line in lines]
 
     async def scenario() -> dict[str, Any]:
         local_gate = asyncio.Event()
-        local = routes_mod._submit_job(
+        local = submission_mod._submit_job(
             "local-run",
             "local",
             "classification",
             "simple",
             lambda: local_executor("local-run", local_gate),
         )
-        colab = routes_mod._submit_job(
+        colab = submission_mod._submit_job(
             "colab-run",
             "colab",
             "classification",
             "colab",
-            lambda: routes_mod._execute_colab("colab-run", "ana", "T4", {}, tmp_path),
+            lambda: colab_run_mod._execute_colab(
+                "colab-run", "ana", "T4", {}, tmp_path
+            ),
             stop_at="vm",
             lane=COLAB,
         )
         await asyncio.to_thread(colab_started.wait, 5)
         await asyncio.sleep(0.01)
-        during = {
+        during: dict[str, Any] = {
             "submitted": (local.status, colab.status),
             "lanes": [
                 (s["lane"], (s["active"] or {}).get("run_id"))
-                for s in routes_mod._LANES.snapshots()
+                for s in execution_mod._LANES.snapshots()
             ],
             "statuses": (
-                (await routes_mod.get_status("local-run")).status,
-                (await routes_mod.get_status("colab-run")).status,
+                (await execution_routes.get_status("local-run")).status,
+                (await execution_routes.get_status("colab-run")).status,
             ),
         }
         # Stopping the Colab job must leave the local one alone.
-        assert routes_mod._LANES.cancel("colab-run") is True
+        assert execution_mod._LANES.cancel("colab-run") is True
         during["tokens"] = (
-            routes_mod._job_state("local-run").token.cancelled,
-            routes_mod._job_state("colab-run").token.cancelled,
+            execution_mod._job_state("local-run").token.cancelled,
+            execution_mod._job_state("colab-run").token.cancelled,
         )
         colab_may_end.set()
         local_gate.set()
@@ -239,8 +246,8 @@ def test_a_local_job_and_a_colab_job_run_at_once_each_with_its_own_stream(
         await asyncio.sleep(0.02)
         during["streams"] = streams
         during["results"] = (
-            (await routes_mod.get_result("local-run")).report,
-            (await routes_mod.get_result("colab-run")).report,
+            (await execution_routes.get_result("local-run")).report,
+            (await execution_routes.get_result("colab-run")).report,
         )
         return during
 
@@ -248,7 +255,7 @@ def test_a_local_job_and_a_colab_job_run_at_once_each_with_its_own_stream(
         seen = asyncio.run(scenario())
     finally:
         colab_may_end.set()
-        release_queue(routes_mod)
+        release_queue(execution_mod)
 
     assert seen["submitted"] == ("running", "running")
     assert seen["lanes"] == [(LOCAL_LANE, "local-run"), (COLAB, "colab-run")]
@@ -264,23 +271,21 @@ def test_a_local_job_and_a_colab_job_run_at_once_each_with_its_own_stream(
 
 
 def test_a_client_that_names_no_run_follows_the_job_started_last() -> None:
-    import visionforge.gui.api.routes as routes_mod
-
     from .conftest import start_job
 
     async def scenario() -> tuple[str | None, list[str]]:
-        start_job(routes_mod, "first")
-        second = start_job(routes_mod, "second", lane=COLAB)
+        start_job(execution_mod, "first")
+        second = start_job(execution_mod, "second", lane=COLAB)
         await second.log.put({"event": "start"})
         await second.log.put(None)
-        status = await routes_mod.get_status()
-        lines = [line async for line in routes_mod._sse_generator()]
+        status = await execution_routes.get_status()
+        lines = [line async for line in execution_mod._sse_generator()]
         return status.run_id, lines
 
     try:
         run_id, lines = asyncio.run(scenario())
     finally:
-        release_queue(routes_mod)
+        release_queue(execution_mod)
 
     assert run_id == "second"
     assert lines == ['data: {"event": "start"}\n\n']
@@ -289,21 +294,19 @@ def test_a_client_that_names_no_run_follows_the_job_started_last() -> None:
 def test_finished_states_are_bounded_but_running_ones_are_kept(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import visionforge.gui.api.routes as routes_mod
-
     from .conftest import start_job
 
-    monkeypatch.setattr(routes_mod, "_MAX_FINISHED_STATES", 2)
+    monkeypatch.setattr(execution_mod, "_MAX_FINISHED_STATES", 2)
     try:
-        start_job(routes_mod, "running-long")
+        start_job(execution_mod, "running-long")
         for i in range(4):
-            start_job(routes_mod, f"done-{i}").run["status"] = "completed"
-        start_job(routes_mod, "trigger")
-        assert list(routes_mod._JOB_STATES) == [
+            start_job(execution_mod, f"done-{i}").run["status"] = "completed"
+        start_job(execution_mod, "trigger")
+        assert list(execution_mod._JOB_STATES) == [
             "running-long",
             "done-2",
             "done-3",
             "trigger",
         ]
     finally:
-        release_queue(routes_mod)
+        release_queue(execution_mod)

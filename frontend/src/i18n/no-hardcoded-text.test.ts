@@ -47,6 +47,11 @@ const OBJECT_PROPS = new Set([...VISIBLE_PROPS, "text", "message"]);
 const PORTUGUESE =
   /[ãõçáéíóúâêôàÃÕÇÁÉÍÓÚÂÊÔÀ]|\b(nenhum|nenhuma|carregando|treinar|salvar|escolha|pasta|arquivo|você|voltar|continuar|pular|abrir|fechar|limpar|baixar|rodar|parar|retomar|apagar|dispositivos?|imagens?|de|do|da|dos|das|para|com|sem|uma?|pel[oa]s?|menos|cancelad[oa]|falha|abrindo|aguarde)\b/i;
 
+// A whole address is a link target, not a word on screen: the Portuguese list would otherwise
+// flag `/docs/gui/primeiro-treino.md` or `crash-course?hl=pt-br`. Only the bare-literal check
+// skips it; an address written as JSX text or in a visible prop is still reported.
+const LINK_TARGET = /^https:\/\/\S+$/;
+
 const HAS_LETTER = /[A-Za-zÀ-ÿ]/;
 const PROSE = /[a-zà-ÿ]{2,}\s+[a-zà-ÿ]{2,}/;
 const SINGLE_WORD = /^\S+$/;
@@ -158,7 +163,8 @@ function findings(path: string): Finding[] {
         ts.isTemplateTail(node))
     ) {
       const s = node.text;
-      if (s.trim() && ((PORTUGUESE.test(s) && !ALLOWED.has(s.trim())) || s === "pt-BR")) add(node, s);
+      const words = PORTUGUESE.test(s) && !ALLOWED.has(s.trim()) && !LINK_TARGET.test(s.trim());
+      if (s.trim() && (words || s === "pt-BR")) add(node, s);
     }
     ts.forEachChild(node, visit);
   };

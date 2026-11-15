@@ -9,6 +9,8 @@ from typing import Any
 
 import pytest
 
+import visionforge.gui.api.colab_run_routes as colab_run_mod
+import visionforge.gui.api.execution as execution_mod
 from visionforge.core.experiment_bundle import export_experiment_bundle
 from visionforge.gui.api import colab_jobs as cj
 from visionforge.gui.api import colab_remote_runner as runner
@@ -69,6 +71,25 @@ def test_the_bundle_is_downloaded_before_the_vm_stops(tmp_path: Path) -> None:
     download = cli.calls[commands.index("download")]
     assert download[:4] == ["download", "-s", download[2], REMOTE]
     assert {"event": "remote", "stage": "download", "session": download[2]} in events
+
+
+def test_the_downloaded_result_keeps_the_report_and_the_remote_bundle(
+    tmp_path: Path,
+) -> None:
+    data = _bundle_bytes(tmp_path)
+    remote = {"path": REMOTE, "size": len(data)}
+    report = {"best_val_loss": 0.4}
+    end = {"event": "job_end", "status": "ok", "report": report, "bundle": remote}
+    cli = FakeCli([event_line(end)])
+    cli.download_bytes = data
+
+    result, _ = run(cli)
+
+    assert result.outcome == "completed"
+    assert result.report == report
+    assert result.error is None
+    assert result.remote_bundle == remote
+    assert result.bundle is not None
 
 
 def test_a_failed_download_fails_the_job_and_still_stops_the_vm(
@@ -138,19 +159,20 @@ def test_a_job_without_a_bundle_completes_without_downloading() -> None:
 def _execute(
     monkeypatch: pytest.MonkeyPatch, result: cj.RemoteResult, models: Path
 ) -> list[dict[str, Any]]:
-    import visionforge.gui.api.routes as routes_mod
 
     class Jobs:
-        def run_job(self, slug, accelerator, payload, on_event, cancelled):  # type: ignore[no-untyped-def]
+        def run_job(
+            self, slug, accelerator, payload, on_event, cancelled, consent=None
+        ):  # type: ignore[no-untyped-def]
             on_event({"event": "remote", "stage": "download"})
             return result
 
-    monkeypatch.setattr(routes_mod, "_COLAB_JOBS", Jobs())
+    monkeypatch.setattr(colab_run_mod, "_COLAB_JOBS", Jobs())
     log = RunEventLog("r1")
 
     async def go() -> list[dict[str, Any]]:
-        start_job(routes_mod, "r1", log=log)
-        await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD, models)
+        start_job(execution_mod, "r1", log=log)
+        await colab_run_mod._execute_colab("r1", "default", "T4", PAYLOAD, models)
         return [e async for e in log.read()]
 
     return asyncio.run(go())
@@ -159,8 +181,6 @@ def _execute(
 def test_the_executor_imports_the_run_and_marks_it_as_colab(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import visionforge.gui.api.routes as routes_mod
-
     local = tmp_path / "job.zip"
     local.write_bytes(_bundle_bytes(tmp_path))
     models = tmp_path / "profile" / "models"
@@ -170,7 +190,7 @@ def test_the_executor_imports_the_run_and_marks_it_as_colab(
             cj.RemoteResult("completed", report={"train": {}}, bundle=local),
             models,
         )
-        current = job_run(routes_mod, "r1")
+        current = job_run(execution_mod, "r1")
         assert current is not None
         assert current["status"] == "completed"
         assert current["error"] is None
@@ -183,14 +203,12 @@ def test_the_executor_imports_the_run_and_marks_it_as_colab(
         assert [s.origin for s in load_runs(models)] == ["colab"]
         assert not local.exists()
     finally:
-        release_queue(routes_mod)
+        release_queue(execution_mod)
 
 
 def test_a_bundle_that_does_not_import_fails_the_job_and_writes_no_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import visionforge.gui.api.routes as routes_mod
-
     local = tmp_path / "job.zip"
     local.write_bytes(b"not a zip")
     models = tmp_path / "profile" / "models"
@@ -198,7 +216,7 @@ def test_a_bundle_that_does_not_import_fails_the_job_and_writes_no_run(
         events = _execute(
             monkeypatch, cj.RemoteResult("completed", report={}, bundle=local), models
         )
-        current = job_run(routes_mod, "r1")
+        current = job_run(execution_mod, "r1")
         assert current is not None
         assert current["status"] == "failed"
         assert current["run_dir"] is None
@@ -208,7 +226,7 @@ def test_a_bundle_that_does_not_import_fails_the_job_and_writes_no_run(
         # The stream still closes after the events that did arrive.
         assert events == [{"event": "remote", "stage": "download"}]
     finally:
-        release_queue(routes_mod)
+        release_queue(execution_mod)
 
 
 def test_an_imported_run_opens_in_the_runs_routes_like_any_other(

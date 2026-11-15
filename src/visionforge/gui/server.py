@@ -2,24 +2,44 @@
 
 from __future__ import annotations
 
+import os
 import re
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from loguru import logger
 
 from visionforge import __version__
+from visionforge.gui.api.error_messages import validation_error_handler
+from visionforge.gui.api.http_responses import (
+    NOT_FOUND_TEXT,
+    OPENAPI_TAGS,
+    TAG_SPA,
+    TAG_SYSTEM,
+)
 from visionforge.gui.api.routes import router as api_router
+from visionforge.gui.security import (
+    HostOriginGuard,
+    HostPolicy,
+    SecurityHeaders,
+    SpaContentSecurityPolicy,
+    is_wildcard,
+)
+from visionforge.utils.third_party_privacy import apply_env_opt_outs
+
+# The trainers are imported only when a run starts (GUI-11, #202), and importing
+# them used to set these switches as a side effect. Set them here, before any
+# handler imports an SDK that reads them on import (ADR-180).
+apply_env_opt_outs()
 
 INDEX_FILENAME = "index.html"
 NOT_FOUND_DETAIL = "Not Found"
 
-_NOT_FOUND: dict[int | str, dict[str, Any]] = {
-    404: {"description": "Resource not found"}
-}
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -45,7 +65,33 @@ def _read_spa_bundle() -> str:
 
 _BOOT_SPA_BUNDLE = _read_spa_bundle()
 
-app = FastAPI(title="VisionForge", version=__version__)
+
+def _docs_enabled() -> bool:
+    """Whether ``VISIONFORGE_DOCS`` asks for the Swagger UI and ReDoc pages.
+
+    Off by default (SEC-2): their pages load code from cdn.jsdelivr.net, which
+    the SPA's policy forbids, and a researcher never needs them.
+    ``/openapi.json`` stays: it is the API's contract, served from here.
+    """
+    value = os.environ.get("VISIONFORGE_DOCS", "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+_DOCS_URL = "/docs"
+_REDOC_URL = "/redoc"
+_DOCS_PATHS = frozenset({_DOCS_URL, f"{_DOCS_URL}/oauth2-redirect", _REDOC_URL})
+DOCS_ENABLED = _docs_enabled()
+
+app = FastAPI(
+    title="VisionForge",
+    openapi_tags=OPENAPI_TAGS,
+    version=__version__,
+    docs_url=_DOCS_URL if DOCS_ENABLED else None,
+    redoc_url=_REDOC_URL if DOCS_ENABLED else None,
+)
+
+# A 422 speaks the page's language like every other message (#208, ADR-191).
+app.add_exception_handler(RequestValidationError, validation_error_handler)
 
 
 @app.on_event("startup")
@@ -65,7 +111,7 @@ async def _sweep_filtered_datasets() -> None:
         sweep_orphans(cache)
 
 
-@app.get("/api/health")
+@app.get("/api/health", tags=[TAG_SYSTEM])
 async def health() -> dict[str, str]:
     """Version and the SPA build this process booted against.
 
@@ -76,13 +122,25 @@ async def health() -> dict[str, str]:
     return {"version": __version__, "spa_bundle": _BOOT_SPA_BUNDLE}
 
 
-app.add_middleware(
+# CORS sits inside HostOriginGuard on purpose (Sonar S8414 wants it outermost):
+# a foreign Host or Origin is refused before any CORS header is added (ADR-178).
+app.add_middleware(  # NOSONAR python:S8414
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173"
     ],  # NOSONAR python:S5332 - local dev frontend only
     allow_methods=["*"],
     allow_headers=["*"],
+)
+# Added last so it runs first: a request for another name, or a state change
+# from another site's page, never reaches CORS or a route (DNS rebinding, CSRF).
+app.add_middleware(HostOriginGuard)
+# Outermost: every response, the guard's refusals included, carries the CSP
+# and the fixed security headers (SEC-2).
+app.add_middleware(
+    SecurityHeaders,
+    spa_policy=SpaContentSecurityPolicy(STATIC_DIR / INDEX_FILENAME),
+    docs_paths=_DOCS_PATHS if DOCS_ENABLED else (),
 )
 
 app.include_router(api_router)
@@ -96,12 +154,18 @@ app.include_router(api_router)
 _INDEX_HEADERS = {"Cache-Control": "no-cache, must-revalidate"}
 
 
-@app.get("/{path:path}", responses=_NOT_FOUND)
+@app.get(
+    "/{path:path}", responses={404: {"description": NOT_FOUND_TEXT}}, tags=[TAG_SPA]
+)
 async def spa_fallback(path: str) -> FileResponse:
     """Serve the React SPA — static files or index.html fallback."""
     # An unknown /api/... is a client error, not a deep link: answering 200 with
     # index.html made typos and stale clients fail as JSON parse errors.
     if path == "api" or path.startswith("api/"):
+        raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
+    # With the docs off their URLs are not SPA deep links either: a 200 with
+    # index.html would read as "the docs are broken" rather than "off".
+    if f"/{path}" in _DOCS_PATHS:
         raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
     root = STATIC_DIR.resolve()
     # Treat Windows separators consistently even when the server runs on Linux.
@@ -124,25 +188,42 @@ _SERVER: Any = None
 
 
 def start_server(
-    *, host: str = "127.0.0.1", port: int = 8000, open_browser: bool = True
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    open_browser: bool = True,
+    allowed_hosts: Sequence[str] = (),
 ) -> None:
     """Start the VisionForge GUI server.
 
     ``open_browser`` is False when the updater restarts the server: the page the
     researcher had open reloads itself, and a second tab would only confuse.
+    ``allowed_hosts`` are the extra names the server answers to (``--allowed-host``):
+    a lab server's DNS alias, or a reverse proxy's public name.
     """
     import webbrowser
 
     import uvicorn
 
     global _SERVER
+    app.state.bind_host = host
+    policy = HostPolicy.for_bind(host, allowed_hosts)
+    app.state.host_policy = policy
     logger.info(
         "Starting VisionForge GUI at http://{}:{}", host, port
     )  # NOSONAR python:S5332 - local server URL
+    if policy.extra:
+        logger.info(
+            "Accepting requests for localhost and: {}", ", ".join(sorted(policy.extra))
+        )
     if open_browser:
-        webbrowser.open(
-            f"http://{host}:{port}"
-        )  # NOSONAR python:S5332 - local server URL
+        # A wildcard is where the server listens, not a page a browser can open
+        # (nor a Host the guard accepts); this machine is reached via loopback.
+        page_host = "127.0.0.1" if is_wildcard(host) else host
+        page_url = (
+            f"http://{page_host}:{port}"  # NOSONAR python:S5332 - local server URL
+        )
+        webbrowser.open(page_url)
     _SERVER = uvicorn.Server(
         uvicorn.Config(app, host=host, port=port, log_level="warning")
     )

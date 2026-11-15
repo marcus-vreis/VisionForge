@@ -40,13 +40,23 @@ from visionforge.core.resume import (
 from visionforge.core.resume_provenance import validate_resume_dataset
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything
-from visionforge.core.training_health import no_detections, summarize
+from visionforge.core.training_health import (
+    HealthWarning,
+    mps_not_deterministic,
+    no_detections,
+    summarize,
+)
 from visionforge.models.detection_factory import build_torchvision_detector
+from visionforge.utils.cuda import mps_available
 from visionforge.utils.detection_config import DetectionConfig
+from visionforge.utils.doctor import ultralytics_missing_message
 from visionforge.utils.messages import tr
+from visionforge.utils.third_party_privacy import apply_opt_outs
 from visionforge.utils.workers import suggested_workers
 
-try:  # ultralytics ships with the package (ADR-106); still bound lazily.
+apply_opt_outs()  # importing the module is enough to reach ultralytics
+
+try:  # the optional `detection` extra (ADR-195): absent in a plain install.
     from ultralytics import YOLO as _YOLO  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover - exercised via monkeypatch in tests
     # The ignore matters only when ultralytics IS installed, where mypy binds
@@ -188,6 +198,15 @@ def _train_loss_metrics(trainer: Any) -> dict[str, Any]:
         logger.warning("Could not read the training losses: {}", exc)
         return {}
     return labelled if isinstance(labelled, dict) else {}
+
+
+def _report_epoch(
+    progress_callback: Callable[[dict[str, Any]], None] | None,
+    event: dict[str, Any],
+) -> None:
+    """Hand one epoch event to the GUI, when someone is listening."""
+    if progress_callback is not None:
+        progress_callback(event)
 
 
 def _epoch_event(
@@ -358,10 +377,7 @@ class DetectionTrainer:
             RuntimeError: if the ultralytics extra is not installed.
         """
         if YOLO is None:
-            raise RuntimeError(
-                "ultralytics ships with VisionForge and is missing — the install "
-                "looks damaged: pip install --force-reinstall 'visionforge-studio'."
-            )
+            raise RuntimeError(ultralytics_missing_message())
 
         cfg = self._config.training
 
@@ -560,8 +576,8 @@ class DetectionTrainer:
 
         Each epoch trains on the loss dict and selects the best checkpoint by
         validation mAP@50 (`_eval_torchvision_map`); validation loss is also
-        logged (frozen-BN detectors are safe to forward in train mode under
-        no_grad). See ADR-035.
+        logged, from a train-mode pass under no_grad with the BatchNorm layers
+        in eval so validation never moves their running statistics. See ADR-035.
 
         Raises:
             ValueError: if data.base_dir is not set (YOLO layout is required).
@@ -651,7 +667,13 @@ class DetectionTrainer:
                     model, train_loader, device, optimizer
                 )
                 val_loss = self._eval_torchvision_loss(model, val_loader, device)
+                # Before the mAP pass: the detections of NaN weights are not
+                # worth scoring, and a mAP of 0 hides the NaN loss (ADR-182).
+                training_loop.require_finite(
+                    training_loop.VAL_LOSS, epoch, val_loss, best_epoch
+                )
                 map50 = self._eval_torchvision_map(model, val_loader, device)
+                training_loop.require_finite("map50", epoch, map50, best_epoch)
 
                 epoch_result = DetectionEpochResult(
                     epoch=epoch,
@@ -676,16 +698,16 @@ class DetectionTrainer:
                     best_epoch = epoch
                     torch.save(model.state_dict(), model_path)
 
-                if progress_callback is not None:
-                    progress_callback(
-                        _epoch_event(
-                            epoch_result,
-                            cfg.epochs,
-                            train_loss=train_loss,
-                            val_loss=val_loss,
-                            lr=epoch_lr,
-                        )
-                    )
+                _report_epoch(
+                    progress_callback,
+                    _epoch_event(
+                        epoch_result,
+                        cfg.epochs,
+                        train_loss=train_loss,
+                        val_loss=val_loss,
+                        lr=epoch_lr,
+                    ),
+                )
 
                 # Every epoch, not only on improvement: a run dies on its
                 # worst epochs too, and stale state resumes into a past already
@@ -709,6 +731,11 @@ class DetectionTrainer:
                     ),
                 )
 
+        except training_loop.NonFiniteMetricError as error:
+            self._record_torchvision_non_finite(
+                error, run_dir, model_path, history, best_epoch
+            )
+            raise
         finally:
             tb.close()
 
@@ -728,6 +755,29 @@ class DetectionTrainer:
         return self._finish_torchvision_training(
             model, result, train_losses, best_map, progress_callback
         )
+
+    def _record_torchvision_non_finite(
+        self,
+        error: training_loop.NonFiniteMetricError,
+        run_dir: Path,
+        model_path: Path,
+        history: list[DetectionEpochResult],
+        best_epoch: int,
+    ) -> None:
+        """Leave a failed run.json that names the epoch and the metric (ADR-182)."""
+        failed = DetectionTrainResult(
+            stopped=False,
+            best_epoch=best_epoch,
+            best_map50_95=None,
+            total_epochs=len(history),
+            device_used=self._device_label,
+            history=history,
+            model_path=model_path,
+            run_dir=run_dir,
+            warnings=[error.health_warning().to_dict()],
+        )
+        self._write_run_json(run_dir, failed)
+        training_loop.record_non_finite_failure(run_dir, error)
 
     def _restore_torchvision_training(
         self,
@@ -790,7 +840,10 @@ class DetectionTrainer:
         self._render_torchvision_plot(run_dir, history, train_losses)
 
         tv_health = summarize(
-            [no_detections(best_map if best_map >= 0 else None, len(history))]
+            [
+                no_detections(best_map if best_map >= 0 else None, len(history)),
+                self._mps_warning(),
+            ]
         )
         for warning in tv_health:
             logger.warning("{}", warning["message"])
@@ -828,18 +881,33 @@ class DetectionTrainer:
         loader: DataLoader,
         device: torch.device,
     ) -> float:
-        # torchvision detectors only return losses in train mode with targets;
-        # their default BN is frozen, so a no_grad train-mode pass is safe.
+        # torchvision detectors only return losses in train mode with targets.
+        # Their BN is only frozen (FrozenBatchNorm2d) with pretrained weights;
+        # SSDLite and any pretrained=False detector use plain BatchNorm, whose
+        # running stats a train-mode pass would update with validation data.
+        # So the BatchNorm layers go to eval for the pass and get their previous
+        # mode back afterwards; FrozenBatchNorm2d is not a _BatchNorm, untouched.
+        batch_norms = [
+            (m, m.training)
+            for m in model.modules()
+            if isinstance(m, torch.nn.modules.batchnorm._BatchNorm)
+        ]
         model.train()
         total = 0.0
         n = 0
-        with torch.no_grad():
-            for images, targets in loader:
-                images = [img.to(device) for img in images]
-                targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-                loss_dict = model(images, targets)
-                total += float(sum(loss_dict.values()).item())
-                n += 1
+        try:
+            for m, _ in batch_norms:
+                m.eval()
+            with torch.no_grad():
+                for images, targets in loader:
+                    images = [img.to(device) for img in images]
+                    targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+                    loss_dict = model(images, targets)
+                    total += float(sum(loss_dict.values()).item())
+                    n += 1
+        finally:
+            for m, was_training in batch_norms:
+                m.train(was_training)
         return total / n if n else 0.0
 
     def _eval_torchvision_map(
@@ -915,10 +983,32 @@ class DetectionTrainer:
             )
         return resolved
 
+    def _effective_kind(self) -> str:
+        """The device kind that will actually run, after the fallbacks.
+
+        The order of ``resolve_device`` (ADR-192): what was asked for if it
+        exists, else the Apple GPU, else the CPU.
+        """
+        kind = self._config.device.kind
+        if kind == "cpu":
+            return "cpu"
+        if kind == "mps":
+            return "mps" if mps_available() else "cpu"
+        if torch.cuda.is_available():
+            return kind
+        return "mps" if mps_available() else "cpu"
+
+    def _mps_warning(self) -> HealthWarning | None:
+        """The run.json warning that ``deterministic`` does not hold on MPS."""
+        return mps_not_deterministic(
+            self._effective_kind(), self._config.training.deterministic
+        )
+
     def _resolve_torch_device(self) -> torch.device:
+        kind = self._effective_kind()
+        if kind in ("cpu", "mps"):
+            return torch.device(kind)
         d = self._config.device
-        if d.kind == "cpu" or not torch.cuda.is_available():
-            return torch.device("cpu")
         idx = d.gpu_ids[0] if d.gpu_ids else 0
         return torch.device(f"cuda:{idx}")
 
@@ -933,7 +1023,7 @@ class DetectionTrainer:
         scored = [h for h in history if h.map50_95 is not None]
         best = max(scored, key=lambda h: h.map50_95 or 0.0, default=None)
         map50 = best.map50 if best else None
-        health = summarize([no_detections(map50, len(history))])
+        health = summarize([no_detections(map50, len(history)), self._mps_warning()])
         for warning in health:
             logger.warning("{}", warning["message"])
         return DetectionTrainResult(
@@ -1033,18 +1123,20 @@ class DetectionTrainer:
         return f"{m.name}{'.pt' if m.pretrained else '.yaml'}"
 
     def _device_arg(self) -> Any:
+        kind = self._effective_kind()
+        if kind in ("cpu", "mps"):
+            return kind
         d = self._config.device
-        if d.kind == "cpu":
-            return "cpu"
-        if d.kind == "multi_cuda":
+        if kind == "multi_cuda":
             return d.gpu_ids if d.gpu_ids else 0
         return d.gpu_ids[0] if d.gpu_ids else 0
 
     def _resolve_device_label(self) -> str:
+        kind = self._effective_kind()
+        if kind in ("cpu", "mps"):
+            return kind
         d = self._config.device
-        if d.kind == "cpu":
-            return "cpu"
-        if d.kind == "multi_cuda":
+        if kind == "multi_cuda":
             return f"multi_cuda:{d.gpu_ids or 'all'}"
         return f"cuda:{d.gpu_ids[0] if d.gpu_ids else 0}"
 

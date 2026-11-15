@@ -13,11 +13,14 @@ import { resolveSchema, visibleChildren } from "../lib/schema-form";
 import { countChanged, errorsUnder, type StepId } from "../lib/steps";
 import { useAutoExperimentName } from "../lib/use-auto-experiment-name";
 import type { ValidationError } from "../hooks/useExperiment";
+import { usePendingImport, type PendingImportProps } from "../hooks/usePendingImport";
 import type { JsonSchema } from "../types/schema";
 import { StrategyCard, type PanelStrategy } from "./ExperimentHeader";
 import { CustomTaskManageCard } from "./CustomTaskManageCard";
 import { Rich } from "./Rich";
 import { ReplicatesCard } from "./ReplicatesCard";
+import { ReplicatedComparisonCard } from "./ReplicatedComparisonCard";
+import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-form";
 import { ReviewStep } from "./ReviewStep";
 import { SchemaForm } from "./SchemaForm";
 import { StepShell, type StepDef } from "./StepShell";
@@ -34,7 +37,7 @@ import type { ReplicatesPayload } from "../lib/replicates-form";
  * the API supports.
  */
 
-interface CustomTaskPanelProps {
+interface CustomTaskPanelProps extends PendingImportProps {
   task: CustomTaskDefinition;
   formData: Record<string, unknown>;
   setFormData: (next: Record<string, unknown>) => void;
@@ -42,6 +45,8 @@ interface CustomTaskPanelProps {
   busy?: boolean;
   onSweep: (payload: SweepPayload) => void;
   onReplicates: (payload: ReplicatesPayload) => void;
+  /** Launches the paired comparison (ADR-193); without it, no card. */
+  onReplicatedComparison?: (payload: ReplicatedComparisonPayload) => void;
   /** Lets App label and route the main Treinar button by the active strategy. */
   onStrategyChange?: (strategy: PanelStrategy) => void;
   /** Incremented by Treinar so the selected strategy's card runs. */
@@ -95,9 +100,12 @@ export function CustomTaskPanel({
   busy,
   onSweep,
   onReplicates,
+  onReplicatedComparison,
   onStrategyChange,
   runSignal,
   onRemoved,
+  pendingImport,
+  onImportApplied,
 }: CustomTaskPanelProps) {
   const t = useT();
   const [schema, setSchema] = useState<JsonSchema | null>(null);
@@ -155,9 +163,12 @@ export function CustomTaskPanel({
       busy={busy}
       onSweep={onSweep}
       onReplicates={onReplicates}
+      onReplicatedComparison={onReplicatedComparison}
       onStrategyChange={onStrategyChange}
       runSignal={runSignal}
       onRemoved={onRemoved}
+      pendingImport={pendingImport}
+      onImportApplied={onImportApplied}
     />
   );
 }
@@ -171,21 +182,45 @@ export function CustomTaskSteps({
   busy,
   onSweep,
   onReplicates,
+  onReplicatedComparison,
   onStrategyChange,
   runSignal,
   onRemoved,
+  pendingImport,
+  onImportApplied,
 }: CustomTaskPanelProps & { schema: JsonSchema }) {
   const t = useT();
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
   // App keys the step of every task by its tab key (`activeKey`), which for
   // a researcher's task is its bare key: the Treinar lock reads that entry.
   const taskKey = task.key;
+  const chooseStrategy = (s: PanelStrategy) => {
+    setStrategy(s);
+    onStrategyChange?.(s);
+  };
+  // The task's own Config validates on submit (422 with field paths), so the
+  // import stays tolerant here rather than duplicating the rules. A run sent
+  // from History goes through it too (#200).
+  const importConfig = (data: Record<string, unknown>): string | null => {
+    setFormData(data);
+    return null;
+  };
+  const { notice, replicatesPreset } = usePendingImport({
+    taskKey,
+    pendingImport,
+    onImportApplied,
+    ready: true,
+    importConfig,
+    refusesOnProblem: false,
+    onStrategy: chooseStrategy,
+  });
 
   // Custom tasks have no K-fold endpoint, so the selector offers exactly what the API supports.
   const strategies: { value: PanelStrategy; label: string }[] = [
     { value: "simple", label: t.paramPanel.blocks.simple },
     { value: "sweep", label: t.taskPanel.sweep },
     { value: "replicates", label: t.taskPanel.replicates },
+    { value: "replicatedComparison", label: t.taskPanel.replicatedComparison },
   ];
   const strategyLabel = strategies.find((s) => s.value === strategy)?.label ?? "";
   const metrics = metricOptions(task);
@@ -267,10 +302,7 @@ export function CustomTaskSteps({
       <div style={stack}>
         <StrategyCard
           strategy={strategy}
-          onStrategyChange={(s) => {
-            setStrategy(s);
-            onStrategyChange?.(s);
-          }}
+          onStrategyChange={chooseStrategy}
           strategies={strategies}
         />
         {strategy === "sweep" && (
@@ -289,6 +321,17 @@ export function CustomTaskSteps({
             accent={task.accent}
             disabled={busy}
             onReplicates={onReplicates}
+            runSignal={runSignal}
+            preset={replicatesPreset}
+          />
+        )}
+        {strategy === "replicatedComparison" && onReplicatedComparison && (
+          <ReplicatedComparisonCard
+            metrics={metrics}
+            pathHints={["training.learning_rate", "training.batch_size"]}
+            accent={task.accent}
+            disabled={busy}
+            onReplicatedComparison={onReplicatedComparison}
             runSignal={runSignal}
           />
         )}
@@ -319,12 +362,8 @@ export function CustomTaskSteps({
           onNameChange={(v) => setFormData({ ...formData, name: v })}
           suggestion={suggestion}
           onExportYaml={() => exportConfigToYaml(formData, name || task.key)}
-          onImportConfig={(data) => {
-            // The task's own Config validates on submit (422 with field paths),
-            // so import stays tolerant here rather than duplicating the rules.
-            setFormData(data);
-            return null;
-          }}
+          onImportConfig={importConfig}
+          importNotice={notice}
           sections={[
             { step: "data", rows: reviewRows("data") },
             {

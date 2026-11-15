@@ -306,3 +306,62 @@ class TestSegmentationDataModuleEvaluationOnly:
             _config(tmp_path, {"data": {"num_workers": 4}}), evaluation_only=True
         )
         assert dm.test_loader() is None
+
+
+# ── augment flag (ADR-083) ────────────────────────────────────────────────────
+
+
+class TestAugmentFlag:
+    """``transforms.augment: false`` must turn off every random step.
+
+    The flag is how a baseline and a tuned run differ by one field. Segmentation
+    read the three augmentation fields directly and never the flag, so the
+    baseline trained augmented while its run.json said it did not.
+    """
+
+    def _dataset(self, tmp_path: Path, *, augment: bool) -> SegmentationDataset:
+        _make_split(tmp_path, "train", 2)
+        cfg = _config(
+            tmp_path,
+            {
+                "data": {
+                    "base_dir": str(tmp_path),
+                    "image_size": 32,
+                    "num_workers": 0,
+                    "transforms": {
+                        "augment": augment,
+                        "horizontal_flip": True,
+                        "rotation_degrees": 30,
+                        "color_jitter": True,
+                    },
+                }
+            },
+        )
+        return SegmentationDataset(
+            tmp_path / "train" / "images",
+            tmp_path / "train" / "masks",
+            image_size=32,
+            ignore_index=255,
+            transform_cfg=cfg.data.transforms,
+            preprocessing_cfg=cfg.data.preprocessing,
+            is_train=True,
+        )
+
+    def test_augment_off_reads_the_same_item_identically(self, tmp_path: Path) -> None:
+        ds = self._dataset(tmp_path, augment=False)
+        torch.manual_seed(0)
+        random.seed(0)
+
+        first_img, first_mask = ds[0]
+        for _ in range(8):
+            img, mask = ds[0]
+            assert torch.equal(img, first_img)
+            assert torch.equal(mask, first_mask)
+
+    def test_augment_on_still_varies_the_item(self, tmp_path: Path) -> None:
+        ds = self._dataset(tmp_path, augment=True)
+        torch.manual_seed(0)
+        random.seed(0)
+
+        first_img, _ = ds[0]
+        assert any(not torch.equal(ds[0][0], first_img) for _ in range(8))

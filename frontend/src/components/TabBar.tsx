@@ -11,6 +11,7 @@ export function TabBar({ tasks, activeKey, setActiveKey }: TabBarProps) {
   return (
     <nav
       data-tour="tabs"
+      className="vf-tabbar"
       style={{
         position: "relative",
         zIndex: 3,
@@ -92,20 +93,6 @@ export function TabBar({ tasks, activeKey, setActiveKey }: TabBarProps) {
             </button>
           );
         })}
-        <button
-          type="button"
-          style={{
-            padding: "14px 18px",
-            background: "transparent",
-            border: "none",
-            color: "var(--vf-text-muted)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 18,
-            letterSpacing: "0.2em",
-          }}
-        >
-          ···
-        </button>
       </div>
     </nav>
   );

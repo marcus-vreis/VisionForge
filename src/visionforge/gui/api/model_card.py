@@ -192,38 +192,52 @@ def _metric_lines(metrics: dict[str, Any], data: dict[str, Any]) -> list[str]:
     lines: list[str] = []
     lines.append(f"## {tr_artifact('card.final_metrics')}")
     lines.append("")
-    if metrics:
-        cis: dict[str, Any] = data.get("metric_cis", {})
-        has_cis = bool(cis)
-        header = f"| {tr_artifact('card.metric')} | {tr_artifact('card.value')} |"
-        if has_cis:
-            header += f" {tr_artifact('card.ci_bootstrap')} |"
-        lines.append(header)
-        lines.append("|---|---|---|" if has_cis else MARKDOWN_TABLE_SEPARATOR)
-        for k, v in metrics.items():
-            value = _card_value(v)
-            if not has_cis:
-                lines.append(f"| {k} | {value} |")
-                continue
-            # run.json keys the CIs by bare metric name; the metrics block
-            # prefixes the test-split ones with "test_".
-            ci = cis.get(k[len("test_") :] if k.startswith("test_") else k)
-            interval = f"[{ci['ci_low']:.4f}, {ci['ci_high']:.4f}]" if ci else "—"
-            lines.append(f"| {k} | {value} | {interval} |")
-        if has_cis:
-            sample = next(iter(cis.values()))
-            lines.append("")
-            lines.append(
-                tr_artifact(
-                    "card.bootstrap_note",
-                    n_samples=sample["n_samples"],
-                    n_resamples=sample["n_resamples"],
-                )
-            )
-    else:
+    if not metrics:
         lines.append(tr_artifact("card.none_recorded"))
+    else:
+        cis: dict[str, Any] = data.get("metric_cis", {})
+        if cis:
+            lines.extend(_metric_table_with_cis(metrics, cis))
+        else:
+            lines.extend(_metric_table(metrics))
     lines.append("")
 
+    return lines
+
+
+def _metric_header() -> str:
+    return f"| {tr_artifact('card.metric')} | {tr_artifact('card.value')} |"
+
+
+def _metric_table(metrics: dict[str, Any]) -> list[str]:
+    """Metric and value columns, for a run without bootstrap intervals."""
+    lines = [_metric_header(), MARKDOWN_TABLE_SEPARATOR]
+    for k, v in metrics.items():
+        lines.append(f"| {k} | {_card_value(v)} |")
+    return lines
+
+
+def _metric_table_with_cis(metrics: dict[str, Any], cis: dict[str, Any]) -> list[str]:
+    """Metric, value and bootstrap interval columns, then the bootstrap note."""
+    lines = [
+        _metric_header() + f" {tr_artifact('card.ci_bootstrap')} |",
+        "|---|---|---|",
+    ]
+    for k, v in metrics.items():
+        # run.json keys the CIs by bare metric name; the metrics block
+        # prefixes the test-split ones with "test_".
+        ci = cis.get(k.removeprefix("test_"))
+        interval = f"[{ci['ci_low']:.4f}, {ci['ci_high']:.4f}]" if ci else "—"
+        lines.append(f"| {k} | {_card_value(v)} | {interval} |")
+    sample = next(iter(cis.values()))
+    lines.append("")
+    lines.append(
+        tr_artifact(
+            "card.bootstrap_note",
+            n_samples=sample["n_samples"],
+            n_resamples=sample["n_resamples"],
+        )
+    )
     return lines
 
 

@@ -30,6 +30,30 @@ _BLOCK_ALIASES: dict[str, str] = {
 }
 
 
+_RUN_EPILOG = """\
+strategies (strategy.kind):
+  replicates             train config once per seed; mean, 95% CI per metric
+                         options: seeds [..] | n_replicates, metric
+  replicated_comparison  train each variant on the same seeds; paired tests
+                         options: variants {label: {dot.path: value}},
+                         seeds | n_replicates, metric, alpha
+  sweep                  grid/random/optuna search ranked on validation
+                         (detection, regression, segmentation, anomaly)
+                         options: search_space, mode, n_trials, seed, metric
+  cv                     K-fold cross-validation (regression, segmentation)
+                         options: n_folds, shuffle, fold_seed
+
+example:
+  strategy:
+    kind: replicates
+    seeds: [0, 1, 2]
+  config:
+    task: regression
+    name: reg_resnet18
+    ...
+"""
+
+
 def _peek_task(config_path: Path) -> str:
     """Read just the ``task`` field from a YAML config (defaults to multiclass)."""
     import yaml
@@ -228,9 +252,81 @@ def _run_selftest_command(args: argparse.Namespace) -> None:
     _sys.exit(0 if all(o.status == "passed" for o in outcomes) else 1)
 
 
+def _run_strategy_command(config_path: Path, parser: argparse.ArgumentParser) -> bool:
+    """Run a strategy envelope (ADR-184); False when the YAML is a plain config.
+
+    An invalid envelope, task or option exits with status 2 before any
+    training; a job none of whose units produced a result exits with 1. A file
+    that cannot be read is left to the plain path, which reports it as it
+    always has.
+    """
+    from visionforge.cli_strategies import read_envelope, run_strategy
+    from visionforge.utils.logger import logger
+
+    try:
+        envelope = read_envelope(config_path)
+    except OSError:
+        return False
+    except ValueError as exc:
+        parser.exit(2, f"visionforge: {exc}\n")
+    if envelope is None:
+        return False
+    strategy, config = envelope
+    try:
+        logger.info(
+            "Strategy: {} | task: {}",
+            strategy["kind"],
+            config.get("task", "multiclass"),
+        )
+        report = run_strategy(strategy, config)
+    except ValueError as exc:
+        parser.exit(2, f"visionforge: {exc}\n")
+    except RuntimeError as exc:
+        parser.exit(1, f"visionforge: {exc}\n")
+    logger.success("Done. Report: {}", report["report_dir"])
+    return True
+
+
+def _use_utf8_console() -> None:
+    """Make stdout and stderr UTF-8, before anything prints (``--help`` included).
+
+    Windows consoles default to a legacy codepage (cp1252), which cannot encode
+    the arrows and box characters the reports use. Without this,
+    `visionforge selftest` crashed with a UnicodeEncodeError while printing a
+    failure — the diagnostic command dying exactly when it found something. It
+    runs before the parser is built: argparse prints ``--help`` and exits inside
+    ``parse_args``, so a later call never reached it.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+
+
+def _add_offline_flag(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help=(
+            "refuse every connection outside this computer and keep the SDKs "
+            "offline (same as VISIONFORGE_OFFLINE=1)"
+        ),
+    )
+
+
 def main() -> None:
     """Run a VisionForge experiment or start the GUI from the command line."""
+    _use_utf8_console()
     from visionforge.utils.logger import setup_logger
+    from visionforge.utils.third_party_privacy import (
+        apply_env_opt_outs,
+        apply_opt_outs,
+        enable_offline_mode,
+        offline_requested,
+    )
+
+    # Before any SDK is imported: they read their switches at import time.
+    apply_env_opt_outs()
 
     parser = argparse.ArgumentParser(
         prog="visionforge",
@@ -242,8 +338,21 @@ def main() -> None:
     )
     subparsers = parser.add_subparsers(dest="command")
 
-    run_parser = subparsers.add_parser("run", help="Run an experiment from YAML.")
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Run an experiment from YAML.",
+        description=(
+            "Run an experiment from YAML.\n\n"
+            "A plain task config trains once (or runs its classification block).\n"
+            "A YAML whose top level is 'strategy:' + 'config:' runs the same\n"
+            "multi-run jobs as the GUI and writes their report (JSON, CSV,\n"
+            "LaTeX table) and History entry. 'config' is the task config as is."
+        ),
+        epilog=_RUN_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     run_parser.add_argument("config", type=Path, help="path to .yaml config")
+    _add_offline_flag(run_parser)
 
     gui_parser = subparsers.add_parser("gui", help="Start the VisionForge web GUI.")
     gui_parser.add_argument(
@@ -253,10 +362,21 @@ def main() -> None:
         "--port", type=int, default=8000, help="bind port (default 8000)"
     )
     gui_parser.add_argument(
+        "--allowed-host",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help=(
+            "extra host name the server answers to, besides localhost (and, with "
+            "a non-loopback --host, this machine's names and addresses); repeatable"
+        ),
+    )
+    gui_parser.add_argument(
         "--no-browser",
         action="store_true",
         help="do not open a browser tab (used when an update restarts the GUI)",
     )
+    _add_offline_flag(gui_parser)
 
     doctor_parser = subparsers.add_parser(
         "doctor", help="Check the environment and recommend the correct torch wheel."
@@ -341,15 +461,14 @@ def main() -> None:
 
     args = parser.parse_args()
     _bind_language_from_env()
-
-    # Windows consoles default to a legacy codepage (cp1252), which cannot
-    # encode the arrows and box characters the reports use. Without this,
-    # `visionforge selftest` crashed with a UnicodeEncodeError while printing a
-    # failure — the diagnostic command dying exactly when it found something.
-    for stream in (sys.stdout, sys.stderr):
-        reconfigure = getattr(stream, "reconfigure", None)
-        if reconfigure is not None:
-            reconfigure(encoding="utf-8", errors="replace")
+    if getattr(args, "offline", False) or offline_requested():
+        # Before apply_opt_outs imports ultralytics, which reads YOLO_OFFLINE.
+        enable_offline_mode()
+    if args.command != "gui":
+        # Imports ultralytics (~1.7 s) to switch its events off. The GUI imports
+        # it only when a run needs it, and each of those imports does this first
+        # (ADR-180, #258).
+        apply_opt_outs()
 
     if args.command in {"audit-data", "bundle", "verify-bundle"}:
         _run_evidence_command(args, parser)
@@ -395,13 +514,20 @@ def main() -> None:
         # the relaunch runs the *new* version, and an environment variable it does
         # not know is ignored where an unknown flag would stop it (ADR-120).
         quiet = args.no_browser or bool(os.environ.get("VISIONFORGE_NO_BROWSER"))
-        start_server(host=args.host, port=args.port, open_browser=not quiet)
+        start_server(
+            host=args.host,
+            port=args.port,
+            open_browser=not quiet,
+            allowed_hosts=args.allowed_host,
+        )
         return
 
     if args.command == "run":
         from visionforge.utils.logger import logger
 
         logger.info("Loading config: {}", args.config)
+        if _run_strategy_command(args.config, parser):
+            return
         config, block = build_task_block(args.config)
 
         logger.info(

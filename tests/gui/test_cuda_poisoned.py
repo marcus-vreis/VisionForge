@@ -7,26 +7,34 @@ failed within a second, CPU ones included, while the GUI kept accepting them.
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 from fastapi import HTTPException
 
-from visionforge.gui.api import routes
+import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.submission as submission_mod
 from visionforge.utils.messages import using_lang
+
+_SRC = Path(__file__).resolve().parents[2] / "src"
 
 
 def _submit() -> object:
     async def start() -> None:
         return None
 
-    return routes._submit_job("r1", "label", "classification", "single", start)
+    return submission_mod._submit_job("r1", "label", "classification", "single", start)
 
 
 def test_a_broken_cuda_context_refuses_new_jobs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(routes, "cuda_context_broken", lambda: True)
+    monkeypatch.setattr(submission_mod, "cuda_context_broken", lambda: True)
     submitted: list[object] = []
-    monkeypatch.setattr(routes._RUN_QUEUE, "submit", submitted.append)
+    monkeypatch.setattr(execution_mod._RUN_QUEUE, "submit", submitted.append)
 
     with using_lang("en"), pytest.raises(HTTPException) as raised:
         _submit()
@@ -37,8 +45,8 @@ def test_a_broken_cuda_context_refuses_new_jobs(
 
 
 def test_a_healthy_server_queues_as_before(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(routes, "cuda_context_broken", lambda: False)
-    monkeypatch.setattr(routes._RUN_QUEUE, "submit", lambda job: "running")
+    monkeypatch.setattr(submission_mod, "cuda_context_broken", lambda: False)
+    monkeypatch.setattr(execution_mod._RUN_QUEUE, "submit", lambda job: "running")
 
     assert _submit().status == "running"  # type: ignore[attr-defined]
 
@@ -71,3 +79,39 @@ def test_the_probe_reads_a_cuda_error_as_broken(
 
     monkeypatch.setattr(torch, "zeros", poisoned)
     assert cuda_context_broken() is True
+
+
+_PROBE_WITHOUT_TORCH = (
+    "import sys\n"
+    "from visionforge.gui.api.gpu_health import cuda_context_broken\n"
+    "assert cuda_context_broken() is False\n"
+    "print('torch' in sys.modules)\n"
+)
+
+
+def test_the_probe_does_not_import_torch(tmp_path: Path) -> None:
+    # Without torch in the process no CUDA context exists to be broken; importing
+    # it here cost the first run ~3 s on the event loop (#258).
+    env = {**os.environ, "PYTHONPATH": str(_SRC), "CUDA_VISIBLE_DEVICES": "-1"}
+    done = subprocess.run(  # noqa: S603 - fixed interpreter and script
+        [sys.executable, "-c", _PROBE_WITHOUT_TORCH],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=tmp_path,
+        timeout=120,
+        check=False,
+    )
+
+    assert done.returncode == 0, done.stderr[-2000:]
+    assert done.stdout.strip() == "False"
+
+
+def test_a_process_without_torch_has_no_context_to_break(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from visionforge.gui.api.gpu_health import cuda_context_broken
+
+    monkeypatch.setitem(sys.modules, "torch", None)  # as if never imported
+
+    assert cuda_context_broken() is False

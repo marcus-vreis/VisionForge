@@ -94,7 +94,47 @@ def using_lang(lang: Lang) -> Iterator[None]:
 # Templates are written once per language, never assembled from fragments: the
 # other language wants the parts in another order. Braces that are meant
 # literally are doubled.
+# Texts the Hub, Zenodo and GitHub exporters repeat (ADR-171, ADR-174, ADR-175).
+_TOKEN_INVALID_PT = "Token inválido: cole o token inteiro, sem espaços."
+_TOKEN_INVALID_EN = "Invalid token: paste the whole token, without spaces."
+_RUN_NOT_FOUND_PT = "Execução não encontrada."
+_RUN_NOT_FOUND_EN = "Run not found."
+_PREVIEW_CHANGED_PT = (
+    "Os arquivos mudaram depois da prévia. Abra a prévia de novo e confira."
+)
+_PREVIEW_CHANGED_EN = (
+    "The files changed after the preview. Open the preview again and review it."
+)
+_RECORD_MISSING_PT = "O registro desta execução não foi encontrado."
+_RECORD_MISSING_EN = "The record of this run was not found."
+_UPLOAD_REFUSED_PT = "Esta execução não pode ser enviada: {reason}"
+_UPLOAD_REFUSED_EN = "This run cannot be uploaded: {reason}"
+# Texts the derived-dataset tools (incorporate, merge, re-split, COCO) repeat.
+_PREVIEW_NOT_READY_PT = "A prévia ainda não terminou ou não deu certo."
+_PREVIEW_NOT_READY_EN = "The preview has not finished or did not succeed."
+_BAD_DEST_NAME_PT = "Nome de pasta inválido para o dataset novo."
+_BAD_DEST_NAME_EN = "Invalid folder name for the new dataset."
+_BASE_MISSING_PT = "A pasta do dataset não existe: {path}"
+_BASE_MISSING_EN = "The dataset folder does not exist: {path}"
+_DEST_EXISTS_PT = (
+    "Já existe uma pasta chamada '{name}' ao lado do dataset. Escolha outro nome."
+)
+_DEST_EXISTS_EN = (
+    "A folder named '{name}' already exists next to the dataset. Pick another name."
+)
+
 CATALOG: dict[str, dict[Lang, str]] = {
+    # ── doctor (utils/doctor.py) ────────────────────────────────────────────
+    "doctor.gpu_hidden": {
+        "pt": (
+            "A variável CUDA_VISIBLE_DEVICES está definida como '{value}' e "
+            "esconde a GPU do torch. Remova-a para usar a placa."
+        ),
+        "en": (
+            "CUDA_VISIBLE_DEVICES is set to '{value}' and hides the GPU from "
+            "torch. Unset it to use the card."
+        ),
+    },
     # ── class vocabulary (core/data.py) ─────────────────────────────────────
     "data.empty_split": {
         "pt": "O split {split} ({root}) não tem imagens em nenhuma pasta de classe.",
@@ -190,6 +230,18 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "switching the optimizer to SGD."
         ),
     },
+    "health.mps_not_deterministic": {
+        "pt": (
+            "Esta execução rodou na GPU da Apple (MPS), suporte experimental. "
+            "'deterministic' só vale para o cuDNN: no MPS a mesma config e a "
+            "mesma seed podem não reproduzir os mesmos números."
+        ),
+        "en": (
+            "This run used Apple's GPU (MPS), which is experimental. "
+            "'deterministic' only applies to cuDNN: on MPS the same config and "
+            "seed may not reproduce the same numbers."
+        ),
+    },
     "health.stagnant_loss": {
         "pt": (
             "A loss de treino praticamente não caiu ({first:.4f} → {last:.4f} em "
@@ -256,6 +308,52 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "did not hit a single box. Check that the labels are in the expected "
             "YOLO format and that the number of classes matches data.yaml; after "
             "that, the learning rate."
+        ),
+    },
+    "health.single_class_test_split": {
+        "pt": (
+            "As {n} imagens de teste são todas {kind}: a AUROC precisa das duas "
+            "classes para ordenar e fica indefinida (null), não 0,5. Coloque "
+            "imagens normais e anômalas em test/ para medir o detector."
+        ),
+        "en": (
+            "All {n} test images are {kind}: AUROC needs both classes to rank "
+            "and is undefined (null), not 0.5. Put normal and anomalous images "
+            "in test/ to measure the detector."
+        ),
+    },
+    "health.single_class_normal": {"pt": "normais", "en": "normal"},
+    "health.single_class_anomalous": {"pt": "anômalas", "en": "anomalous"},
+    "health.non_finite_metric": {
+        "pt": (
+            "A métrica {metric} ficou não finita ({value}) na época {epoch}, e o "
+            "treino parou ali sem salvar checkpoint: com NaN nenhum modelo "
+            "melhora o anterior. Causa mais comum: learning rate alto demais, "
+            "que faz a loss divergir. Reduza o learning rate ou confira se os "
+            "dados têm NaN."
+        ),
+        "en": (
+            "The metric {metric} became non-finite ({value}) at epoch {epoch}, "
+            "and training stopped there without saving a checkpoint: with NaN no "
+            "model beats the previous one. Most common cause: a learning rate "
+            "too high, which makes the loss diverge. Lower the learning rate or check the "
+            "data for NaN."
+        ),
+    },
+    "health.non_finite_metric_kept": {
+        "pt": (
+            "A métrica {metric} ficou não finita ({value}) na época {epoch}, e o "
+            "treino parou ali. O checkpoint da época {best_epoch} foi mantido, "
+            "mas as épocas seguintes divergiram. Causa mais comum: learning "
+            "rate alto demais. Reduza o learning rate ou confira se os dados "
+            "têm NaN."
+        ),
+        "en": (
+            "The metric {metric} became non-finite ({value}) at epoch {epoch}, "
+            "and training stopped there. The checkpoint from epoch {best_epoch} "
+            "was kept, but the later epochs diverged. Most common cause: a "
+            "learning rate too high. Lower the learning rate or check the data "
+            "for NaN."
         ),
     },
     # ── Windows paging file (WinError 1455) ──────────────────────────────────
@@ -601,6 +699,18 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "{train_dir}/{normal_dir}/ and the test folder under the same parent)."
         ),
     },
+    "detection.ultralytics_missing": {
+        "pt": (
+            "O backend Ultralytics (YOLO / RT-DETR) não está instalado: ele é "
+            "opcional porque tem licença AGPL-3.0. Instale com {command} e reinicie "
+            "o VisionForge, ou escolha o backend torchvision."
+        ),
+        "en": (
+            "The Ultralytics backend (YOLO / RT-DETR) is not installed: it is "
+            "optional because it is licensed AGPL-3.0. Install it with {command} "
+            "and restart VisionForge, or pick the torchvision backend."
+        ),
+    },
     "export.torchvision_detection": {
         "pt": (
             "Export ONNX para detectores torchvision ainda não é suportado; "
@@ -672,6 +782,975 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "O run '{run_id}' não tem mais nada a continuar.",
         "en": "Run '{run_id}' has nothing left to continue.",
     },
+    "hub.request_invalid": {
+        "pt": "Pedido inválido para o Hugging Face Hub.",
+        "en": "Invalid Hugging Face Hub request.",
+    },
+    "hub.token_invalid": {
+        "pt": _TOKEN_INVALID_PT,
+        "en": _TOKEN_INVALID_EN,
+    },
+    "hub.token_missing": {
+        "pt": "Salve um token do Hugging Face neste perfil antes de enviar.",
+        "en": "Save a Hugging Face token in this profile before uploading.",
+    },
+    "hub.run_not_found": {
+        "pt": _RUN_NOT_FOUND_PT,
+        "en": _RUN_NOT_FOUND_EN,
+    },
+    "hub.artifact_missing": {
+        "pt": "O checkpoint ou o registro desta execução não foi encontrado.",
+        "en": "The checkpoint or the record of this run was not found.",
+    },
+    "hub.repo_invalid": {
+        "pt": "Informe o destino no formato usuário/modelo.",
+        "en": "Enter the destination as user/model.",
+    },
+    "hub.preview_changed": {
+        "pt": _PREVIEW_CHANGED_PT,
+        "en": _PREVIEW_CHANGED_EN,
+    },
+    "hub.private_required": {
+        "pt": "O repositório precisa ser privado. Use um destino novo ou torne-o privado no Hub.",
+        "en": "The repository must be private. Use a new destination or make it private on the Hub.",
+    },
+    "hub.package_invalid": {
+        "pt": "Esta execução não pode ser exportada: {reason}",
+        "en": "This run cannot be exported: {reason}",
+    },
+    "hub.export_failed": {
+        "pt": "O envio ao Hugging Face Hub falhou. Confira o token, a conexão e o nome do repositório.",
+        "en": "The Hugging Face Hub upload failed. Check the token, the connection and the repository name.",
+    },
+    "github.request_invalid": {
+        "pt": "Pedido inválido para o GitHub.",
+        "en": "Invalid GitHub request.",
+    },
+    "github.token_invalid": {
+        "pt": _TOKEN_INVALID_PT,
+        "en": _TOKEN_INVALID_EN,
+    },
+    "github.token_missing": {
+        "pt": "Salve um token do GitHub neste perfil antes de enviar.",
+        "en": "Save a GitHub token in this profile before uploading.",
+    },
+    "github.token_rejected": {
+        "pt": "O GitHub recusou o token. Confira se ele foi copiado inteiro e se não expirou.",
+        "en": "GitHub refused the token. Check that it was copied whole and has not expired.",
+    },
+    "github.token_forbidden": {
+        "pt": "O token não pode escrever neste repositório. Dê a ele a permissão Contents: leitura e escrita para este repositório.",
+        "en": "The token cannot write to this repository. Give it the Contents: read and write permission for this repository.",
+    },
+    "github.repo_not_found": {
+        "pt": "Repositório não encontrado, ou o token não tem acesso a ele. Crie o repositório privado no GitHub antes.",
+        "en": "Repository not found, or the token has no access to it. Create the private repository on GitHub first.",
+    },
+    "github.repo_invalid": {
+        "pt": "Informe o repositório no formato usuário/repositório.",
+        "en": "Enter the repository as user/repository.",
+    },
+    "github.private_required": {
+        "pt": "O repositório precisa ser privado. Torne-o privado no GitHub ou use outro.",
+        "en": "The repository must be private. Make it private on GitHub or use another one.",
+    },
+    "github.run_not_found": {
+        "pt": _RUN_NOT_FOUND_PT,
+        "en": _RUN_NOT_FOUND_EN,
+    },
+    "github.artifact_missing": {
+        "pt": _RECORD_MISSING_PT,
+        "en": _RECORD_MISSING_EN,
+    },
+    "github.package_invalid": {
+        "pt": _UPLOAD_REFUSED_PT,
+        "en": _UPLOAD_REFUSED_EN,
+    },
+    "github.preview_changed": {
+        "pt": _PREVIEW_CHANGED_PT,
+        "en": _PREVIEW_CHANGED_EN,
+    },
+    "github.export_failed": {
+        "pt": "O envio ao GitHub falhou. Confira a conexão e tente de novo.",
+        "en": "The GitHub upload failed. Check the connection and try again.",
+    },
+    "dvc.request_invalid": {
+        "pt": "Pedido inválido para o DVC.",
+        "en": "Invalid DVC request.",
+    },
+    "dvc.remote_client": {
+        "pt": "O DVC só funciona no computador onde o VisionForge roda: ele grava numa pasta e roda git e DVC nesta máquina.",
+        "en": "DVC only works on the computer running VisionForge: it writes to a folder and runs git and DVC on this machine.",
+    },
+    "dvc.foreign_origin": {
+        "pt": "Pedido recusado: ele veio de outra página.",
+        "en": "Request refused: it came from another page.",
+    },
+    "dvc.repo_invalid": {
+        "pt": "Informe o caminho completo da pasta do repositório.",
+        "en": "Enter the full path of the repository folder.",
+    },
+    "dvc.repo_not_ready": {
+        "pt": "A pasta não é um repositório git com DVC. Use Preparar pasta antes.",
+        "en": "The folder is not a git repository with DVC. Use Prepare folder first.",
+    },
+    "dvc.prepare_refused": {
+        "pt": "Não dá para preparar este caminho: ele é um arquivo, ou a pasta de cima não existe.",
+        "en": "This path cannot be prepared: it is a file, or its parent folder does not exist.",
+    },
+    "dvc.git_missing": {
+        "pt": "O git não foi encontrado neste computador. Instale o Git e reabra o VisionForge.",
+        "en": "git was not found on this computer. Install Git and reopen VisionForge.",
+    },
+    "dvc.dvc_missing": {
+        "pt": "O DVC não foi encontrado. Instale o extra visionforge-studio[dvc], ou o DVC no PATH, e reabra o VisionForge.",
+        "en": "DVC was not found. Install the visionforge-studio[dvc] extra, or DVC on the PATH, and reopen VisionForge.",
+    },
+    "dvc.git_failed": {
+        "pt": "O git falhou em {step}. Confira se o git tem nome e e-mail configurados e se um hook do repositório não bloqueou o commit. O log do servidor tem a saída.",
+        "en": "git failed at {step}. Check that git has a name and e-mail configured and that no repository hook blocked the commit. The server log has the output.",
+    },
+    "dvc.dvc_failed": {
+        "pt": "O DVC falhou em {step}. O log do servidor tem a saída.",
+        "en": "DVC failed at {step}. The server log has the output.",
+    },
+    "dvc.run_not_found": {
+        "pt": _RUN_NOT_FOUND_PT,
+        "en": _RUN_NOT_FOUND_EN,
+    },
+    "dvc.artifact_missing": {
+        "pt": _RECORD_MISSING_PT,
+        "en": _RECORD_MISSING_EN,
+    },
+    "dvc.package_invalid": {
+        "pt": _UPLOAD_REFUSED_PT,
+        "en": _UPLOAD_REFUSED_EN,
+    },
+    "dvc.preview_changed": {
+        "pt": _PREVIEW_CHANGED_PT,
+        "en": _PREVIEW_CHANGED_EN,
+    },
+    "zenodo.request_invalid": {
+        "pt": "Pedido inválido para o Zenodo.",
+        "en": "Invalid Zenodo request.",
+    },
+    "zenodo.token_invalid": {
+        "pt": _TOKEN_INVALID_PT,
+        "en": _TOKEN_INVALID_EN,
+    },
+    "zenodo.token_missing": {
+        "pt": "Salve um token do Zenodo neste perfil antes de enviar.",
+        "en": "Save a Zenodo token in this profile before uploading.",
+    },
+    "zenodo.token_rejected": {
+        "pt": "O Zenodo recusou o token. Confira se ele é deste site (Zenodo ou Sandbox) e se tem o escopo deposit:write.",
+        "en": "Zenodo refused the token. Check that it belongs to this site (Zenodo or Sandbox) and has the deposit:write scope.",
+    },
+    "zenodo.run_not_found": {
+        "pt": _RUN_NOT_FOUND_PT,
+        "en": _RUN_NOT_FOUND_EN,
+    },
+    "zenodo.artifact_missing": {
+        "pt": _RECORD_MISSING_PT,
+        "en": _RECORD_MISSING_EN,
+    },
+    "zenodo.package_invalid": {
+        "pt": _UPLOAD_REFUSED_PT,
+        "en": _UPLOAD_REFUSED_EN,
+    },
+    "zenodo.preview_changed": {
+        "pt": _PREVIEW_CHANGED_PT,
+        "en": _PREVIEW_CHANGED_EN,
+    },
+    "zenodo.export_failed": {
+        "pt": "O envio ao Zenodo falhou. Confira a conexão e tente de novo.",
+        "en": "The Zenodo upload failed. Check the connection and try again.",
+    },
+    "wandb.request_invalid": {
+        "pt": "Pedido inválido para o Weights & Biases.",
+        "en": "Invalid Weights & Biases request.",
+    },
+    "wandb.token_invalid": {
+        "pt": "Chave inválida: cole a chave de API inteira, sem espaços.",
+        "en": "Invalid key: paste the whole API key, without spaces.",
+    },
+    "wandb.token_missing": {
+        "pt": "Salve uma chave de API do W&B neste perfil antes de enviar.",
+        "en": "Save a W&B API key in this profile before uploading.",
+    },
+    "wandb.name_invalid": {
+        "pt": "Use só letras, números, ponto, hífen e sublinhado (até 128).",
+        "en": "Use only letters, digits, dot, hyphen and underscore (up to 128).",
+    },
+    "wandb.retry_unavailable": {
+        "pt": "O envio ao W&B está indisponível para esta execução ou perfil.",
+        "en": "W&B export is unavailable for this run or profile.",
+    },
+    "comet.request_invalid": {
+        "pt": "Pedido inválido para o Comet.",
+        "en": "Invalid Comet request.",
+    },
+    "comet.token_invalid": {
+        "pt": "Chave inválida: cole a chave de API inteira, sem espaços.",
+        "en": "Invalid key: paste the whole API key, without spaces.",
+    },
+    "comet.token_missing": {
+        "pt": "Salve uma chave de API do Comet neste perfil antes de enviar.",
+        "en": "Save a Comet API key in this profile before uploading.",
+    },
+    "comet.name_invalid": {
+        "pt": "Use só minúsculas, números, ponto, hífen e sublinhado (até 100).",
+        "en": "Use only lower-case letters, digits, dot, hyphen and underscore (up to 100).",
+    },
+    "comet.retry_unavailable": {
+        "pt": "O envio ao Comet está indisponível para esta execução ou perfil.",
+        "en": "Comet export is unavailable for this run or profile.",
+    },
+    "code.tour_missing": {
+        "pt": "Ainda não há código comentado para esta tarefa.",
+        "en": "There is no annotated code for this task yet.",
+    },
+    "code.data.resize": {
+        "pt": "Toda imagem fica do mesmo tamanho (image_size × image_size): a rede recebe um tensor de forma fixa. O Resize ajusta o lado menor e o CenterCrop corta o centro.",
+        "en": "Every image gets the same size (image_size × image_size): the network takes a tensor of fixed shape. Resize scales the shorter side and CenterCrop cuts the centre.",
+    },
+    "code.data.augment": {
+        "pt": "Aumento de dados, só no treino: a cada época a mesma foto chega um pouco diferente (espelhada, girada, com outra cor). O modelo aprende a forma, não a foto exata.",
+        "en": "Data augmentation, training only: each epoch the same photo arrives slightly different (flipped, rotated, recoloured). The model learns the shape, not the exact photo.",
+    },
+    "code.data.tensor": {
+        "pt": "ToTensor transforma a imagem em números de 0 a 1, no formato [canais, altura, largura]. Normalize centraliza cada canal com a média e o desvio que a rede viu no pré-treino.",
+        "en": "ToTensor turns the image into numbers from 0 to 1, shaped [channels, height, width]. Normalize centres each channel with the mean and deviation the network saw in pre-training.",
+    },
+    "code.model.family": {
+        "pt": "Ramo da família {family}: a arquitetura termina numa camada linear com uma saída por classe do ImageNet (1000). Ela é trocada por uma nova, com uma saída por classe do seu dataset (uma só no binário). O resto da rede continua igual; com pesos pré-treinados, ele já sabe ver bordas e texturas.",
+        "en": "The {family} family branch: the architecture ends in a linear layer with one output per ImageNet class (1000). It is replaced by a new one with one output per class of your dataset (a single one for binary). The rest of the network stays the same; with pre-trained weights it already sees edges and textures.",
+    },
+    "code.loss.binary": {
+        "pt": "Binário: uma saída só e a BCEWithLogitsLoss, que aplica a sigmoide e mede o erro contra o rótulo 0 ou 1.",
+        "en": "Binary: a single output and BCEWithLogitsLoss, which applies the sigmoid and measures the error against the 0 or 1 label.",
+    },
+    "code.loss.multiclass": {
+        "pt": "Multiclasse: uma saída por classe e a CrossEntropyLoss, que aplica o softmax e pune pouca probabilidade na classe certa.",
+        "en": "Multiclass: one output per class and CrossEntropyLoss, which applies the softmax and penalises low probability on the right class.",
+    },
+    "code.train.mode": {
+        "pt": "Modo de treino: liga o dropout e faz o BatchNorm atualizar suas médias com cada lote.",
+        "en": "Training mode: turns dropout on and lets BatchNorm update its running averages with each batch.",
+    },
+    "code.train.batch": {
+        "pt": "Um lote por vez: as imagens e os rótulos vão para o dispositivo (GPU ou CPU). Uma época é uma volta por todos os lotes do treino.",
+        "en": "One batch at a time: the images and labels move to the device (GPU or CPU). An epoch is one pass over every training batch.",
+    },
+    "code.train.binary_target": {
+        "pt": "No binário, a loss quer o rótulo como número real e com a mesma forma da saída, [lote, 1].",
+        "en": "For binary, the loss wants the label as a real number with the output's shape, [batch, 1].",
+    },
+    "code.train.zero_grad": {
+        "pt": "Zera os gradientes do lote anterior. Sem isso, eles se somariam de um lote para o outro.",
+        "en": "Clears the previous batch's gradients. Without it they would add up from one batch to the next.",
+    },
+    "code.train.amp": {
+        "pt": "Precisão mista: as contas rodam em float16 onde é seguro, o que é mais rápido na GPU. O GradScaler aumenta a loss antes do backward para gradientes pequenos não virarem zero.",
+        "en": "Mixed precision: the maths runs in float16 where it is safe, which is faster on a GPU. GradScaler scales the loss up before backward so small gradients do not round to zero.",
+    },
+    "code.train.step": {
+        "pt": "O passo de aprendizado: forward (a rede prevê), loss (o erro em relação ao rótulo), backward (o gradiente de cada peso) e step (o otimizador mexe nos pesos na direção que diminui o erro).",
+        "en": "The learning step: forward (the network predicts), loss (the error against the label), backward (each weight's gradient) and step (the optimiser moves the weights in the direction that lowers the error).",
+    },
+    "code.train.count": {
+        "pt": "Conta acertos sem guardar gradientes: serve só para mostrar a acurácia de treino, não muda os pesos.",
+        "en": "Counts hits without keeping gradients: it only shows the training accuracy and does not change the weights.",
+    },
+    "code.predict.binary": {
+        "pt": "Binário: a sigmoide transforma a saída em probabilidade da classe positiva; acima de 0,5 a previsão é positiva.",
+        "en": "Binary: the sigmoid turns the output into the positive class probability; above 0.5 the prediction is positive.",
+    },
+    "code.predict.multiclass": {
+        "pt": "Multiclasse: a classe prevista é a de maior saída (argmax).",
+        "en": "Multiclass: the predicted class is the one with the largest output (argmax).",
+    },
+    "code.validate.mode": {
+        "pt": "Modo de avaliação: desliga o dropout, e o BatchNorm usa as médias aprendidas. Nada nesta função mexe nos pesos.",
+        "en": "Evaluation mode: dropout is off and BatchNorm uses the averages it learned. Nothing in this function changes the weights.",
+    },
+    "code.validate.no_grad": {
+        "pt": "Sem gradientes: a validação só mede. Gasta menos memória e roda mais rápido.",
+        "en": "No gradients: validation only measures. It uses less memory and runs faster.",
+    },
+    "code.validate.loss": {
+        "pt": "Esta é a val_loss. A época com a menor val_loss é a que fica salva em best_model.pth.",
+        "en": "This is the val_loss. The epoch with the lowest val_loss is the one saved in best_model.pth.",
+    },
+    "code.test.once": {
+        "pt": "O teste roda uma vez, no fim, com os pesos do best_model.pth. São imagens que não influenciaram nenhuma escolha do treino.",
+        "en": "The test runs once, at the end, with the weights of best_model.pth. These images influenced no choice made during training.",
+    },
+    "code.test.metrics": {
+        "pt": "As métricas comparam o previsto com o verdadeiro. Na multiclasse a média é macro: cada classe pesa igual, mesmo as que têm poucas imagens.",
+        "en": "The metrics compare predicted and true labels. For multiclass the average is macro: every class weighs the same, even those with few images.",
+    },
+    "code.regression.data.image": {
+        "pt": "Abre a imagem da linha do CSV e aplica as mesmas transformações da classificação (_build_transforms): mesmo tamanho, aumento de dados só no treino, ToTensor e Normalize.",
+        "en": "Opens the image of the CSV row and applies the same transforms as classification (_build_transforms): same size, augmentation in training only, ToTensor and Normalize.",
+    },
+    "code.regression.data.target": {
+        "pt": "O alvo não é uma classe: é o número (ou os números) das colunas de alvo do CSV, como float32. É o valor que a rede deve aprender a prever.",
+        "en": "The target is not a class: it is the number (or numbers) in the CSV's target columns, as float32. It is the value the network must learn to predict.",
+    },
+    "code.regression.model.custom": {
+        "pt": "Um modelo próprio registrado ou um modelo do timm, quando escolhidos, entram por estes ramos já com uma saída por alvo.",
+        "en": "A registered custom model or a timm model, when chosen, comes in through these branches already with one output per target.",
+    },
+    "code.regression.model.backbone": {
+        "pt": "A mesma rede da classificação (torchvision), com pesos do ImageNet se pré-treinada.",
+        "en": "The same network as in classification (torchvision), with ImageNet weights when pre-trained.",
+    },
+    "code.regression.model.head": {
+        "pt": "A última camada vira uma linear com uma saída por coluna de alvo, sem ativação: o número que sai é a previsão.",
+        "en": "The last layer becomes a linear one with one output per target column, without activation: the number that comes out is the prediction.",
+    },
+    "code.regression.loss.mae": {
+        "pt": "MAE (L1Loss): a média do erro absoluto. Todo erro pesa na proporção do seu tamanho, e valores fora da curva puxam menos.",
+        "en": "MAE (L1Loss): the mean absolute error. Every error weighs in proportion to its size, and outliers pull less.",
+    },
+    "code.regression.loss.huber": {
+        "pt": "Huber: quadrática para erros menores que delta e linear acima dele. Fica entre o MSE e o MAE.",
+        "en": "Huber: quadratic for errors below delta and linear above it. It sits between MSE and MAE.",
+    },
+    "code.regression.loss.mse": {
+        "pt": "MSE (MSELoss), o padrão: a média do erro ao quadrado. Erros grandes pesam muito mais que os pequenos.",
+        "en": "MSE (MSELoss), the default: the mean squared error. Large errors weigh much more than small ones.",
+    },
+    "code.regression.train.hooks": {
+        "pt": "Este laço é compartilhado com outras tarefas. A regressão não passa validate_targets: esta checagem é pulada.",
+        "en": "This loop is shared with other tasks. Regression passes no validate_targets: this check is skipped.",
+    },
+    "code.regression.train.batch": {
+        "pt": "Um lote por vez: as imagens e os alvos vão para o dispositivo (GPU ou CPU). Uma época é uma volta por todos os lotes do treino.",
+        "en": "One batch at a time: the images and targets move to the device (GPU or CPU). An epoch is one pass over every training batch.",
+    },
+    "code.regression.train.step": {
+        "pt": "O passo de aprendizado: forward (a rede prevê os números), loss (o erro em relação ao alvo), backward (o gradiente de cada peso) e step (o otimizador mexe nos pesos). Na regressão não há outputs_transform: a saída já é a previsão.",
+        "en": "The learning step: forward (the network predicts the numbers), loss (the error against the target), backward (each weight's gradient) and step (the optimiser moves the weights). Regression has no outputs_transform: the output already is the prediction.",
+    },
+    "code.regression.train.mean": {
+        "pt": "A train_loss da época é a média da loss dos lotes.",
+        "en": "The epoch's train_loss is the mean loss over the batches.",
+    },
+    "code.regression.validate.metrics": {
+        "pt": "Acumula o erro de cada amostra para calcular MSE, RMSE, MAE e R² da validação no fim da época.",
+        "en": "Accumulates each sample's error to compute the validation MSE, RMSE, MAE and R² at the end of the epoch.",
+    },
+    "code.regression.test.collect": {
+        "pt": "Guarda cada alvo e cada previsão do teste: deles saem as métricas, o gráfico de previsto contra real e os intervalos de confiança.",
+        "en": "Keeps every test target and prediction: the metrics, the predicted-versus-true plot and the confidence intervals come from them.",
+    },
+    "code.regression.test.metrics": {
+        "pt": "MSE, RMSE, MAE e R² do teste. Um R² perto de 1 explica quase toda a variação do alvo; abaixo de 0, o modelo erra mais do que prever a média.",
+        "en": "Test MSE, RMSE, MAE and R². An R² near 1 explains almost all of the target's variation; below 0, the model does worse than predicting the mean.",
+    },
+    "code.segmentation.data.image": {
+        "pt": "Abre a imagem e roda o pipeline de filtros de pré-processamento, só nela: a máscara não passa por filtros.",
+        "en": "Opens the image and runs the preprocessing filter pipeline on it alone: the mask goes through no filter.",
+    },
+    "code.segmentation.data.mask": {
+        "pt": "A máscara é uma imagem de um canal em que o valor de cada pixel é o id da classe. Uma máscara colorida (RGB) é recusada: não há mapa de cor para id.",
+        "en": "The mask is a single-channel image where each pixel's value is its class id. A colour (RGB) mask is refused: there is no colour-to-id map.",
+    },
+    "code.segmentation.data.resize": {
+        "pt": "Imagem e máscara vão para o mesmo tamanho. A imagem usa interpolação bilinear; a máscara usa o vizinho mais próximo, para nenhum pixel virar a média de dois ids, que seria uma classe que não existe.",
+        "en": "Image and mask go to the same size. The image uses bilinear interpolation; the mask uses nearest neighbour, so no pixel becomes the mean of two ids, which would be a class that does not exist.",
+    },
+    "code.segmentation.data.joint": {
+        "pt": "Aumento de dados geométrico, só no treino e com augment ligado: o mesmo sorteio espelha ou gira a imagem e a máscara juntas, para cada pixel continuar com o seu rótulo. A borda criada pela rotação recebe ignore_index e fica fora da loss.",
+        "en": "Geometric augmentation, in training only and with augment on: the same draw flips or rotates image and mask together, so every pixel keeps its label. The border the rotation creates gets ignore_index and stays out of the loss.",
+    },
+    "code.segmentation.data.jitter": {
+        "pt": "Variação de cor (brilho, contraste, saturação) só na imagem: a cor não muda a classe de um pixel.",
+        "en": "Colour jitter (brightness, contrast, saturation) on the image only: colour does not change a pixel's class.",
+    },
+    "code.segmentation.data.tensor": {
+        "pt": "A imagem vira tensor normalizado [3, H, W]. A máscara vira um tensor de inteiros (long) [H, W] com um id de classe por pixel: é o rótulo de cada pixel.",
+        "en": "The image becomes a normalised [3, H, W] tensor. The mask becomes an integer (long) [H, W] tensor with one class id per pixel: it is every pixel's label.",
+    },
+    "code.segmentation.model.unet": {
+        "pt": "U-Net: a rede escrita neste projeto (a aba U-Net mostra o forward dela), com uma saída por classe em cada pixel.",
+        "en": "U-Net: the network written in this project (the U-Net tab shows its forward), with one output per class at every pixel.",
+    },
+    "code.segmentation.model.torchvision": {
+        "pt": "DeepLabV3, FCN ou LR-ASPP do torchvision: a cabeça é criada com num_classes saídas e só o backbone recebe pesos do ImageNet, se pré-treinado. Elas devolvem um dicionário; segmentation_logits tira dele o tensor da chave out.",
+        "en": "torchvision's DeepLabV3, FCN or LR-ASPP: the head is built with num_classes outputs and only the backbone gets ImageNet weights, when pre-trained. They return a dictionary; segmentation_logits takes the tensor under the out key.",
+    },
+    "code.segmentation.unet.encoder": {
+        "pt": "Codificador: cada nível dobra os canais e o pooling corta a resolução pela metade. A rede vê regiões cada vez maiores da imagem.",
+        "en": "Encoder: each level doubles the channels and pooling halves the resolution. The network sees ever larger regions of the image.",
+    },
+    "code.segmentation.unet.bottleneck": {
+        "pt": "O gargalo: a menor resolução e o maior número de canais, onde a rede resume o que há na imagem.",
+        "en": "The bottleneck: the lowest resolution and the most channels, where the network sums up what is in the image.",
+    },
+    "code.segmentation.unet.decoder": {
+        "pt": "Decodificador: cada passo volta ao tamanho do nível de cima e concatena o mapa guardado no codificador (a conexão de atalho). É isso que devolve as bordas finas que o pooling apagou.",
+        "en": "Decoder: each step goes back up to the size of the level above and concatenates the map kept by the encoder (the skip connection). That is what restores the fine edges pooling erased.",
+    },
+    "code.segmentation.unet.head": {
+        "pt": "Uma convolução 1×1 dá num_classes valores por pixel: os logits [lote, classes, H, W].",
+        "en": "A 1×1 convolution gives num_classes values per pixel: the logits [batch, classes, H, W].",
+    },
+    "code.segmentation.loss.dice": {
+        "pt": "Dice: mede a sobreposição entre a máscara prevista (probabilidades) e a verdadeira, por classe. Não depende de quantos pixels cada classe tem, o que ajuda quando o fundo domina a imagem.",
+        "en": "Dice: measures the overlap between the predicted (probabilities) and the true mask, per class. It does not depend on how many pixels each class has, which helps when the background fills most of the image.",
+    },
+    "code.segmentation.loss.combined": {
+        "pt": "Combinada: cross-entropy mais Dice. A cross-entropy dá gradiente estável pixel a pixel; o Dice puxa a sobreposição das regiões.",
+        "en": "Combined: cross-entropy plus Dice. Cross-entropy gives a steady per-pixel gradient; Dice pulls on region overlap.",
+    },
+    "code.segmentation.loss.cross_entropy": {
+        "pt": "Cross-entropy, o padrão: a classificação de cada pixel, como na classificação multiclasse. Pixels com ignore_index ficam fora.",
+        "en": "Cross-entropy, the default: each pixel is classified, as in multiclass classification. Pixels with ignore_index are left out.",
+    },
+    "code.segmentation.train.check_ids": {
+        "pt": "A segmentação passa check_mask_ids aqui: um id de máscara fora de [0, num_classes) é recusado na CPU com uma mensagem clara, antes de virar um erro obscuro na GPU.",
+        "en": "Segmentation passes check_mask_ids here: a mask id outside [0, num_classes) is refused on the CPU with a clear message, before it turns into an obscure GPU error.",
+    },
+    "code.segmentation.train.batch": {
+        "pt": "Um lote por vez: as imagens e as máscaras vão para o dispositivo (GPU ou CPU).",
+        "en": "One batch at a time: the images and masks move to the device (GPU or CPU).",
+    },
+    "code.segmentation.train.logits": {
+        "pt": "Forward. A segmentação passa segmentation_logits como outputs_transform: o mesmo tensor [lote, classes, H, W] sai da U-Net e dos modelos do torchvision.",
+        "en": "Forward. Segmentation passes segmentation_logits as outputs_transform: the same [batch, classes, H, W] tensor comes out of the U-Net and of the torchvision models.",
+    },
+    "code.segmentation.train.step": {
+        "pt": "A loss compara os logits com a máscara pixel a pixel; backward calcula o gradiente de cada peso e step mexe nos pesos.",
+        "en": "The loss compares the logits with the mask pixel by pixel; backward computes each weight's gradient and step moves the weights.",
+    },
+    "code.segmentation.validate.check_ids": {
+        "pt": "A mesma checagem de ids da máscara do treino, na validação.",
+        "en": "The same mask-id check as in training, for validation.",
+    },
+    "code.segmentation.validate.logits": {
+        "pt": "Os logits de cada pixel; a classe prevista é a de maior valor (argmax), calculada no acumulador de métricas.",
+        "en": "The logits of every pixel; the predicted class is the largest one (argmax), taken in the metric accumulator.",
+    },
+    "code.segmentation.validate.loss": {
+        "pt": "A val_loss usa o mesmo critério do treino.",
+        "en": "val_loss uses the same criterion as training.",
+    },
+    "code.segmentation.validate.best": {
+        "pt": "mIoU, Dice e acurácia de pixel da validação. A época com o maior mIoU de validação é a que fica salva em best_model.pth, não a de menor val_loss.",
+        "en": "Validation mIoU, Dice and pixel accuracy. The epoch with the highest validation mIoU is the one saved in best_model.pth, not the one with the lowest val_loss.",
+    },
+    "code.segmentation.test.once": {
+        "pt": "O teste roda uma vez, no fim, com os pesos do best_model.pth (o de maior mIoU de validação). São imagens que não influenciaram nenhuma escolha do treino.",
+        "en": "The test runs once, at the end, with the weights of best_model.pth (the highest validation mIoU). These images influenced no choice made during training.",
+    },
+    "code.segmentation.test.per_image": {
+        "pt": "Guarda uma matriz de confusão por imagem: delas saem os intervalos de confiança por bootstrap das métricas do teste.",
+        "en": "Keeps one confusion matrix per image: the bootstrap confidence intervals of the test metrics come from them.",
+    },
+    "code.segmentation.test.metrics": {
+        "pt": "mIoU, Dice e acurácia de pixel do teste, sobre todos os pixels das imagens de teste.",
+        "en": "Test mIoU, Dice and pixel accuracy, over every pixel of the test images.",
+    },
+    "code.segmentation.metrics.confusion": {
+        "pt": "A matriz de confusão conta pixels: linha é a classe verdadeira, coluna a prevista. A diagonal são os acertos; somando linha e coluna e tirando a diagonal sai a união de cada classe.",
+        "en": "The confusion matrix counts pixels: the row is the true class, the column the predicted one. The diagonal holds the hits; adding row and column and removing the diagonal gives each class's union.",
+    },
+    "code.segmentation.metrics.present": {
+        "pt": "Só entram na média as classes que aparecem na verdade ou na previsão: uma classe ausente não puxa a média para zero.",
+        "en": "Only classes that appear in the truth or in the prediction enter the mean: an absent class does not drag the mean to zero.",
+    },
+    "code.segmentation.metrics.iou": {
+        "pt": "IoU de cada classe: acertos divididos pela união (o que era a classe ou foi previsto como ela). O mIoU é a média entre as classes.",
+        "en": "Each class's IoU: hits divided by the union (what was the class or was predicted as it). mIoU is the mean over the classes.",
+    },
+    "code.segmentation.metrics.dice": {
+        "pt": "Dice de cada classe: o dobro dos acertos dividido pela soma dos pixels verdadeiros e previstos. Sobe junto com o IoU, mas pune menos os erros.",
+        "en": "Each class's Dice: twice the hits divided by the sum of true and predicted pixels. It rises with IoU but penalises errors less.",
+    },
+    "code.segmentation.metrics.pixel_acc": {
+        "pt": "Acurácia de pixel: a fração de pixels certos. Engana quando o fundo domina; por isso o mIoU é a métrica principal.",
+        "en": "Pixel accuracy: the fraction of correct pixels. It misleads when the background dominates; that is why mIoU is the main metric.",
+    },
+    "code.anomaly.data.normal_only": {
+        "pt": "O treino só tem imagens normais (rótulo 0). O modelo aprende como é o normal; não vê nenhum defeito antes do teste.",
+        "en": "Training holds normal images only (label 0). The model learns what normal looks like; it sees no defect before the test.",
+    },
+    "code.anomaly.data.test_labels": {
+        "pt": "No teste, a pasta das normais tem rótulo 0 e qualquer outra pasta (cada tipo de defeito) tem rótulo 1.",
+        "en": "In the test, the normal folder gets label 0 and every other folder (each kind of defect) gets label 1.",
+    },
+    "code.anomaly.data.train": {
+        "pt": "As imagens de treino passam pelas mesmas transformações da classificação (_build_transforms), com aumento de dados se ligado.",
+        "en": "Training images go through the same transforms as classification (_build_transforms), with augmentation when it is on.",
+    },
+    "code.anomaly.data.calibration": {
+        "pt": "As mesmas normais do treino, sem aumento de dados: é sobre elas que o limiar é calibrado, porque o modelo nunca é aplicado a cópias espelhadas ou giradas.",
+        "en": "The same normals as training, without augmentation: the threshold is calibrated on them, because the model is never applied to flipped or rotated copies.",
+    },
+    "code.anomaly.model.autoencoder": {
+        "pt": "Autoencoder convolucional: comprime a imagem num código pequeno (latent_dim) e tenta reconstruí-la. Treinado só com normais, ele reconstrói mal o que nunca viu.",
+        "en": "Convolutional autoencoder: it squeezes the image into a small code (latent_dim) and tries to rebuild it. Trained on normals only, it rebuilds poorly what it never saw.",
+    },
+    "code.anomaly.model.patchcore": {
+        "pt": "PatchCore: um backbone (com pesos do ImageNet, se pretrained) que não é treinado aqui, mais um banco de memória de pedaços (patches) das imagens normais. coreset_ratio diz quanto do banco fica guardado.",
+        "en": "PatchCore: a backbone (with ImageNet weights, when pretrained) that is not trained here, plus a memory bank of patches from the normal images. coreset_ratio says how much of the bank is kept.",
+    },
+    "code.anomaly.train.batch": {
+        "pt": "Um lote de normais por vez. O rótulo é descartado (o _): todas são normais e o alvo é a própria imagem.",
+        "en": "One batch of normals at a time. The label is dropped (the _): they are all normal and the target is the image itself.",
+    },
+    "code.anomaly.train.reconstruct": {
+        "pt": "A rede reconstrói a imagem e a loss (MSE) compara a reconstrução com a entrada, pixel a pixel. Não há rótulo: a imagem é o seu próprio alvo.",
+        "en": "The network rebuilds the image and the loss (MSE) compares the rebuild with the input, pixel by pixel. There is no label: the image is its own target.",
+    },
+    "code.anomaly.train.step": {
+        "pt": "backward calcula o gradiente de cada peso e step mexe nos pesos para reconstruir melhor.",
+        "en": "backward computes each weight's gradient and step moves the weights to rebuild better.",
+    },
+    "code.anomaly.train.best": {
+        "pt": "A loss média da época. O checkpoint salvo é o da época com a menor loss de reconstrução no treino; a AUROC de teste mostrada a cada época é só acompanhamento e não escolhe o checkpoint.",
+        "en": "The epoch's mean loss. The checkpoint kept is the epoch with the lowest training reconstruction loss; the test AUROC shown each epoch is monitoring only and does not pick the checkpoint.",
+    },
+    "code.anomaly.coreset.small": {
+        "pt": "O PatchCore não tem épocas nem gradiente: o seu treino é uma passada pelas normais extraindo patches das camadas 2 e 3 do backbone. Se o banco pedido couber inteiro, todos os patches ficam.",
+        "en": "PatchCore has no epochs and no gradient: its training is one pass over the normals, extracting patches from layers 2 and 3 of the backbone. When the requested bank holds them all, every patch is kept.",
+    },
+    "code.anomaly.coreset.start": {
+        "pt": "Coreset guloso (k-center): começa pelo primeiro patch e guarda, para cada patch, a distância até o mais próximo já escolhido.",
+        "en": "Greedy coreset (k-center): it starts with the first patch and keeps, for every patch, the distance to the nearest one already picked.",
+    },
+    "code.anomaly.coreset.farthest": {
+        "pt": "A cada passo escolhe o patch mais distante de tudo o que já foi escolhido e atualiza as distâncias. Assim o banco cobre a variedade das normais com uma fração dos patches.",
+        "en": "Each step picks the patch farthest from everything already picked and updates the distances. That way the bank covers the variety of the normals with a fraction of the patches.",
+    },
+    "code.anomaly.coreset.bank": {
+        "pt": "Os patches escolhidos são o banco de memória: é ele que o checkpoint guarda.",
+        "en": "The picked patches are the memory bank: it is what the checkpoint stores.",
+    },
+    "code.anomaly.score.autoencoder": {
+        "pt": "Autoencoder: a nota de anomalia de cada imagem é o erro médio de reconstrução. Quanto pior a reconstrução, mais anômala a imagem.",
+        "en": "Autoencoder: each image's anomaly score is its mean reconstruction error. The worse the rebuild, the more anomalous the image.",
+    },
+    "code.anomaly.score.patchcore": {
+        "pt": "PatchCore: a nota vem de PatchCore.score (aba seguinte), a distância dos patches da imagem até o banco de normais.",
+        "en": "PatchCore: the score comes from PatchCore.score (next tab), the distance from the image's patches to the bank of normals.",
+    },
+    "code.anomaly.patch_score.features": {
+        "pt": "Extrai os patches da imagem com o mesmo backbone usado para montar o banco.",
+        "en": "Extracts the image's patches with the same backbone used to build the bank.",
+    },
+    "code.anomaly.patch_score.nearest": {
+        "pt": "Para cada patch, a distância até o vizinho mais próximo no banco de normais. Um patch parecido com algum normal fica perto; um defeito fica longe de todos.",
+        "en": "For every patch, the distance to its nearest neighbour in the bank of normals. A patch like some normal one sits close; a defect sits far from all of them.",
+    },
+    "code.anomaly.patch_score.image": {
+        "pt": "A nota da imagem é a do seu patch mais estranho (o máximo): basta um pedaço defeituoso para a imagem ser suspeita.",
+        "en": "The image's score is that of its strangest patch (the maximum): one defective piece is enough to make the image suspect.",
+    },
+    "code.anomaly.threshold.percentile": {
+        "pt": "O limiar de decisão é um percentil (threshold_percentile, 95 por padrão) das notas das imagens normais: acima dele, a imagem é anômala. Com 95, cerca de 5% das normais de calibração ficariam acima do limiar.",
+        "en": "The decision threshold is a percentile (threshold_percentile, 95 by default) of the normal images' scores: above it, the image is anomalous. With 95, about 5% of the calibration normals would sit above the threshold.",
+    },
+    "code.anomaly.test.once": {
+        "pt": "O teste final roda uma vez, no fim, com o checkpoint salvo (o banco do PatchCore ou o autoencoder de menor loss de treino).",
+        "en": "The final test runs once, at the end, with the saved checkpoint (the PatchCore bank or the autoencoder with the lowest training loss).",
+    },
+    "code.anomaly.test.calibration": {
+        "pt": "As notas das normais de treino, sem aumento de dados: delas sai o limiar.",
+        "en": "The scores of the training normals, without augmentation: the threshold comes from them.",
+    },
+    "code.anomaly.test.scores": {
+        "pt": "As notas e os rótulos das imagens de teste, normais e com defeito.",
+        "en": "The scores and labels of the test images, normal and defective.",
+    },
+    "code.anomaly.metrics.auroc": {
+        "pt": "AUROC: a chance de uma imagem com defeito ter nota maior que uma normal. Não depende do limiar; 0,5 é sorteio e 1 separa tudo.",
+        "en": "AUROC: the chance that a defective image scores higher than a normal one. It does not depend on the threshold; 0.5 is a coin flip and 1 separates everything.",
+    },
+    "code.anomaly.metrics.threshold": {
+        "pt": "O limiar calibrado nas normais de treino, sem olhar nenhuma imagem de teste.",
+        "en": "The threshold calibrated on the training normals, without looking at any test image.",
+    },
+    "code.anomaly.metrics.f1": {
+        "pt": "Com o limiar, cada imagem de teste vira normal ou anômala, e o F1 mede esse acerto na classe anômala. Ao contrário da AUROC, ele depende do limiar escolhido.",
+        "en": "With the threshold, every test image becomes normal or anomalous, and F1 measures that call on the anomalous class. Unlike AUROC, it depends on the chosen threshold.",
+    },
+    "code.detection.data.tensor": {
+        "pt": "A imagem vira tensor no tamanho original, sem redimensionar aqui: os detectores do torchvision redimensionam e normalizam por dentro.",
+        "en": "The image becomes a tensor at its original size, without resizing here: torchvision detectors resize and normalise internally.",
+    },
+    "code.detection.data.target": {
+        "pt": "O alvo de cada imagem é um dicionário: as caixas (boxes) em pixels no formato x1, y1, x2, y2 e o rótulo de cada caixa. Uma imagem pode ter qualquer número de caixas, inclusive nenhuma.",
+        "en": "Each image's target is a dictionary: the boxes in pixels as x1, y1, x2, y2 and each box's label. An image may hold any number of boxes, none included.",
+    },
+    "code.detection.labels.yolo": {
+        "pt": "O rótulo YOLO guarda classe, centro (cx, cy) e tamanho (w, h) relativos à imagem, de 0 a 1. Aqui viram os cantos da caixa em pixels.",
+        "en": "The YOLO label holds class, centre (cx, cy) and size (w, h) relative to the image, from 0 to 1. Here they become the box corners in pixels.",
+    },
+    "code.detection.labels.clamp": {
+        "pt": "A caixa é cortada nos limites da imagem, e uma caixa sem área é descartada.",
+        "en": "The box is clipped to the image bounds, and a box with no area is dropped.",
+    },
+    "code.detection.labels.background": {
+        "pt": "Os detectores do torchvision reservam o rótulo 0 para o fundo, então a classe YOLO c vira c + 1.",
+        "en": "torchvision detectors reserve label 0 for the background, so YOLO class c becomes c + 1.",
+    },
+    "code.detection.collate.tuples": {
+        "pt": "As imagens têm tamanhos diferentes e cada uma tem seu número de caixas, então o lote não vira um tensor só: são tuplas de imagens e de alvos, como os detectores do torchvision recebem.",
+        "en": "Images differ in size and each has its own number of boxes, so the batch is not stacked into one tensor: it is tuples of images and targets, as torchvision detectors take them.",
+    },
+    "code.detection.model.faster_rcnn": {
+        "pt": "Faster R-CNN: detector em dois estágios. Uma rede propõe regiões e uma cabeça classifica cada uma e ajusta a caixa.",
+        "en": "Faster R-CNN: a two-stage detector. A network proposes regions and a head classifies each one and refines its box.",
+    },
+    "code.detection.model.ssd": {
+        "pt": "SSD: detector de um estágio. Prevê classe e caixa direto sobre âncoras em vários mapas de features.",
+        "en": "SSD: a single-stage detector. It predicts class and box straight from anchors over several feature maps.",
+    },
+    "code.detection.model.retinanet": {
+        "pt": "RetinaNet: detector de um estágio com focal loss, que dá menos peso às âncoras fáceis de fundo.",
+        "en": "RetinaNet: a single-stage detector with focal loss, which gives less weight to easy background anchors.",
+    },
+    "code.yolo.args.core": {
+        "pt": "O formulário vira parâmetros do YOLO.train: épocas, lote, taxa de aprendizado, paciência, seed e workers vão com os nomes que o Ultralytics espera.",
+        "en": "The form becomes YOLO.train arguments: epochs, batch, learning rate, patience, seed and workers go under the names Ultralytics expects.",
+    },
+    "code.yolo.args.gains": {
+        "pt": "Os pesos de cada parte da loss do YOLO: caixa (box), classe (cls) e distribuição das bordas (dfl).",
+        "en": "The weight of each part of the YOLO loss: box, class (cls) and the distribution of the box edges (dfl).",
+    },
+    "code.yolo.args.augmentation": {
+        "pt": "A augmentation entra por último, já com a chave liga/desliga aplicada.",
+        "en": "Augmentation goes in last, with the on/off switch already applied.",
+    },
+    "code.yolo.augment.neutral": {
+        "pt": "Desligada, a augmentation manda valores neutros em vez de omitir as chaves: uma chave omitida o Ultralytics preenche com o próprio padrão, que aumenta os dados.",
+        "en": "Switched off, augmentation sends neutral values instead of leaving the keys out: Ultralytics fills an omitted key with its own default, which augments.",
+    },
+    "code.yolo.augment.config": {
+        "pt": "Ligada, vão os valores do seu config, sem mudar nada.",
+        "en": "Switched on, the values of your config go as they are.",
+    },
+    "code.yolo.fit.missing": {
+        "pt": "Sem o extra detection (o Ultralytics, AGPL-3.0) o treino para aqui, com a linha que o instala.",
+        "en": "Without the detection extra (Ultralytics, AGPL-3.0) training stops here, with the line that installs it.",
+    },
+    "code.yolo.fit.weights": {
+        "pt": "O modelo nasce dos pesos escolhidos: pré-treinados no COCO ou só a arquitetura.",
+        "en": "The model starts from the chosen weights: pretrained on COCO, or the architecture alone.",
+    },
+    "code.yolo.fit.callback": {
+        "pt": "O Ultralytics é dono do laço de treino; o VisionForge só é chamado no fim de cada época, para gravar as métricas e checar o botão de parar.",
+        "en": "Ultralytics owns the training loop; VisionForge is only called at the end of each epoch, to record the metrics and check the stop button.",
+    },
+    "code.yolo.fit.stop": {
+        "pt": "Parar pede ao Ultralytics que saia ao fim da época, pela mesma bandeira que a parada antecipada dele usa.",
+        "en": "Stopping asks Ultralytics to leave at the end of the epoch, through the same flag its own early stopping uses.",
+    },
+    "code.yolo.fit.train": {
+        "pt": "Aqui o treino passa para a biblioteca: a pasta do run é absoluta, para o Ultralytics não gravar em outro lugar.",
+        "en": "Here training hands over to the library: the run folder is absolute, so Ultralytics does not write somewhere else.",
+    },
+    "code.yolo.epoch.metrics": {
+        "pt": "As métricas da época saem de trainer.metrics, que a validação do Ultralytics preenche: mAP@50, mAP@50-95 e as losses de validação.",
+        "en": "The epoch's metrics come from trainer.metrics, which the Ultralytics validator fills: mAP@50, mAP@50-95 and the validation losses.",
+    },
+    "code.yolo.epoch.train_loss": {
+        "pt": "As losses de treino não estão ali: vêm da média que o Ultralytics guarda em trainer.tloss.",
+        "en": "The training losses are not there: they come from the running mean Ultralytics keeps in trainer.tloss.",
+    },
+    "code.yolo.epoch.resume": {
+        "pt": "Num treino retomado, a época substitui o registro dela em vez de aparecer duas vezes.",
+        "en": "In a resumed run, the epoch replaces its own record instead of appearing twice.",
+    },
+    "code.yolo.loop.setup": {
+        "pt": "Prepara dataloaders, otimizador, scheduler e EMA a partir dos parâmetros que o VisionForge passou.",
+        "en": "Builds the dataloaders, optimizer, scheduler and EMA from the arguments VisionForge passed.",
+    },
+    "code.yolo.loop.epochs": {
+        "pt": "O laço das épocas: roda até a última época, a parada antecipada ou o botão de parar.",
+        "en": "The epoch loop: it runs until the last epoch, early stopping or the stop button.",
+    },
+    "code.yolo.loop.scheduler": {
+        "pt": "A taxa de aprendizado da época, pelo scheduler (linear ou cosseno, lrf).",
+        "en": "The epoch's learning rate, from the scheduler (linear or cosine, lrf).",
+    },
+    "code.yolo.loop.warmup": {
+        "pt": "Nas primeiras iterações a taxa de aprendizado e o momentum sobem aos poucos (warmup).",
+        "en": "In the first iterations the learning rate and momentum ramp up (warmup).",
+    },
+    "code.yolo.loop.forward": {
+        "pt": "Forward e loss do lote, em precisão mista quando amp está ligado.",
+        "en": "The batch's forward pass and loss, in mixed precision when amp is on.",
+    },
+    "code.yolo.loop.backward": {
+        "pt": "Backward: os gradientes da loss.",
+        "en": "Backward: the gradients of the loss.",
+    },
+    "code.yolo.loop.step": {
+        "pt": "O otimizador atualiza os pesos depois de acumular gradientes até o lote nominal (nbs).",
+        "en": "The optimizer updates the weights once gradients have accumulated up to the nominal batch (nbs).",
+    },
+    "code.yolo.loop.validate": {
+        "pt": "Validação ao fim da época: mAP e losses no split de validação.",
+        "en": "Validation at the end of the epoch: mAP and losses on the validation split.",
+    },
+    "code.yolo.loop.callback": {
+        "pt": "Aqui roda o callback do VisionForge que grava a época.",
+        "en": "Here VisionForge's callback runs and records the epoch.",
+    },
+    "code.yolo.loop.final_eval": {
+        "pt": "Depois do laço, o Ultralytics mede o best.pt de novo; o VisionForge não conta essa passada como época.",
+        "en": "After the loop, Ultralytics measures best.pt again; VisionForge does not count that pass as an epoch.",
+    },
+    "code.detection.weights": {
+        "pt": "Com pretrained, o detector começa dos pesos treinados no COCO; sem ele, começa do zero, sem baixar nada.",
+        "en": "With pretrained, the detector starts from weights trained on COCO; without it, it starts from scratch and downloads nothing.",
+    },
+    "code.detection.faster_rcnn.head": {
+        "pt": "A cabeça de classificação do COCO é trocada por uma nova com uma saída por classe do seu dataset mais o fundo (num_classes + 1).",
+        "en": "The COCO classification head is replaced by a new one with one output per class of your dataset plus the background (num_classes + 1).",
+    },
+    "code.detection.ssd.head": {
+        "pt": "A cabeça de classificação do SSD é trocada por uma nova, com num_classes + 1 saídas por âncora (o + 1 é o fundo). A cabeça das caixas continua a do COCO.",
+        "en": "SSD's classification head is replaced by a new one with num_classes + 1 outputs per anchor (the + 1 is the background). The box head stays COCO's.",
+    },
+    "code.detection.retinanet.head": {
+        "pt": "A cabeça de classificação da RetinaNet é trocada por uma nova, com num_classes + 1 saídas por âncora e GroupNorm. A cabeça das caixas continua a do COCO.",
+        "en": "RetinaNet's classification head is replaced by a new one with num_classes + 1 outputs per anchor and GroupNorm. The box head stays COCO's.",
+    },
+    "code.detection.train.batch": {
+        "pt": "As imagens e os alvos do lote vão para o dispositivo (GPU ou CPU), um a um, porque cada imagem tem seu tamanho.",
+        "en": "The batch's images and targets move to the device (GPU or CPU) one by one, since each image has its own size.",
+    },
+    "code.detection.train.losses": {
+        "pt": "Em modo de treino, o detector recebe imagens e alvos e devolve um dicionário de losses (classificação, caixa e, no Faster R-CNN, as da rede de propostas). A loss do lote é a soma delas.",
+        "en": "In training mode the detector takes images and targets and returns a dictionary of losses (classification, box and, in Faster R-CNN, those of the proposal network). The batch loss is their sum.",
+    },
+    "code.detection.train.step": {
+        "pt": "Zera os gradientes, backward calcula o gradiente de cada peso e step mexe nos pesos.",
+        "en": "Clears the gradients, backward computes each weight's gradient and step moves the weights.",
+    },
+    "code.detection.validate.train_mode": {
+        "pt": "Os detectores do torchvision só devolvem losses em modo de treino. A val_loss usa esse modo dentro de no_grad e sem passo do otimizador, mas com as camadas de BatchNorm em eval: assim os pesos e as estatísticas de média e variância não mudam.",
+        "en": "torchvision detectors only return losses in training mode. val_loss uses that mode inside no_grad and with no optimiser step, but with the BatchNorm layers in eval: so the weights and the running mean and variance do not change.",
+    },
+    "code.detection.validate.loss": {
+        "pt": "A val_loss é a soma das losses do detector, na média dos lotes. Ela é mostrada, mas não escolhe o checkpoint: quem escolhe é o mAP@0.5 (aba mAP).",
+        "en": "val_loss is the sum of the detector's losses, averaged over batches. It is shown, but it does not pick the checkpoint: mAP@0.5 does (mAP tab).",
+    },
+    "code.detection.map.eval": {
+        "pt": "Em modo de avaliação o detector devolve previsões: caixas, rótulos e confiança de cada detecção.",
+        "en": "In evaluation mode the detector returns predictions: boxes, labels and the confidence of each detection.",
+    },
+    "code.detection.map.predict": {
+        "pt": "Guarda as previsões e as caixas verdadeiras de cada imagem de validação para comparar no fim.",
+        "en": "Keeps the predictions and the true boxes of every validation image to compare at the end.",
+    },
+    "code.detection.map.best": {
+        "pt": "O mAP@0.5 da validação. A época com o maior mAP@0.5 é a que fica salva em best_model.pth.",
+        "en": "The validation mAP@0.5. The epoch with the highest mAP@0.5 is the one saved in best_model.pth.",
+    },
+    "code.detection.metric.sort": {
+        "pt": "AP de uma classe: as detecções dela são ordenadas da mais confiante para a menos confiante.",
+        "en": "AP of one class: its detections are sorted from most to least confident.",
+    },
+    "code.detection.metric.match": {
+        "pt": "Cada detecção procura a caixa verdadeira de maior IoU (sobreposição) na sua imagem. Com IoU de pelo menos 0,5 e caixa ainda livre, é um acerto (TP); senão, um falso positivo (FP). Uma caixa verdadeira só vale para uma detecção.",
+        "en": "Each detection looks for the true box with the highest IoU (overlap) in its image. With IoU of at least 0.5 and the box still free, it is a hit (TP); otherwise a false positive (FP). A true box counts for one detection only.",
+    },
+    "code.detection.metric.curve": {
+        "pt": "Descendo a lista, a revocação (quantas caixas verdadeiras já foram achadas) e a precisão (quantas detecções estavam certas) formam a curva precisão-revocação.",
+        "en": "Going down the list, recall (how many true boxes were found so far) and precision (how many detections were right) form the precision-recall curve.",
+    },
+    "code.detection.metric.ap": {
+        "pt": "O AP é a área sob essa curva (todos os pontos, como no VOC). O mAP@0.5 é a média do AP entre as classes que têm caixas verdadeiras.",
+        "en": "AP is the area under that curve (all points, as in VOC). mAP@0.5 is the mean AP over the classes that have true boxes.",
+    },
+    # One plain sentence per function of a tour, for a newcomer (code_tour.Section.summary).
+    "code.summary.train_epoch": {
+        "pt": "Uma época: para cada lote, o modelo prevê, mede o erro e ajusta os pesos.",
+        "en": "One epoch: for each batch, the model predicts, measures its error and adjusts the weights.",
+    },
+    "code.summary.classification.data": {
+        "pt": "Prepara cada imagem: tamanho fixo, aumento de dados no treino e números que a rede entende.",
+        "en": "Prepares each image: a fixed size, augmentation in training, and numbers the network understands.",
+    },
+    "code.summary.classification.model": {
+        "pt": "Troca a última camada da rede pronta por uma com uma saída por classe do seu dataset.",
+        "en": "Swaps the last layer of the ready-made network for one with an output per class of your dataset.",
+    },
+    "code.summary.classification.loss": {
+        "pt": "Escolhe a função que mede o erro de cada previsão.",
+        "en": "Picks the function that measures the error of each prediction.",
+    },
+    "code.summary.classification.train": {
+        "pt": "Uma época: para cada lote, o modelo prevê, mede o erro e ajusta os pesos.",
+        "en": "One epoch: for each batch, the model predicts, measures its error and adjusts the weights.",
+    },
+    "code.summary.classification.validate": {
+        "pt": "Mede o modelo nas imagens de validação, sem mexer nos pesos.",
+        "en": "Measures the model on the validation images, without touching the weights.",
+    },
+    "code.summary.classification.test": {
+        "pt": "Mede o melhor modelo no conjunto de teste, que ele nunca viu.",
+        "en": "Measures the best model on the test set, which it never saw.",
+    },
+    "code.summary.regression.data": {
+        "pt": "Lê uma imagem e os valores-alvo dela na planilha.",
+        "en": "Reads one image and its target values from the spreadsheet.",
+    },
+    "code.summary.regression.model": {
+        "pt": "Monta a rede e troca a última camada por uma saída por alvo.",
+        "en": "Builds the network and swaps its last layer for one output per target.",
+    },
+    "code.summary.regression.loss": {
+        "pt": "Escolhe como medir a distância entre o valor previsto e o real.",
+        "en": "Picks how to measure the distance between the predicted and the true value.",
+    },
+    "code.summary.regression.validate": {
+        "pt": "Mede o erro nas imagens de validação, sem mexer nos pesos.",
+        "en": "Measures the error on the validation images, without touching the weights.",
+    },
+    "code.summary.regression.test": {
+        "pt": "Mede o melhor modelo no teste e guarda cada previsão.",
+        "en": "Measures the best model on the test set and keeps each prediction.",
+    },
+    "code.summary.segmentation.data": {
+        "pt": "Lê a imagem e a máscara, e aplica as mesmas mudanças às duas.",
+        "en": "Reads the image and its mask, and applies the same changes to both.",
+    },
+    "code.summary.segmentation.model": {
+        "pt": "Escolhe a arquitetura: a U-Net do VisionForge ou uma do torchvision.",
+        "en": "Picks the architecture: VisionForge's U-Net or a torchvision one.",
+    },
+    "code.summary.segmentation.unet": {
+        "pt": "O caminho de uma imagem pela U-Net: encolhe, passa pelo gargalo e cresce de volta.",
+        "en": "An image's path through the U-Net: it shrinks, crosses the bottleneck and grows back.",
+    },
+    "code.summary.segmentation.loss": {
+        "pt": "Escolhe como medir o erro de cada pixel.",
+        "en": "Picks how to measure the error of each pixel.",
+    },
+    "code.summary.segmentation.validate": {
+        "pt": "Mede loss e mIoU na validação; o melhor mIoU escolhe o modelo salvo.",
+        "en": "Measures loss and mIoU on validation; the best mIoU picks the saved model.",
+    },
+    "code.summary.segmentation.test": {
+        "pt": "Mede o melhor modelo no teste, imagem por imagem.",
+        "en": "Measures the best model on the test set, image by image.",
+    },
+    "code.summary.segmentation.metrics": {
+        "pt": "Calcula mIoU, Dice e acurácia por pixel a partir da matriz de confusão.",
+        "en": "Computes mIoU, Dice and pixel accuracy from the confusion matrix.",
+    },
+    "code.summary.anomaly.data": {
+        "pt": "Separa as imagens: o treino só tem normais; o teste tem normais e com defeito.",
+        "en": "Splits the images: training has only normal ones; test has normal and defective ones.",
+    },
+    "code.summary.anomaly.model": {
+        "pt": "Monta o método escolhido: autoencoder ou PatchCore.",
+        "en": "Builds the chosen method: autoencoder or PatchCore.",
+    },
+    "code.summary.anomaly.train": {
+        "pt": "Uma época do autoencoder: ele aprende a reconstruir imagens normais.",
+        "en": "One autoencoder epoch: it learns to rebuild normal images.",
+    },
+    "code.summary.anomaly.coreset": {
+        "pt": "PatchCore: escolhe as características mais representativas para o banco de memória.",
+        "en": "PatchCore: picks the most representative features for the memory bank.",
+    },
+    "code.summary.anomaly.score": {
+        "pt": "Dá a cada imagem uma nota de anomalia: quanto maior, mais longe do normal.",
+        "en": "Gives each image an anomaly score: the higher, the further from normal.",
+    },
+    "code.summary.anomaly.patch_score": {
+        "pt": "PatchCore: a nota é a distância ao vizinho mais próximo no banco.",
+        "en": "PatchCore: the score is the distance to the nearest neighbour in the bank.",
+    },
+    "code.summary.anomaly.threshold": {
+        "pt": "Define a partir de que nota uma imagem é chamada de defeituosa.",
+        "en": "Sets the score from which an image is called defective.",
+    },
+    "code.summary.anomaly.test": {
+        "pt": "Pontua as imagens de calibração e de teste com o modelo final.",
+        "en": "Scores the calibration and test images with the final model.",
+    },
+    "code.summary.anomaly.metrics": {
+        "pt": "Calcula AUROC, limiar e F1 a partir das notas.",
+        "en": "Computes AUROC, threshold and F1 from the scores.",
+    },
+    "code.summary.detection.data": {
+        "pt": "Lê uma imagem e as caixas dela.",
+        "en": "Reads an image and its boxes.",
+    },
+    "code.summary.detection.labels": {
+        "pt": "Converte as caixas do formato YOLO para pixels.",
+        "en": "Converts the boxes from YOLO format to pixels.",
+    },
+    "code.summary.detection.collate": {
+        "pt": "Junta imagens de tamanhos diferentes num lote.",
+        "en": "Puts images of different sizes into one batch.",
+    },
+    "code.summary.detection.model": {
+        "pt": "Escolhe o construtor do detector pelo nome do modelo.",
+        "en": "Picks the detector's builder by the model's name.",
+    },
+    "code.summary.detection.faster_rcnn": {
+        "pt": "Monta o Faster R-CNN com uma cabeça para as suas classes.",
+        "en": "Builds Faster R-CNN with a head for your classes.",
+    },
+    "code.summary.detection.ssd": {
+        "pt": "Monta o SSD com uma cabeça para as suas classes.",
+        "en": "Builds SSD with a head for your classes.",
+    },
+    "code.summary.detection.retinanet": {
+        "pt": "Monta o RetinaNet com uma cabeça para as suas classes.",
+        "en": "Builds RetinaNet with a head for your classes.",
+    },
+    "code.summary.detection.train": {
+        "pt": "Uma época: o modelo devolve as losses de cada lote, e o otimizador ajusta os pesos.",
+        "en": "One epoch: the model returns each batch's losses, and the optimiser adjusts the weights.",
+    },
+    "code.summary.detection.validate": {
+        "pt": "Mede a loss na validação, sem mexer nos pesos.",
+        "en": "Measures the loss on validation, without touching the weights.",
+    },
+    "code.summary.detection.map": {
+        "pt": "Mede o mAP@0.5 na validação; o melhor escolhe o modelo salvo.",
+        "en": "Measures mAP@0.5 on validation; the best one picks the saved model.",
+    },
+    "code.summary.detection.metric": {
+        "pt": "Calcula a precisão média (AP) de uma classe.",
+        "en": "Computes the average precision (AP) of one class.",
+    },
+    "code.summary.yolo.yolo_args": {
+        "pt": "Traduz o formulário para os parâmetros de treino do Ultralytics.",
+        "en": "Turns the form into Ultralytics' training arguments.",
+    },
+    "code.summary.yolo.yolo_augment": {
+        "pt": "Liga ou desliga o aumento de dados com os valores da sua configuração.",
+        "en": "Turns augmentation on or off with your config's values.",
+    },
+    "code.summary.yolo.yolo_fit": {
+        "pt": "Carrega o YOLO com os pesos escolhidos e entrega o treino à biblioteca.",
+        "en": "Loads YOLO with the chosen weights and hands training to the library.",
+    },
+    "code.summary.yolo.yolo_epoch": {
+        "pt": "Ao fim de cada época, registra o que a validação do Ultralytics mediu.",
+        "en": "At the end of each epoch, records what Ultralytics' validation measured.",
+    },
+    "code.summary.yolo.yolo_loop": {
+        "pt": "O laço de treino do próprio Ultralytics: épocas, lotes e validação.",
+        "en": "Ultralytics' own training loop: epochs, batches and validation.",
+    },
+    "mlflow.retry_unavailable": {
+        "pt": "A exportação para MLflow está indisponível para esta execução ou perfil.",
+        "en": "MLflow export is unavailable for this run or profile.",
+    },
     "run.cannot_delete_active": {
         "pt": "Não é possível excluir um run que está em execução.",
         "en": "Cannot delete a run that is currently executing.",
@@ -701,6 +1780,23 @@ CATALOG: dict[str, dict[Lang, str]] = {
     "queue.unknown_id": {
         "pt": "Nenhum run na fila com esse id — talvez ele já tenha começado.",
         "en": "No queued run with that id — it may have already started.",
+    },
+    # ── Host and Origin guard (gui/security.py) ──────────────────────────────
+    "guard.foreign_host": {
+        "pt": (
+            "Pedido recusado: o endereço usado não é um dos nomes deste servidor. "
+            "Abra o VisionForge por localhost ou, num servidor de laboratório, "
+            "inicie-o com --allowed-host <nome>."
+        ),
+        "en": (
+            "Request refused: the address used is not one of this server's names. "
+            "Open VisionForge through localhost or, on a lab server, start it "
+            "with --allowed-host <name>."
+        ),
+    },
+    "guard.foreign_origin": {
+        "pt": "Pedido recusado: ele veio de uma página que não é do VisionForge.",
+        "en": "Request refused: it came from a page that is not VisionForge's.",
     },
     # ── "Open folder" ────────────────────────────────────────────────────────
     "reveal.foreign_origin": {
@@ -836,6 +1932,54 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "As seeds das réplicas precisam ser distintas.",
         "en": "Replicate seeds must be unique.",
     },
+    # ── visionforge run with a strategy envelope (ADR-184) ───────────────────
+    "cli.strategy_shape": {
+        "pt": (
+            "Um YAML com 'strategy' tem só duas chaves no topo: 'strategy' "
+            "(um mapa com 'kind' e as opções) e 'config' (a config da tarefa)."
+        ),
+        "en": (
+            "A YAML with 'strategy' has exactly two top-level keys: 'strategy' "
+            "(a mapping with 'kind' and its options) and 'config' (the task config)."
+        ),
+    },
+    "cli.strategy_kind": {
+        "pt": "Estratégia '{kind}' desconhecida. Use uma de: {kinds}.",
+        "en": "Unknown strategy '{kind}'. Use one of: {kinds}.",
+    },
+    "cli.strategy_task": {
+        "pt": (
+            "A tarefa '{task}' não tem estratégias na linha de comando. "
+            "Tarefas aceitas: {tasks}."
+        ),
+        "en": (
+            "Task '{task}' has no strategies on the command line. "
+            "Supported tasks: {tasks}."
+        ),
+    },
+    "cli.sweep_classification": {
+        "pt": (
+            "Na classificação, a busca de hiperparâmetros é um bloco: use "
+            "'block: grid_search' ou 'block: random_search' numa config comum, "
+            "sem 'strategy'."
+        ),
+        "en": (
+            "Classification sweeps are blocks: use 'block: grid_search' or "
+            "'block: random_search' in a plain config, without 'strategy'."
+        ),
+    },
+    "cli.cv_unavailable": {
+        "pt": (
+            "Validação cruzada K-fold não existe para a tarefa '{task}'. Ela "
+            "existe para: {tasks}; na classificação, use 'block: "
+            "cross_validation' numa config comum, sem 'strategy'."
+        ),
+        "en": (
+            "K-fold cross-validation is not available for task '{task}'. It "
+            "is available for: {tasks}; for classification, use 'block: "
+            "cross_validation' in a plain config, without 'strategy'."
+        ),
+    },
     # ── files served to the page (image preview, artifacts) ──────────────────
     "file.traversal": {
         "pt": "O caminho contém segmentos de navegação ('..').",
@@ -857,6 +2001,303 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "en": "Path is not inside any dataset directory probed this session.",
     },
     "file.access_denied": {"pt": "Acesso negado.", "en": "Access denied."},
+    # ── dataset explorer (gui/api/explorer_routes.py, ADR-165) ───────────────
+    "explorer.scan_busy": {
+        "pt": "Já existe uma varredura em andamento. Espere ou interrompa a atual.",
+        "en": "A scan is already running. Wait for it or cancel it.",
+    },
+    "explorer.scan_missing": {
+        "pt": "Varredura não encontrada.",
+        "en": "Scan not found.",
+    },
+    "explorer.unreadable_image": {
+        "pt": "Não foi possível abrir esta imagem.",
+        "en": "This image could not be opened.",
+    },
+    # ── incorporating images (gui/api/incorporate_*.py, ADR-166) ─────────────
+    "incorporate.busy": {
+        "pt": "Já existe uma incorporação em andamento. Espere ou interrompa a atual.",
+        "en": "An incorporation is already running. Wait for it or cancel it.",
+    },
+    "incorporate.job_missing": {
+        "pt": "Incorporação não encontrada. Refaça a prévia.",
+        "en": "Incorporation not found. Run the preview again.",
+    },
+    "incorporate.preview_not_ready": {
+        "pt": _PREVIEW_NOT_READY_PT,
+        "en": _PREVIEW_NOT_READY_EN,
+    },
+    "incorporate.base_not_opened": {
+        "pt": "Abra o dataset no explorador antes de incorporar imagens a ele.",
+        "en": "Open the dataset in the explorer before adding images to it.",
+    },
+    "incorporate.base_missing": {
+        "pt": _BASE_MISSING_PT,
+        "en": _BASE_MISSING_EN,
+    },
+    "incorporate.source_missing": {
+        "pt": "A pasta das imagens novas não existe: {path}",
+        "en": "The folder of new images does not exist: {path}",
+    },
+    "incorporate.source_overlaps_base": {
+        "pt": "A pasta das imagens novas não pode ficar dentro do dataset nem conter o dataset.",
+        "en": "The folder of new images cannot be inside the dataset or contain it.",
+    },
+    "incorporate.base_empty": {
+        "pt": "O dataset não tem imagens, então não há proporção a seguir.",
+        "en": "The dataset has no images, so there is no proportion to follow.",
+    },
+    "incorporate.bad_ratios": {
+        "pt": "Proporção inválida: use números não negativos com soma maior que zero.",
+        "en": "Invalid ratios: use non-negative numbers that sum to more than zero.",
+    },
+    "incorporate.ratio_split_absent": {
+        "pt": "O dataset não tem a divisão '{split}'; ela não será criada.",
+        "en": "The dataset has no '{split}' split; it will not be created.",
+    },
+    "incorporate.not_a_new_class": {
+        "pt": "'{name}' não é uma classe nova desta prévia.",
+        "en": "'{name}' is not a new class of this preview.",
+    },
+    "incorporate.bad_dest_name": {
+        "pt": _BAD_DEST_NAME_PT,
+        "en": _BAD_DEST_NAME_EN,
+    },
+    "incorporate.dest_exists": {
+        "pt": _DEST_EXISTS_PT,
+        "en": _DEST_EXISTS_EN,
+    },
+    "incorporate.base_changed": {
+        "pt": "O dataset mudou desde a prévia. Refaça a prévia.",
+        "en": "The dataset changed since the preview. Run the preview again.",
+    },
+    "incorporate.source_changed": {
+        "pt": "A imagem '{path}' mudou desde a prévia. Refaça a prévia.",
+        "en": "The image '{path}' changed since the preview. Run the preview again.",
+    },
+    # ── merging two datasets (gui/api/merge_*.py, ADR-167) ─────────────────
+    "merge.busy": {
+        "pt": "Já existe uma junção em andamento. Espere ou interrompa a atual.",
+        "en": "A merge is already running. Wait for it or cancel it.",
+    },
+    "merge.job_missing": {
+        "pt": "Junção não encontrada. Refaça a prévia.",
+        "en": "Merge not found. Run the preview again.",
+    },
+    "merge.preview_not_ready": {
+        "pt": _PREVIEW_NOT_READY_PT,
+        "en": _PREVIEW_NOT_READY_EN,
+    },
+    "merge.base_not_opened": {
+        "pt": "Abra o dataset no explorador antes de juntá-lo a outro.",
+        "en": "Open the dataset in the explorer before merging it with another.",
+    },
+    "merge.a_missing": {
+        "pt": "A pasta do dataset aberto não existe: {path}",
+        "en": "The folder of the opened dataset does not exist: {path}",
+    },
+    "merge.b_missing": {
+        "pt": "A pasta do outro dataset não existe: {path}",
+        "en": "The folder of the other dataset does not exist: {path}",
+    },
+    "merge.datasets_overlap": {
+        "pt": "Os dois datasets precisam ser pastas diferentes, e um não pode ficar dentro do outro.",
+        "en": "The two datasets must be different folders, and neither can be inside the other.",
+    },
+    "merge.empty": {
+        "pt": "O dataset {side} não tem imagens.",
+        "en": "Dataset {side} has no images.",
+    },
+    "merge.unreadable": {
+        "pt": "Não foi possível ler a imagem '{path}'.",
+        "en": "The image '{path}' could not be read.",
+    },
+    "merge.bad_mapping": {
+        "pt": "Mapeamento inválido: '{name}' não é um dos dois datasets.",
+        "en": "Invalid mapping: '{name}' is not one of the two datasets.",
+    },
+    "merge.unknown_class": {
+        "pt": "A classe '{name}' não existe no dataset {side}.",
+        "en": "The class '{name}' does not exist in dataset {side}.",
+    },
+    "merge.empty_target": {
+        "pt": "A classe '{name}' precisa de um nome de destino, ou ser descartada.",
+        "en": "The class '{name}' needs a target name, or to be discarded.",
+    },
+    "merge.bad_target": {
+        "pt": "'{name}' não serve como nome de classe (pasta inválida).",
+        "en": "'{name}' is not usable as a class name (invalid folder).",
+    },
+    "merge.targets_differ_by_case": {
+        "pt": "'{first}' e '{second}' só diferem por maiúsculas e minúsculas; no Windows seriam a mesma pasta. Use o mesmo nome nas duas classes para juntá-las.",
+        "en": "'{first}' and '{second}' differ only by letter case; on Windows they would be the same folder. Give both classes the same name to merge them.",
+    },
+    "merge.nothing_left": {
+        "pt": "Com este mapeamento não sobra nenhuma imagem.",
+        "en": "With this mapping no image is left.",
+    },
+    "merge.bad_dest_name": {
+        "pt": _BAD_DEST_NAME_PT,
+        "en": _BAD_DEST_NAME_EN,
+    },
+    "merge.dest_exists": {
+        "pt": _DEST_EXISTS_PT,
+        "en": _DEST_EXISTS_EN,
+    },
+    "merge.a_changed": {
+        "pt": "O dataset aberto mudou desde a prévia. Refaça a prévia.",
+        "en": "The opened dataset changed since the preview. Run the preview again.",
+    },
+    "merge.b_changed": {
+        "pt": "O outro dataset mudou desde a prévia. Refaça a prévia.",
+        "en": "The other dataset changed since the preview. Run the preview again.",
+    },
+    "merge.image_changed": {
+        "pt": "A imagem '{path}' mudou desde a prévia. Refaça a prévia.",
+        "en": "The image '{path}' changed since the preview. Run the preview again.",
+    },
+    # ── re-splitting a dataset (gui/api/resplit_*.py, ADR-168) ───────────────
+    "resplit.busy": {
+        "pt": "Já existe uma nova divisão em andamento. Espere ou interrompa a atual.",
+        "en": "A re-split is already running. Wait for it or cancel it.",
+    },
+    "resplit.job_missing": {
+        "pt": "Divisão não encontrada. Refaça a prévia.",
+        "en": "Re-split not found. Run the preview again.",
+    },
+    "resplit.preview_not_ready": {
+        "pt": _PREVIEW_NOT_READY_PT,
+        "en": _PREVIEW_NOT_READY_EN,
+    },
+    "resplit.base_not_opened": {
+        "pt": "Abra o dataset no explorador antes de refazer a divisão dele.",
+        "en": "Open the dataset in the explorer before re-splitting it.",
+    },
+    "resplit.base_missing": {
+        "pt": _BASE_MISSING_PT,
+        "en": _BASE_MISSING_EN,
+    },
+    "resplit.base_empty": {
+        "pt": "O dataset não tem imagens para dividir.",
+        "en": "The dataset has no images to split.",
+    },
+    "resplit.unreadable": {
+        "pt": "Não foi possível ler a imagem '{path}'.",
+        "en": "The image '{path}' could not be read.",
+    },
+    "resplit.group_csv_missing": {
+        "pt": "Não foi possível ler o arquivo de grupos: {path}",
+        "en": "The group file could not be read: {path}",
+    },
+    "resplit.bad_group_csv": {
+        "pt": "Arquivo de grupos inválido ({detail}). Use um CSV UTF-8 com as colunas path,group.",
+        "en": "Invalid group file ({detail}). Use a UTF-8 CSV with the columns path,group.",
+    },
+    "resplit.no_group_csv": {
+        "pt": "Para dividir por grupo, escolha um arquivo de grupos na prévia.",
+        "en": "To split by group, pick a group file in the preview.",
+    },
+    "resplit.bad_ratios": {
+        "pt": "Proporção inválida: use números não negativos com soma maior que zero.",
+        "en": "Invalid ratios: use non-negative numbers that sum to more than zero.",
+    },
+    "resplit.ratio_test_locked": {
+        "pt": "O teste está mantido como está; desmarque a opção para dar uma proporção a ele.",
+        "en": "The test split is kept as it is; untick the option to give it a ratio.",
+    },
+    "resplit.nothing_to_split": {
+        "pt": "Não há imagens para redistribuir com estas opções.",
+        "en": "There are no images to redistribute with these options.",
+    },
+    "resplit.bad_dest_name": {
+        "pt": _BAD_DEST_NAME_PT,
+        "en": _BAD_DEST_NAME_EN,
+    },
+    "resplit.dest_exists": {
+        "pt": _DEST_EXISTS_PT,
+        "en": _DEST_EXISTS_EN,
+    },
+    "resplit.base_changed": {
+        "pt": "O dataset mudou desde a prévia. Refaça a prévia.",
+        "en": "The dataset changed since the preview. Run the preview again.",
+    },
+    "resplit.group_csv_changed": {
+        "pt": "O arquivo de grupos mudou desde a prévia. Refaça a prévia.",
+        "en": "The group file changed since the preview. Run the preview again.",
+    },
+    # ── converting between YOLO and COCO (gui/api/coco_*.py, ADR-169) ────────
+    "coco.busy": {
+        "pt": "Já existe uma conversão em andamento. Espere ou interrompa a atual.",
+        "en": "A conversion is already running. Wait for it or cancel it.",
+    },
+    "coco.job_missing": {
+        "pt": "Conversão não encontrada. Refaça a prévia.",
+        "en": "Conversion not found. Run the preview again.",
+    },
+    "coco.preview_not_ready": {
+        "pt": _PREVIEW_NOT_READY_PT,
+        "en": _PREVIEW_NOT_READY_EN,
+    },
+    "coco.base_not_opened": {
+        "pt": "Abra o dataset no explorador antes de exportá-lo para COCO.",
+        "en": "Open the dataset in the explorer before exporting it to COCO.",
+    },
+    "coco.base_missing": {
+        "pt": _BASE_MISSING_PT,
+        "en": _BASE_MISSING_EN,
+    },
+    "coco.source_missing": {
+        "pt": "A pasta do COCO não existe: {path}",
+        "en": "The COCO folder does not exist: {path}",
+    },
+    "coco.base_empty": {
+        "pt": "O dataset não tem imagens para exportar.",
+        "en": "The dataset has no images to export.",
+    },
+    "coco.nothing_to_export": {
+        "pt": "Nenhuma imagem pode ser exportada: todas falharam ao abrir ou têm rótulo malformado.",
+        "en": "No image can be exported: all of them failed to open or have a malformed label.",
+    },
+    "coco.no_annotations": {
+        "pt": "Não achei nenhum arquivo de anotações COCO (.json com images, annotations e categories) na pasta nem em annotations/.",
+        "en": "No COCO annotation file (a .json with images, annotations and categories) was found in the folder or in annotations/.",
+    },
+    "coco.bad_dest_name": {
+        "pt": _BAD_DEST_NAME_PT,
+        "en": _BAD_DEST_NAME_EN,
+    },
+    "coco.dest_exists": {
+        "pt": _DEST_EXISTS_PT,
+        "en": _DEST_EXISTS_EN,
+    },
+    "coco.base_changed": {
+        "pt": "A pasta mudou desde a prévia. Refaça a prévia.",
+        "en": "The folder changed since the preview. Run the preview again.",
+    },
+    "coco.unassigned_split": {
+        "pt": "O arquivo '{name}' ainda não tem divisão. Escolha train, val ou test, ou ignore o arquivo.",
+        "en": "The file '{name}' has no split yet. Pick train, val or test, or skip the file.",
+    },
+    "coco.nothing_selected": {
+        "pt": "Todos os arquivos foram ignorados: não há nada para importar.",
+        "en": "Every file was skipped: there is nothing to import.",
+    },
+    "coco.unknown_json": {
+        "pt": "O arquivo '{name}' não está nesta prévia.",
+        "en": "The file '{name}' is not part of this preview.",
+    },
+    "coco.bad_split": {
+        "pt": "Divisão inválida: '{split}'. Use train, val, test ou skip.",
+        "en": "Invalid split: '{split}'. Use train, val, test or skip.",
+    },
+    "coco.split_taken": {
+        "pt": "Os arquivos '{first}' e '{second}' foram atribuídos à mesma divisão ({split}). Mude um deles ou ignore-o.",
+        "en": "The files '{first}' and '{second}' are assigned to the same split ({split}). Change one or skip it.",
+    },
+    "coco.category_conflict": {
+        "pt": "A categoria {id} se chama '{first}' em um arquivo e '{second}' em outro. Ignore um dos arquivos.",
+        "en": "Category {id} is called '{first}' in one file and '{second}' in another. Skip one of the files.",
+    },
     # ── updating the install from the page (gui/api/routes.py, ADR-120) ──────
     "update.foreign_origin": {
         "pt": "Atualização recusada: o pedido veio de uma página de outro site.",
@@ -1002,7 +2443,25 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "materialize into an ImageFolder."
         ),
     },
+    "download.hf_revision_failed": {
+        "pt": (
+            "Não foi possível fixar a revisão do dataset '{dataset}' no Hugging "
+            "Face. Confira o nome, o token e a conexão. Nada foi baixado."
+        ),
+        "en": (
+            "Could not pin the revision of Hugging Face dataset '{dataset}'. "
+            "Check the name, the token and the connection. Nothing was downloaded."
+        ),
+    },
+    "download.request_invalid": {
+        "pt": "Pedido de download de dataset inválido.",
+        "en": "Invalid dataset download request.",
+    },
     # ── stored provider keys (utils/credentials.py) ──────────────────────────
+    "credentials.invalid": {
+        "pt": "Pedido de credencial inválido.",
+        "en": "Invalid credential request.",
+    },
     "credentials.empty": {
         "pt": "O valor da credencial não pode ficar vazio.",
         "en": "Credential value cannot be empty.",
@@ -1063,6 +2522,54 @@ CATALOG: dict[str, dict[Lang, str]] = {
     "colab.run_no_start": {
         "pt": "O treino não começou na VM: nenhum evento em {seconds} s, em {attempts} tentativas. A VM foi liberada.",
         "en": "The training never started on the VM: no event in {seconds} s, over {attempts} attempts. The VM was released.",
+    },
+    "colab.drive_consent_failed": {
+        "pt": "O acesso ao Google Drive não foi permitido em {attempts} tentativas; a VM foi liberada.",
+        "en": "Access to Google Drive was not allowed in {attempts} attempts; the VM was released.",
+    },
+    "colab.drive_mount_failed": {
+        "pt": "O Google Drive não montou na VM: {detail}. A VM foi liberada.",
+        "en": "Google Drive did not mount on the VM: {detail}. The VM was released.",
+    },
+    "colab.drive_not_in_drive": {
+        "pt": 'A pasta do dataset ({path}) não está dentro do Google Drive para desktop. Informe a pasta "Meu Drive" deste computador ou escolha outra origem.',
+        "en": 'The dataset folder ({path}) is not inside Google Drive for desktop. Give this computer\'s "My Drive" folder or choose another source.',
+    },
+    "colab.drive_empty": {
+        "pt": "A pasta do dataset ({path}) não tem arquivos neste computador.",
+        "en": "The dataset folder ({path}) has no files on this computer.",
+    },
+    "colab.drive_folder_outside": {
+        "pt": 'Essa pasta fica fora do "Meu Drive" deste computador.',
+        "en": 'That folder is outside this computer\'s "My Drive".',
+    },
+    "colab.drive_folder_missing": {
+        "pt": 'A pasta "{rel}" não existe mais no "Meu Drive".',
+        "en": 'The folder "{rel}" is no longer in "My Drive".',
+    },
+    "colab.drive_folder_unreadable": {
+        "pt": 'Não foi possível ler a pasta "{rel}" do "Meu Drive".',
+        "en": 'Could not read the folder "{rel}" in "My Drive".',
+    },
+    "colab.drive_no_root": {
+        "pt": 'Nenhuma pasta "Meu Drive" do Google Drive para desktop foi achada neste computador.',
+        "en": 'No "My Drive" folder of Google Drive for desktop was found on this computer.',
+    },
+    "colab.drive_foreign_origin": {
+        "pt": "As pastas do Drive só podem ser vistas pela página do próprio VisionForge.",
+        "en": "Drive folders can only be browsed from VisionForge's own page.",
+    },
+    "colab.drive_remote_client": {
+        "pt": "As pastas do Drive só podem ser vistas na máquina que executa o servidor.",
+        "en": "Drive folders can only be browsed on the machine running the server.",
+    },
+    "colab.drive_open_failed": {
+        "pt": "Não foi possível abrir a pasta: {error}",
+        "en": "Could not open the folder: {error}",
+    },
+    "colab.drive_not_waiting": {
+        "pt": "Esse job não está esperando a permissão do Google Drive.",
+        "en": "That job is not waiting for the Google Drive permission.",
     },
     "colab.download_failed": {
         "pt": "O treino terminou, mas o run não veio da VM: {detail}. A VM foi liberada e nada foi gravado nos runs.",
@@ -1173,6 +2680,10 @@ CATALOG: dict[str, dict[Lang, str]] = {
     "config.gpu_ids_unique": {
         "pt": "gpu_ids não podem se repetir, recebido {ids}",
         "en": "gpu_ids must be unique, got {ids}",
+    },
+    "config.figure_formats_empty": {
+        "pt": "figure_formats precisa de pelo menos um formato (png, pdf ou svg)",
+        "en": "figure_formats needs at least one format (png, pdf or svg)",
     },
     "config.multi_cuda_gpus": {
         "pt": "multi_cuda precisa de pelo menos 2 gpu_ids, recebido {ids}",
@@ -1399,6 +2910,12 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Taxa de verdadeiros positivos",
         "en": "True Positive Rate",
     },
+    "plot.title_replicates": {
+        "pt": "Réplicas por semente: {metric}",
+        "en": "Replicates by seed: {metric}",
+    },
+    "plot.axis_seed": {"pt": "Semente", "en": "Seed"},
+    "plot.replicates_mean": {"pt": "média", "en": "mean"},
     "plot.title_roc": {"pt": "Curva ROC", "en": "ROC Curve"},
     "plot.axis_recall": {"pt": "Revocação", "en": "Recall"},
     "plot.axis_precision": {"pt": "Precisão", "en": "Precision"},
@@ -1494,17 +3011,29 @@ CATALOG: dict[str, dict[Lang, str]] = {
         ),
     },
     "latex.cv_caption": {
-        "pt": "{experiment}: validação cruzada com {n_folds} folds.",
-        "en": "{experiment}: {n_folds}-fold cross-validation.",
+        "pt": (
+            "{experiment}: validação cruzada com {n_folds} folds. A época de cada "
+            "fold é escolhida no próprio fold de validação, que também a avalia: "
+            "estimativa otimista, sem divisão aninhada."
+        ),
+        "en": (
+            "{experiment}: {n_folds}-fold cross-validation. Each fold's epoch is "
+            "selected on its own fold's validation split, which also scores it: "
+            "an optimistic estimate, with no nested split."
+        ),
     },
     "latex.cv_caption_partial": {
         "pt": (
             "{experiment}: validação cruzada com {n_folds} folds, {finished} de "
-            "{n_folds} folds concluídos ({detail})."
+            "{n_folds} folds concluídos ({detail}). A época de cada fold é "
+            "escolhida no próprio fold de validação, que também a avalia: "
+            "estimativa otimista, sem divisão aninhada."
         ),
         "en": (
             "{experiment}: {n_folds}-fold cross-validation, {finished} of "
-            "{n_folds} folds finished ({detail})."
+            "{n_folds} folds finished ({detail}). Each fold's epoch is selected "
+            "on its own fold's validation split, which also scores it: an "
+            "optimistic estimate, with no nested split."
         ),
     },
     "latex.cv_mean_sd": {
@@ -1514,6 +3043,36 @@ CATALOG: dict[str, dict[Lang, str]] = {
     "latex.comparison_caption": {
         "pt": "{experiment}: comparação pareada nas seeds compartilhadas.",
         "en": "{experiment}: paired comparison over shared seeds.",
+    },
+    "latex.comparison_ci": {
+        "pt": r"IC 95\% da diferença: {methods}.",
+        "en": r"95\% CI of the difference: {methods}.",
+    },
+    "latex.ci_method_t": {
+        "pt": r"$t$ de Student da média (dual do teste $t$ pareado)",
+        "en": r"Student $t$ of the mean (dual of the paired $t$ test)",
+    },
+    "latex.ci_method_hodges_lehmann": {
+        "pt": (
+            "Hodges-Lehmann sobre as médias de Walsh com valor crítico exato "
+            "(dual do teste de Wilcoxon, cobre a pseudomediana e não a média, "
+            "--- com menos de 6 pares)"
+        ),
+        "en": (
+            "Hodges-Lehmann over the Walsh averages with the exact critical "
+            "value (dual of the Wilcoxon test, brackets the pseudo-median rather "
+            "than the mean, --- below 6 pairs)"
+        ),
+    },
+    "latex.ci_method_bootstrap": {
+        "pt": (
+            "bootstrap percentil (relatório anterior à ADR-187, subcobre com "
+            "poucas seeds)"
+        ),
+        "en": (
+            "percentile bootstrap (report predating ADR-187, under-covers with "
+            "few seeds)"
+        ),
     },
     "latex.comparison_note": {
         "pt": (
@@ -1629,6 +3188,69 @@ CATALOG: dict[str, dict[Lang, str]] = {
     "card.stopped_epochs": {
         "pt": "{done} de {planned} épocas",
         "en": "{done} of {planned} epochs",
+    },
+    # ── unexpected failures and request validation (gui/api/error_messages.py,
+    # ADR-191). The English of ``validation.*`` mirrors Pydantic's own text,
+    # which an English page keeps; the placeholders are the names of its ctx.
+    "errors.unexpected": {
+        "pt": "Algo deu errado no servidor. Detalhe técnico: {error}",
+        "en": "Something went wrong on the server. Technical detail: {error}",
+    },
+    "validation.missing": {
+        "pt": "Campo obrigatório",
+        "en": "Field required",
+    },
+    "validation.extra_forbidden": {
+        "pt": "Campo não permitido",
+        "en": "Extra inputs are not permitted",
+    },
+    "validation.greater_than": {
+        "pt": "Deve ser maior que {gt}",
+        "en": "Input should be greater than {gt}",
+    },
+    "validation.greater_than_equal": {
+        "pt": "Deve ser maior ou igual a {ge}",
+        "en": "Input should be greater than or equal to {ge}",
+    },
+    "validation.less_than": {
+        "pt": "Deve ser menor que {lt}",
+        "en": "Input should be less than {lt}",
+    },
+    "validation.less_than_equal": {
+        "pt": "Deve ser menor ou igual a {le}",
+        "en": "Input should be less than or equal to {le}",
+    },
+    "validation.string_too_short": {
+        "pt": "Deve ter pelo menos {min_length} caractere(s)",
+        "en": "String should have at least {min_length} character(s)",
+    },
+    "validation.string_too_long": {
+        "pt": "Deve ter no máximo {max_length} caractere(s)",
+        "en": "String should have at most {max_length} character(s)",
+    },
+    "validation.too_short": {
+        "pt": "Deve ter pelo menos {min_length} item(ns)",
+        "en": "Value should have at least {min_length} item(s)",
+    },
+    "validation.too_long": {
+        "pt": "Deve ter no máximo {max_length} item(ns)",
+        "en": "Value should have at most {max_length} item(s)",
+    },
+    "validation.int_parsing": {
+        "pt": "Deve ser um número inteiro",
+        "en": "Input should be a valid integer",
+    },
+    "validation.float_parsing": {
+        "pt": "Deve ser um número",
+        "en": "Input should be a valid number",
+    },
+    "validation.bool_parsing": {
+        "pt": "Deve ser verdadeiro ou falso",
+        "en": "Input should be a valid boolean",
+    },
+    "validation.literal_error": {
+        "pt": "Deve ser um destes valores: {expected}",
+        "en": "Input should be {expected}",
     },
 }
 

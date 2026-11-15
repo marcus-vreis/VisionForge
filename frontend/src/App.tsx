@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchQueue,
   fetchSchema,
   fetchTasks,
   runCustomReplicates,
+  runCustomReplicatedComparison,
   runCustomSweep,
   runCustomTask,
-  runReplicates,
   runCompare,
   runSweep,
   runTaskCv,
@@ -17,18 +17,33 @@ import type { CvPayload } from "./components/CvCard";
 import type { PanelStrategy } from "./components/ExperimentHeader";
 import type { SweepPayload } from "./components/SweepCard";
 import type { ReplicatesPayload } from "./lib/replicates-form";
+import { replicatesLaunch } from "./lib/replicates-launch";
+import type { ReplicatedComparisonPayload } from "./lib/replicated-comparison-form";
+import {
+  comparisonUnits,
+  replicatedComparisonLaunch,
+} from "./lib/replicated-comparison-launch";
 import type { ComparePayload } from "./lib/compare-form";
 import { announce, requestPermission, resetTitle } from "./lib/run-notify";
 import { runIdentityFromJob, serverRunning } from "./lib/run-control";
 import { GENERIC_STORY, storySpecFor, type StorySpec } from "./lib/story-family";
+import { codeSettingsFor } from "./lib/code-settings";
+import type { CodeSettings } from "./api/client";
 import type { SheetTab } from "./lib/training-story";
 import { BottomBar } from "./components/BottomBar";
 import type { DeviceSelection } from "./components/DeviceSelector";
 import { Header } from "./components/Header";
+import { SkipLink } from "./components/SkipLink";
 import { WelcomeOverlay } from "./components/WelcomeOverlay";
 import { GuidedTour } from "./components/GuidedTour";
 import { readTourSeen } from "./lib/tour";
 import { StepNavContext, type StepId, type StepNav } from "./lib/steps";
+import {
+  planRerun,
+  takePendingImport,
+  type PendingImport,
+  type RerunRequest,
+} from "./lib/history-rerun";
 import type { GuideContext, GuideId, GuideTask } from "./lib/guides";
 import {
   sampleAnomalyForm,
@@ -41,14 +56,12 @@ import { readUserName, readUserPronoun } from "./lib/user-name";
 import {
   isProfileStorageKey,
   profileAfterStorageChange,
-  profileIsTheName,
-  profileLabel,
+  profileHasName,
   readProfile,
   type ProfileInfo,
 } from "./lib/profile";
 import { useT } from "./i18n/useT";
 import { DatasetsOverlay } from "./components/DatasetsOverlay";
-import { HistoryOverlay } from "./components/HistoryOverlay";
 import { CustomAccentsContext } from "./lib/custom-accents";
 import { customAccentMap } from "./lib/task-accent";
 import { QueueOverlay } from "./components/QueueOverlay";
@@ -92,9 +105,11 @@ import {
   withTaskColors,
 } from "./lib/task-color";
 import { CustomTaskPanel } from "./components/CustomTaskPanel";
-import { ContentBoundary } from "./components/ErrorBoundary";
+import { ContentBoundary, LazySurface } from "./components/ErrorBoundary";
 import { ResultsView } from "./components/ResultsView";
+import { historyTargetForResult, type HistoryTarget } from "./lib/history-target";
 import { TabBar } from "./components/TabBar";
+import { resultsOnTab } from "./lib/results-tab";
 import { TaskHero } from "./components/TaskHero";
 import { TrainingOverlay } from "./components/TrainingOverlay";
 import { useExperiment } from "./hooks/useExperiment";
@@ -102,6 +117,15 @@ import { useRunMotionPause } from "./hooks/useRunMotionPause";
 import type { QueuedJobInfo, RunResponse } from "./types/run";
 import type { JsonSchema } from "./types/schema";
 import { taskDefinitions } from "./types/tasks";
+
+// The History (and the run detail, comparisons and exports under it) is its own
+// chunk, fetched the first time it opens (GUI-12).
+const HistoryOverlay = lazy(() =>
+  import("./components/HistoryOverlay").then((m) => ({ default: m.HistoryOverlay })),
+);
+const LearnOverlay = lazy(() =>
+  import("./components/learn/LearnOverlay").then((m) => ({ default: m.LearnOverlay })),
+);
 
 /** What the training sheet shows about a run, fixed when it is submitted: the
  *  forms go on changing while it trains or waits (ADR-159). */
@@ -112,6 +136,8 @@ interface RunMeta {
   pipeline: string[];
   queueSize: number | undefined;
   story: StorySpec;
+  /** The branches of the "Código" tab (ADR-173); null when unknown. */
+  code?: CodeSettings | null;
 }
 
 /** Standalone tasks that expose the comparison/sweep advanced surface. */
@@ -151,18 +177,26 @@ export default function App() {
   // "convite" na primeira visita; um id de guia quando escolhido no menu do
   // cabeçalho (ADR-115).
   const [tour, setTour] = useState<"none" | "convite" | GuideId>("none");
+  // The "Começando do zero" page (ADR-207), opened from the guide menu or the
+  // first-visit invitation.
+  const [showLearn, setShowLearn] = useState(false);
   // Set by the header chip: remounts the overlay so the intro replays clean.
   const [askName, setAskName] = useState(false);
-  // The profile in use and whether the server has any besides the default
-  // (ADR-114). The header chip only exists on a server that does; a one-person
-  // install sees no profile UI beyond the optional link under the name field.
+  // The profile in use and whether there is more than one (ADR-114). The
+  // header's profile chip edits its integrations and offers "switch profile"
+  // when there is another, "new profile" when there is not.
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const [sharedServer, setSharedServer] = useState(false);
-  // Set by the profile chip: remounts the overlay straight on "who are you".
+  // Set by the profile menu: remounts the overlay straight on "who are you".
   const [pickProfile, setPickProfile] = useState(false);
+  // Set by the profile menu's "new profile": remounts it on the create step.
+  const [newProfile, setNewProfile] = useState(false);
   const profileSlugRef = useRef<string | null>(null);
   const profileRef = useRef<ProfileInfo | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  // The run History opens on: the one the results view sent it to (ADR-193), or
+  // the job the training sheet's "Ver resultados" just finished.
+  const [historyTarget, setHistoryTarget] = useState<HistoryTarget | null>(null);
   const [showDatasets, setShowDatasets] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
   const [historyCount, setHistoryCount] = useState(0);
@@ -208,6 +242,7 @@ export default function App() {
   // config when it is submitted (the sheet outlives the form), and which tab of the
   // sheet is open: the log, until a guide asks for the other one (ADR-118).
   const [storySpec, setStorySpec] = useState<StorySpec>(GENERIC_STORY);
+  const [codeSettings, setCodeSettings] = useState<CodeSettings | null>(null);
   const [sheetTab, setSheetTab] = useState<SheetTab>("log");
   const [overlayVisible, setOverlayVisible] = useState(false);
   // The task the followed run belongs to, which may not be the open tab.
@@ -288,6 +323,12 @@ export default function App() {
     }),
     [stepByTask],
   );
+  // A run History sent back to a form (#200), one per task until that task's
+  // panel has applied it through its own YAML import.
+  const [pendingImports, setPendingImports] = useState<
+    Readonly<Record<string, PendingImport>>
+  >({});
+  const rerunCount = useRef(0);
 
   // What the guides read and change (ADR-115, ADR-117). Each task keeps its
   // dataset folder in its own form, so the "dataset set" gate follows what the
@@ -466,6 +507,7 @@ export default function App() {
     setPipelineSummary(meta.pipeline);
     setQueueSize(meta.queueSize);
     setStorySpec(meta.story);
+    setCodeSettings(meta.code ?? null);
     // A run opens on its log.
     setSheetTab("log");
   };
@@ -549,6 +591,23 @@ export default function App() {
     );
   };
 
+  // The task families History can send a run back to: the tabs there are now.
+  const rerunFamilies = useMemo(
+    () => tasks.map((task) => (isCustomTask(task) ? `custom:${task.key}` : task.key)),
+    [tasks],
+  );
+  const openRerun = (request: RerunRequest) => {
+    rerunCount.current += 1;
+    const plan = planRerun(request, rerunFamilies, rerunCount.current);
+    if (!plan) return;
+    setShowHistory(false);
+    setResultsVisible(false);
+    setActiveKey(plan.tab);
+    setPendingImports((prev) => ({ ...prev, [plan.tab]: plan.pending }));
+  };
+  const takeImport = (id: number) =>
+    setPendingImports((prev) => takePendingImport(prev, activeKey, id));
+
   const activeStrategy = strategyByTask[activeKey] ?? "simple";
   const setActiveStrategy = (s: PanelStrategy) =>
     setStrategyByTask((prev) => ({ ...prev, [activeKey]: s }));
@@ -556,10 +615,16 @@ export default function App() {
   const handleTrain = async (colab?: ColabLaunch) => {
     // A Colab run (ADR-163) is a classification payload sent to another route.
     if (colab && (activeKey !== "classification" || isCustomTask(activeTask))) return;
-    // Classification encodes its strategy in config.block, so its payload
-    // already carries it; the standalone panels keep theirs in cards, which
-    // this signal triggers.
-    if (activeStrategy !== "simple" && activeKey !== "classification") {
+    // Colab trains one config.block; a replicate set is not one (ADR-056),
+    // nor is a replicated comparison (ADR-193).
+    if (colab && (activeStrategy === "replicates" || activeStrategy === "replicatedComparison")) {
+      return;
+    }
+    // Classification encodes most strategies in config.block, so its payload
+    // already carries them, and its panel only reports "replicates", which is
+    // not a block. That one, like the standalone panels' strategies, lives in
+    // a card this signal triggers.
+    if (activeStrategy !== "simple") {
       setRunSignal((n) => n + 1);
       return;
     }
@@ -584,6 +649,7 @@ export default function App() {
           pipeline: [],
           queueSize: undefined,
           story: storySpecFor("detection", payload),
+          code: codeSettingsFor("detection", payload),
         },
         payload,
         { detection: true },
@@ -603,6 +669,7 @@ export default function App() {
           pipeline: [],
           queueSize: undefined,
           story: storySpecFor("regression", payload),
+          code: codeSettingsFor("regression", payload),
         },
         payload,
         { regression: true },
@@ -622,6 +689,7 @@ export default function App() {
           pipeline: [],
           queueSize: undefined,
           story: storySpecFor("segmentation", payload),
+          code: codeSettingsFor("segmentation", payload),
         },
         payload,
         { segmentation: true },
@@ -641,6 +709,7 @@ export default function App() {
           pipeline: [],
           queueSize: undefined,
           story: storySpecFor("anomaly", payload),
+          code: codeSettingsFor("anomaly", payload),
         },
         payload,
         { anomaly: true },
@@ -695,6 +764,7 @@ export default function App() {
         pipeline,
         queueSize: qSize,
         story: storySpecFor("classification", payload),
+        code: codeSettingsFor("classification", payload),
       },
       colab ? { config: payload, ...colab } : payload,
       colab ? { run: runColabExperiment } : undefined,
@@ -738,14 +808,17 @@ export default function App() {
 
   // Multi-seed replicates (ADR-056): same config, N seeds, mean ± CI report.
   // Same overlay/results flow as sweeps; one trial trains at a time.
+  // Classification's form is the config itself; its block goes as
+  // "classification" (replicatesLaunch).
   const handleReplicates = async (
-    task: AdvancedTask,
+    task: AdvancedTask | "classification",
     payload: ReplicatesPayload,
   ) => {
     const config = {
-      ...buildTaskBase(task),
+      ...(task === "classification" ? formData : buildTaskBase(task)),
       device: { kind: device.kind, gpu_ids: device.gpu_ids },
     };
+    const { body, run } = replicatesLaunch(task, config, payload);
     await launch(
       {
         custom: false,
@@ -755,8 +828,34 @@ export default function App() {
         queueSize: payload.seeds?.length ?? payload.n_replicates ?? undefined,
         story: storySpecFor(task, config),
       },
-      { config, ...payload },
-      { run: (p) => runReplicates(task, p) },
+      body,
+      { run },
+    );
+  };
+
+  // Replicated comparison (ADR-061, ADR-193): the form is the baseline, each
+  // variant overrides one field, and all train on the same seeds so the
+  // backend can pair them. Classification goes as `block: "classification"`.
+  const handleReplicatedComparison = async (
+    task: AdvancedTask | "classification",
+    payload: ReplicatedComparisonPayload,
+  ) => {
+    const config = {
+      ...(task === "classification" ? formData : buildTaskBase(task)),
+      device: { kind: device.kind, gpu_ids: device.gpu_ids },
+    };
+    const { body, run, units } = replicatedComparisonLaunch(task, config, payload);
+    await launch(
+      {
+        custom: false,
+        taskKey: task,
+        blockKind: "replicated-comparison",
+        pipeline: [],
+        queueSize: units,
+        story: storySpecFor(task, config),
+      },
+      body,
+      { run },
     );
   };
 
@@ -813,7 +912,14 @@ export default function App() {
     );
   };
 
-  const showResults = resultsVisible && result !== null;
+  // A finished run's results stay on the tab of the task that ran it: another
+  // task's tab shows its own form, and coming back shows the results again.
+  const showResults =
+    resultsVisible && result !== null && resultsOnTab(
+    runTaskKey,
+    activeKey,
+    tasks.map((task) => task.key),
+  );
 
   // Treinar unlocks on the Revisão step once the dataset is set (ADR-156).
   // A researcher's own task has no dataset field App can read: its review is
@@ -846,22 +952,36 @@ export default function App() {
         color: "var(--vf-text)",
       }}
     >
+      <SkipLink />
+
       <Header
-        userName={
-          sharedServer && profileIsTheName(profile, userName) ? undefined : userName
-        }
+        userName={profile && profileHasName(profile) ? profile.name : userName}
         pronoun={profile?.pronoun ?? readUserPronoun()}
         onChangeName={() => setAskName(true)}
         onGuide={setTour}
-        profileName={
-          sharedServer && profile ? profileLabel(profile, t.profile.defaultShort) : undefined
-        }
+        onLearn={() => setShowLearn(true)}
+        profile={profile}
+        sharedServer={sharedServer}
+        onProfileSaved={(p) => {
+          profileRef.current = p;
+          setProfile(p);
+        }}
         onChangeProfile={() => setPickProfile(true)}
+        onNewProfile={() => setNewProfile(true)}
         profileSlug={profile?.slug}
         onTrainColab={
           activeKey === "classification" && !isCustomTask(activeTask)
             ? (launch) => void handleTrain(launch)
             : undefined
+        }
+        colabTrainBlocked={
+          activeKey !== "classification"
+            ? undefined
+            : activeStrategy === "replicates"
+              ? t.colab.replicatesBlocked
+              : activeStrategy === "replicatedComparison"
+                ? t.colab.comparisonBlocked
+                : undefined
         }
         taskColor={
           isCustomTask(activeTask)
@@ -880,6 +1000,8 @@ export default function App() {
       <TabBar tasks={tasks} activeKey={activeKey} setActiveKey={setActiveKey} />
 
       <main
+        id="vf-main"
+        tabIndex={-1}
         className="vf-app-main"
         style={{
           position: "relative",
@@ -909,6 +1031,10 @@ export default function App() {
             // Only a stopped run lists fewer units than it planned; for any other
             // the report's own count is the one to trust.
             submittedUnits={result.stopped === true ? (queueSize ?? null) : null}
+            onOpenInHistory={(runId) => {
+              setHistoryTarget({ runId });
+              setShowHistory(true);
+            }}
             onClose={() => {
               setResultsVisible(false);
               reset();
@@ -945,8 +1071,22 @@ export default function App() {
                 (p) => runCustomReplicates(activeTask.key, p),
               )
             }
+            onReplicatedComparison={(payload) =>
+              void startCustom(
+                activeTask.key,
+                {
+                  config: buildCustomPayload(activeCustomForm, device),
+                  ...payload,
+                },
+                "replicated-comparison",
+                comparisonUnits(payload),
+                (p) => runCustomReplicatedComparison(activeTask.key, p),
+              )
+            }
             onStrategyChange={setActiveStrategy}
             runSignal={runSignal}
+            pendingImport={pendingImports[activeKey]}
+            onImportApplied={takeImport}
             onRemoved={reloadTasks}
           />
         ) : activeKey === "detection" ? (
@@ -960,8 +1100,13 @@ export default function App() {
             onReplicates={(payload) =>
               void handleReplicates("detection", payload)
             }
+            onReplicatedComparison={(payload) =>
+              void handleReplicatedComparison("detection", payload)
+            }
             onStrategyChange={setActiveStrategy}
             runSignal={runSignal}
+            pendingImport={pendingImports[activeKey]}
+            onImportApplied={takeImport}
           />
         ) : activeKey === "regression" ? (
           <RegressionPanel
@@ -974,9 +1119,14 @@ export default function App() {
             onReplicates={(payload) =>
               void handleReplicates("regression", payload)
             }
+            onReplicatedComparison={(payload) =>
+              void handleReplicatedComparison("regression", payload)
+            }
             onCv={(payload) => void handleTaskCv("regression", payload)}
             onStrategyChange={setActiveStrategy}
             runSignal={runSignal}
+            pendingImport={pendingImports[activeKey]}
+            onImportApplied={takeImport}
           />
         ) : activeKey === "segmentation" ? (
           <SegmentationPanel
@@ -989,9 +1139,14 @@ export default function App() {
             onReplicates={(payload) =>
               void handleReplicates("segmentation", payload)
             }
+            onReplicatedComparison={(payload) =>
+              void handleReplicatedComparison("segmentation", payload)
+            }
             onCv={(payload) => void handleTaskCv("segmentation", payload)}
             onStrategyChange={setActiveStrategy}
             runSignal={runSignal}
+            pendingImport={pendingImports[activeKey]}
+            onImportApplied={takeImport}
           />
         ) : activeKey === "anomaly" ? (
           <AnomalyPanel
@@ -1003,9 +1158,14 @@ export default function App() {
             onReplicates={(payload) =>
               void handleReplicates("anomaly", payload)
             }
+            onReplicatedComparison={(payload) =>
+              void handleReplicatedComparison("anomaly", payload)
+            }
             onCompare={(payload) => void handleCompare("anomaly", payload)}
             onStrategyChange={setActiveStrategy}
             runSignal={runSignal}
+            pendingImport={pendingImports[activeKey]}
+            onImportApplied={takeImport}
           />
         ) : (
           <ParamPanel
@@ -1014,6 +1174,18 @@ export default function App() {
             formData={formData}
             setFormData={setFormData}
             validationErrors={validationErrors}
+            busy={submitting}
+            strategy={activeStrategy}
+            onStrategyChange={setActiveStrategy}
+            onReplicates={(payload) =>
+              void handleReplicates("classification", payload)
+            }
+            onReplicatedComparison={(payload) =>
+              void handleReplicatedComparison("classification", payload)
+            }
+            runSignal={runSignal}
+            pendingImport={pendingImports[activeKey]}
+            onImportApplied={takeImport}
           />
         )}
         </StepNavContext.Provider>
@@ -1044,7 +1216,11 @@ export default function App() {
       </main>
 
       <BottomBar
-        onHistory={() => setShowHistory(true)}
+        onHistory={() => {
+          // The header opens the list, never a run a results view asked for.
+          setHistoryTarget(null);
+          setShowHistory(true);
+        }}
         onDatasets={() => setShowDatasets(true)}
         onQueue={() => setShowQueue(true)}
         onTrain={() => void handleTrain()}
@@ -1063,16 +1239,35 @@ export default function App() {
 
       {showHistory && (
       <CustomAccentsContext.Provider value={customAccents}>
+      <LazySurface>
       <HistoryOverlay
-        onClose={() => setShowHistory(false)}
+        onClose={() => {
+          setShowHistory(false);
+          setHistoryTarget(null);
+        }}
+        initialTarget={historyTarget}
+        // The finished job is not listed (its History entry failed to write, or
+        // a Colab search left its units on the VM): its results view stays.
+        onTargetMissing={() => {
+          setShowHistory(false);
+          setHistoryTarget(null);
+          setResultsVisible(true);
+        }}
         onCountChange={setHistoryCount}
+        onFirstTraining={() => {
+          setShowHistory(false);
+          setHistoryTarget(null);
+          setTour("firstTraining");
+        }}
         // `activeKey` is already the family the history groups by: the task
         // tabs are classification/detection/... and custom tasks carry their
         // own key, which the history prefixes to match its `custom:<key>` runs.
         initialTask={
           isCustomTask(activeTask) ? `custom:${activeKey}` : activeKey
         }
+        rerun={{ families: rerunFamilies, onRerun: openRerun }}
       />
+      </LazySurface>
       </CustomAccentsContext.Provider>
       )}
 
@@ -1105,19 +1300,29 @@ export default function App() {
           stopped={result?.stopped ?? null}
           customRun={customRun}
           story={storySpec}
+          codeSettings={codeSettings}
           tab={sheetTab}
           onTabChange={setSheetTab}
           onClose={() => setOverlayVisible(false)}
           onViewResults={() => {
             setOverlayVisible(false);
-            setResultsVisible(true);
+            // The run's History entry is its results page; a job History cannot
+            // name keeps the results view.
+            const target = result ? historyTargetForResult(result) : null;
+            if (target) {
+              setHistoryTarget(target);
+              setShowHistory(true);
+            } else {
+              setResultsVisible(true);
+            }
           }}
         />
       )}
       <WelcomeOverlay
-        key={askName ? "ask" : pickProfile ? "pick" : "boot"}
+        key={askName ? "ask" : pickProfile ? "pick" : newProfile ? "create" : "boot"}
         forceAsk={askName}
         forcePick={pickProfile}
+        forceCreate={newProfile}
         onProfile={(p, shared) => {
           // The History is the profile's: another profile's count and open sheet
           // would describe runs this one cannot see.
@@ -1133,6 +1338,7 @@ export default function App() {
           setUserName(n);
           setAskName(false);
           setPickProfile(false);
+          setNewProfile(false);
           // Só na primeira vez: quem já viu (ou dispensou) o guia entra direto.
           if (!readTourSeen()) setTour("convite");
         }}
@@ -1147,7 +1353,22 @@ export default function App() {
           datasetPaths={guideDatasetPaths}
           context={guideContext}
           onClose={() => setTour("none")}
+          onLearn={() => {
+            setTour("none");
+            setShowLearn(true);
+          }}
         />
+      )}
+      {showLearn && (
+        <LazySurface>
+          <LearnOverlay
+            onClose={() => setShowLearn(false)}
+            onFirstTraining={() => {
+              setShowLearn(false);
+              setTour("firstTraining");
+            }}
+          />
+        </LazySurface>
       )}
     </div>
   );

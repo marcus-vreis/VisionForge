@@ -2,7 +2,9 @@
 
 Reads every ``results/<dataset>__<architecture>.json`` that run_study.py saved,
 plus the ``run.json`` of each cell's baseline at seed 0 (for the evaluation-noise
-item), and writes ``results/summary.json``. Prints the tables as Markdown.
+item), and writes ``results/summary.json``. Prints the tables as Markdown. The
+records come from ``runs/`` (published by export_runs.py), falling back to the
+local ``outputs/`` the study wrote.
 
     .venv\\Scripts\\python.exe research\\seed_variance\\summarize.py
 """
@@ -12,7 +14,7 @@ from __future__ import annotations
 import json
 import statistics
 import sys
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from analysis import (
@@ -25,6 +27,7 @@ from analysis import (
 
 HERE = Path(__file__).resolve().parent
 RESULTS = HERE / "results"
+RUNS = HERE / "runs"
 REPO = HERE.parents[1]
 DATASETS = ["usk_full", "usk_10pct", "beans"]
 ARCHITECTURES = ["resnet18", "convnext_tiny", "swin_t"]
@@ -42,12 +45,42 @@ def _comparison(report: dict[str, Any], ablation: str) -> dict[str, Any]:
     raise KeyError(f"no baseline-vs-{ablation} comparison in the report")
 
 
+def exploratory_contrasts(report: dict[str, Any]) -> list[dict[str, Any]]:
+    """The report's comparisons between two ablations, which no hypothesis covers.
+
+    The replicated comparison tests every pair of variants and applies Holm to
+    the whole family, so these are in the report; they were not pre-registered
+    and are kept apart from the per-cell rows as exploratory.
+    """
+    return [
+        {
+            "label_a": row["label_a"],
+            "label_b": row["label_b"],
+            "b_minus_a": row["mean_b"] - row["mean_a"],
+            "test": row["test"],
+            "p_value": row["p_value"],
+            "significant_holm": bool(row["significant"]),
+        }
+        for row in report["comparisons"]
+        if "baseline" not in (row["label_a"], row["label_b"])
+    ]
+
+
 def smallest_stable_k(diffs: list[float]) -> int | None:
     """The smallest k of 1, 3, 5, 10 whose reversal rate is at most 10% (item 5a)."""
     for k in SMALLEST_K_CANDIDATES:
         if k <= len(diffs) and reversal_rate(diffs, k) <= REVERSAL_THRESHOLD:
             return k
     return None
+
+
+def run_record_path(run_dir: str) -> Path | None:
+    """The trial's published record in ``runs/``, else its local ``run.json``."""
+    published = RUNS / f"{PureWindowsPath(run_dir).parent.name}.json"
+    if published.is_file():
+        return published
+    local = REPO / PureWindowsPath(run_dir).as_posix() / "run.json"
+    return local if local.is_file() else None
 
 
 def evaluation_half_width(report: dict[str, Any]) -> float | None:
@@ -57,8 +90,8 @@ def evaluation_half_width(report: dict[str, Any]) -> float | None:
     )
     if trial is None or not trial.get("run_dir"):
         return None
-    run_json = REPO / Path(trial["run_dir"].replace("\\", "/")) / "run.json"
-    if not run_json.is_file():
+    run_json = run_record_path(trial["run_dir"])
+    if run_json is None:
         return None
     ci = json.loads(run_json.read_text(encoding="utf-8"))["metric_cis"]["accuracy"]
     return (float(ci["ci_high"]) - float(ci["ci_low"])) / 2
@@ -172,9 +205,10 @@ def print_tables(rows: list[dict[str, Any]], verdicts: dict[str, Any]) -> None:
         )
 
 
-def main() -> int:
-    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]  # cp1252 console
+def build_summary() -> tuple[dict[str, Any], list[str]]:
+    """The summary of every report in ``results/`` and the reports missing from it."""
     rows: list[dict[str, Any]] = []
+    exploratory: list[dict[str, Any]] = []
     sd: dict[tuple[str, str], float] = {}
     missing = []
     for dataset in DATASETS:
@@ -194,15 +228,34 @@ def main() -> int:
                         "evaluation_half_width": half_width,
                     }
                 )
+            exploratory += [
+                {"dataset": dataset, "architecture": arch, **row}
+                for row in exploratory_contrasts(report)
+            ]
             sd[(dataset, arch)] = statistics.stdev(
                 per_seed(report, "baseline").values()
             )
+    verdicts = {"H1": judge_h1(rows), "H2": judge_h2(rows), "H3": judge_h3(sd)}
+    summary = {
+        "cells": rows,
+        "hypotheses": verdicts,
+        "exploratory_contrasts": exploratory,
+        "missing": missing,
+    }
+    return summary, missing
+
+
+def main() -> int:
+    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]  # cp1252 console
+    summary, missing = build_summary()
     if missing:
         print(f"missing reports: {', '.join(missing)}", file=sys.stderr)
-    verdicts = {"H1": judge_h1(rows), "H2": judge_h2(rows), "H3": judge_h3(sd)}
-    summary = {"cells": rows, "hypotheses": verdicts, "missing": missing}
+    verdicts = summary["hypotheses"]
+    rows = summary["cells"]
     (RESULTS / "summary.json").write_text(
-        json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        json.dumps(summary, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+        newline="\n",
     )
     print_tables(rows, verdicts)
     return 1 if missing else 0

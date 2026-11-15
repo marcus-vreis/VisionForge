@@ -24,7 +24,7 @@ on:
 
 jobs:
   install:
-    name: ${{ matrix.os }}, py${{ matrix.python-version }}
+    name: ${{ matrix.os }}, py${{ matrix.python-version }}, ${{ matrix.variant }}
     # A CD run that failed, or one for a push without a tag, published nothing.
     if: >-
       github.event_name != 'workflow_run' ||
@@ -38,6 +38,9 @@ jobs:
         # since 2.3, so that is the only Mac the guide supports.
         os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.12", "3.13"]
+        # ultralytics (AGPL-3.0) is the optional `detection` extra (ADR-195):
+        # both install lines the guide gives are checked.
+        variant: [plain, detection]
     defaults:
       run:
         shell: bash
@@ -51,9 +54,12 @@ jobs:
         env:
           INPUT: ${{ inputs.version }}
           TAG: ${{ github.event.workflow_run.head_branch }}
+          VARIANT: ${{ matrix.variant }}
         run: |
           VERSION="${INPUT:-${TAG#v}}"
-          echo "spec=visionforge-studio${VERSION:+==$VERSION}" >> "$GITHUB_OUTPUT"
+          EXTRA=""
+          if [ "$VARIANT" = detection ]; then EXTRA="[detection]"; fi
+          echo "spec=visionforge-studio${EXTRA}${VERSION:+==$VERSION}" >> "$GITHUB_OUTPUT"
 
       # The index can temporarily omit a fresh upload; do not reuse pip's HTTP cache.
       - name: pip install, as the guide says
@@ -73,6 +79,17 @@ jobs:
             sleep 60
           done
           visionforge --version
+
+      - name: ultralytics only with the detection extra
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          if [ -f .venv/Scripts/activate ]; then source .venv/Scripts/activate; else source .venv/bin/activate; fi
+          if python -c "import importlib.util, sys; sys.exit(importlib.util.find_spec('ultralytics') is None)"; then present=yes; else present=no; fi
+          expected=no
+          if [ "$VARIANT" = detection ]; then expected=yes; fi
+          echo "ultralytics installed: $present (expected: $expected)"
+          [ "$present" = "$expected" ]
 
       - name: visionforge doctor
         run: |

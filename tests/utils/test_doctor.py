@@ -32,7 +32,9 @@ class TestSelectWheelTag:
             ("12.6", "cu126"),
             ("12.7", "cu126"),  # between 12.6 and 12.8 → cu126
             ("12.8", "cu128"),
-            ("13.3", "cu128"),  # above highest supported → clamp to cu128
+            ("12.9", "cu128"),
+            ("13.0", "cu130"),
+            ("13.3", "cu130"),  # above highest supported → clamp to cu130
             ("12.4", "cu124"),
             ("12.5", "cu124"),  # between 12.4 and 12.6 → cu124
             ("12.1", "cu121"),
@@ -55,7 +57,8 @@ class TestSelectWheelTag:
         to prevent, so the mapping must not stop below cu128.
         """
         assert select_wheel_tag("12.8") == "cu128"
-        assert select_wheel_tag("13.0") == "cu128"
+        assert select_wheel_tag("12.9") == "cu128"
+        assert select_wheel_tag("13.0") == "cu130"
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +113,7 @@ class TestDetectDriverCuda:
 
     def test_driver_6xx_still_selects_a_cuda_wheel(self) -> None:
         """The bug's real cost: a CUDA machine being told to install cpu torch."""
-        assert select_wheel_tag("13.3") == "cu128"
+        assert select_wheel_tag("13.3") == "cu130"
 
     def test_parses_version_with_single_digit_minor(self) -> None:
         output = (
@@ -460,7 +463,7 @@ class TestRunDoctor:
             patch("subprocess.run", return_value=self._make_smi_output("13.3")),
             patch("importlib.util.find_spec", return_value=MagicMock()),
             patch.dict(
-                sys.modules, {"torch": self._cuda_torch("2.11.0+cu128", "12.8")}
+                sys.modules, {"torch": self._cuda_torch("2.14.1+cu130", "13.0")}
             ),
         ):
             run_doctor(fix=False, confirm_fn=MagicMock())
@@ -482,8 +485,8 @@ class TestRunDoctor:
             run_doctor(fix=False, confirm_fn=MagicMock())
 
         out = capsys.readouterr().out
-        assert "Recommended wheel: cu128" in out
-        assert "--index-url https://download.pytorch.org/whl/cu128" in out
+        assert "Recommended wheel: cu130" in out
+        assert "--index-url https://download.pytorch.org/whl/cu130" in out
 
     def test_all_ok_returns_zero(self) -> None:
         fake_torch = MagicMock()
@@ -684,3 +687,103 @@ class TestCheckoutVersion:
         expected = checkout_version()
         if expected is not None:
             assert visionforge.__version__ == expected
+
+
+class TestDoctorNamesHiddenGpu:
+    """A CUDA_VISIBLE_DEVICES that hides the card must be named in the GPU line."""
+
+    @staticmethod
+    def _run(capsys: pytest.CaptureFixture[str]) -> str:
+        with (
+            patch("subprocess.run", side_effect=FileNotFoundError),
+            patch("importlib.util.find_spec", return_value=None),
+        ):
+            run_doctor(fix=False, confirm_fn=MagicMock())
+        out: str = capsys.readouterr().out
+        return out
+
+    def test_minus_one_is_named(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "-1")
+        assert "CUDA_VISIBLE_DEVICES" in self._run(capsys)
+
+    def test_empty_is_named(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "")
+        assert "CUDA_VISIBLE_DEVICES" in self._run(capsys)
+
+    def test_unset_is_not_mentioned(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
+        assert "CUDA_VISIBLE_DEVICES" not in self._run(capsys)
+
+
+# ---------------------------------------------------------------------------
+# Apple GPU (MPS, ADR-192)
+# ---------------------------------------------------------------------------
+
+
+class TestAppleGpu:
+    """A Mac's torch from PyPI already drives the GPU through MPS.
+
+    Recommending the CPU wheel there is the mistake ADR-107 fixed for CUDA
+    machines without nvidia-smi: telling someone whose GPU works to replace the
+    build that makes it work.
+    """
+
+    @staticmethod
+    def _mac(monkeypatch: pytest.MonkeyPatch, *, mps: bool = True) -> None:
+        monkeypatch.setattr("visionforge.utils.doctor.detect_driver_cuda", lambda: None)
+        monkeypatch.setattr(
+            "visionforge.utils.doctor.probe_torch",
+            lambda: {
+                "importable": True,
+                "version": "2.11.0",
+                "cuda_available": False,
+                "cuda_build": None,
+            },
+        )
+        monkeypatch.setattr("visionforge.utils.doctor.mps_available", lambda: mps)
+
+    def test_reports_the_apple_gpu_and_keeps_the_install(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        self._mac(monkeypatch)
+
+        run_doctor(fix=False)
+
+        out = capsys.readouterr().out
+        assert "Apple GPU usable via torch (MPS, experimental)" in out
+        assert "keep the current install" in out
+        assert "already runs on the Apple GPU (MPS)" in out
+        assert "mps_available=True" in out
+        assert "Recommended wheel: cpu" not in out
+        assert "[WARN] torch" not in out
+
+    def test_fix_offers_nothing_when_the_gpu_already_works(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        self._mac(monkeypatch)
+        confirm = MagicMock(return_value=True)
+
+        with patch("visionforge.utils.doctor._run_install") as mock_install:
+            run_doctor(fix=True, confirm_fn=confirm)
+
+        confirm.assert_not_called()
+        mock_install.assert_not_called()
+        assert "Nothing to fix" in capsys.readouterr().out
+
+    def test_a_cpu_only_torch_without_mps_still_gets_the_cpu_wheel(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        self._mac(monkeypatch, mps=False)
+
+        run_doctor(fix=False)
+
+        out = capsys.readouterr().out
+        assert "No CUDA-capable GPU detected" in out
+        assert "Recommended wheel: cpu" in out
+        assert "mps_available" not in out

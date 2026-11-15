@@ -1,5 +1,6 @@
 """Static requests cannot escape the SPA directory."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -39,3 +40,34 @@ def test_internal_asset_and_deep_link_still_work(
 
     assert client.get("/app.js").text == "ASSET"
     assert client.get("/history/run-1").text == "INDEX"
+
+
+@pytest.mark.parametrize("meta", ["description", "theme-color", "color-scheme"])
+def test_built_index_declares_its_metas(meta: str) -> None:
+    """The index.html the server delivers carries a description, theme-color and color-scheme."""
+    html = server.STATIC_DIR.joinpath("index.html").read_text(encoding="utf-8")
+
+    assert re.search(rf'<meta\s+name="{meta}"\s+content="[^"]+"', html)
+
+
+_CHUNK_BUDGET_BYTES = 500_000
+
+
+def test_no_bundled_script_exceeds_the_chunk_budget() -> None:
+    """The SPA ships split by panel: no single script outgrows 500 kB (GUI-12)."""
+    scripts = list(server.STATIC_DIR.joinpath("assets").glob("*.js"))
+    assert scripts, "the SPA must be built for this test to mean anything"
+
+    largest = max(scripts, key=lambda p: p.stat().st_size)
+
+    assert largest.stat().st_size <= _CHUNK_BUDGET_BYTES, largest.name
+
+
+def test_index_html_points_at_exactly_one_entry_script() -> None:
+    """Lazy chunks are fetched by the entry, never listed beside it in index.html."""
+    html = server.STATIC_DIR.joinpath("index.html").read_text(encoding="utf-8")
+
+    entries = re.findall(r"assets/index-[A-Za-z0-9_-]+\.js", html)
+
+    assert len(entries) == 1, entries
+    assert server.STATIC_DIR.joinpath(entries[0]).is_file()

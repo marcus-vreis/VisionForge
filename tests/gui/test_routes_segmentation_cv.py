@@ -1,12 +1,19 @@
 from __future__ import annotations
 
-import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.strategies as strategies
+from tests.helpers import wait_experiment_done
+
 from .conftest import occupy_queue, release_queue
+
+# Any: the tests swap its orchestrators and executors for fakes.
+strategies_mod: Any = strategies
 
 
 @pytest.fixture
@@ -34,7 +41,11 @@ def _payload(tmp_path: Path) -> dict:
 
 class TestSegmentationCv:
     def test_cv_dispatches_and_reports_fold_table(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.blocks.regression_cv import (
             CrossValidationReport,
@@ -42,7 +53,7 @@ class TestSegmentationCv:
         )
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
 
@@ -62,8 +73,9 @@ class TestSegmentationCv:
                 aggregate={"miou": {"mean": 0.7, "std": 0.1}},
             )
 
-        orig = routes_mod.run_segmentation_cross_validation
-        routes_mod.run_segmentation_cross_validation = fake_cv
+        monkeypatch.setattr(
+            strategies_mod, "run_segmentation_cross_validation", fake_cv
+        )
         try:
             client = live_client
             resp = client.post(
@@ -73,12 +85,7 @@ class TestSegmentationCv:
             assert resp.status_code == 200, resp.text
             run_id = resp.json()["run_id"]
 
-            status = {"status": "running"}
-            for _ in range(50):
-                status = client.get("/api/experiment/status").json()
-                if status["status"] in ("completed", "failed"):
-                    break
-                time.sleep(0.05)
+            status = wait_experiment_done(client)
             assert status["status"] == "completed", status
 
             assert captured["n_folds"] == 2
@@ -90,14 +97,13 @@ class TestSegmentationCv:
             assert report["aggregate"]["miou"]["mean"] == 0.7
             assert (Path(report["report_dir"]) / "cv_summary.json").exists()
         finally:
-            routes_mod.run_segmentation_cross_validation = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post(
@@ -107,13 +113,13 @@ class TestSegmentationCv:
             assert resp.status_code == 200
             assert resp.json()["status"] == "queued"
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_rejects_invalid_config(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         cfg = _payload(tmp_path)
         # ignore_index colliding with a class id → invalid SegmentationConfig
         cfg["data"]["ignore_index"] = 1

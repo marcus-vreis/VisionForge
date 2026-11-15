@@ -224,7 +224,23 @@ class TestStoppedRunsInTheTables:
             }
         )
 
-        assert r"\caption{Experiment: 2-fold cross-validation.}" in tex
+        assert r"\caption{Experiment: 2-fold cross-validation." in tex
+
+    def test_cv_caption_declares_the_per_fold_epoch_selection(self) -> None:
+        caption = _caption(cv_to_latex(TestCvTable()._report()))
+
+        assert "selected on its own fold's validation split" in caption
+        assert "optimistic" in caption
+
+    def test_partial_cv_caption_declares_it_too(self) -> None:
+        report = TestCvTable()._report()
+        report["stopped"] = True
+        report["n_folds"] = 5
+
+        caption = _caption(cv_to_latex(report))
+
+        assert "folds finished" in caption
+        assert "selected on its own fold's validation split" in caption
 
     def test_replicates_list_only_the_seeds_that_finished(self) -> None:
         report = _replicates_report()
@@ -308,6 +324,40 @@ class TestComparisonTable:
 
     def test_test_name_is_human_readable(self) -> None:
         assert r"paired t" in comparison_to_latex(self._comparisons())
+
+    def test_caption_names_the_interval_of_each_test(self) -> None:
+        rows = self._comparisons()
+        rows[0]["ci_method"] = "t"
+        rows[1]["ci_method"] = "hodges_lehmann"
+
+        caption = _caption(comparison_to_latex(rows))
+
+        assert r"95\% CI of the difference" in caption
+        assert r"Student $t$ of the mean" in caption
+        assert "Hodges-Lehmann over the Walsh averages" in caption
+        assert "bootstrap" not in caption
+
+    def test_a_report_without_the_method_is_labelled_bootstrap(self) -> None:
+        # Reports written before ADR-187 carry percentile bootstrap intervals.
+        caption = _caption(comparison_to_latex(self._comparisons()))
+
+        assert "percentile bootstrap" in caption
+        assert "Hodges-Lehmann" not in caption
+
+    def test_an_unbounded_interval_is_a_dash(self) -> None:
+        rows = self._comparisons()
+        rows[1].update(ci_low=None, ci_high=None, ci_method="hodges_lehmann")
+
+        row = next(
+            line for line in comparison_to_latex(rows).splitlines() if "ablação" in line
+        )
+
+        assert "& --- &" in row
+        assert "None" not in row
+
+
+def _caption(tex: str) -> str:
+    return next(line for line in tex.splitlines() if r"\caption{" in line)
 
 
 class TestDispatch:

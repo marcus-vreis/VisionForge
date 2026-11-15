@@ -69,7 +69,12 @@ def test_torchvision_backend_trains_end_to_end(tmp_path: Path) -> None:
 
     assert result.model_path.exists()
     assert result.total_epochs == 1
-    assert [e["event"] for e in events] == ["start", "epoch_end", "end"]
+    kinds = [e["event"] for e in events]
+    assert [k for k in kinds if k != "batch"] == ["start", "epoch_end", "end"]
+    # The epoch's last batch is always reported, right before epoch_end (ADR-205).
+    last_batch = events[kinds.index("epoch_end") - 1]
+    assert last_batch["event"] == "batch"
+    assert last_batch["batch"] == last_batch["total_batches"]
 
     run_json = json.loads((result.run_dir / "run.json").read_text("utf-8"))
     assert run_json["status"] == "completed"

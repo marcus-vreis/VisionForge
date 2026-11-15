@@ -21,6 +21,9 @@ import pytest
 from fastapi.testclient import TestClient
 from matplotlib.figure import Figure
 
+import visionforge.gui.api.custom_task_routes as custom_tasks_mod
+import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.submission as submission_mod
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.training_health import collapsed_predictions
 from visionforge.gui.api.schemas import RunResponse
@@ -44,9 +47,9 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-unt
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(routes_mod, "_MODELS_DIR", Path("outputs/models"))
     monkeypatch.setattr(routes_mod, "_PROFILES_DIR", Path("outputs/profiles"))
-    routes_mod._JOB_STATES.clear()
+    execution_mod._JOB_STATES.clear()
     yield app, routes_mod
-    release_queue(routes_mod)
+    release_queue(execution_mod)
 
 
 @pytest.fixture
@@ -131,8 +134,10 @@ class TestRunsAndTheQueue:
         self, client: TestClient, env
     ) -> None:
         _, routes_mod = env
-        occupy_queue(routes_mod, "busy_run")
-        routes_mod._RUN_QUEUE._active.stop_at = None
+        occupy_queue(execution_mod, "busy_run")
+        active = execution_mod._RUN_QUEUE._active
+        assert active is not None
+        active.stop_at = None
 
         en = client.delete("/api/queue/busy_run", headers=EN)
         pt = client.delete("/api/queue/busy_run")
@@ -146,7 +151,7 @@ class TestRunsAndTheQueue:
     def test_a_result_that_is_not_ready(self, client: TestClient, env) -> None:
         _, routes_mod = env
         fake_run(
-            routes_mod,
+            execution_mod,
             {
                 "run_id": "r1",
                 "status": "running",
@@ -168,7 +173,7 @@ class TestRunsAndTheQueue:
     ) -> None:
         _, routes_mod = env
         fake_run(
-            routes_mod,
+            execution_mod,
             {
                 "run_id": "r2",
                 "status": "failed",
@@ -192,7 +197,7 @@ class TestRunsAndTheQueue:
         run_dir = tmp_path / "outputs" / "models" / "e" / "20260522_100000_000000"
         run_dir.mkdir(parents=True)
         (run_dir / "run.json").write_text("{}", encoding="utf-8")
-        fake_run(routes_mod, {"run_id": run_dir.name, "status": "running"})
+        fake_run(execution_mod, {"run_id": run_dir.name, "status": "running"})
 
         en = client.delete(f"/api/runs/{run_dir.name}", headers=EN)
         pt = client.delete(f"/api/runs/{run_dir.name}")
@@ -228,10 +233,25 @@ class TestRevealRefusals:
         (run_dir / "run.json").write_text("{}", encoding="utf-8")
         return run_dir.name
 
-    def test_a_page_from_another_site(self, client: TestClient, tmp_path: Path) -> None:
+    def test_a_page_from_another_site(
+        self, client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The route's own refusal, for an origin the Host/Origin guard lets by.
+
+        A foreign site is refused by the guard before any route runs; what still
+        reaches this route is a lab server's own page (``--host 0.0.0.0``), whose
+        origin is the machine's name: not loopback, so not "this machine".
+        """
+        from visionforge.gui import security
+
+        monkeypatch.setattr(
+            security,
+            "DEFAULT_POLICY",
+            security.HostPolicy(extra=frozenset({"testserver", "labbox"})),
+        )
         run_id = self._run(tmp_path)
         url = f"/api/runs/{run_id}/reveal"
-        evil = {"Origin": "https://evil.example"}
+        evil = {"Origin": "http://labbox:8000"}
 
         en = client.post(url, headers={**evil, **EN})
         pt = client.post(url, headers=evil)
@@ -628,7 +648,7 @@ class TestRunRoutesOwnRefusals:
     ) -> None:
         from fastapi import HTTPException
 
-        from visionforge.gui.api.routes import _reject_custom_task_action
+        from visionforge.gui.api.evaluation_routes import _reject_custom_task_action
 
         run_id = _run_with(tmp_path, {"task": "custom:vlm"})
         run_dir = tmp_path / "outputs" / "models" / "e" / run_id
@@ -756,7 +776,9 @@ class TestCustomTaskActions:
         import visionforge.tasks.manage as manage_mod
 
         _, routes_mod = env
-        monkeypatch.setattr(routes_mod, "_get_custom_task_or_404", lambda _key: None)
+        monkeypatch.setattr(
+            custom_tasks_mod, "_get_custom_task_or_404", lambda _key: None
+        )
         return manage_mod
 
     def test_hiding_and_restoring(
@@ -862,7 +884,7 @@ class TestMessagesWrittenAfterTheRequestIsOver:
             seen.update(label=label, lang=current_lang())
             return RunResponse(run_id=job_id)
 
-        monkeypatch.setattr(routes_mod, "_submit_job", fake_submit)
+        monkeypatch.setattr(submission_mod, "_submit_job", fake_submit)
 
         assert (
             client.post(f"/api/runs/{run_dir.name}/resume", headers=EN).status_code
@@ -896,14 +918,14 @@ class TestMessagesWrittenAfterTheRequestIsOver:
 
         async def scenario() -> None:
             set_lang("en")
-            routes_mod._submit_job(
+            submission_mod._submit_job(
                 "job-en", "en", "classification", "simple", make_start("en")
             )
             set_lang("pt")
-            routes_mod._submit_job(
+            submission_mod._submit_job(
                 "job-pt", "pt", "classification", "simple", make_start("pt")
             )
-            queue = routes_mod._RUN_QUEUE
+            queue = execution_mod._RUN_QUEUE
             while queue.is_busy() or queue.pending_count():
                 await asyncio.sleep(0.01)
 
@@ -938,14 +960,14 @@ class TestMessagesWrittenAfterTheRequestIsOver:
 
         async def scenario() -> None:
             set_lang("en")
-            routes_mod._submit_job(
+            submission_mod._submit_job(
                 "fig-en", "en", "classification", "simple", make_start("en")
             )
             set_lang("pt")
-            routes_mod._submit_job(
+            submission_mod._submit_job(
                 "fig-pt", "pt", "classification", "simple", make_start("pt")
             )
-            queue = routes_mod._RUN_QUEUE
+            queue = execution_mod._RUN_QUEUE
             while queue.is_busy() or queue.pending_count():
                 await asyncio.sleep(0.01)
 

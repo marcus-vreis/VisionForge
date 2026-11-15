@@ -35,8 +35,9 @@ model:
   # weights_path: path/to/checkpoint.pth   # optional, loaded non-strictly
 ```
 
-In the interface the same field appears under **Modelo** — pick your model by
-name and the built-in architecture selector steps aside.
+The interface has no selector for it: `custom_model` is set in the YAML config
+file, and the run that reads that file is the one that uses your builder
+(`visionforge run <file>.yaml`).
 
 VisionForge imports every `.py` file in the folder on demand to discover the
 registered builders, so a new file is picked up without restarting the server.
@@ -56,6 +57,24 @@ Detection and anomaly have their own model paths and do not read
 `custom_model`.
 
 Detecção e anomalia têm caminhos próprios de modelo e não leem `custom_model`.
+
+## Stability · Estabilidade
+
+Before 1.0 the extension API may change, but not by accident. What is stable:
+`@register_model("name")` on a function that takes one `int` (the task's output
+dimension) and returns an `nn.Module`, and `build_custom_model(name, *,
+num_outputs, user_models_dir=None)`. A change to either lands only in a minor
+release, with an entry under "Changed" in the CHANGELOG, never in a patch.
+`tests/tasks/test_task_api_contract.py` pins the signatures (ADR-190). There is
+no API version number to check yet; the release notes are the signal.
+
+Antes da 1.0 a API de extensão pode mudar, mas não por acidente. É estável:
+`@register_model("nome")` numa função que recebe um `int` (a dimensão de saída
+da tarefa) e devolve um `nn.Module`, e `build_custom_model(name, *,
+num_outputs, user_models_dir=None)`. Uma mudança nesses pontos só entra numa
+versão minor, com entrada em "Changed" no CHANGELOG, nunca num patch. O teste
+`tests/tasks/test_task_api_contract.py` trava as assinaturas. Não há número de
+versão da API; as notas de release são o aviso.
 
 ## Notes · Observações
 
@@ -80,8 +99,8 @@ O passo a passo é o mesmo dos três blocos acima, e vale repetir o essencial:
 1. Um arquivo `.py` em `user_models/`, com nome que não comece por `_`.
 2. Uma função registrada com `@register_model("seu_nome")` que recebe um `int`
    — quantos números o modelo precisa emitir — e devolve um `nn.Module`.
-3. No config (ou no campo **Modelo** da interface), `model.custom_model:
-   seu_nome`. Os campos `name` e `pretrained` do modelo embutido passam a ser
+3. No config (YAML), `model.custom_model: seu_nome`; a interface não tem campo
+   para isso. Os campos `name` e `pretrained` do modelo embutido passam a ser
    ignorados.
 
 O mesmo modelo serve para classificação, segmentação e regressão, porque o

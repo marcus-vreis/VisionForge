@@ -61,3 +61,58 @@ class TestSaveCredential:
         )
 
         assert resp.status_code == 422
+
+
+SENTINEL = "SENTINEL_SECRET_123"
+
+
+class TestInvalidRequestsDoNotEchoTheKey:
+    """FastAPI's default 422 repeats the input; here the input is a key."""
+
+    def test_a_missing_provider_does_not_echo_the_value(
+        self, client: TestClient
+    ) -> None:
+        resp = client.post("/api/credentials", json={"value": SENTINEL})
+
+        assert resp.status_code == 422
+        assert SENTINEL not in resp.text
+
+    def test_a_list_value_does_not_echo_it(self, client: TestClient) -> None:
+        resp = client.post(
+            "/api/credentials", json={"provider": "kaggle", "value": [SENTINEL]}
+        )
+
+        assert resp.status_code == 422
+        assert SENTINEL not in resp.text
+
+    def test_an_unknown_provider_does_not_echo_the_value(
+        self, client: TestClient
+    ) -> None:
+        resp = client.post(
+            "/api/credentials", json={"provider": "dropbox", "value": SENTINEL}
+        )
+
+        assert resp.status_code == 422
+        assert SENTINEL not in resp.text
+
+    def test_the_422_says_so_in_the_requested_language(
+        self, client: TestClient
+    ) -> None:
+        resp = client.post(
+            "/api/credentials",
+            json={"value": SENTINEL},
+            headers={"X-VF-Lang": "en"},
+        )
+
+        assert resp.json()["detail"] == "Invalid credential request."
+
+    def test_a_valid_save_still_lists_only_the_mask(self, client: TestClient) -> None:
+        client.post(
+            "/api/credentials", json={"provider": "roboflow", "value": SENTINEL}
+        )
+
+        resp = client.get("/api/credentials")
+
+        assert resp.status_code == 200
+        assert SENTINEL not in resp.text
+        assert resp.json()["providers"]["roboflow"]["masked"].endswith("_123")

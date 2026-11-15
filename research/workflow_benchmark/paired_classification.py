@@ -27,7 +27,10 @@ VISIONFORGE_INCLUDES = {
     "evaluation": ["best-checkpoint reload", "test pass with predictions"],
     "evidence": ["best-checkpoint SHA-256", "result assembly"],
 }
-EXECUTION_ORDER = ["native_pytorch", "visionforge_trainer"]
+EXECUTION_ORDER = list(phase_contract.EXECUTION_ORDER)
+
+
+execution_order = phase_contract.execution_order
 
 
 def run_visionforge(
@@ -269,12 +272,13 @@ def run_pair(
         raise ValueError("Dataset image audit has findings; inspect before pairing")
     fingerprint = fingerprint_dataset(dataset, method="content").to_dict()
     output.mkdir(parents=True)
+    order = execution_order(seed)
     report: dict[str, Any] = {
         "purpose": "engineering_parity_only",
         "status": "running",
         "failed_phase": None,
         "phase_contract": phase_contract.contract_header(),
-        "execution_order": EXECUTION_ORDER,
+        "execution_order": order,
         "seed": seed,
         "epochs": epochs,
         "batch_size": batch_size,
@@ -301,7 +305,7 @@ def run_pair(
         "visionforge_trainer": ("visionforge", run_visionforge),
     }
     try:
-        for workflow in EXECUTION_ORDER:
+        for workflow in order:
             key, runner = runners[workflow]
             try:
                 report[key] = runner(dataset, initial_weights, output / key, **options)

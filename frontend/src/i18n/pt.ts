@@ -84,6 +84,7 @@ export const pt = {
     skip: "Pular",
     close: "Fechar",
     cancel: "Cancelar",
+    loading: "Carregando…",
   },
   // The five task families by name: the history tabs and the queue rows.
   taskNames: {
@@ -121,8 +122,13 @@ export const pt = {
       login_pending: "colab · aguardando código",
       connected: "colab · conectado",
     },
-    intro:
-      "Treinar no Google Colab usa a sua conta Google e a GPU que ela tiver. O VisionForge conversa com o Colab pela CLI oficial, instalada num ambiente só dela.",
+    intro: "Treine na GPU da sua conta Google.",
+    introMore:
+      "O VisionForge conversa com o Colab pela CLI oficial, instalada num ambiente só dela. O treino entra na mesma fila dos locais e o run volta para o Histórico ao terminar.",
+    howItWorks: "como funciona",
+    learnMore: "saiba mais",
+    sectionConnect: "Conexão",
+    sectionAccount: "Conta e uso",
     install: (version: string) => `instalar a CLI do Colab (v${version})`,
     installing: "Instalando a CLI do Colab… isso leva um ou dois minutos.",
     installFailed: "A instalação falhou:",
@@ -144,15 +150,45 @@ export const pt = {
     noRate: "Nenhum runtime ativo agora; as horas restantes dependem da GPU escolhida.",
     usageFailed: "Não foi possível ler o saldo.",
     loadFailed: "Não foi possível falar com o servidor.",
-    trainTitle: "Treinar este experimento no Colab",
-    trainSource: "Dataset na VM: URL de um zip, torchvision:cifar10 ou hf:dono/nome",
+    trainTitle: "Treinar no Colab",
+    trainSource: "Dataset: URL de zip, torchvision:nome ou hf:dono/nome",
+    driveSource: "Dataset no Google Drive",
+    driveRoot: "Pasta \"Meu Drive\" deste computador",
+    driveRootPlaceholder: "G:\\Meu Drive",
+    driveRootOther: "usar outra pasta \"Meu Drive\"",
+    driveExport: "Salvar o run também no Drive",
+    driveNote:
+      "A VM monta o seu Drive e copia a pasta antes de treinar; o Google pede permissão a cada runtime. Sem pasta escolhida, vale a pasta do dataset do formulário.",
+    driveChecking: "Procurando o Google Drive para desktop…",
+    driveFolder: "Pasta do dataset",
+    driveFolderPlaceholder: "vazio = pasta do formulário",
+    drivePick: "escolher pasta no Drive",
+    driveRemote: (path: string) => `No Colab: ${path}`,
+    driveBrowserLabel: "Pastas do Meu Drive",
+    driveHome: "Meu Drive",
+    driveLoading: "Lendo pastas…",
+    driveEmpty: "Nenhuma subpasta aqui.",
+    driveTruncated: (n: number) => `Mostrando só as primeiras ${n} pastas.`,
+    driveUse: "usar esta pasta",
+    driveOpen: "abrir pasta do Drive",
+    driveRetry: "procurar de novo",
+    driveMissingTitle: "Google Drive para desktop não encontrado",
+    driveStep1: "Instale e abra o Google Drive para desktop.",
+    driveStep2: "Coloque o dataset dentro de \"Meu Drive\".",
+    driveStep3: "Volte aqui e escolha a pasta.",
     sourcePlaceholder: "https://…/dataset.zip",
     badSource: "Use uma URL http(s) de um zip, torchvision:<nome> ou hf:<dono/nome>.",
     accelerator: "GPU",
     train: "treinar no Colab",
     trainNote:
-      "Entra na mesma fila dos treinos locais. A aba ao vivo acompanha; os arquivos treinados ficam na VM até a importação da próxima fase.",
-    sessionsTitle: "Runtimes ativos nesta conta",
+      "Entra na mesma fila dos treinos locais e a aba ao vivo acompanha. Com \"Salvar no Drive\", o run vai também para MyDrive/VisionForge/runs.",
+    // The strategy step has Réplicas on (ADR-056): Colab trains one run.
+    replicatesBlocked:
+      "Réplicas roda só neste computador: o Colab treina uma execução por vez. Volte a estratégia para Treino simples para treinar no Colab.",
+    // The same for the replicated comparison (ADR-193).
+    comparisonBlocked:
+      "A comparação replicada roda só neste computador: o Colab treina uma execução por vez. Volte a estratégia para Treino simples para treinar no Colab.",
+    sessionsTitle: "Runtimes ativos",
     sessionsNone: "Nenhum runtime ativo.",
     stopSession: "parar",
     sessionNotOurs: "aberto fora do VisionForge; pare em colab.research.google.com",
@@ -203,6 +239,9 @@ export const pt = {
     other: "Outra cor",
     reset: "Voltar à cor original",
   },
+  a11y: {
+    skipToContent: "Pular para o conteúdo",
+  },
   theme: {
     label: "Tema",
     names: { system: "Automático (segue o sistema)", light: "Claro", dark: "Escuro" },
@@ -228,6 +267,7 @@ export const pt = {
       sweep: "▶ Rodar sweep",
       replicates: "▶ Rodar réplicas",
       compare: "▶ Comparar arquiteturas",
+      replicatedComparison: "▶ Rodar comparação",
     },
     error: "Erro",
     // Names a run in the tab title when the server sent no run id.
@@ -266,6 +306,11 @@ export const pt = {
     errorPrefix: (message: string) => `erro: ${message}`,
     cudaNotDetected: "cuda não detectado",
     cpuSubtitle: "Treinar usando processador",
+    // Apple's GPU is experimental until it is checked on a real Mac (ADR-192).
+    mpsTitle: "GPU da Apple (MPS) · experimental",
+    mpsSummary: "gpu da apple (mps)",
+    mpsOption: "GPU da Apple (MPS)",
+    mpsSubtitle: "Treinar usando a GPU do Mac · experimental",
   },
   welcome: {
     askName: "Qual é o seu nome?",
@@ -277,17 +322,231 @@ export const pt = {
     pronounLabel: "Como você prefere a saudação?",
     pronounNames: { ele: "Bem-vindo (ele)", ela: "Bem-vinda (ela)", neutro: "Boas-vindas (neutro)" },
   },
+  mlflow: {
+    label: "Exportar treinos para MLflow local",
+    hint: "Grava só nesta máquina. Requer o extra mlflow.",
+    saveFailed: "Falha ao salvar configuração MLflow.",
+    warning: "Exportação MLflow não concluída",
+    notInstalled: "O MLflow não está instalado neste computador. Instale o extra mlflow do VisionForge e repita a exportação.",
+    retry: "Repetir exportação",
+    retrying: "Exportando…",
+    retryFailed: "Falha ao repetir exportação.",
+  },
+  wandb: {
+    label: "Enviar treinos ao Weights & Biases",
+    hint: "Projeto privado na sua conta: config e métricas. Dataset, caminhos e código ficam aqui.",
+    project: "Projeto",
+    entity: "Usuário ou equipe (opcional)",
+    entityHint: "Vazio usa o usuário dono da chave.",
+    saveTarget: "Salvar destino",
+    saveFailed: "Falha ao salvar a configuração do W&B.",
+    token: "Chave de API do W&B",
+    tokenHint: "Crie a chave nas configurações da sua conta W&B. Ela fica salva neste computador, só para este perfil, e nunca volta para a tela.",
+    configured: "Chave salva neste perfil.",
+    saveToken: "Salvar chave",
+    removeToken: "Esquecer chave",
+    shared: "Este servidor aceita conexões de outras máquinas: quem escolher este perfil pode enviar com a chave salva.",
+    tokenFailed: "Falha ao salvar a chave do W&B.",
+    open: "Abrir no W&B",
+    warning: "Envio ao W&B não concluído",
+    notInstalled: "O W&B não está instalado neste computador. Instale o extra wandb do VisionForge e repita o envio.",
+    tokenMissing: "Este perfil não tem chave do W&B. Salve uma na configuração do perfil e repita o envio.",
+    notPrivate: "O projeto já existe no W&B e não é privado. Escolha outro nome de projeto ou torne-o privado no W&B.",
+    retry: "Repetir envio ao W&B",
+    retrying: "Enviando…",
+    retryFailed: "Falha ao repetir o envio ao W&B.",
+  },
+  comet: {
+    label: "Enviar treinos ao Comet",
+    hint: "Projeto privado na sua conta: config e métricas. Dataset, caminhos e código ficam aqui.",
+    project: "Projeto",
+    workspace: "Workspace (opcional)",
+    workspaceHint: "Vazio usa o workspace padrão da chave.",
+    saveTarget: "Salvar destino",
+    saveFailed: "Falha ao salvar a configuração do Comet.",
+    token: "Chave de API do Comet",
+    tokenHint: "Crie a chave nas configurações da sua conta Comet. Ela fica salva neste computador, só para este perfil, e nunca volta para a tela.",
+    configured: "Chave salva neste perfil.",
+    saveToken: "Salvar chave",
+    removeToken: "Esquecer chave",
+    shared: "Este servidor aceita conexões de outras máquinas: quem escolher este perfil pode enviar com a chave salva.",
+    tokenFailed: "Falha ao salvar a chave do Comet.",
+    open: "Abrir no Comet",
+    warning: "Envio ao Comet não concluído",
+    notInstalled: "O Comet não está instalado neste computador. Instale o extra comet do VisionForge e repita o envio.",
+    tokenMissing: "Este perfil não tem chave do Comet. Salve uma na configuração do perfil e repita o envio.",
+    notPrivate: "O projeto já existe no Comet e é público. Escolha outro nome de projeto ou torne-o privado no Comet.",
+    busy: "Outro envio ao Comet estava aberto neste servidor. Repita quando ele terminar.",
+    retry: "Repetir envio ao Comet",
+    retrying: "Enviando…",
+    retryFailed: "Falha ao repetir o envio ao Comet.",
+  },
+  // The code of the "Como funciona" tab (components/training-code/, ADR-173):
+  // the run as steps, and the real code of the step that is running.
+  codeTour: {
+    stepsLabel: "Passos do treino",
+    // The steps of a run (lib/run-steps.ts), each with one short sentence.
+    steps: {
+      data: { title: "Dados", text: "Lê as imagens e as prepara para a rede." },
+      model: { title: "Modelo", text: "Monta a rede que vai aprender." },
+      loss: { title: "Loss", text: "Define como o erro de cada previsão é medido." },
+      train: { title: "Época de treino", text: "Passa por todos os lotes e ajusta os pesos." },
+      validate: { title: "Validação", text: "Mede o modelo em imagens que ele não treinou." },
+      test: { title: "Teste e relatório", text: "Mede o melhor modelo no teste e escreve o relatório." },
+    },
+    // PatchCore has no epochs and no gradient: its training and validation say so.
+    patchcoreSteps: {
+      train: { title: "Banco de memória", text: "Extrai características das imagens normais e guarda as típicas." },
+      validate: { title: "Pontuação", text: "Mede a distância de cada imagem ao banco." },
+    },
+    // Over the code of the step the run is in, while the tab follows the run.
+    live: "trecho em execução",
+    // The stream cannot tell these steps apart (lib/run-steps.ts).
+    liveGroup: (steps: string[]) =>
+      `em execução: ${steps.length > 1 ? `${steps.slice(0, -1).join(", ")} ou ${steps[steps.length - 1]}` : steps[0]} (o log não diz qual)`,
+    resume: "voltar ao que está rodando",
+    functionsLabel: "Funções deste passo",
+    granularity: "Marca o passo que está rodando, não a linha: o treino informa por época e por lote.",
+    noteToggle: (lines: string) => `Nota (${lines})`,
+    library: (name: string, version: string, license: string) =>
+      `Código do ${name} ${version}, como está instalado no seu ambiente, sob licença ${license}: não é código do VisionForge, só é mostrado aqui.`,
+    notesResolved: (resolved: number, total: number) =>
+      `${resolved} de ${total} notas acharam a linha nesta versão.`,
+    where: (file: string, name: string, line: number) => `${file} · ${name} · linha ${line}`,
+    lines: (first: number, last: number) => (first === last ? `linha ${first}` : `linhas ${first}–${last}`),
+    active: "o caminho deste treino",
+    inactive: "não usado neste treino",
+    loading: "Carregando o código…",
+    failed: "Não foi possível carregar o código.",
+    missing: "Ainda não há código comentado para esta tarefa.",
+  },
+  // Rascunho do bundle de uma execução no Zenodo (ZenodoExportPanel, ADR-174).
+  zenodo: {
+    title: "Rascunho no Zenodo",
+    open: "Criar rascunho no Zenodo",
+    // The service's name on its closed button, beside its mark.
+    service: "Zenodo",
+    intro: "O Zenodo arquiva o experimento e, quando você publica, gera um DOI para citar no artigo. Daqui sai só um rascunho: título, autores, licença e a publicação ficam com você, no site do Zenodo.",
+    site: "Onde criar",
+    production: "Zenodo (zenodo.org)",
+    sandbox: "Sandbox de teste (sandbox.zenodo.org)",
+    sandboxHint: "O Sandbox é um Zenodo de teste, com conta e token próprios: os DOIs dele não valem e os registros podem ser apagados. Serve para conferir antes.",
+    token: "Token do Zenodo",
+    tokenHint: "Crie em Account → Applications → Personal access tokens, só com o escopo deposit:write. Sem deposit:actions, o token não consegue publicar. Ele fica salvo no servidor para este perfil e não aparece de novo.",
+    configured: "Token configurado neste perfil.",
+    saveToken: "Salvar token",
+    removeToken: "Remover token",
+    shared: "Servidor compartilhado: perfis não são controle de acesso. Outras pessoas com acesso ao servidor podem usar o token deste perfil.",
+    loading: "Montando o pacote…",
+    preview: "O que vai para o rascunho",
+    file: (name: string, size: string) => `${name} · ${size}`,
+    pathsNote: "No run.json, os caminhos desta máquina ficam só com o nome final (a pasta do dataset vira só o nome dela), sem o seu nome de usuário.",
+    leftOut: (n: number) => (n === 1 ? "1 item ficou de fora" : `${n} itens ficaram de fora`),
+    checkpointWarning: "O checkpoint vai como foi gravado e pode conter metadados internos, caminhos e labels. Revise a origem do arquivo antes de enviar.",
+    confirm: "Nada é publicado: o rascunho não fica público até você publicá-lo no Zenodo.",
+    send: "Criar rascunho",
+    busy: "Enviando…",
+    failed: "Não foi possível concluir a operação no Zenodo.",
+    success: "Abrir o rascunho no Zenodo",
+    next: "Lá, preencha título, autores e licença. Publicar gera um DOI permanente, e o registro publicado não pode ser apagado.",
+    close: "Fechar",
+  },
+  // Uma execução, sem pesos, num repositório privado do GitHub (GitHubExportPanel, ADR-175).
+  github: {
+    title: "Enviar ao GitHub",
+    open: "Enviar relatório ao GitHub",
+    // The service's name on its closed button, beside its mark.
+    service: "GitHub",
+    intro: "Guarda esta execução num repositório privado de experimentos, numa pasta própria: um README com as métricas, a tabela por época e os gráficos, mais o run.json. Os pesos não vão: eles ficam no Hugging Face Hub ou no Zenodo.",
+    loading: "Montando os arquivos…",
+    token: "Token do GitHub",
+    tokenHint: "Crie em Settings → Developer settings → Fine-grained tokens, só para o repositório de experimentos, com a permissão Contents: leitura e escrita. O token fica salvo no servidor para este perfil e não aparece de novo.",
+    configured: "Token configurado neste perfil.",
+    saveToken: "Salvar token",
+    removeToken: "Remover token",
+    shared: "Servidor compartilhado: perfis não são controle de acesso. Outras pessoas com acesso ao servidor podem usar o token deste perfil.",
+    preview: "Arquivos do commit",
+    folder: (folder: string) => `Pasta no repositório: ${folder}`,
+    noWeights: "Sem pesos. No run.json, os caminhos desta máquina ficam só com o nome final.",
+    readme: "Prévia do README",
+    repo: "Repositório privado (usuário/repositório)",
+    repoPlaceholder: "usuario/experimentos",
+    confirm: "O repositório precisa existir e ser privado; o envio recusa um público. Tudo entra num commit só, no branch padrão.",
+    send: "Enviar ao repositório",
+    busy: "Enviando…",
+    failed: "Não foi possível concluir a operação no GitHub.",
+    success: "Abrir a pasta no GitHub",
+    close: "Fechar",
+  },
+  dvc: {
+    title: "Versionar com DVC",
+    open: "Versionar com DVC",
+    // The service's name on its closed button, beside its mark.
+    service: "DVC",
+    intro: "Guarda esta execução num repositório git com DVC neste computador, numa pasta própria. README, run.json, gráficos e os arquivos que o DVC compara (params.yaml, metrics.json, history.csv e dvc.yaml) vão para o git; os pesos vão para o DVC. Depois, dvc metrics show, dvc params diff e dvc plots show comparam as execuções.",
+    repo: "Pasta do repositório (caminho completo)",
+    repoPlaceholder: "C:\\pesquisa\\experimentos",
+    check: "Ver prévia",
+    loading: "Montando os arquivos…",
+    state: {
+      missing: "A pasta ainda não existe.",
+      not_dir: "Este caminho é um arquivo, não uma pasta.",
+      not_git: "A pasta não é um repositório git.",
+      no_dvc: "A pasta é um repositório git sem DVC.",
+    },
+    prepareHint: "Preparar pasta cria a pasta se for preciso, roda git init e dvc init e faz um commit só com os arquivos do DVC.",
+    prepare: "Preparar pasta",
+    noGit: "O git não foi encontrado neste computador.",
+    noDvc: "O DVC não foi encontrado. Instale o extra visionforge-studio[dvc], ou o DVC no PATH, e reabra o VisionForge.",
+    preview: "Arquivos",
+    folder: (folder: string) => `Pasta no repositório: ${folder}`,
+    storageGit: "git",
+    storageDvc: "DVC",
+    remote: (name: string) => `Os pesos vão para o remoto padrão do DVC, "${name}" (dvc push).`,
+    noRemote: "Sem remoto padrão no DVC: os pesos ficam no cache local até você configurar um.",
+    readme: "Prévia do README",
+    confirm: "O commit leva só esta pasta; o que você já tinha no stage do git fica como estava. Nada vai para o remoto do git (sem git push).",
+    send: "Versionar",
+    busy: "Versionando…",
+    failed: "Não foi possível concluir a operação com o DVC.",
+    committed: (commit: string) => `Commit ${commit} feito.`,
+    unchanged: "Nada mudou desde o último envio: nenhum commit novo.",
+    savedAt: (path: string) => `Arquivos em ${path}`,
+    pushed: "Pesos enviados ao remoto do DVC.",
+    pushFailed: "O commit foi feito, mas o dvc push falhou. Confira o remoto e versione de novo para tentar outra vez.",
+    close: "Fechar",
+  },
+  hub: {
+    checkpointWarning: "O checkpoint é enviado como foi gravado e pode conter metadados internos, caminhos e labels. Revise a origem do arquivo antes de enviar.",
+    title: "Enviar ao Hugging Face Hub",
+    open: "Revisar envio ao Hugging Face Hub",
+    // The service's name on its closed button, beside its mark.
+    service: "Hugging Face Hub",
+    loading: "Carregando prévia…",
+    preview: "Arquivos a enviar",
+    card: "Prévia do model card",
+    token: "Token Hugging Face",
+    tokenHint: "O token é salvo no servidor para este perfil e não é exibido novamente.",
+    configured: "Token configurado neste perfil.",
+    saveToken: "Salvar token",
+    removeToken: "Remover token",
+    shared: "Servidor compartilhado: perfis não são controle de acesso. Outras pessoas com acesso ao servidor podem usar o token deste perfil.",
+    repo: "Repositório de destino (usuário/modelo)",
+    confirm: "Revise os arquivos e o destino. O envio publica estes arquivos no repositório informado; a visibilidade segue a configuração do repositório.",
+    send: "Enviar arquivos revisados",
+    busy: "Processando…",
+    failed: "Não foi possível concluir a operação no Hub.",
+    success: "Abrir repositório no Hub",
+    close: "Fechar prévia",
+  },
   // Perfis de um servidor compartilhado (ADR-114): uma pasta de saída por pessoa.
   profile: {
     who: "Quem é você?",
-    defaultName: "Padrão (sem perfil)",
-    // O padrão com o nome dado na introdução (ADR-126).
-    defaultNamed: (name: string) => `${name} (padrão)`,
-    defaultShort: "Padrão",
+    // Um perfil antigo que nunca recebeu nome, ao lado de perfis com nome.
+    unnamed: "Sem nome",
     listLabel: "Perfis",
     create: "criar novo perfil",
     createTitle: "Novo perfil",
-    createLink: "criar perfil",
     nameLabel: "Nome do perfil",
     namePlaceholder: "ex.: Ana Souza",
     folder: (slug: string) => `pasta: outputs/profiles/${slug}`,
@@ -295,10 +554,11 @@ export const pt = {
     submit: "Criar ↵",
     creating: "Criando…",
     back: "← voltar",
-    notice:
-      "Perfis organizam o histórico de treinos; não protegem. Quem alcança este servidor pode escolher qualquer perfil.",
-    chip: "perfil",
-    chipTitle: "Trocar de perfil",
+    notice: "Perfis organizam o histórico; não protegem o acesso.",
+    menuTitle: "Perfil e integrações",
+    integrations: "Integrações",
+    integrationsNote: "valem para os próximos treinos",
+    switchProfile: "Trocar de perfil",
     exists: "Já existe um perfil com esse nome.",
     invalid:
       "Esse nome não vira uma pasta. Use ao menos uma letra (a-z) ou um número.",
@@ -310,6 +570,472 @@ export const pt = {
     title: "Obter dados",
     description:
       "Baixe uma vez para uma pasta local; depois aponte o campo de dataset de qualquer task para ela.",
+    tabGet: "Baixar",
+    tabExplore: "Explorar",
+    tabsLabel: "Ferramentas de dataset",
+  },
+  datasetLab: {
+    kicker: "// laboratório de datasets",
+    dialogLabel: (name: string) => `Laboratório de datasets: ${name}`,
+    back: "Voltar",
+    backTitle: "Fecha o laboratório e volta à escolha do dataset (Esc)",
+    sectionsLabel: "Ferramentas do laboratório",
+    sections: {
+      overview: "Visão geral",
+      resplit: "Refazer divisão",
+      incorporate: "Incorporar imagens",
+      merge: "Juntar datasets",
+      coco: "COCO",
+    },
+    typeClassification: "Classificação",
+    typeDetection: "Detecção (YOLO)",
+    noDataset: "Conversão de COCO",
+    noDatasetHint: "Nenhum dataset aberto: aqui só dá para converter uma pasta COCO.",
+    images: (n: number) => `${n} ${n === 1 ? "imagem" : "imagens"}`,
+    classes: (n: number) => `${n} ${n === 1 ? "classe" : "classes"}`,
+    boxes: (n: number) => `${n} ${n === 1 ? "caixa" : "caixas"}`,
+    openLab: "Abrir laboratório",
+    openLabHint: "Abre em tela cheia a visão geral e as ferramentas deste dataset.",
+    cocoEntry: "Converter uma pasta COCO",
+    cocoEntryHint: "Cria um dataset YOLO a partir de anotações COCO, sem abrir um dataset antes.",
+    summaryLabel: "Dataset escolhido",
+    noteMissing: (split: string) => `Pasta de ${split} não encontrada.`,
+    noteUnlabeled: (n: number) =>
+      n === 1 ? "1 imagem sem caixas." : `${n} imagens sem caixas.`,
+    cardTotal: "Imagens",
+    cardClasses: "Classes",
+    cardBoxes: "Caixas",
+    cardMissing: "pasta não encontrada",
+    cardUnlabeled: (n: number) => `${n} sem caixas`,
+    perClassTitle: "Imagens por classe",
+    boxesPerClassTitle: "Caixas por classe",
+    perClassHelp: "Cada barra soma as divisões; o número no fim é o total da classe.",
+    tableToggle: "Ver a tabela por classe e divisão",
+    segmentTitle: (split: string, n: number) => `${split}: ${n}`,
+    learnMore: "Saiba mais",
+    leadResplit:
+      "Junta treino e validação e redistribui pela proporção que você escolher; o teste fica como está, por padrão. Grava um dataset novo e o original não muda.",
+    leadIncorporate:
+      "Acrescenta uma pasta de imagens novas ao dataset e grava o resultado como um dataset novo; o original não muda.",
+    leadMerge:
+      "Junta o dataset aberto (A) com outro do mesmo tipo (B) num dataset novo; nenhum dos dois muda.",
+    leadCocoExport:
+      "Grava o dataset aberto no formato COCO, numa pasta nova ao lado dele; o original não muda.",
+    leadCocoImport:
+      "Converte uma pasta COCO num dataset YOLO de detecção, numa pasta nova ao lado dela. Só as caixas são importadas.",
+    cocoMode: "O que fazer",
+    cocoExportOnlyDetection: "Exportar para COCO vale só para datasets de detecção.",
+    groupLead:
+      "Imagens da mesma origem (mesmo paciente, mesma lâmina, mesmo vídeo) devem cair na mesma divisão: informe um CSV com as colunas path,group.",
+    groupMore: "Como montar o CSV",
+    mappingMore: "Como funciona o mapeamento",
+    resultTitle: "Resultado",
+  },
+  datasetExplorer: {
+    intro:
+      "Somente leitura: veja o dataset antes de treinar. Nada na pasta é alterado.",
+    task: "Tipo de dataset",
+    taskClassification: "Classificação (pastas por classe)",
+    taskDetection: "Detecção (YOLO)",
+    baseDir: "Pasta do dataset",
+    baseDirPlaceholder: "ex.: C:/datasets/cafe  ou  /home/user/data",
+    browse: "Procurar",
+    browseTitle: "Abre o seletor de pastas do sistema",
+    pickCancelled: "Seleção cancelada.",
+    pickFailed: "Não foi possível abrir o seletor de pastas.",
+    open: "Abrir",
+    refresh: "Atualizar",
+    loading: "Lendo a pasta…",
+    loadFailed: (reason: string) => `Não foi possível ler o dataset: ${reason}`,
+    empty: "Esta pasta não tem imagens no formato esperado.",
+    totalImages: (n: number) => `Imagens: ${n}`,
+    splitNames: { train: "Treino", val: "Validação", test: "Teste" },
+    splitMissing: "pasta não encontrada",
+    unlabeled: (n: number) => `sem caixas: ${n}`,
+    distributionTitle: "Distribuição",
+    imagesPerClass: "Imagens por classe",
+    boxesPerClass: "Caixas por classe",
+    classColumn: "Classe",
+    totalColumn: "Total",
+    galleryTitle: "Galeria",
+    filterSplit: "Split",
+    filterClass: "Classe",
+    all: "Todos",
+    range: (from: number, to: number, total: number) =>
+      `${from}-${to} de ${total}`,
+    previous: "Anterior",
+    next: "Próxima",
+    noMatch: "Nenhuma imagem corresponde a esses filtros.",
+    thumbBroken: "não abre",
+    boxesOnImage: (n: number) => `caixas: ${n}`,
+    scanTitle: "Varredura de integridade",
+    scanHelp:
+      "Abre cada imagem uma vez: acha arquivos que não abrem, cópias exatas (mesmo SHA-256) e a mesma imagem em splits diferentes, e mede os tamanhos.",
+    scanLimit: "Limite de imagens",
+    scanLimitHint: "Acima disso, a varredura lê uma amostra espaçada.",
+    scanStart: "Varrer",
+    scanCancel: "Cancelar varredura",
+    scanCancelling: "Cancelando…",
+    scanProgress: (done: number, total: number) =>
+      `Varrendo: ${done} de ${total}`,
+    scanFailed: (reason: string) => `A varredura falhou: ${reason}`,
+    scanBusy: "Já existe outra varredura em andamento.",
+    scanComplete: (n: number) => `Todas as imagens varridas: ${n}`,
+    scanSampled: (scanned: number, total: number) =>
+      `Amostra de ${scanned} entre ${total} imagens. Uma cópia ou vazamento encontrado é real; não encontrar nada não prova nada. Aumente o limite para varrer tudo.`,
+    scanCancelled: (scanned: number) =>
+      `Cancelada após ${scanned} imagens. Os resultados abaixo são parciais.`,
+    noProblems: "Nenhum arquivo corrompido, cópia ou vazamento encontrado.",
+    problemsTitle: "Problemas",
+    corruptedTitle: "Imagens que não abrem",
+    duplicatesTitle: "Cópias exatas (mesmo conteúdo)",
+    leakageTitle: "Vazamento entre splits",
+    leakageHelp:
+      "A mesma imagem em mais de um split faz a métrica de validação parecer melhor do que é.",
+    groupFiles: (n: number) => `arquivos: ${n}`,
+    labelConflict: "mesma imagem, classes diferentes",
+    moreNotShown: (n: number) => `mais ${n} não mostrados`,
+    sizesTitle: "Tamanhos das imagens",
+    longestSide: "Maior lado (px)",
+    aspectRatio: "Proporção (largura / altura)",
+    widthStats: (min: number, median: number, max: number) =>
+      `largura mín ${min} · mediana ${median} · máx ${max}`,
+    heightStats: (min: number, median: number, max: number) =>
+      `altura mín ${min} · mediana ${median} · máx ${max}`,
+    distinctSizes: (n: number) => `Tamanhos distintos: ${n}`,
+    topSizes: "Tamanhos mais comuns",
+    sizeCount: (w: number, h: number, n: number) => `${w}×${h}: ${n}`,
+  },
+  datasetIncorporate: {
+    open: "Incorporar imagens",
+    close: "Fechar",
+    intro:
+      "Cria um dataset novo ao lado do original, que não muda. As imagens que já existem ficam onde estão; as novas são distribuídas entre as divisões.",
+    sourceTitle: "1. Pasta das imagens novas",
+    sourceClassification:
+      "Uma subpasta por classe, com as imagens dentro.",
+    sourceDetection:
+      "Cada imagem com o seu .txt (YOLO). Se a pasta tiver classes.txt ou data.yaml, as classes são casadas pelo nome.",
+    sourceDir: "Pasta",
+    sourcePlaceholder: "ex.: C:/novas-imagens",
+    browse: "Procurar",
+    pickCancelled: "Seleção cancelada.",
+    pickFailed: "Não foi possível abrir o seletor de pastas.",
+    analyze: "Analisar",
+    analyzing: (done: number, total: number) =>
+      `Lendo e comparando: ${done} de ${total}`,
+    cancel: "Cancelar",
+    cancelling: "Cancelando…",
+    cancelled: "Cancelado. Nenhuma pasta foi criada.",
+    failed: (reason: string) => `Não deu certo: ${reason}`,
+    previewTitle: "2. Prévia",
+    found: (n: number) => `Imagens na pasta: ${n}`,
+    willAdd: (n: number) => `Entram: ${n}`,
+    willSkip: (n: number) => `Ficam de fora: ${n}`,
+    nothingToAdd: "Nenhuma imagem nova passou nas checagens.",
+    addedPerClass: "Entram, por classe e divisão",
+    newClassesTitle: "Classes novas",
+    newClassesHelp:
+      "O dataset não tem estas classes. Elas só entram se você marcar. Ficam no fim da lista, sem renumerar as que já existem.",
+    newClassItem: (name: string, n: number) => `${name} (${n} imagens)`,
+    ratioTitle: "Proporção das imagens novas",
+    ratioSame: (label: string) => `A do dataset (${label})`,
+    ratioCustom: "Escolher",
+    ratioPercent: (split: string) => `${split} (%)`,
+    ratioInvalid: "Use números maiores ou iguais a zero, com algum maior que zero.",
+    noSplit: (split: string) => `O dataset não tem ${split}; essa divisão não será criada.`,
+    seed: "Seed",
+    seedHint: "Mesma seed, mesma divisão. Fica registrada no dataset novo.",
+    seedInvalid: "Use um inteiro maior ou igual a zero.",
+    excludedTitle: (n: number) => `Ficam de fora (${n})`,
+    reasons: {
+      unreadable: "não abre",
+      duplicate_existing: "cópia exata de uma imagem do dataset",
+      duplicate_new: "cópia exata de outra imagem nova",
+      no_label: "sem arquivo .txt",
+      bad_label: "arquivo .txt inválido",
+      no_class_folder: "fora de uma pasta de classe",
+      unknown_class: "classe nova não marcada",
+    } as Record<string, string>,
+    reasonCount: (reason: string, n: number) => `${reason}: ${n}`,
+    moreNotShown: (n: number) => `mais ${n} não mostrados`,
+    destTitle: "3. Pasta de destino",
+    destName: "Nome da pasta nova",
+    destHint: "Fica ao lado do dataset original.",
+    destInvalid: "Nome de pasta inválido.",
+    apply: "Criar dataset novo",
+    applying: (done: number, total: number) => `Escrevendo: ${done} de ${total}`,
+    doneTitle: "Dataset criado",
+    done: (n: number, path: string) => `${n} imagens novas em ${path}`,
+    linkedCopied: (linked: number, copied: number) =>
+      `${linked} arquivos por hardlink, ${copied} copiados`,
+    openResult: "Abrir no laboratório",
+  },
+  datasetMerge: {
+    open: "Juntar com outro dataset",
+    close: "Fechar",
+    intro:
+      "Cria um dataset novo ao lado do aberto (A), juntando-o com outro (B). Nenhum dos dois muda. Cada imagem continua na divisão em que estava.",
+    sourceTitle: "1. O outro dataset (B)",
+    sourceHelp: "Mesmo tipo e mesma organização de pastas do dataset aberto.",
+    sourceDir: "Pasta",
+    sourcePlaceholder: "ex.: C:/datasets/outro",
+    browse: "Procurar",
+    pickCancelled: "Seleção cancelada.",
+    pickFailed: "Não foi possível abrir o seletor de pastas.",
+    analyze: "Analisar",
+    analyzing: (done: number, total: number) =>
+      `Lendo e comparando: ${done} de ${total}`,
+    cancel: "Cancelar",
+    cancelling: "Cancelando…",
+    cancelled: "Cancelado. Nenhuma pasta foi criada.",
+    failed: (reason: string) => `Não deu certo: ${reason}`,
+    found: (a: number, b: number) => `Imagens: A ${a} · B ${b}`,
+    repeatedWithin: (a: number, b: number) =>
+      `Cópias exatas dentro de um mesmo dataset (ficam como estão): A ${a} · B ${b}`,
+    mappingTitle: "2. Classes",
+    mappingHelp:
+      "Cada classe mantém o próprio nome, então classes com o mesmo nome se juntam. Mude o destino para renomear; dois destinos iguais se juntam; marque descartar para tirar a classe.",
+    sideA: "A (aberto)",
+    sideB: "B (outro)",
+    colOrigin: "Origem",
+    colClass: "Classe",
+    colImages: "Imagens",
+    colTarget: "Vira",
+    colDiscard: "Descartar",
+    targetLabel: (name: string) => `Destino da classe ${name}`,
+    discardLabel: (name: string) => `Descartar a classe ${name}`,
+    merged: "junta",
+    problems: {
+      empty: "Dê um nome ou descarte a classe.",
+      invalid: "Nome inválido para uma classe.",
+      case: "Só difere de outro destino por maiúsculas; use o mesmo nome para juntar.",
+    } as Record<string, string>,
+    similarHint: (names: string) =>
+      `Nomes parecidos, que não foram juntados: ${names}. Se são a mesma classe, dê o mesmo destino às duas.`,
+    resultTitle: "3. Resultado",
+    classesTitle: "Classes do resultado, na ordem",
+    boxesColumn: "Caixas",
+    splitsTitle: "Divisões",
+    splitCounts: (a: number, b: number) => `A ${a} · B ${b}`,
+    splitOnlyIn: (split: string, side: string) =>
+      `${split} existe só em ${side}: todas as suas imagens vêm de lá.`,
+    totalImages: (n: number) => `Imagens no resultado: ${n}`,
+    background: (n: number) => `Imagens sem caixas, mantidas: ${n}`,
+    nothingLeft: "Com este mapeamento não sobra nenhuma imagem.",
+    droppedTitle: (n: number) => `Ficam de fora (${n})`,
+    reasons: {
+      discarded_class: "classe descartada",
+      all_boxes_discarded: "perdeu todas as caixas",
+    } as Record<string, string>,
+    reasonCount: (reason: string, n: number) => `${reason}: ${n}`,
+    droppedItem: (side: string, path: string, reason: string) =>
+      `${side}: ${path} — ${reason}`,
+    moreNotShown: (n: number) => `mais ${n} não mostrados`,
+    duplicatesTitle: (n: number) => `Cópias exatas de A encontradas em B, tiradas de B (${n})`,
+    duplicatesHelp: "Fica a cópia de A. Se A não a guarda, a de B é mantida.",
+    leakTitle: (n: number) =>
+      n === 1
+        ? "Uma delas estava em divisões diferentes nos dois datasets: vazamento evitado."
+        : `${n} delas estavam em divisões diferentes nos dois datasets: vazamento evitado.`,
+    duplicateItem: (b: string, a: string) => `${b} = ${a}`,
+    destTitle: "4. Pasta de destino",
+    destName: "Nome da pasta nova",
+    destHint: "Fica ao lado do dataset aberto (A).",
+    destInvalid: "Nome de pasta inválido.",
+    apply: "Criar dataset novo",
+    applying: (done: number, total: number) => `Escrevendo: ${done} de ${total}`,
+    doneTitle: "Dataset criado",
+    done: (n: number, path: string) => `${n} imagens em ${path}`,
+    linkedCopied: (linked: number, copied: number) =>
+      `${linked} arquivos por hardlink, ${copied} copiados`,
+    openResult: "Abrir no laboratório",
+  },
+  datasetResplit: {
+    open: "Refazer divisão",
+    close: "Fechar",
+    intro:
+      "Cria um dataset novo ao lado do original, que não muda. As imagens de treino e validação são juntadas e redistribuídas pela proporção escolhida; o teste fica como está, para os resultados continuarem comparáveis com os de antes.",
+    groupTitle: "1. Grupos (opcional)",
+    groupHelp:
+      "Um CSV com as colunas path,group, com o path relativo à pasta do dataset. Imagens do mesmo grupo vão sempre para a mesma divisão. Imagens que o arquivo não cita formam um grupo cada uma.",
+    groupFile: "Arquivo de grupos",
+    groupPlaceholder: "ex.: C:/dados/grupos.csv (vazio: sem grupos)",
+    analyze: "Analisar",
+    analyzing: (done: number, total: number) =>
+      `Lendo e calculando: ${done} de ${total}`,
+    cancel: "Cancelar",
+    cancelling: "Cancelando…",
+    cancelled: "Cancelado. Nenhuma pasta foi criada.",
+    failed: (reason: string) => `Não deu certo: ${reason}`,
+    previewTitle: "2. Opções e prévia",
+    found: (n: number) => `Imagens: ${n}`,
+    groupsInfo: (groups: number, ungrouped: number) =>
+      `${groups} ${groups === 1 ? "grupo" : "grupos"}; ${ungrouped} ${ungrouped === 1 ? "imagem fora do arquivo" : "imagens fora do arquivo"}`,
+    unknownEntries: (n: number) =>
+      n === 1
+        ? "1 linha do arquivo não é uma imagem do dataset (ignorada)"
+        : `${n} linhas do arquivo não são imagens do dataset (ignoradas)`,
+    lockTest: "Manter o teste como está",
+    lockNoTest: "O dataset não tem teste",
+    lockOnHelp: "O teste não muda; só treino e validação são redistribuídos.",
+    lockOffHelp:
+      "Todas as divisões são juntadas e redistribuídas. Os resultados não serão comparáveis com os de runs que usaram o teste atual.",
+    byGroup: "Dividir por grupo",
+    ratioCustom: "Escolher a proporção",
+    ratioSame: "Mantém a proporção atual das divisões que são redistribuídas.",
+    ratioPercent: (split: string) => `${split} (%)`,
+    ratioHelp:
+      "Zero tira a divisão do resultado. Uma divisão que o dataset não tem só é criada se você der a ela um valor maior que zero.",
+    ratioInvalid: "Use números maiores ou iguais a zero, com algum maior que zero.",
+    seed: "Seed",
+    seedHint: "Mesma seed, mesma divisão. Fica registrada no dataset novo.",
+    seedInvalid: "Use um inteiro maior ou igual a zero.",
+    keptLine: (n: number) => `No resultado: ${n} ${n === 1 ? "imagem" : "imagens"}`,
+    movedLine: (n: number) => `Mudam de divisão: ${n}`,
+    droppedLine: (n: number) => `Ficam de fora: ${n}`,
+    tableTitle: "Imagens por classe e divisão (antes → depois)",
+    lockedMark: "(travado)",
+    ratiosTitle: "Proporção pedida e obtida",
+    ratioLine: (split: string, requested: string, achieved: string) =>
+      `${split}: pedido ${requested}%, obtido ${achieved}%`,
+    duplicatesLine: (sets: number, extras: number) =>
+      `Cópias exatas mantidas juntas: ${sets} ${sets === 1 ? "conjunto" : "conjuntos"} (${extras} ${extras === 1 ? "cópia a mais" : "cópias a mais"}).`,
+    duplicatesLeak: (n: number) =>
+      n === 1
+        ? "Um deles estava em divisões diferentes: vazamento evitado."
+        : `${n} deles estavam em divisões diferentes: vazamento evitado.`,
+    warnNewSplit: (split: string) => `${split} não existia e será criado.`,
+    warnEmptySplit: (split: string) => `${split} ficaria sem nenhuma imagem.`,
+    warnSplitRemoved: (split: string) => `${split} deixa de existir no resultado.`,
+    warnSplitEmptyResult: (split: string) => `Atenção: ${split} fica sem imagens.`,
+    warnClassMissing: (cls: string, split: string) =>
+      `A classe ${cls} não tem nenhuma imagem em ${split}.`,
+    droppedTitle: (n: number) => `Ficam de fora (${n})`,
+    droppedHelp:
+      "Vazariam para o treino: são cópias de imagens do teste travado ou estão num grupo que tem imagem no teste.",
+    reasons: {
+      duplicate_of_test: "cópia exata de uma imagem do teste",
+      group_in_test: "grupo com imagem no teste",
+    } as Record<string, string>,
+    reasonCount: (reason: string, n: number) => `${reason}: ${n}`,
+    moreNotShown: (n: number) => `mais ${n} não mostrados`,
+    destTitle: "3. Pasta de destino",
+    destName: "Nome da pasta nova",
+    destHint: "Fica ao lado do dataset original.",
+    destInvalid: "Nome de pasta inválido.",
+    apply: "Criar dataset novo",
+    applying: (done: number, total: number) => `Escrevendo: ${done} de ${total}`,
+    doneTitle: "Dataset criado",
+    done: (n: number, moved: number, path: string) =>
+      `${n} ${n === 1 ? "imagem" : "imagens"} em ${path}; ${moved} ${moved === 1 ? "mudou" : "mudaram"} de divisão`,
+    linkedCopied: (linked: number, copied: number) =>
+      `${linked} ${linked === 1 ? "arquivo" : "arquivos"} por hardlink, ${copied} ${copied === 1 ? "copiado" : "copiados"}`,
+    openResult: "Abrir no laboratório",
+  },
+  datasetCoco: {
+    exportOpen: "Exportar para COCO",
+    importOpen: "Importar COCO",
+    close: "Fechar",
+    exportIntro:
+      "Cria um dataset COCO novo ao lado do original, que não muda: imagens em images/<divisão> e um annotations/instances_<divisão>.json por divisão. O explorador não lê COCO, então o resultado não é aberto aqui.",
+    importIntro:
+      "Lê uma pasta COCO (os .json de anotações e as imagens deles) e cria um dataset YOLO novo ao lado dela. A pasta só é lida. Só as caixas são importadas; polígonos de segmentação são ignorados.",
+    analyze: "Analisar",
+    analyzingExport: (done: number, total: number) =>
+      `Lendo rótulos e tamanhos das imagens: ${done} de ${total}`,
+    analyzingImport: (done: number, total: number) =>
+      `Lendo imagens e convertendo caixas: ${done} de ${total}`,
+    applying: (done: number, total: number) => `Gravando: ${done} de ${total}`,
+    cancel: "Cancelar",
+    cancelling: "Cancelando…",
+    cancelled: "Cancelado. Nenhuma pasta foi criada.",
+    failed: (reason: string) => `Não deu certo: ${reason}`,
+    folder: "Pasta COCO",
+    folderPlaceholder: "ex.: C:/datasets/coco-mini",
+    browse: "Procurar",
+    browseTitle: "Abre o seletor de pastas nativo do sistema",
+    pickCancelled: "Seleção cancelada.",
+    pickFailed: "Não foi possível abrir o seletor de pastas.",
+    previewTitle: "2. Prévia",
+    exportTitle: "1. Analisar o dataset aberto",
+    importTitle: "1. Pasta COCO",
+    imagesLine: (n: number) => `Imagens: ${n}`,
+    boxesLine: (n: number) => `Caixas: ${n}`,
+    categoriesLine: (n: number) => `${n} ${n === 1 ? "categoria" : "categorias"}`,
+    splitColumn: "Divisão",
+    imagesColumn: "Imagens",
+    boxesColumn: "Caixas",
+    excludedTitle: (n: number) => `Ficam de fora (${n})`,
+    excludedHelp:
+      "Essas imagens não entram no resultado. Uma imagem nunca é convertida pela metade: ou vai completa ou fica de fora.",
+    exportReasons: {
+      unreadable_image: "a imagem não abre",
+      malformed_label: "linha malformada no arquivo de rótulos",
+    } as Record<string, string>,
+    reasonCount: (reason: string, n: number) => `${reason}: ${n}`,
+    moreNotShown: (n: number) => `mais ${n} não mostrados`,
+    jsonFile: (name: string) => `Arquivo ${name}`,
+    splitFor: (name: string) => `Divisão de ${name}`,
+    splitUnset: "Escolha…",
+    splitSkip: "Ignorar este arquivo",
+    splitNames: { train: "Treino", val: "Validação", test: "Teste" } as Record<string, string>,
+    detectedHint: (split: string) => `Detectada pelo nome do arquivo: ${split}`,
+    undetectedHint: "O nome do arquivo não diz a divisão: escolha uma ou ignore o arquivo.",
+    imagesFolder: (dir: string) => `Imagens em: ${dir === "." ? "a própria pasta" : dir}`,
+    imagesFolderMissing: "Nenhuma pasta com as imagens foi encontrada.",
+    sourceCounts: (listed: number, kept: number, annotations: number, boxes: number) =>
+      `${listed} ${listed === 1 ? "imagem listada" : "imagens listadas"}, ${kept} ${kept === 1 ? "mantida" : "mantidas"}; ${annotations} ${annotations === 1 ? "anotação" : "anotações"}, ${boxes} ${boxes === 1 ? "caixa" : "caixas"}`,
+    skippedTitle: "Ficam de fora",
+    adjustedTitle: "Mantidas, mas alteradas",
+    importReasons: {
+      missing_image: "imagem não encontrada no disco",
+      unreadable_image: "a imagem não abre",
+      unsafe_path: "file_name aponta para fora da pasta",
+      bad_image_entry: "entrada de imagem malformada",
+      duplicate_image_id: "id de imagem repetido",
+      crowd: "caixa iscrowd (ignorada)",
+      bad_bbox: "bbox malformada",
+      degenerate_box: "sem área depois de recortar na imagem",
+      unknown_image_id: "anotação de imagem que não está listada",
+      unknown_category: "anotação de categoria que não está listada",
+      bad_category: "entrada de categoria malformada",
+      size_mismatch: "o tamanho real da imagem difere do JSON (vale o real)",
+      clipped_box: "caixa recortada nos limites da imagem",
+    } as Record<string, string>,
+    ignoredTitle: "Arquivos JSON que não são anotações COCO (ignorados)",
+    ignoredReasons: {
+      unreadable: "não foi possível ler",
+      not_json: "JSON inválido",
+      not_coco: "sem as listas images, annotations e categories",
+    } as Record<string, string>,
+    splitConflict: (split: string) =>
+      `Mais de um arquivo foi atribuído a ${split}. Mude um deles ou ignore-o.`,
+    unassigned: (n: number) =>
+      n === 1
+        ? "1 arquivo ainda precisa de uma divisão (ou de ser ignorado)."
+        : `${n} arquivos ainda precisam de uma divisão (ou de serem ignorados).`,
+    planTitle: "3. Resultado",
+    planLine: (images: number, boxes: number) =>
+      `No resultado: ${images} ${images === 1 ? "imagem" : "imagens"}, ${boxes} ${boxes === 1 ? "caixa" : "caixas"}`,
+    mappingTitle: "Classes (id COCO → id YOLO)",
+    mappingLine: (cocoId: number, yoloId: number, name: string) =>
+      `${cocoId} → ${yoloId}  ${name}`,
+    renamedMark: (original: string) => `(era "${original}"; o nome já estava em uso)`,
+    destTitle: "Pasta de destino",
+    destName: "Nome da pasta nova",
+    destHint: "Ela é criada ao lado da pasta original.",
+    destInvalid: "Nome de pasta inválido.",
+    applyExport: "Criar dataset COCO",
+    applyImport: "Criar dataset YOLO",
+    doneTitle: "Dataset criado",
+    doneExport: (images: number, boxes: number, excluded: number, path: string) =>
+      `${images} ${images === 1 ? "imagem" : "imagens"} e ${boxes} ${boxes === 1 ? "caixa" : "caixas"} em ${path}; ${excluded} ${excluded === 1 ? "ficou de fora" : "ficaram de fora"}`,
+    doneImport: (images: number, boxes: number, classes: number, path: string) =>
+      `${images} ${images === 1 ? "imagem" : "imagens"}, ${boxes} ${boxes === 1 ? "caixa" : "caixas"} e ${classes} ${classes === 1 ? "classe" : "classes"} em ${path}`,
+    linkedCopied: (linked: number, copied: number) =>
+      `${linked} ${linked === 1 ? "arquivo" : "arquivos"} com hardlink, ${copied} copiados`,
+    openResult: "Abrir no laboratório",
   },
   lightbox: {
     closeTitle: "Fechar (Esc)",
@@ -634,6 +1360,20 @@ export const pt = {
       queued: "Na fila: começa quando o treino atual terminar.",
       failed: "Falha ao retomar.",
     },
+    // Back to the form from History (#200): the config goes through the same
+    // import as the YAML button, so its warnings are the same.
+    rerun: {
+      load: "Carregar no formulário",
+      loadTitle:
+        "Abre a aba da tarefa com a configuração deste run, pelo mesmo caminho do Importar YAML",
+      replicates: (n: number) => `Repetir com ${n} seeds`,
+      replicatesTitle: (seeds: string) =>
+        `Abre a estratégia Réplicas com as seeds ${seeds}, diferentes das que este run usou`,
+      customRemoved: (key: string) =>
+        `A tarefa "${key}" não está mais registrada: registre-a de novo para carregar este run no formulário.`,
+      noTab: (task: string) => `Esta versão não tem a aba de ${task}.`,
+      noConfig: "O run.json deste run não guardou a configuração.",
+    },
     // The native folder picker the three forms below share.
     picker: {
       opening: "Abrindo seletor…",
@@ -650,6 +1390,21 @@ export const pt = {
       fingerprint: "Fingerprint",
       noFingerprint: "sem fingerprint — run anterior a 26/07/2026",
     },
+    // The run detail's action groups and their buttons.
+    actions: {
+      reuse: "Reusar",
+      download: "Baixar",
+      publish: "Publicar",
+      useModel: "Usar o modelo",
+      bundle: "Bundle do experimento",
+      markdown: "Markdown",
+    },
+    environment: {
+      title: "Ambiente",
+    },
+    // Beside the status of a run a user stop cut short (ADR-111).
+    stoppedTag: "interrompido",
+    runStatus: { completed: "concluído", running: "em andamento", failed: "falhou" } as Record<string, string>,
     location: {
       title: "Localização no disco",
       runFolder: "Pasta do run",
@@ -668,7 +1423,8 @@ export const pt = {
     },
     onnx: {
       title: "Exportar para ONNX",
-      open: "↗ exportar onnx",
+      open: "Exportar ONNX",
+      short: "Converte o checkpoint, compara com o PyTorch e mede a latência.",
       // `file` follows this text, in <code>.
       hint: "Converte o checkpoint para ONNX, valida diff numérico contra PyTorch e mede latência de inferência. O arquivo é salvo ao lado do checkpoint como",
       file: "best_model.onnx",
@@ -694,7 +1450,8 @@ export const pt = {
     },
     batch: {
       title: "Inferência em lote (CSV)",
-      open: "+ inferência em lote",
+      open: "Inferência em lote",
+      short: "Roda o modelo numa pasta de imagens e grava um CSV.",
       folderPlaceholder: "ex: C:/datasets/inbox",
       recursive: "recursive (subpastas)",
       run: "▶ Rodar inferência",
@@ -715,7 +1472,8 @@ export const pt = {
     },
     gradcam: {
       title: "Grad-CAM (explicabilidade)",
-      open: "🔥 Grad-CAM",
+      open: "Grad-CAM",
+      short: "Mapas de calor das regiões que mais pesaram na saída.",
       folderPlaceholder: "ex: C:/datasets/amostras",
       samples: "Nº de amostras (1–64)",
       run: "▶ Gerar Grad-CAM",
@@ -740,18 +1498,20 @@ export const pt = {
         accuracy: "Acurácia",
         precision: "Precisão",
         best_val_loss: "Melhor val loss",
-        best_epoch: "Melhor epoch",
-        total_epochs: "Epochs treinados",
+        best_epoch: "Melhor época",
+        total_epochs: "Épocas treinadas",
       },
       // `name` is a metric label: "Acurácia (teste)", "F1 (teste)".
       onTestSet: (name: string) => `${name} (teste)`,
     },
     graphs: {
       title: "Gráficos (clique para expandir)",
+      curves: "Curvas por época",
+      curvesHint: "passe o mouse para ler o valor",
     },
     tests: {
       title: "Testes neste modelo",
-      open: "+ testar",
+      open: "Testar em outro dataset",
       empty: "Nenhum teste executado ainda neste modelo.",
       folder: "Pasta de teste",
       manifest: "Manifesto de teste (.csv)",
@@ -794,6 +1554,18 @@ export const pt = {
       status: "status",
     },
   },
+  // "E agora?" under a run's numbers (components/NextSteps.tsx, lib/next-steps.ts).
+  nextSteps: {
+    title: "E agora?",
+    unfinished: "Este treino não terminou; os números acima podem estar incompletos.",
+    unfinishedResume: "Este treino não terminou. Retome de onde parou.",
+    stillImproving:
+      "A melhor época foi a última: o modelo ainda melhorava. Vale treinar por mais épocas.",
+    untested: "Ainda não há resultado no split de teste. Avalie nele antes de reportar um número.",
+    singleRun:
+      "Um treino só não mostra quanto o resultado varia. Rode réplicas com outras seeds antes de comparar.",
+    resume: "Retomar",
+  },
   // The detection form (components/DetectionPanel.tsx). Ultralytics hyperparameter
   // names and their short labels (lrf, Cosine LR, Mosaic, imgsz…) read the same in
   // every language and are repeated in both dictionaries; the hints beside them and
@@ -805,6 +1577,9 @@ export const pt = {
       title: "Modelo · detecção",
       backend: "Backend",
       backendHint: "origem do modelo",
+      noAgplBadge: "sem AGPL",
+      ultralyticsMissing: (command: string) =>
+        `O Ultralytics (AGPL-3.0) não está instalado, e um treino com ele será recusado. Instale com \`${command}\` e reinicie o VisionForge, ou escolha Torchvision.`,
       architecture: "Arquitetura",
       architectureHint: "detector",
       pretrained: "Pesos pré-treinados",
@@ -943,6 +1718,8 @@ export const pt = {
   // section prefix read the same in every language.
   resultsView: {
     title: "// resultados",
+    // The replicated comparison's group, opened in History (ADR-193).
+    openGroupInHistory: "abrir o grupo no Histórico",
     // Keys are the backend's metric names.
     metricLabels: {
       best_val_loss: "Best Val Loss",
@@ -1052,7 +1829,7 @@ export const pt = {
   // The run-history sheet (components/HistoryOverlay.tsx). The status and the task
   // pill on each card are the backend's own values, shown as the server wrote them.
   history: {
-    eyebrow: "// training history",
+    eyebrow: "// histórico de treinos",
     title: "Treinamentos recentes",
     select: "✓ Selecionar",
     cancelSelect: "Cancelar seleção",
@@ -1063,8 +1840,10 @@ export const pt = {
     loading: "carregando histórico…",
     errorTitle: "Erro",
     loadFailed: "Erro ao carregar histórico.",
-    emptyTitle: "Nenhum treinamento ainda",
-    emptyHint: "Execute o primeiro experimento para vê-lo aqui.",
+    emptyTitle: "Nenhum treino ainda",
+    emptyHint:
+      "Cada treino que terminar aparece aqui, com as métricas, as curvas e o modelo para baixar ou reusar.",
+    emptyGuide: "Fazer o primeiro treino com o guia",
     selectModeTip: "Modo seleção — marque os runs que quer excluir ou comparar.",
     selectedTip: (n: number) =>
       `${n} ${n === 1 ? "selecionado" : "selecionados"} — 🗑 exclui; ↔ compara a partir de 2.`,
@@ -1256,6 +2035,7 @@ export const pt = {
         pair: "par",
         pairs: "pares",
         diff: "Δ média (a−b)",
+        ci: "IC 95% da Δ",
         test: "teste",
         p: "p (bruto)",
         holm: "significativo após Holm",
@@ -1306,6 +2086,13 @@ export const pt = {
         medium: "médio",
         large: "grande",
       },
+      ciMethods: {
+        t: "t de Student",
+        hodges_lehmann: "Hodges-Lehmann",
+      },
+      ciTitle: (method: string, coverage: string, estimate: string) =>
+        `Intervalo de ${method} da diferença a−b, centrado em ${estimate}; cobertura real ${coverage}. Um extremo "aberto" é um que os dados não conseguem limitar (com menos de 6 pares, o de Hodges-Lehmann não chega a 95%).`,
+      ciOpen: "aberto",
       underpowered: "poucas seeds",
       underpoweredTitle: (pairs: number, floor: string) =>
         `Com ${pairs} pares o menor p possível é ${floor}, acima de alfa: nenhum resultado, por mais consistente, poderia ser significativo.`,
@@ -1324,6 +2111,7 @@ export const pt = {
     sweep: "Sweep",
     replicates: "Réplicas",
     pretrained: "Pesos pré-treinados",
+    replicatedComparison: "Comparação replicada",
     backbone: "Backbone",
     imageNet: "ImageNet",
     // The hint under "pretrained weights" in the segmentation and regression forms.
@@ -1775,6 +2563,15 @@ export const pt = {
     needTwoSeeds: "informe pelo menos 2 seeds",
     duplicateSeeds: "seeds duplicadas",
   },
+  // Why the replicated comparison cannot run yet (lib/replicated-comparison-form.ts).
+  replicatedComparisonForm: {
+    needPath: "informe o campo que as variantes mudam",
+    outputPath: "campos de output.* não podem variar: todas as variantes gravariam no mesmo lugar",
+    needValue: "informe pelo menos 1 valor além do formulário (2 variantes)",
+    tooManyValues: "no máximo 3 valores além do formulário (4 variantes)",
+    duplicateValues: "valores repetidos",
+    tooManySeeds: (max: number) => `no máximo ${max} seeds`,
+  },
   // The run hook's messages and the breadcrumb that names a field in a validation
   // error, "Treinamento › Learning Rate" (hooks/useExperiment.ts). Filter names in
   // the breadcrumb are technical and stay in the code.
@@ -1891,6 +2688,28 @@ export const pt = {
       sweep: "grid / random / optuna sobre a config abaixo",
       replicates: "mesma config, N seeds → média ± IC 95%",
       compare: "uma run por arquitetura, mesma config → tabela comparativa",
+      replicatedComparison: "2 a 4 variantes de um campo, mesmas seeds → teste pareado",
+    },
+  },
+  // One sentence under a strategy selector saying when that strategy is the
+  // right choice (components/WhenToUse.tsx). The selectors' own hints say what
+  // each one does; these are for choosing.
+  whenToUse: {
+    label: "Quando usar",
+    strategies: {
+      simple:
+        "No primeiro treino de um dataset, ou para acertar a config antes de gastar mais tempo.",
+      cv: "Com dataset pequeno, em que uma única divisão de validação daria um número instável.",
+      sweep:
+        "Quando você ainda não sabe quais hiperparâmetros usar e quer que a busca teste por você.",
+      grid: "Quando há poucos valores a testar e você quer ver todas as combinações.",
+      random:
+        "Quando o espaço é grande demais para testar tudo: sorteia um número fixo de configurações.",
+      replicates:
+        "Quando o número vai para um relatório ou artigo: dá média e intervalo, não um treino só.",
+      compare: "Quando a dúvida é qual arquitetura serve melhor a este dataset.",
+      replicatedComparison:
+        "Quando você quer afirmar, com um teste estatístico, que uma variante é melhor que outra.",
     },
   },
   // The K-fold launcher (components/CvCard.tsx).
@@ -1930,6 +2749,25 @@ export const pt = {
     summary: (seeds: number) =>
       `${seeds} seed${seeds === 1 ? "" : "s"} · roda pelo botão abaixo`,
     blocked: "Precisa de pelo menos 2 seeds válidas para rodar.",
+  },
+  // The paired comparison launcher (components/ReplicatedComparisonCard.tsx,
+  // ADR-193). Wilcoxon, Holm and alpha are the statistics' own names.
+  replicatedComparisonCard: {
+    title: "Comparação replicada · teste pareado",
+    // `paths` is the task's suggested dot-paths, joined with commas.
+    description: (paths: string) =>
+      `O formulário é a baseline. Escolha um campo (ex.: ${paths}) e de 1 a 3 outros valores para ele: cada variante treina nas mesmas seeds e cada par passa por um teste pareado (t ou Wilcoxon) com correção de Holm. A mesma seed nas duas variantes separa o efeito da mudança do ruído da seed.`,
+    parameter: "Campo (dot-path)",
+    values: "Outros valores (vírgula)",
+    valuesPlaceholder: "0.0001, 0.01",
+    valuesHint: "de 1 a 3",
+    count: "Seeds por variante",
+    cost: (variants: number, seeds: number, trainings: number) =>
+      `Custo: ${variants} variante${variants === 1 ? "" : "s"} × ${seeds} seed${seeds === 1 ? "" : "s"} = ${trainings} treino${trainings === 1 ? "" : "s"}`,
+    power: (seeds: number, floor: string, alpha: string) =>
+      `Com ${seeds} seeds o Wilcoxon não retorna p abaixo de ${floor}, acima de alfa = ${alpha}: nenhuma diferença, por maior e mais consistente, sairá significativa. Use 6 seeds ou mais.`,
+    summary: (trainings: number) =>
+      `${trainings} treino${trainings === 1 ? "" : "s"} · roda pelo botão abaixo`,
   },
   // The hyperparameter sweep editor (components/SweepCard.tsx). Grid, Random and
   // Optuna are algorithm names; dot-paths and the model names in the placeholders
@@ -2052,6 +2890,7 @@ export const pt = {
       modelComparison: "Comparação de modelos",
       crossValidation: "K-Fold CV",
       replicates: "Réplicas multi-seed",
+      replicatedComparison: "Comparação replicada",
     },
     // The three phases PatchCore reports, which the server labels in Portuguese
     // (lib/training-phase.ts maps them).
@@ -2078,6 +2917,14 @@ export const pt = {
     // previous job and not for this machine's GPU (ADR-163).
     queuedColabNote: (account: string, position: number | undefined) =>
       `${position ? `aguardando o Colab de ${account} — ${position}º na fila` : `aguardando o Colab de ${account}`}. O treino começa sozinho quando o anterior dessa conta terminar.`,
+    // The Drive consent of a Colab job (ADR-164): each new runtime asks once.
+    driveConsentTitle: "O Colab pede acesso ao seu Google Drive",
+    driveConsentBody: (attempt: number, attempts: number) =>
+      `Permita numa aba nova e volte para esta janela; o treino segue sozinho. Tentativa ${attempt} de ${attempts}.`,
+    driveConsentOpen: "Permitir acesso ao Drive",
+    driveConsentDone: "Já permiti",
+    driveConsentSending: "Conferindo a permissão…",
+    driveConsentError: "O servidor não recebeu a resposta. Tente \"Já permiti\" de novo.",
     // The status poll is not reaching the server; the run goes on there (ADR-133).
     reconnecting: "reconectando…",
     reconnectingNote: "O servidor não respondeu. Tentando de novo — o treino continua no servidor.",
@@ -2119,7 +2966,7 @@ export const pt = {
       replicate:
         "Parar as réplicas? A réplica em andamento termina a época atual e nenhuma outra começa. A média e o intervalo usam só as réplicas concluídas; a réplica cortada fica de fora. Um conjunto interrompido não pode ser retomado.",
       phase:
-        "Parar o PatchCore? Se ainda estiver na extração de features, nada é guardado. Se já estiver montando o banco de memória, ele termina, é salvo e a pontuação é pulada — dá para pontuar depois em “+ testar” no Histórico.",
+        "Parar o PatchCore? Se ainda estiver na extração de features, nada é guardado. Se já estiver montando o banco de memória, ele termina, é salvo e a pontuação é pulada — dá para pontuar depois em “Testar em outro dataset” no Histórico.",
       vm: "Parar o treino no Colab? A VM é liberada na hora: a época em andamento se perde, e nada do que foi treinado lá volta para esta máquina por enquanto.",
     },
     // A researcher's own task. Never resumable from the History; and one that owns its
@@ -2174,13 +3021,21 @@ export const pt = {
     },
     stoppedPhaseLog: (bankKept: boolean): string =>
       bankKept
-        ? "interrompido · banco de memória salvo, sem pontuação (pontue depois em “+ testar”)"
+        ? "interrompido · banco de memória salvo, sem pontuação (pontue depois em “Testar em outro dataset”)"
         : "interrompido durante a extração · nada foi guardado",
     // The server says the run was not cut (`stopped: false`): the stop arrived too late
     // to change anything, or the run had ended on its own.
     stopTooLate: "> a parada não cortou nada: o treino terminou normalmente",
   },
   // The "Resultados" tab of the training sheet (components/LiveResults.tsx, ADR-160).
+  // Shared line chart (components/ui/LineChart).
+  chart: {
+    epoch: (n: number) => `Época ${n}`,
+    noValue: "—",
+    best: "melhor",
+    keyboardHint:
+      "Use as setas esquerda e direita para ver o valor de cada época; Home e End vão ao início e ao fim; Esc limpa.",
+  },
   liveResults: {
     tab: "Resultados",
     empty: "As curvas aparecem quando a primeira época terminar.",
@@ -2207,13 +3062,12 @@ export const pt = {
     epochsCol: "Épocas",
     bestCol: "Melhor",
   },
-  // The "Como funciona" tab of the training sheet (components/training-story/, ADR-118).
+  // The training sheet's tabs, and the run's figures and drawing on "Como funciona" (ADR-118).
   // Only the stage and the numbers are real; the caption says the motion is not.
   trainingStory: {
-    tab: "Como funciona",
+    tab: "Código ao vivo",
     logTab: "Log",
     tabsLabel: "Conteúdo da tela de treino",
-    stripLabel: "Estágios do treino",
     caption:
       "animação ilustrativa, em câmera lenta: só o estágio e os números são reais",
     figure: (family: string) => `Desenho ilustrativo de uma rede: ${family}`,
@@ -2228,39 +3082,6 @@ export const pt = {
       detector: "detector: backbone, neck e cabeças que dão caixas",
       autoencoder: "autoencoder: comprime e reconstrói",
       patchcore: "PatchCore: extrator, banco de memória e pontuação",
-    },
-    // The strip. The last slot says how the run ended.
-    stageNames: {
-      queued: "na fila",
-      preparing: "dados",
-      training: "treino",
-      testing: "teste",
-      done: "pronto",
-      interrupted: "interrompido",
-      failed: "falhou",
-    },
-    // One sentence per stage.
-    stages: {
-      queued: "Na fila: o treino começa sozinho quando a GPU ficar livre.",
-      preparing:
-        "Carregando os dados e montando o modelo; ainda não houve nenhuma época.",
-      training:
-        "O modelo vê os dados, erra, e o erro volta ajustando os pesos; ao fim de cada época, a validação mede o quanto ele aprendeu.",
-      testing:
-        "Treino terminado: o modelo é medido no conjunto de teste, que ele nunca viu, e o relatório é escrito.",
-      done: "Pronto: os resultados completos estão em “Ver resultados”.",
-      interrupted:
-        "Interrompido a pedido: o que já foi salvo continua disponível.",
-      failed: "O treino falhou: o detalhe do erro está no quadro acima e no log.",
-    },
-    // PatchCore has phases where the others have epochs.
-    phases: {
-      extractingFeatures:
-        "Uma rede já treinada lê as imagens normais e extrai suas características (features); nada é ajustado.",
-      buildingBank:
-        "As características mais representativas do que é normal são guardadas no banco de memória.",
-      scoring:
-        "Cada imagem de teste é comparada com o banco: quanto mais longe do que é normal, maior a nota de anomalia.",
     },
     numbers: {
       epoch: "época",
@@ -2285,15 +3106,6 @@ export const pt = {
       model: (index: number, total: number) => `modelo ${index}/${total}`,
       replicate: (index: number, total: number) => `réplica ${index}/${total}`,
     },
-    // A finished run can show its stages again, in slow motion (ADR-118).
-    replay: { button: "rever animação", playing: "revendo…" },
-    legend: {
-      forward: "dados e passagem direta",
-      backward: "gradiente voltando",
-      validation: "validação",
-      patchForward: "características guardadas",
-      patchScore: "pontuação",
-    },
   },
   // Side-by-side comparison of two or more runs (components/CompareRunsPanel.tsx).
   compareRuns: {
@@ -2317,7 +3129,7 @@ export const pt = {
     // validation score at the best epoch — all a detection run has.
     metrics: {
       best_val_loss: "Melhor val loss",
-      best_epoch: "Melhor epoch",
+      best_epoch: "Melhor época",
       total_epochs: "Total de epochs",
       test_accuracy: "Acurácia (teste)",
       test_f1: "F1 (teste)",
@@ -2446,6 +3258,184 @@ export const pt = {
     },
   },
   // The first-run guide (components/GuidedTour.tsx). The steps are `tour`.
+  // A tela "Começando do zero" (ADR-207): para quem nunca treinou um modelo.
+  // Um capítulo por conceito, na ordem de lib/learn.ts; cada um tem um título,
+  // parágrafos e, quando ajuda, os termos novos em uma linha cada.
+  learn: {
+    menuTitle: "Começando do zero",
+    menuSummary:
+      "Para quem nunca treinou um modelo: os conceitos com figuras e um treino de verdade para assistir.",
+    inviteLink: "Nunca treinei um modelo: começar do zero",
+    eyebrow: "guia · começando do zero",
+    title: "Treinar um modelo, do zero",
+    lead: "Você não precisa programar nem conhecer a área para chegar ao fim desta página. Ela explica o que um treino faz, o que cada tela pede e o que os números do resultado querem dizer. São uns dez minutos de leitura.",
+    close: "Fechar",
+    closeTitle: "Fechar o guia (Esc)",
+    railLabel: "Capítulos",
+    chapterOf: (n: number, total: number) => `${n} de ${total}`,
+    termsLabel: "em uma linha",
+    illustrative: "Figura ilustrativa: os números não vêm de um treino.",
+    opensOutside: "abre no navegador",
+    chapters: {
+      idea: {
+        title: "O que é treinar um modelo",
+        body: [
+          "Um modelo de visão computacional é um programa que recebe uma imagem e devolve uma resposta: de que classe ela é, onde estão os objetos, quanto vale uma medida. Ninguém escreve as regras dessa resposta. O modelo começa com milhões de números ajustáveis, os pesos, e aprende as regras com exemplos.",
+          "Treinar é repetir três passos. O modelo vê algumas imagens e arrisca uma resposta. Uma conta, a função de perda, mede o tamanho do erro. O erro volta pelo modelo e corrige um pouco cada peso. Depois de milhares de repetições, as respostas melhoram.",
+        ],
+        figureLabel: "Desenho de uma rede: as imagens entram, a resposta sai e a correção volta",
+        legend: { data: "imagens indo", gradient: "correção voltando", validation: "validação" },
+        caption:
+          "É o mesmo desenho que a aba Código ao vivo mostra durante um treino. O ponto cheio são as imagens indo, o anel é a correção voltando e o losango é a validação.",
+        terms: [
+          ["peso", "um dos números que o treino ajusta; um modelo tem milhões."],
+          ["perda (loss)", "o tamanho do erro numa leva de imagens; o treino tenta diminuí-la."],
+          ["gradiente", "a direção em que cada peso deve mudar para o erro cair."],
+        ],
+      },
+      data: {
+        title: "Os dados: exemplos com a resposta certa",
+        body: [
+          "Para classificar, o dataset é uma pasta com uma subpasta por classe: as imagens de cada classe ficam na subpasta que leva o nome dela. É assim que o VisionForge sabe a resposta certa de cada imagem.",
+          "As imagens são divididas em três partes que nunca se misturam. O treino é o que o modelo estuda. A validação é uma prova ao fim de cada época, para ver se ele está aprendendo. O teste é a prova final, com imagens que ele nunca viu, usada uma vez só.",
+          "Na etapa Dados você aponta a pasta, e o VisionForge mostra as divisões e as classes que encontrou. Se ainda não tem imagens, o botão “usar dataset de exemplo” cria um conjunto pequeno para o primeiro treino.",
+        ],
+        figureLabel: "Quarenta imagens divididas em treino, validação e teste",
+        parts: { train: "treino", val: "validação", test: "teste" },
+        partNotes: {
+          train: "o modelo estuda",
+          val: "prova a cada época",
+          test: "prova final",
+        },
+        caption: "Uma divisão comum: 70% para o treino, 15% para a validação e 15% para o teste.",
+        screenAlt: "Etapa Dados da classificação com o dataset de exemplo carregado",
+        screenCaption: "A etapa Dados, com o dataset de exemplo: três divisões e duas classes encontradas.",
+        terms: [
+          ["dataset", "o conjunto de imagens, com a resposta certa de cada uma."],
+          ["classe", "uma das respostas possíveis, como “gato” ou “defeito”."],
+          ["divisão (split)", "cada uma das partes: treino, validação e teste."],
+        ],
+      },
+      loop: {
+        title: "Épocas, lotes e taxa de aprendizado",
+        body: [
+          "O modelo não vê todas as imagens de uma vez. Ele recebe um lote (batch) por vez, por exemplo 32 imagens, corrige os pesos e passa ao lote seguinte. Quando todos os lotes do treino passaram, terminou uma época. Um treino tem várias épocas: o modelo revê as mesmas imagens e erra menos a cada volta.",
+          "A taxa de aprendizado (learning rate) é o tamanho de cada correção, e é o número que mais muda o resultado. Pequena demais, o treino anda devagar. Grande demais, as correções passam do ponto e o erro não assenta.",
+          "Na etapa Treinamento esses campos aparecem primeiro: épocas, tamanho do batch e taxa de aprendizado. Os outros já vêm com valores que funcionam e ficam recolhidos em “avançado”.",
+        ],
+        figureLabel: "Uma época: os lotes de imagens passam pelo modelo, um de cada vez",
+        batch: (n: number) => `lote ${n}`,
+        epochDone: "passaram todos: 1 época",
+        caption: "Cada lote corrige os pesos uma vez. Uma época é uma passada por todos os lotes.",
+        terms: [
+          ["lote (batch)", "as imagens que o modelo vê antes de cada correção."],
+          ["época", "uma passada completa pelas imagens de treino."],
+          ["taxa de aprendizado", "o tamanho de cada correção nos pesos."],
+        ],
+      },
+      curves: {
+        title: "Ler as curvas: aprender ou decorar",
+        body: [
+          "Durante o treino o VisionForge desenha a perda de cada época em duas curvas: a do treino e a da validação. As duas devem cair. Troque a taxa de aprendizado na figura e veja o que muda.",
+          "É para isso que a validação existe: ela mostra o momento em que estudar mais deixa de ajudar. O VisionForge guarda os pesos da melhor época na validação, não os da última.",
+        ],
+        figureLabel: "Curvas de perda do treino e da validação por época",
+        rateLabel: "taxa de aprendizado",
+        rates: { low: "baixa", good: "adequada", high: "alta" },
+        train: "treino",
+        val: "validação",
+        epochAxis: "época",
+        lossAxis: "perda",
+        best: (epoch: number) => `melhor época: ${epoch}`,
+        notes: {
+          low: "Taxa baixa: as duas curvas caem, mas devagar. Trinta épocas não bastaram.",
+          good: (epoch: number) =>
+            `Taxa adequada: o erro cai rápido. Depois da época ${epoch} a validação volta a subir enquanto o treino continua caindo. O modelo começou a decorar as imagens de treino, o que se chama overfitting. Os pesos guardados são os da época ${epoch}.`,
+          high: "Taxa alta: o erro pula de um lado para o outro e não assenta.",
+        },
+        terms: [
+          ["overfitting", "o modelo decora o treino e piora nas imagens que não viu."],
+          ["melhor época", "a de menor perda na validação; é dela que os pesos são guardados."],
+        ],
+      },
+      result: {
+        title: "O resultado: quanto o modelo acerta",
+        body: [
+          "Terminado o treino, o modelo é medido no teste. A acurácia é a fração de imagens que ele acertou. A matriz de confusão abre esse número: cada linha é a classe verdadeira e cada coluna é a classe que o modelo respondeu. A diagonal são os acertos; fora dela, cada célula diz qual classe foi confundida com qual.",
+          "Um número sozinho pode ser sorte. O treino parte de pesos sorteados, e a seed fixa esse sorteio. Mudar a seed muda um pouco o resultado. Para saber quanto, a estratégia Réplicas repete o treino com várias seeds e dá a média com um intervalo de confiança.",
+          "Cada tarefa tem a sua métrica: acurácia na classificação, mAP na detecção, mIoU na segmentação, R² na regressão e AUROC na anomalia. A ideia é sempre a mesma: medir em imagens que o modelo não viu.",
+        ],
+        figureLabel: "Matriz de confusão de três classes em 60 imagens de teste",
+        trueAxis: "classe verdadeira",
+        predictedAxis: "classe prevista",
+        classes: ["A", "B", "C"],
+        accuracy: (correct: number, total: number, percent: string) =>
+          `${correct} acertos em ${total} imagens: acurácia de ${percent}`,
+        caption: "A diagonal são os acertos. A classe B foi confundida com C duas vezes e com A outras duas.",
+        screenAlt: "Resultado de uma execução no Histórico, com métricas e curvas por época",
+        screenCaption: "O resultado de um treino no Histórico: métricas no topo e as curvas por época.",
+        terms: [
+          ["acurácia", "a fração de imagens em que o modelo acertou."],
+          ["seed", "o número que fixa os sorteios do treino, para ele poder ser repetido."],
+          ["métrica", "a conta que resume o resultado; cada tarefa tem a sua."],
+        ],
+      },
+      watch: {
+        title: "Veja um treino acontecer",
+        body: [
+          "A gravação mostra um treino real de oito épocas no dataset de exemplo, na CPU, da etapa Revisão ao resultado. A barra avança a cada época, o log mostra a perda caindo, e no fim o resultado abre no Histórico.",
+          "O próximo passo é fazer o seu. O guia Primeiro treino acompanha cada clique na própria tela, com o dataset de exemplo, e leva poucos minutos.",
+        ],
+        filmAlt: "Gravação de um treino de oito épocas, do clique em Treinar ao resultado",
+        filmCaption: "Um treino de verdade, gravado nesta interface. A gravação pula os intervalos entre os quadros.",
+        start: "Fazer o primeiro treino guiado",
+      },
+      stack: {
+        title: "O que roda por trás",
+        body: [
+          "O VisionForge não tem um treino próprio escondido: ele organiza bibliotecas abertas que a área inteira usa, e a aba Código ao vivo mostra o código que está rodando. Vale conhecer cada uma pelo nome.",
+        ],
+        items: {
+          pytorch: "A biblioteca de redes neurais em que todo modelo aqui é treinado.",
+          torchvision: "Arquiteturas prontas, pesos pré-treinados e transformações de imagem.",
+          timm: "Centenas de arquiteturas a mais, escolhidas pelo nome.",
+          ultralytics: "YOLO e RT-DETR para detecção de objetos. É opcional e se instala à parte.",
+          sklearn: "As métricas do resultado e a divisão do K-fold.",
+          optuna: "A busca guiada de hiperparâmetros.",
+          onnx: "Roda o modelo exportado em ONNX, fora do PyTorch.",
+          fastapi: "O servidor local com que esta interface conversa.",
+          react: "A interface que você está usando.",
+          pydantic: "Confere a configuração antes de o treino começar.",
+        },
+      },
+      more: {
+        title: "Para aprender mais",
+        body: [
+          "Esta página dá o vocabulário. Para entender a área de verdade, estes materiais são gratuitos e muito usados em cursos.",
+        ],
+        resourcesTitle: "Cursos e livros",
+        resources: {
+          d2lPt: "Livro aberto com teoria e código lado a lado. Em português.",
+          crashCourse: "Curso introdutório do Google, com exercícios. Em português.",
+          threeBlue: "Vídeos com animações de como uma rede neural aprende. Em inglês.",
+          fastai: "Curso prático: você treina um modelo já na primeira aula. Em inglês.",
+          cs231n: "O curso de Stanford sobre redes neurais para visão computacional. Em inglês.",
+          pytorchTutorials: "Os tutoriais oficiais do PyTorch. Em inglês.",
+          deepLearningBook: "O livro-texto da área, com a matemática por trás. Em inglês.",
+        },
+        docsTitle: "A documentação do VisionForge",
+        docs: {
+          firstTraining: "Primeiro treino, passo a passo",
+          strategies: "Quando usar K-fold, busca, réplicas e comparação",
+          afterTraining: "O que fazer com o resultado",
+          datasets: "Explorar, auditar e redividir um dataset",
+          features: "Tudo o que o VisionForge faz",
+          allGuides: "Todos os guias",
+        },
+        footnote: "Os links abrem no navegador e precisam de internet.",
+      },
+    },
+  },
   guidedTour: {
     dialogLabel: "Guia do VisionForge",
     closeLabel: "Fechar o guia",
@@ -2511,7 +3501,7 @@ export const pt = {
       resultWaiting: "Aguardando o treino terminar…",
       history: {
         title: "Tudo ficou salvo",
-        body: "O treino já está no Histórico, em outputs/models/<nome>/<data> (na pasta do seu perfil, se você usa um). O run.json guarda a configuração e as métricas de cada época; para ver o efeito do acaso, rode de novo com outra seed e compare as duas execuções ali.",
+        body: "O treino já está no Histórico, em outputs/models/<nome>/<data> (na pasta do seu perfil, se você usa um). O run.json guarda a configuração e as métricas de cada época; para ver o efeito do acaso, escolha Réplicas na estratégia: a mesma configuração treina com várias seeds e o relatório dá a média ± IC 95% de cada métrica.",
       },
       // O roteiro de cada tarefa (ADR-117): o que são os dados, os parâmetros que
       // importam, o que olhar durante o treino e a métrica do resultado.
@@ -2535,7 +3525,7 @@ export const pt = {
           },
           watching: {
             title: "O que está acontecendo",
-            body: "A tela de treino mostra a época atual e, a cada época, a loss de treino e a de validação. Loss é o erro do modelo, e as duas devem cair. A de treino é medida durante a época, com o modelo ainda mudando; a de validação, ao fim dela, em imagens que ele não usou para aprender. A aba “Como funciona”, aberta ao lado do log, desenha o que o treino está fazendo, com os números ao vivo.",
+            body: "A tela de treino mostra a época atual e, a cada época, a loss de treino e a de validação. Loss é o erro do modelo, e as duas devem cair. A de treino é medida durante a época, com o modelo ainda mudando; a de validação, ao fim dela, em imagens que ele não usou para aprender. A aba “Código ao vivo”, aberta ao lado do log, mostra o passo em que o treino está e o código real desse passo, com os números ao vivo.",
           },
           result: {
             title: "O resultado",
@@ -2565,7 +3555,7 @@ export const pt = {
           },
           watching: {
             title: "O que está acontecendo",
-            body: "A tela de treino mostra a época atual e, a cada época, o mAP, a precisão, o recall e as losses da validação. A de caixa (box) mede onde o modelo põe a caixa; a de classe (cls), se ele acerta o que há nela. Nas primeiras épocas o mAP fica perto de zero e só sobe depois do aquecimento: é o esperado. A aba “Como funciona”, aberta ao lado do log, desenha o que o treino está fazendo, com os números ao vivo.",
+            body: "A tela de treino mostra a época atual e, a cada época, o mAP, a precisão, o recall e as losses da validação. A de caixa (box) mede onde o modelo põe a caixa; a de classe (cls), se ele acerta o que há nela. Nas primeiras épocas o mAP fica perto de zero e só sobe depois do aquecimento: é o esperado. A aba “Código ao vivo”, aberta ao lado do log, mostra o passo em que o treino está e o código real desse passo, com os números ao vivo.",
           },
           result: {
             title: "O resultado",
@@ -2595,7 +3585,7 @@ export const pt = {
           },
           watching: {
             title: "O que está acontecendo",
-            body: "A tela de treino mostra a época atual e, a cada época, a loss de treino e as métricas da validação: RMSE e MAE, o erro típico na unidade do alvo (menor é melhor), e R², que vale 1 para um modelo perfeito e 0 para um que sempre prevê a média. O R² oscila de uma época para outra, e o resultado fica com a melhor delas; nas primeiras ele pode ser negativo, porque o modelo ainda é pior que a média. A aba “Como funciona”, aberta ao lado do log, desenha o que o treino está fazendo, com os números ao vivo.",
+            body: "A tela de treino mostra a época atual e, a cada época, a loss de treino e as métricas da validação: RMSE e MAE, o erro típico na unidade do alvo (menor é melhor), e R², que vale 1 para um modelo perfeito e 0 para um que sempre prevê a média. O R² oscila de uma época para outra, e o resultado fica com a melhor delas; nas primeiras ele pode ser negativo, porque o modelo ainda é pior que a média. A aba “Código ao vivo”, aberta ao lado do log, mostra o passo em que o treino está e o código real desse passo, com os números ao vivo.",
           },
           result: {
             title: "O resultado",
@@ -2625,7 +3615,7 @@ export const pt = {
           },
           watching: {
             title: "O que está acontecendo",
-            body: "A tela de treino mostra a época atual e, a cada época, a loss e as métricas da validação: o mIoU (a sobreposição média entre a máscara prevista e a real, por classe), o Dice (parecido, mais generoso) e a acurácia por pixel. Como o fundo ocupa quase tudo, a acurácia por pixel é a mais otimista das três: confie no mIoU. A aba “Como funciona”, aberta ao lado do log, desenha o que o treino está fazendo, com os números ao vivo.",
+            body: "A tela de treino mostra a época atual e, a cada época, a loss e as métricas da validação: o mIoU (a sobreposição média entre a máscara prevista e a real, por classe), o Dice (parecido, mais generoso) e a acurácia por pixel. Como o fundo ocupa quase tudo, a acurácia por pixel é a mais otimista das três: confie no mIoU. A aba “Código ao vivo”, aberta ao lado do log, mostra o passo em que o treino está e o código real desse passo, com os números ao vivo.",
           },
           result: {
             title: "O resultado",
@@ -2655,7 +3645,7 @@ export const pt = {
           },
           watching: {
             title: "O que está acontecendo",
-            body: "A tela de treino mostra a época atual e, a cada época, a loss de reconstrução (o erro ao recriar uma imagem normal, que deve cair) e, medidos nas imagens de teste, o AUROC e o F1 de imagem. Com o PatchCore não há épocas: a tela mostra fases (extraindo features, montando o banco e pontuando), cada uma com o seu progresso. A aba “Como funciona”, aberta ao lado do log, desenha o que o treino está fazendo, com os números ao vivo.",
+            body: "A tela de treino mostra a época atual e, a cada época, a loss de reconstrução (o erro ao recriar uma imagem normal, que deve cair) e, medidos nas imagens de teste, o AUROC e o F1 de imagem. Com o PatchCore não há épocas: a tela mostra fases (extraindo features, montando o banco e pontuando), cada uma com o seu progresso. A aba “Código ao vivo”, aberta ao lado do log, mostra o passo em que o treino está e o código real desse passo, com os números ao vivo.",
           },
           result: {
             title: "O resultado",

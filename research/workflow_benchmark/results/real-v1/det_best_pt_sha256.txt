@@ -1,0 +1,6 @@
+19e987ff1b7c2c57a8e720ee84739fa27a671cd17f59b2f0dc605933cc981a4a *det/seed37/native/run/weights/best.pt
+7d63f511e3a207c997488b453a19d3d304ee5959662761a5a4ad5bb406f8dbe8 *det/seed37/vf/models/real_det_s37/20261030_185845_670303/weights/best.pt
+de828d45a3f5b73ffbd90173c21b33e2fb9a41a6cd5be71647d9434da14a82d6 *det/seed38/native/run/weights/best.pt
+19f4664e752ef61f2b55fd3abd545ca994bf0631ed00875b143590e047ffd301 *det/seed38/vf/models/real_det_s38/20261030_211402_007767/weights/best.pt
+daedb05bacc7e74edcea94dbb135753892f1a55f19843371db4457cad0396e57 *det/seed39/native/run/weights/best.pt
+69d64d235035bed2da1bfaaa0dce05da2184e0b693d3b306cb09a6ed6abad530 *det/seed39/vf/models/real_det_s39/20261030_215901_382535/weights/best.pt

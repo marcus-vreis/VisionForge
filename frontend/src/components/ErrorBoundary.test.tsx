@@ -10,7 +10,8 @@ import { describe, expect, it } from "vitest";
 import { LanguageContext } from "../i18n/context";
 import { en } from "../i18n/en";
 import { pt } from "../i18n/pt";
-import { ContentBoundary, CrashNotice, ErrorBoundary } from "./ErrorBoundary";
+import { lazy } from "react";
+import { ContentBoundary, CrashNotice, ErrorBoundary, LazySurface } from "./ErrorBoundary";
 
 const inLanguage = (lang: "pt" | "en", node: React.ReactNode) =>
   renderToStaticMarkup(
@@ -96,5 +97,45 @@ describe("ContentBoundary", () => {
       </ContentBoundary>,
     );
     expect(html).toBe("<p>form</p>");
+  });
+});
+
+describe("LazySurface", () => {
+  // A chunk still on its way: the import never settles.
+  const Pending = lazy(() => new Promise<{ default: () => null }>(() => {}));
+
+  it("shows only an announced status while the chunk loads, in Portuguese", () => {
+    const html = inLanguage(
+      "pt",
+      <LazySurface>
+        <Pending />
+      </LazySurface>,
+    );
+    expect(html).toBe(`<span role="status" class="sr-only">${pt.common.loading}</span>`);
+  });
+
+  it("shows only an announced status while the chunk loads, in English", () => {
+    const html = inLanguage(
+      "en",
+      <LazySurface>
+        <Pending />
+      </LazySurface>,
+    );
+    expect(html).toBe(`<span role="status" class="sr-only">${en.common.loading}</span>`);
+  });
+
+  it("is invisible once the chunk is in", () => {
+    const html = inLanguage(
+      "pt",
+      <LazySurface>
+        <p>panel</p>
+      </LazySurface>,
+    );
+    expect(html).toBe("<p>panel</p>");
+  });
+
+  it("puts the chunk under the crash notice's boundary, so a failed fetch is never a blank page", () => {
+    const surface = LazySurface({ children: <p>panel</p> });
+    expect(surface.type).toBe(ContentBoundary);
   });
 });
