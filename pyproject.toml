@@ -1,7 +1,7 @@
 [project]
 name = "visionforge-studio"
 authors = [{ name = "Marcus Reis", email = "marcusvinicius0083@gmail.com" }]
-version = "0.22.0"
+version = "0.22.1"
 dynamic = []
 description = "Local-first computer-vision experimentation platform: five task families, multi-seed replicates with confidence intervals, K-fold CV, sweeps and full run provenance — on your own GPU."
 readme = "README.md"
@@ -116,7 +116,7 @@ tensorboard = []
 roboflow = []
 kaggle = []
 huggingface = []
-hub = ["huggingface-hub>=1.16.1,<2"]
+hub = ["huggingface-hub>=1.16.1,<3"]
 
 dev = [
     "pytest>=8.0",
@@ -125,7 +125,7 @@ dev = [
     # Exact pin: CI installs the newest release and mypy 2.x flagged code the
     # local hook (1.x) accepted. Keep this, .pre-commit-config.yaml `rev` and
     # uv.lock on the same version so the hook, CI and `uv run mypy` agree.
-    "mypy==2.4.0",
+    "mypy==2.4.1",
     "codespell>=2.3",
     "pre-commit>=4.0",
     "bump-my-version>=0.24",
@@ -178,7 +178,7 @@ skip = ".venv,*.lock,outputs,htmlcov,*.egg-info,package-lock.json,src/visionforg
 ignore-words = ".codespell-ignore-words.txt"
 
 [tool.bumpversion]
-current_version = "0.22.0"
+current_version = "0.22.1"
 parse           = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
 serialize       = ["{major}.{minor}.{patch}"]
 commit          = true

@@ -52,8 +52,12 @@ test("Hub preview requires an explicit upload and keeps credentials out of expor
   expect(tokens).toEqual([{ token: "hf_placeholder_not_a_real_secret" }]);
   await send.click();
   await expect(panel.getByRole("link", { name: pt.hub.success })).toHaveAttribute("href", "https://huggingface.co/test/reviewed");
-  const runs = await (await request.get("/api/runs")).json();
-  expect(uploads).toEqual([{ run_id: runs[0].run_id, repo_id: "test/reviewed", digest: "reviewed-digest" }]);
+  // The suite shares one server: other files leave runs of their own in the
+  // History, so this one is found by its name, not by being the first.
+  const runs: { run_id: string; experiment_name: string }[] = await (await request.get("/api/runs")).json();
+  const run = runs.find((r) => r.experiment_name === "HubE2E");
+  expect(run).toBeDefined();
+  expect(uploads).toEqual([{ run_id: run!.run_id, repo_id: "test/reviewed", digest: "reviewed-digest" }]);
   await panel.getByRole("button", { name: pt.hub.removeToken, exact: true }).click();
   await expect(send).toBeDisabled();
 });

@@ -36,8 +36,10 @@ model:
 ```
 
 The interface has no selector for it: `custom_model` is set in the YAML config
-file, and the run that reads that file is the one that uses your builder
-(`visionforge run <file>.yaml`).
+file. Run that file with `visionforge run <file>.yaml`, or import it in the
+interface (**↑ Importar YAML**, in the Revisão step of the Classification tab):
+the Modelo and Revisão steps then name your model instead of the builtin
+architecture, and the History lists the run under its name.
 
 VisionForge imports every `.py` file in the folder on demand to discover the
 registered builders, so a new file is picked up without restarting the server.
@@ -53,8 +55,16 @@ One builder can serve any CNN-headed task, because the argument is always
 | Segmentation · Segmentação | `num_classes` (per-pixel logits · logits por pixel) |
 | Regression · Regressão | `num_targets` |
 
+For segmentation the module must return per-pixel logits, shaped
+`[batch, num_classes, height, width]`: a classifier that ends in a linear layer
+serves classification and regression, not segmentation.
+
 Detection and anomaly have their own model paths and do not read
 `custom_model`.
+
+Na segmentação o módulo precisa devolver logits por pixel, no formato
+`[batch, num_classes, altura, largura]`: um classificador que termina numa
+camada linear serve para classificação e regressão, não para segmentação.
 
 Detecção e anomalia têm caminhos próprios de modelo e não leem `custom_model`.
 
@@ -101,7 +111,10 @@ O passo a passo é o mesmo dos três blocos acima, e vale repetir o essencial:
    — quantos números o modelo precisa emitir — e devolve um `nn.Module`.
 3. No config (YAML), `model.custom_model: seu_nome`; a interface não tem campo
    para isso. Os campos `name` e `pretrained` do modelo embutido passam a ser
-   ignorados.
+   ignorados. Rode o arquivo com `visionforge run arquivo.yaml` ou importe-o na
+   interface (**↑ Importar YAML**, na etapa Revisão da aba Classificação): as
+   etapas Modelo e Revisão passam a mostrar o seu modelo, e o Histórico lista a
+   execução com o nome dele.
 
 O mesmo modelo serve para classificação, segmentação e regressão, porque o
 argumento é sempre a dimensão de saída da tarefa: `num_classes` nas duas

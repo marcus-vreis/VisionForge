@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { artifactUrl, downloadRunMarkdown } from "../api/client";
 import { useT } from "../i18n/useT";
+import { metricLabel } from "../lib/metric-labels";
 import { metricCi } from "../lib/metric-ci";
 import { isCrossValidationReport } from "../lib/report-shape";
 import {
@@ -253,7 +254,7 @@ export function ResultsView({
           {metricsEntries.map(([key, value]) => (
             <MetricCard
               key={key}
-              label={metricLabels[key] ?? key}
+              label={metricLabels[key] ?? metricLabel(t, key)}
               value={formatMetric(value)}
               accent={taskAccent}
               highlight={key === highlightKey}

@@ -8305,3 +8305,30 @@ Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS
 - *Only a page in `docs/`.* The reader who needs it most is the one least likely to look for documentation on GitHub; the interface is where they already are.
 - *A recorded video file.* Playwright records WebM, which GitHub does not show inline in a Markdown page, and a video in the wheel is heavier than a few dozen frames. Frames assembled by Pillow need no encoder beyond what the project already depends on.
 - *Figures as images.* A drawn figure follows the theme and the language, can be tried (the learning rate switch), and costs no bytes.
+
+## ADR-208 — The screens name what a run reports and what it trains
+
+**Date:** 2026-11-15
+**Status:** Accepted
+**Amends:** ADR-048 (custom models), ADR-051 (timm), ADR-038 (anomaly), ADR-201 (the History entry as the results page)
+
+**Context:** after 0.22.0 the first training of every task other than classification was walked through the interface, and a custom model was used the way `docs/custom/MODELS.md` describes. Every run trained. Three things on screen were wrong:
+
+- the detail of a regression, segmentation or anomaly run showed its metrics under the raw `run.json` keys (`TEST_R2`, `BEST_VAL_MIOU`), because its label table only knew classification and detection, while the comparison between runs had labels for all five tasks in another table;
+- anomaly's per-epoch scores were labelled "(val)". The task has no validation split: the trainer scores every epoch on the labelled test split, and the backend's `val_` prefix is a field name, not a description;
+- a run built from `model.custom_model` or `model.timm_model` was listed in the History, and shown in the Modelo and Revisão steps after a YAML import, under `model.name`, the builtin default those two fields override.
+
+**Decision:**
+
+- The run detail reads its labels from `lib/metric-labels.ts`: its own short table first, then `compareRuns.metrics`, which gains the four names only the detail shows. One dictionary names a metric in both places.
+- No label calls an anomaly score a validation one: `auroc`, `image_f1` and `threshold` read "(melhor época)", and the live series read "(teste)". The `run.json` keys do not change.
+- The History's architecture is `custom_model`, then `timm_model`, then `model.name` (`run_history._model_arch`). The classification panel shows a note in the Modelo step and a row in the Revisão step when the form carries one of the two, with a button that clears it (`lib/model-source.ts`).
+- Two browser tests keep this: `e2e/tasks.e2e.ts` trains the four other tasks on their sample datasets and reads the labels, and `e2e/custom-model.e2e.ts` imports a YAML with `custom_model`.
+- Dependabot groups only minor and patch updates; a major one arrives alone.
+
+**Consequences:** anomaly still selects and reports on the same split, which the labels now say instead of hiding; a validation split for anomaly would be a change to the task, not to its words. The form still has no field to type a custom model: it arrives by YAML, as before. The end-to-end job trains five more tiny runs, about a minute on a CPU.
+
+**Alternatives considered:**
+
+- *Rename the backend's `val_auroc`.* It is in every anomaly `run.json` already written and in the event stream; the name is wrong, and changing it breaks reading old runs for a label the interface can fix.
+- *A field for `custom_model` in the Modelo step.* Useful, and a larger change: it needs the list of registered builders from the server. The note covers the case that exists today, a YAML that names one.

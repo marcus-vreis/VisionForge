@@ -133,19 +133,20 @@ Other repository settings that are on:
 ## CI action runtimes
 
 ADR-139 replaces actions declaring Node 20 with releases declaring Node 24.
-Versions were checked against upstream releases and `action.yml` on 2026-10-21:
+Versions were checked against upstream releases and `action.yml` on 2026-10-21;
+Dependabot moved four of them on 2026-11-15 (minor and patch releases):
 
 | Action | Version |
 |---|---|
 | [checkout](https://github.com/actions/checkout/releases/tag/v7.0.1) | `v7.0.1` |
-| [setup-python](https://github.com/actions/setup-python/releases/tag/v7.0.0) | `v7.0.0` |
+| [setup-python](https://github.com/actions/setup-python/releases/tag/v7.1.0) | `v7.1.0` |
 | [setup-node](https://github.com/actions/setup-node/releases/tag/v7.1.0) | `v7.1.0` |
 | [cache](https://github.com/actions/cache/releases/tag/v6.1.0) | `v6.1.0` |
 | [upload-artifact](https://github.com/actions/upload-artifact/releases/tag/v7.0.2) | `v7.0.2` |
 | [download-artifact](https://github.com/actions/download-artifact/releases/tag/v8.0.2) | `v8.0.2` |
-| [setup-uv](https://github.com/astral-sh/setup-uv/releases/tag/v10.3.1) | `v10.3.1` |
-| [action-gh-release](https://github.com/softprops/action-gh-release/releases/tag/v3.0.3) | `v3.0.3` |
-| [sonarqube-scan-action](https://github.com/SonarSource/sonarqube-scan-action/releases/tag/v8.3.0) | `v8.3.0` |
+| [setup-uv](https://github.com/astral-sh/setup-uv/releases/tag/v10.3.3) | `v10.3.3` |
+| [action-gh-release](https://github.com/softprops/action-gh-release/releases/tag/v3.0.4) | `v3.0.4` |
+| [sonarqube-scan-action](https://github.com/SonarSource/sonarqube-scan-action/releases/tag/v8.5.0) | `v8.5.0` |
 
 The pre-commit composite action was replaced with explicit install/cache/run
 steps because its internal cache action still declared Node 20. Hosted runners
