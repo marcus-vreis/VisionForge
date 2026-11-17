@@ -226,9 +226,16 @@ export function RunDetailPanel({
   // Detection (Ultralytics) and anomaly (no class/conv target) are excluded.
   const canGradcam = !isDetection && !isCustom && task !== "anomaly";
 
+  // Another run starts a fresh load (the effect below); `loading` starts true
+  // for the first one and is raised again while rendering for each new runId.
+  const [loadingFor, setLoadingFor] = useState(runId);
+  if (runId !== loadingFor) {
+    setLoadingFor(runId);
+    setLoading(true);
+  }
+
   useEffect(() => {
     let alive = true;
-    setLoading(true);
     fetchRunDetail(runId)
       .then((d) => {
         if (alive) setDetail(d);

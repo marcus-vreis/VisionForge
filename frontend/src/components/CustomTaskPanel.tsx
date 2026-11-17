@@ -112,10 +112,16 @@ export function CustomTaskPanel({
   const [error, setError] = useState<string | null>(null);
 
   // Re-fetch per task: switching tabs must not show the previous task's form.
-  useEffect(() => {
-    let cancelled = false;
+  // A new load (the effect's deps below) clears the old schema while rendering.
+  const [loadFor, setLoadFor] = useState({ key: task.key, setFormData });
+  if (loadFor.key !== task.key || loadFor.setFormData !== setFormData) {
+    setLoadFor({ key: task.key, setFormData });
     setSchema(null);
     setError(null);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
     fetchCustomSchema(task.key)
       .then((s) => {
         if (cancelled) return;

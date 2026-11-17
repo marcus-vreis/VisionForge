@@ -53,20 +53,25 @@ export function QueueOverlay({
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    try {
-      const snap = await fetchQueue();
-      const totals = queueTotals(snap);
-      setLanes(queueLanes(snap));
-      onCountChange?.(totals.pending);
-      onRunningChange?.(totals.running);
-      setError(null);
-    } catch (e) {
-      setError(
-        e instanceof ApiError ? e.message : t.queueOverlay.readFailed,
-      );
-    }
-  }, [onCountChange, onRunningChange, t]);
+  // State is set only in the promise callbacks, after the request settles;
+  // the trailing catch also covers a throw from the handlers, as try/catch did.
+  const refresh = useCallback(
+    () =>
+      fetchQueue()
+        .then((snap) => {
+          const totals = queueTotals(snap);
+          setLanes(queueLanes(snap));
+          onCountChange?.(totals.pending);
+          onRunningChange?.(totals.running);
+          setError(null);
+        })
+        .catch((e: unknown) => {
+          setError(
+            e instanceof ApiError ? e.message : t.queueOverlay.readFailed,
+          );
+        }),
+    [onCountChange, onRunningChange, t],
+  );
 
   useEffect(() => {
     if (!open) return;

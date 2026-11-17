@@ -50,10 +50,12 @@ export function CredentialField({
       .catch(() => setEntry(null));
   }, [provider, refreshToken]);
 
-  // A stale "saved!" under a field the user has since edited is a lie.
-  useEffect(() => {
-    if (value) setFeedback(null);
-  }, [value]);
+  // A stale "saved!" under a field the user has since edited is a lie: typing
+  // is the only thing that sets a non-empty value, so it clears it there.
+  const edit = (next: string) => {
+    setValue(next);
+    if (next && next !== value) setFeedback(null);
+  };
 
   const save = async () => {
     if (!value.trim()) {
@@ -99,7 +101,7 @@ export function CredentialField({
       <TextField
         label={label}
         value={value}
-        onChange={setValue}
+        onChange={edit}
         placeholder={saved ? t.credentialField.savedPlaceholder(entry?.masked ?? "") : (placeholder ?? "")}
         hint={saved ? t.credentialField.savedHint : hint}
         mono

@@ -28,10 +28,20 @@ export function GitHubExportPanel({ runId }: { runId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [url, setUrl] = useState<string | null>(null);
 
+  // Opening, another run or another language starts a fresh load (the effect's
+  // deps below): the panel is reset while rendering, before the fetch runs.
+  const loadKey = open ? JSON.stringify([runId, g.failed]) : null;
+  const [seenLoadKey, setSeenLoadKey] = useState<string | null>(null);
+  if (loadKey !== seenLoadKey) {
+    setSeenLoadKey(loadKey);
+    if (loadKey !== null) {
+      setBusy(true); setError(null); setPreview(null); setStatus(null); setUrl(null);
+    }
+  }
+
   useEffect(() => {
     if (!open) return;
     let alive = true;
-    setBusy(true); setError(null); setPreview(null); setStatus(null); setUrl(null);
     Promise.all([fetchGitHubToken(), fetchGitHubPreview(runId)])
       .then(([tokenStatus, snapshot]) => {
         if (alive) { setStatus(tokenStatus); setPreview(snapshot); }

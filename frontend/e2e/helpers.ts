@@ -6,11 +6,21 @@ import { expect, type Locator, type Page } from "@playwright/test";
  * profile has one, every later load enters directly (no question), so either
  * ending counts. The header's profile chip appears only after the welcome.
  */
-export async function enter(page: Page, name = "E2E"): Promise<void> {
-  // The guide offers itself on a first visit and after a first training; it is
-  // not what these tests drive, so it is dismissed whenever it covers the page.
-  const closeGuide = page.getByRole("button", { name: "Fechar o guia" });
-  await page.addLocatorHandler(closeGuide, () => closeGuide.click());
+export async function enter(
+  page: Page,
+  name = "E2E",
+  { guide = false }: { guide?: boolean } = {},
+): Promise<void> {
+  if (!guide) {
+    // The guide offers itself on a first visit, at the moment the profile chip
+    // appears: closing it from a locator handler then raced the test, which could
+    // end while the handler still waited for the card's entrance animation. A
+    // test that drives the guide passes `guide: true` and gets the invite.
+    await page.addInitScript(() => localStorage.setItem("vf.tour.seen", "1"));
+    // It still offers itself after a first training; dismiss it whenever it covers the page.
+    const closeGuide = page.getByRole("button", { name: "Fechar o guia" });
+    await page.addLocatorHandler(closeGuide, () => closeGuide.click());
+  }
   await page.goto("/");
   const chip = page.getByTitle("Perfil e integrações");
   // The field exists from the start but stays inert until the intro reaches the question.

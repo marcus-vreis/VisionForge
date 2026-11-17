@@ -13,6 +13,16 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Changed
+
+- Dependências do frontend: React 19.3, Base UI 1.9, Tailwind 4.3, Vite 8.3.8, Playwright 1.65, lucide-react 1.72 e mais 13 atualizações minor e patch. O `eslint-plugin-react-hooks` 7.1 passou a ver 15 componentes que mudavam estado de forma síncrona dentro de um effect; eles agora ajustam esse estado durante o render ou no próprio handler, sem desligar a regra.
+- `uv.lock`: httpx2 e httpcore2 2.12.0 e idna 3.20, que fecham seis alertas de segurança; o lock também passa a dizer 0.22.1 para o próprio pacote.
+
+### Fixed
+
+- Depois das boas-vindas, ou de fechar o guia pelo ✕, o primeiro Tab saía da página em vez de cair no link "Pular para o conteúdo": as duas camadas vinham depois do conteúdo no DOM, e o navegador continua o Tab de onde estava o botão que sumiu. Elas agora vêm antes do link.
+- No convite do guia, a 375 px, o botão "Primeiro treino →" passava da borda do cartão; os dois botões agora quebram linha.
+
 ## [0.22.1] — 2026-11-15
 
 ### Added
