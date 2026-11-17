@@ -13,6 +13,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Added
+
+- `visionforge reproduce BUNDLE.zip [--data PASTA] [--seed N] [--output PASTA]`: retreina uma semente de um pacote de experimento verificado, numa cópia local do dataset, e compara com o que o pacote registrou. Num grupo de réplicas, o veredito usa o intervalo de predição de 95% de uma semente nova (média ± t·s·√(1+1/n)), não o IC95 da média, que é estreito demais para uma semente só; o IC95 gravado aparece ao lado. Imprime um JSON com os valores, a diferença, os dois intervalos e as diferenças de ambiente; sai com 0 dentro do intervalo, 1 fora dele e 2 para um pacote que não pode ser reproduzido (ADR-210).
+
 ### Changed
 
 - Dependências do frontend: React 19.3, Base UI 1.9, Tailwind 4.3, Vite 8.3.8, Playwright 1.65, lucide-react 1.72 e mais 13 atualizações minor e patch. O `eslint-plugin-react-hooks` 7.1 passou a ver 15 componentes que mudavam estado de forma síncrona dentro de um effect; eles agora ajustam esse estado durante o render ou no próprio handler, sem desligar a regra.

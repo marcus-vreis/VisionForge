@@ -249,7 +249,14 @@ without touching the package.
 visionforge audit-data datasets/my_dataset --groups groups.csv --strict-groups --json audit.json
 visionforge bundle outputs/models/my_run evidence.zip
 visionforge verify-bundle evidence.zip
+visionforge reproduce evidence.zip --data datasets/my_dataset
 ```
+
+  `reproduce` re-trains one seed of a single run or a replicate set from a
+  verified bundle and prints one JSON comparing it with the record: for a
+  replicate set, whether the new seed falls inside the 95% prediction interval
+  of one seed computed from the set's mean and std (exit code 1 when a metric
+  falls outside it), and the library/device differences.
 
 - **Learning rate per model** (classification) — with
   `model_comparison.lr_policy: suggested` each architecture trains at its own
@@ -638,7 +645,15 @@ sem tocar no pacote.
 visionforge audit-data datasets/meu_dataset --groups groups.csv --strict-groups --json auditoria.json
 visionforge bundle outputs/models/meu_run evidencia.zip
 visionforge verify-bundle evidencia.zip
+visionforge reproduce evidencia.zip --data datasets/meu_dataset
 ```
+
+  `reproduce` retreina uma semente de um run único ou de um conjunto de
+  réplicas a partir de um pacote verificado e imprime um JSON que o compara com
+  o registro: num conjunto de réplicas, se a semente nova cai no intervalo de
+  predição de 95% de uma semente, calculado da média e do desvio do conjunto
+  (código de saída 1 quando uma métrica fica fora dele), e as diferenças de
+  bibliotecas e dispositivo.
 
 - **Learning rate por modelo** (classificação) — com
   `model_comparison.lr_policy: suggested` cada arquitetura treina com o seu LR

@@ -152,3 +152,48 @@ O ambiente do run registra versões adicionais das bibliotecas e, em um checkout
 Git reconhecido do pacote, a revisão e o indicador de alterações locais. Uma
 instalação sem esse checkout informa `unknown`; o repositório do pesquisador não
 é usado como se fosse o código-fonte do VisionForge.
+
+## Reproduzir um bundle
+
+Quem recebeu o ZIP pode retreinar uma semente dele e comparar o resultado com o
+que foi registrado:
+
+```bash
+visionforge reproduce evidencia.zip --data PASTA_DO_DATASET
+visionforge reproduce evidencia.zip --seed 1 --output saida_repro
+```
+
+O comando verifica o bundle (como `verify-bundle`), lê o `run.json` e a
+configuração direto do ZIP, sem extraí-lo, e treina pelo mesmo caminho de
+`visionforge run`. Funciona com um run único e com um conjunto de réplicas;
+K-fold, sweep e comparação pareada ainda não são suportados.
+
+- **Semente:** num run único, a semente registrada (ou `--seed`). Num conjunto
+  de réplicas, `--seed` precisa ser uma das sementes do conjunto; sem ela, vale
+  a primeira semente que terminou.
+- **Dataset:** `--data` substitui o caminho registrado (na detecção, um arquivo
+  vira `data_yaml` e uma pasta vira `base_dir`). Sem `--data`, o caminho
+  registrado é usado se existir nesta máquina; um bundle público guarda só o
+  nome final da pasta, então nesse caso o comando pede `--data`. Nada é baixado.
+- **Saída:** um run novo chamado `<nome>_repro` (`<nome>_s<semente>_repro` nas
+  réplicas), em `--output` ou na pasta `outputs` de sempre. O run original não
+  é tocado.
+
+A saída padrão é um único JSON com `bundle`, `kind`, `seed`, `run_dir`,
+`environment_diff` (versões de Python, torch, torchvision e VisionForge e o
+dispositivo, registrados e atuais) e, por métrica, `recorded`, `reproduced`,
+`delta`, `ci95`, `pi95` e `inside`. As métricas são as finais do teste (ou da
+validação, quando a tarefa não tem teste). Nas réplicas, `recorded` é o valor
+da mesma semente.
+
+`ci95` é o intervalo t de 95% registrado para a **média** das sementes
+(meia-largura t·s/√n) e aparece só como contexto: uma semente sozinha cai fora
+dele com frequência bem maior que 5%, sem que nada esteja errado. O julgamento
+(`inside`) usa `pi95`, o intervalo de **predição** de 95% para uma semente nova,
+`média ± t(0,975; n−1) · desvio · √(1 + 1/n)`, calculado da `n`, da média e do
+desvio registrados (n ≥ 2) e cortado ao domínio da métrica como o `ci95`.
+`verdict` vale `inside_interval`, `outside_interval` ou `no_interval` (run
+único, ou réplicas sem `pi95`). Códigos de saída: 0 dentro do intervalo de
+predição ou sem intervalo, 1 fora dele ou treino com falha, 2 entrada inválida
+(bundle, tipo, semente ou dataset), antes de qualquer treino. Os logs do treino
+vão para a saída de erro.

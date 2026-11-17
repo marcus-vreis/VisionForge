@@ -119,9 +119,10 @@ download: [`../DATASETS.md`](../DATASETS.md).
 | `visionforge audit-data PASTA` | procura duplicatas exatas entre splits, imagens ilegíveis e, com `--groups`, grupos que cruzam splits |
 | `visionforge bundle RUN destino.zip` | exporta a execução com manifesto de hashes |
 | `visionforge verify-bundle destino.zip` | confere o manifesto sem extrair o ZIP |
+| `visionforge reproduce destino.zip` | retreina uma semente do bundle e confere se ela cai no intervalo de predição de 95% das réplicas (`--data`, `--seed`, `--output`) |
 | `visionforge new-task CHAVE` | cria `user_tasks/CHAVE.py`, uma tarefa sua que já treina |
 
-`run` e `gui` aceitam `--offline`, que recusa toda conexão para fora do
+`run`, `gui` e `reproduce` aceitam `--offline`, que recusa toda conexão para fora do
 computador. `visionforge run --help` lista as opções de cada estratégia, e o
 formato de cada uma está em [`../QUICKSTART.md`](../QUICKSTART.md), seção 5.
 
