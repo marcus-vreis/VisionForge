@@ -13,6 +13,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Changed
+
+- Dependências do frontend: vitest 5.1, js-yaml 5.5, lucide-react 1.73 e Playwright 1.65.1. O js-yaml 5 traz os próprios tipos (sai o `@types/js-yaml`) e lê com o schema CORE do YAML 1.2; os configs de `configs/` saem idênticos aos do PyYAML do backend, na leitura e na ida e volta pelo `dump`.
+
 ## [0.22.2] — 2026-11-17
 
 ### Added
