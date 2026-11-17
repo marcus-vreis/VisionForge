@@ -23,10 +23,11 @@ _DIST_NAME = "visionforge-studio"
 # Supported wheel tags in ascending CUDA capability order.
 # Each entry is (min_driver_major*10 + min_driver_minor, tag).
 # Rule: pick the highest tag whose threshold is <= driver CUDA (in major*10+minor space).
-# driver < 11.8 or None → cpu; 11.8..12.0 → cu118; 12.1..12.3 → cu121;
-# 12.4..12.5 → cu124; 12.6..12.7 → cu126; 12.8..12.9 → cu128; 13.0+ → cu130.
-# cu118/cu121/cu124 stay only for drivers too old for 12.6: their indexes stopped
-# at torch 2.7.1/2.5.1/2.6.0, below every security fix (ADR-198).
+# driver < 12.0 or None → cpu; 12.0..12.7 → cu126; 12.8..12.9 → cu128; 13.0+ → cu130.
+# A CUDA 12.0–12.5 driver takes cu126 through CUDA's minor version
+# compatibility (any 12.x runtime on a 12.x driver, 525.60+). The cu118, cu121
+# and cu124 extras are gone: their indexes stopped at torch 2.7.1/2.5.1/2.6.0,
+# below every security fix, including a critical one in torch.load (ADR-209).
 #
 # cu128 matters beyond "newer is nicer": RTX 50-series (Blackwell) is compute
 # capability 12.0, and no wheel before cu128 ships an sm_120 kernel. On those
@@ -34,10 +35,7 @@ _DIST_NAME = "visionforge-studio"
 # first kernel launch — the exact silent-misconfiguration this module exists
 # to prevent.
 _WHEEL_THRESHOLDS: list[tuple[int, str]] = [
-    (118, "cu118"),
-    (121, "cu121"),
-    (124, "cu124"),
-    (126, "cu126"),
+    (120, "cu126"),
     (128, "cu128"),
     (130, "cu130"),
 ]
@@ -446,6 +444,13 @@ def _report_gpu(
     """Say which GPU, if any, this machine can train on."""
     if driver_cuda:
         print(f"[OK] CUDA driver version: {driver_cuda}")
+        if select_wheel_tag(driver_cuda) == "cpu":
+            # No CUDA 11 extra is left (ADR-209): say why the GPU goes unused.
+            print(
+                f"[WARN] CUDA driver {driver_cuda} is older than CUDA 12: no GPU build "
+                "of torch is offered for it. Update the NVIDIA driver to 525.60 or "
+                "newer (527.41 on Windows) to train on this GPU."
+            )
     elif on_cuda:
         print(
             "[OK] GPU usable via torch "
