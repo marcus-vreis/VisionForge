@@ -27,8 +27,9 @@ const child = spawn(python ?? exe, python ? ["-m", "visionforge", ...args] : arg
   env: {
     ...process.env,
     // The suite trains on the CPU even when the UI would offer a GPU: the
-    // machine's GPU may be busy with a real training.
-    CUDA_VISIBLE_DEVICES: "",
+    // machine's GPU may be busy with a real training. "-1", not "": on Windows
+    // an empty value hides nothing, and the local suite then saw the GPU.
+    CUDA_VISIBLE_DEVICES: "-1",
     OMP_NUM_THREADS: "1",
     MKL_NUM_THREADS: "1",
     OPENBLAS_NUM_THREADS: "1",

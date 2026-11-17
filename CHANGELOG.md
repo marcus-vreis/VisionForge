@@ -17,11 +17,17 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 - Dependências do frontend: React 19.3, Base UI 1.9, Tailwind 4.3, Vite 8.3.8, Playwright 1.65, lucide-react 1.72 e mais 13 atualizações minor e patch. O `eslint-plugin-react-hooks` 7.1 passou a ver 15 componentes que mudavam estado de forma síncrona dentro de um effect; eles agora ajustam esse estado durante o render ou no próprio handler, sem desligar a regra.
 - `uv.lock`: httpx2 e httpcore2 2.12.0 e idna 3.20, que fecham seis alertas de segurança; o lock também passa a dizer 0.22.1 para o próprio pacote.
+- Os minimatch das ferramentas de desenvolvimento do frontend (typescript-eslint e ts-morph) sobem para 11 por `overrides` do npm, fora da faixa do alerta de negação de serviço.
+
+### Removed
+
+- Os extras `cu118`, `cu121` e `cu124`. O torch deles parava na 2.7, com nove alertas de segurança, um crítico no `torch.load`. Qualquer driver CUDA 12 roda o `cu126`; o `visionforge doctor` passa a recomendá-lo para drivers 12.0 a 12.5 e avisa, num driver só com CUDA 11, que a GPU volta com um driver 525.60 ou mais novo (ADR-209).
 
 ### Fixed
 
 - Depois das boas-vindas, ou de fechar o guia pelo ✕, o primeiro Tab saía da página em vez de cair no link "Pular para o conteúdo": as duas camadas vinham depois do conteúdo no DOM, e o navegador continua o Tab de onde estava o botão que sumiu. Elas agora vêm antes do link.
 - No convite do guia, a 375 px, o botão "Primeiro treino →" passava da borda do cartão; os dois botões agora quebram linha.
+- O `visionforge doctor` culpava um `CUDA_VISIBLE_DEVICES` vazio pela GPU escondida mesmo quando o torch rodava nela: no Windows o valor vazio não esconde nada. O aviso agora só aparece quando o torch não vê a GPU. Pelo mesmo motivo, o servidor dos testes de navegador passa a esconder a GPU com `-1`, como a CI já fazia na prática.
 
 ## [0.22.1] — 2026-11-15
 

@@ -8332,3 +8332,25 @@ Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS
 
 - *Rename the backend's `val_auroc`.* It is in every anomaly `run.json` already written and in the event stream; the name is wrong, and changing it breaks reading old runs for a label the interface can fix.
 - *A field for `custom_model` in the Modelo step.* Useful, and a larger change: it needs the list of registered builders from the server. The note covers the case that exists today, a YAML that names one.
+
+## ADR-209 — The cu118, cu121 and cu124 extras are removed
+
+**Date:** 2026-11-17
+**Status:** Accepted
+**Amends:** ADR-198 (torch floors per hardware extra), ADR-005 (hardware extras)
+
+**Context:** ADR-198 kept `cu118`, `cu121` and `cu124` as legacy extras for drivers too old for CUDA 12.6. Their PyTorch indexes stop at torch 2.7.1, 2.5.1 and 2.6.0, so the lock kept three forks that carry nine of the repository's ten torch advisories, one of them critical (`torch.load` with `weights_only=True` leads to remote code execution, GHSA-53q9-r3pm-6pq6) and one high (code execution through an untrusted checkpoint, GHSA-63cw-57p8-fm3p). VisionForge loads checkpoints, and the Hub and bundle import bring checkpoints from elsewhere. ADR-198's reason to keep them was that a driver predating 12.6 would be left with the CPU; but CUDA's minor version compatibility runs any CUDA 12.x runtime on any CUDA 12 driver (525.60+, 527.41+ on Windows), which is the same premise the Docker default already rests on (ADR-072: the cu128 image "works on any CUDA 12 driver").
+
+**Decision:**
+
+- `pyproject.toml` loses the three extras, their indexes, sources and lock conflicts; `uv.lock` was regenerated and only lost packages (the three torch/torchvision forks, the CUDA 11, 12.1 and 12.4 runtime libraries and three old tritons).
+- `visionforge doctor` maps any CUDA 12 driver below 12.6 to `cu126`. A driver that only reaches CUDA 11 gets `cpu`, with a warning that names the driver version that brings the GPU back.
+- README, QUICKSTART and CONTRIBUTING list `cu126`, `cu128`, `cu130` and `cpu`, and say that `cu126` runs on any CUDA 12 driver.
+
+**Consequences:** a machine whose NVIDIA driver only reaches CUDA 11 (older than 525.60, from before late 2022) trains on the CPU until the driver is updated; before, it got a torch with a critical advisory. The one torch advisory left is a low one on `cu128` (GHSA-rrmf-rvhw-rf47, `torch.jit.script`), whose index stops at 2.11 while the fix is 2.13; RTX 50-series cards that want it gone use `cu130`.
+
+**Alternatives considered:**
+
+- *Keep the extras and dismiss the alerts as accepted risk.* Nothing changes for anyone, and a researcher on an old driver keeps a torch whose checkpoint loading is exploitable.
+- *Pin the legacy extras to their last torch and document the risk.* That is what ADR-198 did; the advisories stayed open and the extras kept being offered first to old drivers by `doctor`.
+

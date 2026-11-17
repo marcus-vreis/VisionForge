@@ -35,13 +35,14 @@ class TestSelectWheelTag:
             ("12.9", "cu128"),
             ("13.0", "cu130"),
             ("13.3", "cu130"),  # above highest supported → clamp to cu130
-            ("12.4", "cu124"),
-            ("12.5", "cu124"),  # between 12.4 and 12.6 → cu124
-            ("12.1", "cu121"),
-            ("12.3", "cu121"),  # between 12.1 and 12.4 → cu121
-            ("12.0", "cu118"),  # edge: just below cu121 boundary → cu118
-            ("11.8", "cu118"),
-            ("11.2", "cpu"),  # below 11.8 → cpu
+            # Any CUDA 12 driver runs cu126 by minor version compatibility; the
+            # cu118/cu121/cu124 extras are gone (ADR-209).
+            ("12.5", "cu126"),
+            ("12.4", "cu126"),
+            ("12.1", "cu126"),
+            ("12.0", "cu126"),  # edge: the first CUDA 12 driver
+            ("11.8", "cpu"),  # a CUDA 11 driver has no extra left → cpu
+            ("11.2", "cpu"),
             (None, "cpu"),  # no GPU detected → cpu
         ],
     )
@@ -138,7 +139,7 @@ class TestBuildInstallCommand:
     user who answered `y` to `--fix` kept training on the CPU.
     """
 
-    @pytest.mark.parametrize("tag", ["cpu", "cu118", "cu124", "cu128"])
+    @pytest.mark.parametrize("tag", ["cpu", "cu126", "cu128", "cu130"])
     def test_removes_then_installs_from_that_index(self, tag: str) -> None:
         commands, url = build_install_command(tag)
 
@@ -340,6 +341,35 @@ class TestRunDoctor:
         r.returncode = 0
         return r
 
+    def test_cuda_11_driver_is_told_to_update_not_just_cpu(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """With the CUDA 11 extras gone (ADR-209), a GPU on an old driver gets
+        the CPU wheel; the report must say why and what brings the GPU back."""
+        with (
+            patch("subprocess.run", return_value=self._make_smi_output("11.8")),
+            patch("importlib.util.find_spec", return_value=None),
+        ):
+            run_doctor(fix=False, confirm_fn=MagicMock())
+
+        out = capsys.readouterr().out
+        assert "Recommended wheel: cpu" in out
+        assert "[WARN] CUDA driver 11.8 is older than CUDA 12" in out
+        assert "525.60" in out
+
+    def test_cuda_12_driver_gets_no_update_warning(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        with (
+            patch("subprocess.run", return_value=self._make_smi_output("12.0")),
+            patch("importlib.util.find_spec", return_value=None),
+        ):
+            run_doctor(fix=False, confirm_fn=MagicMock())
+
+        out = capsys.readouterr().out
+        assert "Recommended wheel: cu126" in out
+        assert "older than CUDA 12" not in out
+
     def test_fix_false_never_calls_confirm_or_install(self) -> None:
         confirm = MagicMock()
         with (
@@ -363,9 +393,9 @@ class TestRunDoctor:
 
         confirm.assert_called_once()
         mock_install.assert_called_once()
-        # Verify correct tag was selected
+        # A CUDA 12.4 driver gets cu126 (minor version compatibility, ADR-209)
         call_args = mock_install.call_args
-        assert "cu124" in call_args[0][0]
+        assert "cu126" in call_args[0][0]
 
     def test_fix_true_confirm_no_does_not_install(self) -> None:
         confirm = MagicMock(return_value=False)
@@ -719,6 +749,24 @@ class TestDoctorNamesHiddenGpu:
     ) -> None:
         monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
         assert "CUDA_VISIBLE_DEVICES" not in self._run(capsys)
+
+    def test_not_named_when_torch_still_sees_the_gpu(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """On Windows an empty CUDA_VISIBLE_DEVICES hides nothing: torch still
+        reports CUDA. Blaming the variable then would point at the wrong cause."""
+        monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "")
+        fake_torch = MagicMock()
+        fake_torch.__version__ = "2.14.1+cu130"
+        fake_torch.version.cuda = "13.0"
+        fake_torch.cuda.is_available.return_value = True
+        with (
+            patch("subprocess.run", side_effect=FileNotFoundError),
+            patch("importlib.util.find_spec", return_value=MagicMock()),
+            patch.dict(sys.modules, {"torch": fake_torch}),
+        ):
+            run_doctor(fix=False, confirm_fn=MagicMock())
+        assert "CUDA_VISIBLE_DEVICES" not in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------

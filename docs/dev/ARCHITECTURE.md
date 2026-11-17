@@ -255,7 +255,7 @@ multi_cuda  → torch.nn.DataParallel over gpu_ids (classification, regression, 
               gpu_ids passed to Ultralytics (detection)
 ```
 
-`DistributedDataParallel` is not implemented (ADR-007). The device actually used is recorded in `run.json` as `device_used`. PyTorch installation is the user's responsibility (ADR-005): `torch`/`torchvision` come from a hardware extra (`cpu`, `cu118` … `cu130`; one lock fork per extra, ADR-198); everything else ships in the base install (ADR-106).
+`DistributedDataParallel` is not implemented (ADR-007). The device actually used is recorded in `run.json` as `device_used`. PyTorch installation is the user's responsibility (ADR-005): `torch`/`torchvision` come from a hardware extra (`cpu`, `cu126`, `cu128`, `cu130`; one lock fork per extra, ADR-198; the CUDA 11 era extras left in ADR-209); everything else ships in the base install (ADR-106).
 
 ## Dependency policy
 
