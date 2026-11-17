@@ -49,14 +49,19 @@ export function CvCard({ accent, disabled, onCv, runSignal }: CvCardProps) {
   const run = () => onCv({ n_folds: nFolds, shuffle, fold_seed: foldSeed });
 
   // Fire on a new signal only — see ReplicatesCard for the rationale.
-  // Set when the bottom bar asked to run and this card could not.
+  // Set when the bottom bar asked to run and this card could not: local state,
+  // so it is adjusted while rendering; only the parent call stays in the effect.
   const [attempted, setAttempted] = useState(false);
+  const [seenSignal, setSeenSignal] = useState(runSignal ?? 0);
+  if (runSignal !== undefined && runSignal !== seenSignal) {
+    setSeenSignal(runSignal);
+    if (!canRun) setAttempted(true);
+  }
   const lastSignal = useRef(runSignal ?? 0);
   useEffect(() => {
     if (runSignal === undefined || runSignal === lastSignal.current) return;
     lastSignal.current = runSignal;
     if (canRun) run();
-    else setAttempted(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runSignal]);
 

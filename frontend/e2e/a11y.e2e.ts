@@ -14,6 +14,17 @@ test("o primeiro Tab cai no link que pula para o conteúdo", async ({ page }) =>
   await expect(page.locator("main#vf-main")).toBeFocused();
 });
 
+// Closing the guide with its ✕ removed the focused button from the end of the
+// page, and the browser resumed Tab from there: the next Tab left the page.
+test("fechar o guia deixa o primeiro Tab no link que pula para o conteúdo", async ({ page }) => {
+  await enter(page, "E2E", { guide: true });
+  const close = page.getByRole("button", { name: "Fechar o guia" });
+  await close.click();
+  await expect(close).toBeHidden();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: "Pular para o conteúdo" })).toBeFocused();
+});
+
 test("botões e links do cabeçalho têm ao menos 44x44 px a 375x812", async ({ page }) => {
   await enter(page);
   const targets = page.locator("header.vf-app-header").locator("button, a");

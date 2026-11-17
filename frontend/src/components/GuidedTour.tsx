@@ -399,7 +399,8 @@ export function GuidedTour({
 
         {/* O convite oferece cada guia do registro, lado a lado; o último é o destaque. */}
         {!current && (
-          <div style={{ marginTop: 20, display: "flex", gap: 10 }}>
+          // Wraps: at 375 px the two titles, kept on one line each, overflow the card side by side.
+          <div style={{ marginTop: 20, display: "flex", flexWrap: "wrap", gap: 10 }}>
             {GUIDES.map((g, i) => (
               <button
                 key={g.id}

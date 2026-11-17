@@ -110,14 +110,19 @@ export function ReplicatedComparisonCard({
 
   // Fire on a new signal only — the card keeps owning its own fields, so the
   // effect deliberately does not depend on them (it would re-fire on typing).
-  // Set when the bottom bar asked to run and this card could not.
+  // Set when the bottom bar asked to run and this card could not: local state,
+  // so it is adjusted while rendering; only the parent call stays in the effect.
   const [attempted, setAttempted] = useState(false);
+  const [seenSignal, setSeenSignal] = useState(runSignal ?? 0);
+  if (runSignal !== undefined && runSignal !== seenSignal) {
+    setSeenSignal(runSignal);
+    if (!canRun) setAttempted(true);
+  }
   const lastSignal = useRef(runSignal ?? 0);
   useEffect(() => {
     if (runSignal === undefined || runSignal === lastSignal.current) return;
     lastSignal.current = runSignal;
     if (canRun) run();
-    else setAttempted(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runSignal]);
 

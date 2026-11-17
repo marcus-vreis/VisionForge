@@ -64,13 +64,19 @@ export function CompareModelsCard({
   const run = () => onCompare(buildComparePayload(selected, metric));
 
   // Fire on a new signal only, as ReplicatesCard does.
+  // The "could not run" flag is local state, adjusted while rendering; only the
+  // parent call stays in the effect.
   const [attempted, setAttempted] = useState(false);
+  const [seenSignal, setSeenSignal] = useState(runSignal ?? 0);
+  if (runSignal !== undefined && runSignal !== seenSignal) {
+    setSeenSignal(runSignal);
+    if (!canRun) setAttempted(true);
+  }
   const lastSignal = useRef(runSignal ?? 0);
   useEffect(() => {
     if (runSignal === undefined || runSignal === lastSignal.current) return;
     lastSignal.current = runSignal;
     if (canRun) run();
-    else setAttempted(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runSignal]);
 

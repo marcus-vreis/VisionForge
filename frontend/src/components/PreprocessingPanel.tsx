@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   artifactUrl,
   previewPreprocess,
@@ -60,11 +60,14 @@ export function PreprocessingPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Reset preview when the dataset changes — stale paths would 404.
-  useEffect(() => {
+  // Reset preview when the dataset changes — stale paths would 404. Adjusted
+  // while rendering, so the stale preview is never painted under the new dir.
+  const [previewDir, setPreviewDir] = useState(baseDir);
+  if (baseDir !== previewDir) {
+    setPreviewDir(baseDir);
     setPreview(null);
     setError(null);
-  }, [baseDir]);
+  }
 
   const addStep = (kind: string) => {
     const params = DEFAULT_PARAMS[kind] ?? {};

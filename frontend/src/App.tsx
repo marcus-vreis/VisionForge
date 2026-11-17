@@ -952,6 +952,54 @@ export default function App() {
         color: "var(--vf-text)",
       }}
     >
+      {/* The welcome and the guide come before the skip link on purpose. Both are
+          fixed layers (z-index 40 and 95), so their place in the DOM changes
+          nothing on screen; but when one closes with the focus on its own button
+          ("Entrar", "Fechar o guia"), the browser resumes Tab from where that
+          button was. Here, the next Tab lands on the skip link; rendered after
+          <main>, it left the page. A keyboard user also reaches an open guide
+          card first. */}
+      <WelcomeOverlay
+        key={askName ? "ask" : pickProfile ? "pick" : newProfile ? "create" : "boot"}
+        forceAsk={askName}
+        forcePick={pickProfile}
+        forceCreate={newProfile}
+        onProfile={(p, shared) => {
+          // The History is the profile's: another profile's count and open sheet
+          // would describe runs this one cannot see.
+          if (profileSlugRef.current !== null && profileSlugRef.current !== p.slug) {
+            setHistoryCount(0);
+            setShowHistory(false);
+          }
+          profileSlugRef.current = p.slug;
+          setProfile(p);
+          setSharedServer(shared);
+        }}
+        onName={(n) => {
+          setUserName(n);
+          setAskName(false);
+          setPickProfile(false);
+          setNewProfile(false);
+          // Só na primeira vez: quem já viu (ou dispensou) o guia entra direto.
+          if (!readTourSeen()) setTour("convite");
+        }}
+      />
+      {tour !== "none" && (
+        <GuidedTour
+          key={tour}
+          invite={tour === "convite"}
+          guide={tour === "convite" ? undefined : tour}
+          events={progressEvents}
+          activeTask={activeKey}
+          datasetPaths={guideDatasetPaths}
+          context={guideContext}
+          onClose={() => setTour("none")}
+          onLearn={() => {
+            setTour("none");
+            setShowLearn(true);
+          }}
+        />
+      )}
       <SkipLink />
 
       <Header
@@ -1315,47 +1363,6 @@ export default function App() {
             } else {
               setResultsVisible(true);
             }
-          }}
-        />
-      )}
-      <WelcomeOverlay
-        key={askName ? "ask" : pickProfile ? "pick" : newProfile ? "create" : "boot"}
-        forceAsk={askName}
-        forcePick={pickProfile}
-        forceCreate={newProfile}
-        onProfile={(p, shared) => {
-          // The History is the profile's: another profile's count and open sheet
-          // would describe runs this one cannot see.
-          if (profileSlugRef.current !== null && profileSlugRef.current !== p.slug) {
-            setHistoryCount(0);
-            setShowHistory(false);
-          }
-          profileSlugRef.current = p.slug;
-          setProfile(p);
-          setSharedServer(shared);
-        }}
-        onName={(n) => {
-          setUserName(n);
-          setAskName(false);
-          setPickProfile(false);
-          setNewProfile(false);
-          // Só na primeira vez: quem já viu (ou dispensou) o guia entra direto.
-          if (!readTourSeen()) setTour("convite");
-        }}
-      />
-      {tour !== "none" && (
-        <GuidedTour
-          key={tour}
-          invite={tour === "convite"}
-          guide={tour === "convite" ? undefined : tour}
-          events={progressEvents}
-          activeTask={activeKey}
-          datasetPaths={guideDatasetPaths}
-          context={guideContext}
-          onClose={() => setTour("none")}
-          onLearn={() => {
-            setTour("none");
-            setShowLearn(true);
           }}
         />
       )}
