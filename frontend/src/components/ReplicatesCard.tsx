@@ -65,7 +65,8 @@ export function ReplicatesCard({
   const [metric, setMetric] = useState(metrics[0]?.value ?? "");
   // A new preset fills the seeds once; the researcher edits from there.
   const [seenPreset, setSeenPreset] = useState<number | null>(null);
-  if (preset && preset.id !== seenPreset) {
+  const presetPending = !!preset && preset.id !== seenPreset;
+  if (preset && presetPending) {
     const fields = seedFieldsFor(preset.seeds);
     setSeenPreset(preset.id);
     setSeedMode(fields.mode);
@@ -83,14 +84,21 @@ export function ReplicatesCard({
 
   // Fire on a new signal only — the card keeps owning its own fields, so the
   // effect deliberately does not depend on them (it would re-fire on typing).
-  // Set when the bottom bar asked to run and this card could not.
+  // Set when the bottom bar asked to run and this card could not: local state,
+  // so it is adjusted while rendering; only the parent call stays in the effect.
+  // Not in the pass that applies a preset: canRun there still reads the old
+  // seeds, and React re-renders at once with the new ones.
   const [attempted, setAttempted] = useState(false);
+  const [seenSignal, setSeenSignal] = useState(runSignal ?? 0);
+  if (!presetPending && runSignal !== undefined && runSignal !== seenSignal) {
+    setSeenSignal(runSignal);
+    if (!canRun) setAttempted(true);
+  }
   const lastSignal = useRef(runSignal ?? 0);
   useEffect(() => {
     if (runSignal === undefined || runSignal === lastSignal.current) return;
     lastSignal.current = runSignal;
     if (canRun) run();
-    else setAttempted(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runSignal]);
 

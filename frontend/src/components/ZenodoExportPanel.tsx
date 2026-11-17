@@ -29,10 +29,24 @@ export function ZenodoExportPanel({ runId }: { runId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [url, setUrl] = useState<string | null>(null);
 
+  // Each effect below starts a fresh load when its deps change while open: the
+  // state it shows is reset while rendering, before that fetch runs.
+  const previewKey = open ? JSON.stringify([runId, z.failed]) : null;
+  const [seenPreviewKey, setSeenPreviewKey] = useState<string | null>(null);
+  if (previewKey !== seenPreviewKey) {
+    setSeenPreviewKey(previewKey);
+    if (previewKey !== null) { setBusy(true); setError(null); setPreview(null); setUrl(null); }
+  }
+  const tokenKey = open ? JSON.stringify([site, z.failed]) : null;
+  const [seenTokenKey, setSeenTokenKey] = useState<string | null>(null);
+  if (tokenKey !== seenTokenKey) {
+    setSeenTokenKey(tokenKey);
+    if (tokenKey !== null) setStatus(null);
+  }
+
   useEffect(() => {
     if (!open) return;
     let alive = true;
-    setBusy(true); setError(null); setPreview(null); setUrl(null);
     fetchZenodoPreview(runId)
       .then((snapshot) => { if (alive) setPreview(snapshot); })
       .catch((e: unknown) => { if (alive) setError(reason(e, z.failed)); })
@@ -43,7 +57,6 @@ export function ZenodoExportPanel({ runId }: { runId: string }) {
   useEffect(() => {
     if (!open) return;
     let alive = true;
-    setStatus(null);
     fetchZenodoToken(site)
       .then((next) => { if (alive) setStatus(next); })
       .catch((e: unknown) => { if (alive) setError(reason(e, z.failed)); });

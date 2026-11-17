@@ -414,13 +414,14 @@ export function ColabConnection({
   const [open, setOpen] = useState(false);
   const [sessions, setSessions] = useState<ColabSessionInfo[] | null>(null);
 
-  const refresh = useCallback(async () => {
-    try {
-      setStatus(await fetchColabStatus());
-    } catch (e) {
-      setError(message(e));
-    }
-  }, []);
+  // State is set only in the promise callbacks, after the request settles.
+  const refresh = useCallback(
+    () =>
+      fetchColabStatus()
+        .then(setStatus)
+        .catch((e: unknown) => setError(message(e))),
+    [],
+  );
 
   useEffect(() => {
     void refresh();

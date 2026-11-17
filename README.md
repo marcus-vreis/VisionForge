@@ -67,9 +67,9 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 pip install visionforge-studio
 ```
 
-Available in place of `cu128`: `cu130` (driver 580+) · `cu126` · `cpu`. The legacy
-`cu118` · `cu121` · `cu124` builds stop at torch 2.7 and miss its security fixes
-(ADR-198); use them only with a driver too old for CUDA 12.6.
+Available in place of `cu128`: `cu130` (driver 580+) · `cu126` · `cpu`. `cu126`
+runs on any CUDA 12 driver (525.60+, 527.41+ on Windows); a driver that only
+reaches CUDA 11 has no GPU build left and needs an update (ADR-209).
 `cu128` is the broadest — it spans Turing (sm_75) through Blackwell, and is the
 only one that runs on an RTX 50-series card at all.
 
@@ -249,7 +249,14 @@ without touching the package.
 visionforge audit-data datasets/my_dataset --groups groups.csv --strict-groups --json audit.json
 visionforge bundle outputs/models/my_run evidence.zip
 visionforge verify-bundle evidence.zip
+visionforge reproduce evidence.zip --data datasets/my_dataset
 ```
+
+  `reproduce` re-trains one seed of a single run or a replicate set from a
+  verified bundle and prints one JSON comparing it with the record: for a
+  replicate set, whether the new seed falls inside the 95% prediction interval
+  of one seed computed from the set's mean and std (exit code 1 when a metric
+  falls outside it), and the library/device differences.
 
 - **Learning rate per model** (classification) — with
   `model_comparison.lr_policy: suggested` each architecture trains at its own
@@ -453,9 +460,9 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 pip install visionforge-studio
 ```
 
-Disponíveis no lugar de `cu128`: `cu130` (driver 580+) · `cu126` · `cpu`. As builds
-legadas `cu118` · `cu121` · `cu124` param no torch 2.7 e ficam sem as correções de
-segurança (ADR-198); use só com um driver antigo demais para o CUDA 12.6.
+Disponíveis no lugar de `cu128`: `cu130` (driver 580+) · `cu126` · `cpu`. O `cu126`
+roda com qualquer driver CUDA 12 (525.60+, 527.41+ no Windows); um driver que só
+chega ao CUDA 11 não tem mais build de GPU e precisa ser atualizado (ADR-209).
 O `cu128` é o mais abrangente — vai de Turing (sm_75) até Blackwell, e é o único
 que roda numa RTX série 50.
 
@@ -638,7 +645,15 @@ sem tocar no pacote.
 visionforge audit-data datasets/meu_dataset --groups groups.csv --strict-groups --json auditoria.json
 visionforge bundle outputs/models/meu_run evidencia.zip
 visionforge verify-bundle evidencia.zip
+visionforge reproduce evidencia.zip --data datasets/meu_dataset
 ```
+
+  `reproduce` retreina uma semente de um run único ou de um conjunto de
+  réplicas a partir de um pacote verificado e imprime um JSON que o compara com
+  o registro: num conjunto de réplicas, se a semente nova cai no intervalo de
+  predição de 95% de uma semente, calculado da média e do desvio do conjunto
+  (código de saída 1 quando uma métrica fica fora dele), e as diferenças de
+  bibliotecas e dispositivo.
 
 - **Learning rate por modelo** (classificação) — com
   `model_comparison.lr_policy: suggested` cada arquitetura treina com o seu LR

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import sys
@@ -190,6 +191,49 @@ def _run_verify_bundle_command(args: argparse.Namespace) -> None:
     print(
         json.dumps(verify_experiment_bundle(args.bundle), indent=2, ensure_ascii=False)
     )
+
+
+def _one_line(exc: BaseException) -> str:
+    """An error as one line: a config validation error spans several."""
+    return " ".join(str(exc).split())
+
+
+def _run_reproduce_command(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> None:
+    """Re-train one seed of a verified bundle and print the comparison as JSON.
+
+    Exit 2 before any training when the bundle, its kind, the seed or the
+    dataset cannot be reproduced; 1 when the training fails or a metric falls
+    outside the recorded interval; 0 otherwise.
+    """
+    from visionforge.cli_strategies import runner_for
+    from visionforge.core.reproduce import (
+        exit_code,
+        plan_reproduction,
+        run_reproduction,
+    )
+    from visionforge.utils.logger import setup_logger
+
+    try:
+        plan = plan_reproduction(
+            args.bundle, data=args.data, seed=args.seed, output=args.output
+        )
+    except (OSError, ValueError) as exc:
+        parser.exit(2, f"visionforge: {_one_line(exc)}\n")
+    # Logs and whatever a library prints go to stderr: stdout is the JSON alone.
+    with contextlib.redirect_stdout(sys.stderr):
+        setup_logger(log_dir=args.output / "logs" if args.output else None)
+        try:
+            report = run_reproduction(plan, runner_for)
+        except ValueError as exc:
+            parser.exit(2, f"visionforge: {_one_line(exc)}\n")
+        except RuntimeError as exc:
+            parser.exit(1, f"visionforge: {_one_line(exc)}\n")
+    print(json.dumps(report, indent=2, ensure_ascii=False))
+    code = exit_code(report["verdict"])
+    if code:
+        raise SystemExit(code)
 
 
 def _run_evidence_command(
@@ -458,6 +502,30 @@ def main() -> None:
         "verify-bundle", help="Verify an experiment record without extracting it."
     )
     verify_parser.add_argument("bundle", type=Path)
+    reproduce_parser = subparsers.add_parser(
+        "reproduce",
+        help="Re-train one seed of a verified bundle and compare it with the record.",
+    )
+    reproduce_parser.add_argument("bundle", type=Path)
+    reproduce_parser.add_argument(
+        "--data",
+        type=Path,
+        metavar="DATASET_DIR",
+        help="dataset to train on, in place of the path the bundle recorded",
+    )
+    reproduce_parser.add_argument(
+        "--seed",
+        type=int,
+        metavar="N",
+        help="seed to train (a replicate group: one of its seeds; default: the first)",
+    )
+    reproduce_parser.add_argument(
+        "--output",
+        type=Path,
+        metavar="OUTPUTS_DIR",
+        help="where the new run goes (default: the usual outputs folder)",
+    )
+    _add_offline_flag(reproduce_parser)
 
     args = parser.parse_args()
     _bind_language_from_env()
@@ -472,6 +540,10 @@ def main() -> None:
 
     if args.command in {"audit-data", "bundle", "verify-bundle"}:
         _run_evidence_command(args, parser)
+        return
+
+    if args.command == "reproduce":
+        _run_reproduce_command(args, parser)
         return
 
     setup_logger()

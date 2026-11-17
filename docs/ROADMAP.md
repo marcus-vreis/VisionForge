@@ -9,11 +9,13 @@ VisionForge is below `1.0.0`: the configuration schema and the HTTP API may stil
 
 ## On `development` (next release)
 
-Nothing yet. `0.22.0` shipped everything that was listed here, and four items that were under "Planned next": the paired comparison in the GUI for the five task families, `ultralytics` as the optional `detection` extra, the guaranteed offline mode (`--offline`) and the Apple Silicon GPU (`mps`, experimental until it is validated on a real Mac). The full list is in the [`CHANGELOG.md`](../CHANGELOG.md).
+- **Independent bundle reproduction:** `visionforge reproduce <bundle>` re-trains one seed of a verified experiment bundle (a single run or a replicate group) on a local copy of its dataset, and judges the result against the group's 95% prediction interval for one new seed (ADR-210).
+
+`0.22.0` shipped everything that was listed here, and four items that were under "Planned next": the paired comparison in the GUI for the five task families, `ultralytics` as the optional `detection` extra, the guaranteed offline mode (`--offline`) and the Apple Silicon GPU (`mps`, experimental until it is validated on a real Mac). The full list is in the [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## Planned next
 
-- **Independent bundle reproduction:** `visionforge reproduce <bundle>` to re-train a seed from a verified experiment bundle and compare the result against its recorded confidence interval.
+- **Reproduction of the other group kinds:** `visionforge reproduce` for K-fold, sweep and paired comparison bundles, and for researcher-defined tasks.
 
 ## Criteria for `1.0.0`
 
@@ -34,11 +36,13 @@ O VisionForge está abaixo da `1.0.0`: o schema de configuração e a API HTTP a
 
 ## Em `development` (próxima release)
 
-Nada ainda. A `0.22.0` levou tudo o que estava listado aqui e quatro itens que estavam em "Próximos passos": a comparação pareada na GUI nas cinco famílias de tarefa, o `ultralytics` como extra opcional `detection`, o modo offline garantido (`--offline`) e a GPU Apple Silicon (`mps`, experimental até ser validada num Mac de verdade). A lista completa está no [`CHANGELOG.md`](../CHANGELOG.md).
+- **Reprodução independente de bundle:** `visionforge reproduce <bundle>` retreina uma semente de um pacote de experimento verificado (uma execução ou um grupo de réplicas) numa cópia local do dataset e julga o resultado pelo intervalo de predição de 95% do grupo para uma semente nova (ADR-210).
+
+A `0.22.0` levou tudo o que estava listado aqui e quatro itens que estavam em "Próximos passos": a comparação pareada na GUI nas cinco famílias de tarefa, o `ultralytics` como extra opcional `detection`, o modo offline garantido (`--offline`) e a GPU Apple Silicon (`mps`, experimental até ser validada num Mac de verdade). A lista completa está no [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## Próximos passos
 
-- **Reprodução independente de bundle:** `visionforge reproduce <bundle>` para retreinar uma semente a partir de um pacote de experimento verificado e comparar o resultado com o intervalo de confiança registrado.
+- **Reprodução dos outros tipos de grupo:** `visionforge reproduce` para bundles de K-fold, sweep e comparação pareada, e para tarefas definidas pelo pesquisador.
 
 ## Critérios para a `1.0.0`
 

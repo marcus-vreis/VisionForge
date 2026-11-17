@@ -2,7 +2,7 @@ version: 2
 
 # Monthly, grouped version updates against `development` (the integration
 # branch). torch and torchvision are excluded: the build has to match the
-# hardware extra (cpu / cu118 ... cu130), so a bump is chosen by hand.
+# hardware extra (cpu / cu126 ... cu130), so a bump is chosen by hand.
 #
 # A group holds only minor and patch updates. A major one comes alone, in its
 # own pull request: the first grouped npm update put TypeScript 7, ESLint 10

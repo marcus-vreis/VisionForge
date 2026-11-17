@@ -108,6 +108,7 @@ Imports `utils/`, plus `models/` from the four non-classification trainers (see 
 | `dataset_fingerprint.py` | `dataset_fingerprint` in every `run.json` (ADR-061) — sha256 over the sorted path+size manifest of `data.base_dir`, so "same dataset" becomes checkable. Records the method used, because `manifest` cannot see a same-size edit and `content` can. |
 | `dataset_audit.py` | Read-only cross-split SHA-256 duplicate checks and explicit group manifests (ADR-136). Classification CV consumes the same mapping with GroupKFold/StratifiedGroupKFold. |
 | `experiment_bundle.py` | Contained experiment records (ADR-135): allowlisted run artifacts in a ZIP with a SHA-256/size manifest, atomic export without overwrite, verification without extraction. CLI: `bundle` and `verify-bundle`. |
+| `reproduce.py` | Independent bundle reproduction (CLI `reproduce`): verifies a bundle, reads its run.json from the ZIP, picks the seed (single run or replicate group), points the config at a local dataset, trains through the `visionforge run` runner dispatcher it is handed, and compares the result with the recorded values; the verdict uses the 95% prediction interval of one seed (from the group's recorded n/mean/std), the recorded ci95 of the mean is shown for context. |
 | `resume_provenance.py` | Compare a resumed run's recorded dataset fingerprint before native training; reject confirmed changes and warn when legacy identity cannot be verified (ADR-134). |
 | `preprocessing.py` | The filter pipeline (blur, edges, wavelet, CLAHE…) shared by every task, applied before augmentation and normalization. |
 | `gradcam.py` · `onnx_export.py` · `batch_predict.py` | Post-training tooling: explainability heatmaps, ONNX export with a latency benchmark, and batch inference to CSV. |
@@ -255,7 +256,7 @@ multi_cuda  → torch.nn.DataParallel over gpu_ids (classification, regression, 
               gpu_ids passed to Ultralytics (detection)
 ```
 
-`DistributedDataParallel` is not implemented (ADR-007). The device actually used is recorded in `run.json` as `device_used`. PyTorch installation is the user's responsibility (ADR-005): `torch`/`torchvision` come from a hardware extra (`cpu`, `cu118` … `cu130`; one lock fork per extra, ADR-198); everything else ships in the base install (ADR-106).
+`DistributedDataParallel` is not implemented (ADR-007). The device actually used is recorded in `run.json` as `device_used`. PyTorch installation is the user's responsibility (ADR-005): `torch`/`torchvision` come from a hardware extra (`cpu`, `cu126`, `cu128`, `cu130`; one lock fork per extra, ADR-198; the CUDA 11 era extras left in ADR-209); everything else ships in the base install (ADR-106).
 
 ## Dependency policy
 
