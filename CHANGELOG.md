@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.22.2] — 2026-11-17
+
 ### Added
 
 - `visionforge reproduce BUNDLE.zip [--data PASTA] [--seed N] [--output PASTA]`: retreina uma semente de um pacote de experimento verificado, numa cópia local do dataset, e compara com o que o pacote registrou. Num grupo de réplicas, o veredito usa o intervalo de predição de 95% de uma semente nova (média ± t·s·√(1+1/n)), não o IC95 da média, que é estreito demais para uma semente só; o IC95 gravado aparece ao lado. Imprime um JSON com os valores, a diferença, os dois intervalos e as diferenças de ambiente; sai com 0 dentro do intervalo, 1 fora dele e 2 para um pacote que não pode ser reproduzido (ADR-210).
