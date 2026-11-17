@@ -338,14 +338,19 @@ def _run_install(tag: str) -> int:
     return subprocess.run(install, check=False).returncode
 
 
-def _report_hidden_gpu() -> None:
-    """Name CUDA_VISIBLE_DEVICES when it is set to nothing or to -1.
+def _report_hidden_gpu(on_cuda: bool) -> None:
+    """Name CUDA_VISIBLE_DEVICES when it is set to nothing or to -1 and torch
+    sees no GPU.
 
-    Either value hides every card from torch, so doctor would otherwise report a
-    missing GPU without saying that the variable, not the machine, is the cause.
+    Either value can hide every card from torch, so doctor would otherwise report
+    a missing GPU without saying that the variable, not the machine, is the
+    cause. Only "can": on Windows an empty value hides nothing, and naming it
+    while torch runs on the GPU would blame the wrong thing.
     """
     from visionforge.utils.messages import tr
 
+    if on_cuda:
+        return
     value = os.environ.get("CUDA_VISIBLE_DEVICES")
     if value is not None and value.strip() in {"", "-1"}:
         print(f"[WARN] {tr('doctor.gpu_hidden', value=value)}")
@@ -460,7 +465,7 @@ def _report_gpu(
         print("[OK] Apple GPU usable via torch (MPS, experimental)")
     else:
         print("[INFO] No CUDA-capable GPU detected (nvidia-smi not found or failed)")
-    _report_hidden_gpu()
+    _report_hidden_gpu(on_cuda)
 
 
 def _print_keep_install(version: str, on_mps_only: bool) -> None:

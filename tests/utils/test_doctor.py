@@ -750,6 +750,24 @@ class TestDoctorNamesHiddenGpu:
         monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
         assert "CUDA_VISIBLE_DEVICES" not in self._run(capsys)
 
+    def test_not_named_when_torch_still_sees_the_gpu(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """On Windows an empty CUDA_VISIBLE_DEVICES hides nothing: torch still
+        reports CUDA. Blaming the variable then would point at the wrong cause."""
+        monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "")
+        fake_torch = MagicMock()
+        fake_torch.__version__ = "2.14.1+cu130"
+        fake_torch.version.cuda = "13.0"
+        fake_torch.cuda.is_available.return_value = True
+        with (
+            patch("subprocess.run", side_effect=FileNotFoundError),
+            patch("importlib.util.find_spec", return_value=MagicMock()),
+            patch.dict(sys.modules, {"torch": fake_torch}),
+        ):
+            run_doctor(fix=False, confirm_fn=MagicMock())
+        assert "CUDA_VISIBLE_DEVICES" not in capsys.readouterr().out
+
 
 # ---------------------------------------------------------------------------
 # Apple GPU (MPS, ADR-192)

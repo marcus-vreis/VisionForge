@@ -27,6 +27,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 - Depois das boas-vindas, ou de fechar o guia pelo ✕, o primeiro Tab saía da página em vez de cair no link "Pular para o conteúdo": as duas camadas vinham depois do conteúdo no DOM, e o navegador continua o Tab de onde estava o botão que sumiu. Elas agora vêm antes do link.
 - No convite do guia, a 375 px, o botão "Primeiro treino →" passava da borda do cartão; os dois botões agora quebram linha.
+- O `visionforge doctor` culpava um `CUDA_VISIBLE_DEVICES` vazio pela GPU escondida mesmo quando o torch rodava nela: no Windows o valor vazio não esconde nada. O aviso agora só aparece quando o torch não vê a GPU. Pelo mesmo motivo, o servidor dos testes de navegador passa a esconder a GPU com `-1`, como a CI já fazia na prática.
 
 ## [0.22.1] — 2026-11-15
 
