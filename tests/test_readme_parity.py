@@ -51,6 +51,7 @@ def test_cli_subcommands_extracted_from_argparse() -> None:
         "audit-data",
         "bundle",
         "verify-bundle",
+        "reproduce",
     ]
 
 
