@@ -336,3 +336,18 @@ def test_a_replicate_set_reproduces_on_cpu_end_to_end(
     assert report["environment_diff"]["device"]["same"] is True
     for path, raw in originals.items():
         assert (path / "run.json").read_bytes() == raw
+
+
+def test_an_output_that_is_a_file_exits_2(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    fake: FakeRunner,
+) -> None:
+    bundle = _record_bundle(
+        tmp_path, {"config": _config(tmp_path), "metrics": {"test_r2": 0.75}}
+    )
+    out = tmp_path / "out.txt"
+    out.write_text("x", encoding="utf-8")
+    code = _invoke(monkeypatch, ["reproduce", str(bundle), "--output", str(out)])
+    _assert_exit_2(capsys, code, "is a file, not a folder")

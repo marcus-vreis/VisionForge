@@ -17,6 +17,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 - Dependências do frontend: vitest 5.1, js-yaml 5.5, lucide-react 1.73 e Playwright 1.65.1. O js-yaml 5 traz os próprios tipos (sai o `@types/js-yaml`) e lê com o schema CORE do YAML 1.2; os configs de `configs/` saem idênticos aos do PyYAML do backend, na leitura e na ida e volta pelo `dump`.
 
+### Fixed
+
+- `visionforge reproduce`: uma métrica que a reprodução devolve como NaN, num grupo com intervalo de predição, conta como fora dele (saída 1), em vez de "sem intervalo" com saída 0; um grupo de réplicas reproduzido sem a divisão de teste sai com 2, porque os agregados do grupo são de teste; o valor gravado e a diferença só aparecem para a execução terminada da mesma semente (`--seed` diferente da gravada, ou réplica parada, dão `recorded: null`); `--output` que é um arquivo, ou `training`/`output` que não são mapas no config, saem com 2 em vez de traceback (ADR-210, emenda).
+
 ## [0.22.2] — 2026-11-17
 
 ### Added

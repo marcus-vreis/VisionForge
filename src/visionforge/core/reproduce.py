@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 import yaml
+from loguru import logger
 
 from visionforge.core.experiment_bundle import (
     RUN_FILENAME,
@@ -94,6 +95,10 @@ class ReproductionPlan:
     child: dict[str, Any] | None
     # The config the new run trains: recorded one, new seed, name, data, outputs.
     config: dict[str, Any]
+    # False when the bundle's recorded scores belong to another seed (a single
+    # run re-trained with --seed) or to a replicate that did not finish: then
+    # there is no recorded value or delta to report.
+    recorded_is_this_seed: bool = True
 
 
 def _read_member(bundle: zipfile.ZipFile, name: str) -> bytes:
@@ -164,6 +169,18 @@ def bundle_kind(record: Mapping[str, Any]) -> Kind:
     )
 
 
+def _section(config: Mapping[str, Any], key: str) -> Mapping[str, Any]:
+    """The config's ``key`` section, empty when absent.
+
+    Raises:
+        ReproduceError: the section is present but not a mapping.
+    """
+    section = config.get(key) or {}
+    if not isinstance(section, Mapping):
+        raise ReproduceError(f"the bundle's config has a '{key}' that is not a mapping")
+    return section
+
+
 def task_of(record: Mapping[str, Any], config: Mapping[str, Any]) -> str:
     """The task the runner dispatcher knows the config by.
 
@@ -203,7 +220,7 @@ def pick_seed(
     if kind == "single":
         if requested is not None:
             return requested, None
-        seed = (config.get("training") or {}).get("seed")
+        seed = _section(config, "training").get("seed")
         if not isinstance(seed, int) or isinstance(seed, bool):
             raise ReproduceError("the bundle records no training seed; pass --seed N")
         return seed, None
@@ -283,10 +300,10 @@ def reproduction_config(
     """
     new = copy.deepcopy(dict(config))
     new["name"] = name
-    new["training"] = {**(new.get("training") or {}), "seed": seed}
+    new["training"] = {**_section(new, "training"), "seed": seed}
     new["data"] = data
     section = {
-        k: v for k, v in (new.get("output") or {}).items() if k not in _OUTPUT_DIRS
+        k: v for k, v in _section(new, "output").items() if k not in _OUTPUT_DIRS
     }
     if output is not None:
         section.update(
@@ -310,6 +327,8 @@ def plan_reproduction(
             (exit code 2 on the command line).
         OSError: the bundle cannot be read.
     """
+    if output is not None and output.exists() and not output.is_dir():
+        raise ReproduceError(f"--output {output} is a file, not a folder")
     bundle = read_bundle_record(bundle_path)
     kind = bundle_kind(bundle.record)
     task = task_of(bundle.record, bundle.config)
@@ -331,7 +350,19 @@ def plan_reproduction(
         record=bundle.record,
         child=child,
         config=config,
+        recorded_is_this_seed=_recorded_is_this_seed(
+            kind, bundle.config, chosen, child
+        ),
     )
+
+
+def _recorded_is_this_seed(
+    kind: Kind, config: Mapping[str, Any], seed: int, child: Mapping[str, Any] | None
+) -> bool:
+    """Whether the bundle's recorded scores come from ``seed``'s finished run."""
+    if kind == "single":
+        return _section(config, "training").get("seed") == seed
+    return child is not None and child.get("status") == _SUCCESS
 
 
 def _finite(value: Any) -> float | None:
@@ -347,10 +378,16 @@ def recorded_value(plan: ReproductionPlan, name: str, split: Split) -> float | N
     A replicate group's children carry the runner's own metric names. A single
     run's run.json writes the test score as ``test_<name>`` (the bare name for
     detection and custom tasks, ``core.run_groups``) and a validation score as
-    ``val_<name>``, or the bare name in older records.
+    ``val_<name>``, or the bare name in older records. None when the recorded
+    scores belong to another seed or to an unfinished replicate.
     """
+    if not plan.recorded_is_this_seed:
+        return None
     if plan.kind == "replicates":
-        return _finite(((plan.child or {}).get("metrics") or {}).get(name))
+        child = plan.child or {}
+        if child.get("status") != _SUCCESS:
+            return None
+        return _finite((child.get("metrics") or {}).get(name))
     metrics: Mapping[str, Any] = plan.record.get("metrics") or {}
     if split == "test":
         bare = _writes_bare_names(plan.config, plan.record)
@@ -412,16 +449,16 @@ def compare_metrics(
 
     ``ci95`` (the recorded interval of the mean) is reported for context;
     ``inside`` is judged against ``pi95``, the prediction interval of one seed.
+    A metric the reproduction reported as None (a NaN or infinite score) with
+    a ``pi95`` is outside it; one it did not report at all is not judged.
     """
     rows: list[dict[str, Any]] = []
     for name in names:
         old, new = recorded.get(name), reproduced.get(name)
         interval, prediction = intervals.get(name), predictions.get(name)
-        inside = (
-            None
-            if prediction is None or new is None
-            else prediction[0] <= new <= prediction[1]
-        )
+        inside: bool | None = None
+        if prediction is not None and name in reproduced:
+            inside = new is not None and prediction[0] <= new <= prediction[1]
         rows.append(
             {
                 "name": name,
@@ -486,7 +523,9 @@ def run_reproduction(
     run`` (``cli_strategies.runner_for``).
 
     Raises:
-        ValueError: the config does not validate for its task (nothing trained).
+        ValueError: the config does not validate for its task (nothing trained),
+            or a replicate group's test scores cannot judge a run that had no
+            test split (``ReproduceError``).
         RuntimeError: the training failed.
     """
     runner = runner_for(plan.task)
@@ -498,11 +537,22 @@ def run_reproduction(
         k: _finite(v) for k, v in runner.metrics(result).items()
     }
     split: Split = "test"
+    aggregates = (plan.record.get("group") or {}).get("aggregates") or {}
     if not reproduced:
+        if plan.kind == "replicates" and aggregates:
+            raise ReproduceError(
+                "the reproduced run has no test split, but the group recorded "
+                "test scores; pass --data with the dataset's test split"
+            )
         reproduced = {k: _finite(v) for k, v in result.selection_metrics.items()}
         split = "validation"
+    if not plan.recorded_is_this_seed:
+        logger.warning(
+            "The bundle records no finished run of seed {}: no recorded value "
+            "or delta is reported",
+            plan.seed,
+        )
     intervals = recorded_intervals(plan.record)
-    aggregates = (plan.record.get("group") or {}).get("aggregates") or {}
     names = list(dict.fromkeys([*reproduced, *map(str, aggregates)]))
     recorded = {name: recorded_value(plan, name, split) for name in names}
     rows = compare_metrics(
