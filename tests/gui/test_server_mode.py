@@ -134,7 +134,9 @@ def test_a_route_the_table_does_not_know_is_refused() -> None:
     assert not answers("GET /api/brand-new")
     assert answers("GET /api/health")
     assert answers("GET /api/runs")
-    assert not answers("GET /api/queue")
+    assert answers("GET /api/queue")
+    assert answers("POST /api/experiment/run")
+    assert not answers("POST /api/classification/replicates")
     assert answers("POST /api/dataset/stats")
     assert not answers("POST /api/dataset/download")
     assert not answers("POST /api/dataset/pick")
@@ -230,12 +232,9 @@ def test_the_browser_cannot_pick_another_profile(served: Any, tmp_path: Path) ->
         ("POST", "/api/dataset/pick"),
         ("POST", "/api/update/apply"),
         ("POST", "/api/profiles"),
-        ("GET", "/api/queue"),
-        ("GET", "/api/experiment/events"),
-        ("GET", "/api/artifacts/outputs/models/x.png"),
         ("POST", "/api/dataset/download"),
         ("POST", "/api/explorer/summary"),
-        ("POST", "/api/experiment/run"),
+        ("POST", "/api/classification/replicates"),
         ("GET", "/api/colab/status"),
         ("GET", "/api/brand-new"),
         ("OPTIONS", "/api/runs"),

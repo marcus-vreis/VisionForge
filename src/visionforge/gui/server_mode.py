@@ -250,6 +250,17 @@ ROUTE_CLASSES: dict[str, RouteClass] = {
 # answer 404 in server mode until they are read.
 READY: frozenset[str] = frozenset(
     {
+        "GET /api/artifacts/{file_path:path}",
+        "POST /api/anomaly/run",
+        "POST /api/detection/run",
+        "POST /api/experiment/run",
+        "POST /api/regression/run",
+        "POST /api/segmentation/run",
+        "GET /api/experiment/events",
+        "GET /api/experiment/result/{run_id}",
+        "GET /api/experiment/status",
+        "GET /api/queue",
+        "DELETE /api/queue/{run_id}",
         "POST /api/anomaly/dataset/stats",
         "POST /api/dataset/detect",
         "GET /api/dataset/file",
@@ -512,7 +523,9 @@ class ServerModeGate:
             response = JSONResponse({"detail": str(exc)}, status_code=500)
             await response(scope, receive, send)
             return
-        with dataset_scope(DatasetScope(readable=(own, *mode.datasets))):
+        with dataset_scope(
+            DatasetScope(readable=(own, *mode.datasets), owner=profile.slug)
+        ):
             await self.app(signed, receive, send)
 
 

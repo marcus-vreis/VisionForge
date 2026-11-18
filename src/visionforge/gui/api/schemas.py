@@ -100,6 +100,9 @@ class QueueLane(BaseModel):
     lane: str
     active: QueuedJobInfo | None = None
     pending: list[QueuedJobInfo] = []
+    # Server mode (ADR-215): how many jobs of other people run or wait before
+    # the first of who asks (all of them when who asks has none). 0 locally.
+    others_ahead: int = 0
 
 
 class QueueSnapshot(BaseModel):
@@ -112,6 +115,8 @@ class QueueSnapshot(BaseModel):
     active: QueuedJobInfo | None = None
     pending: list[QueuedJobInfo] = []
     lanes: list[QueueLane] = []
+    # The local queue's ``others_ahead``.
+    others_ahead: int = 0
 
 
 class ComparisonRequest(BaseModel):

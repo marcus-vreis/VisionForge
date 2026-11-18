@@ -87,6 +87,8 @@ class JobState:
     token: CancellationToken
     lane: str = LOCAL_LANE
     run: dict[str, Any] = dataclasses.field(default_factory=dict)
+    # Whose job it is (ADR-114); in server mode only that person reads it.
+    profile: str = "default"
 
 
 # Started jobs by run_id, oldest first. A finished job stays a while so its
@@ -134,6 +136,7 @@ def _begin_job(job: QueuedJob) -> None:
         log=RunEventLog(job.run_id),
         token=job.cancel_token,
         lane=job.lane,
+        profile=job.profile,
         run={
             "run_id": job.run_id,
             "status": "running",
@@ -149,7 +152,26 @@ def _begin_job(job: QueuedJob) -> None:
 def _finish_job(job: QueuedJob) -> dict[str, Any] | None:
     """Hand the finished run's terminal state to its lane to keep by run_id."""
     state = _JOB_STATES.get(job.run_id)
-    return dict(state.run) if state is not None else None
+    # The record outlives the state, so it carries whose run it was.
+    return {**state.run, "profile": job.profile} if state is not None else None
+
+
+def profile_of_run(run_id: str) -> str | None:
+    """Whose the job ``run_id`` is: started, waiting or finished; None if unknown."""
+    state = _JOB_STATES.get(run_id)
+    if state is not None:
+        return state.profile
+    waiting = _LANES.profile_of(run_id)
+    if waiting is not None:
+        return waiting
+    record = _LANES.record(run_id)
+    return record.get("profile") if record is not None else None
+
+
+def latest_run_of(profile: str) -> str | None:
+    """The job of ``profile`` started last, or None when it started none."""
+    mine = [key for key, state in _JOB_STATES.items() if state.profile == profile]
+    return mine[-1] if mine else None
 
 
 def _new_lane() -> RunQueue:

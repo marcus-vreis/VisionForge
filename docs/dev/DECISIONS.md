@@ -8528,3 +8528,38 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Check the path in each handler.* Nine handlers today and 45 in the end, each a place to forget; the type is checked by a test.
 - *Inspect the JSON body in the gate.* The gate would have to know which strings are paths, and it would check a path the handler then reads again in another spelling.
 - *A fixed list of dataset names instead of paths.* Cleaner for a server, and it would fork the request models and the forms from the local tool, which names folders.
+
+## ADR-215 — In server mode a run, its progress and the queue belong to who started it, and a config names only what its owner may reach
+
+**Date:** 2026-11-18
+**Status:** Accepted
+**Extends:** ADR-075 (one run queue per server), ADR-212, ADR-213 (the gate), ADR-214 (the dataset scope)
+
+**Context:** after ADR-214 a person could inspect a dataset on a server and do nothing with it. Three groups of routes stood between that and a training. The queue and the run routes (`/api/queue`, `/api/experiment/events`, `status`, `result`) showed every job to everyone and let anyone stop any of them. `/api/artifacts` served everything under `outputs/`. And the five run routes take a whole config: a dataset folder, weights, names inside the dataset, and a model name that Ultralytics and timm resolve as a file or a remote address when it looks like one (`YOLO("../x.pt")` unpickles that file).
+
+**Decision:**
+
+- The request scope (ADR-214) also names its owner, the signed-in person's profile. A started job keeps the profile it was submitted under, and the record a lane keeps after the job's state is gone carries it too.
+- With an owner bound:
+  - `/api/experiment/status`, `events` and `result/{run_id}` and `DELETE /api/queue/{run_id}` treat a run of another profile as a run that does not exist: the same 404, idle status or empty stream. With no `run_id`, "the latest run" is the person's own latest, not the server's.
+  - `GET /api/queue` lists the person's jobs and adds `others_ahead` to each lane and to the snapshot: how many jobs of other people run or wait before the person's first job, or all of them when the person has none. No label, id or profile of another person's job leaves the server. It is 0 on a local install.
+  - `/api/artifacts/{path}` serves only what sits under the person's profile folder.
+- The five run routes (`/api/experiment/run` and the detection, segmentation, regression and anomaly `run`) call `confine_config` on the validated config, after the profile has rewritten its output folders. With a scope bound it walks every field and answers 422 naming the field when:
+  - a path is outside the person's profile folder and the shared dataset folders, or a path the run writes (`output.*`, `output_csv`, `output_onnx`) is outside the person's folder;
+  - a name inside the dataset (`train_dir`, `images_subdir`, `train_csv`...) climbs out of it;
+  - `model.name` or `model.timm_model` has a path separator, a colon, a leading dot or `~`, or `..`;
+  - `model.custom_model` is set.
+- The configs live in `utils/` and are shared with the command line, so the rule is a walk over the validated model and not a field type. A test lists every text field of the five configs and fails when one is in none of the four sets (dataset part, model name, forbidden, read and free): a new text field has to be read before the suite passes.
+- These routes are open in server mode. The strategies (23 routes), resume, the evaluation routes and the exporters stay closed until each is read.
+
+**Consequences:** a person can train one run at a time on a server with a shared dataset and follow it; nobody sees what the others train, only how long the line is. Weights must sit in the person's folder or a shared one, and nobody can put a file there through the GUI yet, so a detection checkpoint, which Ultralytics unpickles, can only be one the operator placed or one the person's own run wrote. The training still runs in a thread of the server: one person's job can exhaust the memory or the GPU of all, and phase 0 remains for a group that trusts its members.
+
+**Known limits:** the config is validated before it is confined, and its own validators say whether `base_dir` or `weights_path` exists, so the 422 of a path outside the scope can differ from that of a path that does not exist. `status.queued` still counts every waiting job on the server. A data YAML or a CSV inside a shared dataset may name files elsewhere; the operator controls those.
+
+**Not verified:** no training was started in server mode: the tests record the submission and stop there, and the queue tests place jobs by hand. Nothing ran behind a real proxy.
+
+**Alternatives considered:**
+
+- *One queue per person.* Nobody would wait for anybody, on one GPU that cannot be true; the shared queue with a count is what the request asked for.
+- *Hide `others_ahead` too.* The person would see their job waiting with no reason.
+- *Field types in the configs, as in ADR-214.* `utils/` imports nothing of the GUI, and the command line must keep accepting any folder.

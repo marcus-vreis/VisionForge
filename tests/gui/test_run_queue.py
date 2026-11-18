@@ -317,7 +317,11 @@ class TestQueueEndpoints:
         assert body == {
             "active": None,
             "pending": [],
-            "lanes": [{"lane": "local", "active": None, "pending": []}],
+            "lanes": [
+                {"lane": "local", "active": None, "pending": [], "others_ahead": 0}
+            ],
+            # Only server mode counts other people's jobs (ADR-215).
+            "others_ahead": 0,
         }
 
     def test_queue_lists_the_active_job_and_what_waits(self, tmp_path) -> None:
