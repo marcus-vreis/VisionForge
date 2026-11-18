@@ -95,13 +95,14 @@ export function serializeConfigToYaml(formData: Record<string, unknown>): string
 
 /**
  * Parse a YAML string into a config object.
- * Uses js-yaml's default safe loader (v4). Never uses loadAll or unsafe schemas.
+ * Uses js-yaml's default loader, safe since v4 and on CORE_SCHEMA (YAML 1.2) since v5;
+ * the backend's PyYAML reads the configs the same way. Never uses loadAll or unsafe schemas.
  * Throws YamlParseError on malformed input or non-object root.
  */
 export function parseYamlToConfig(yamlText: string): Record<string, unknown> {
   let parsed: unknown;
   try {
-    // js-yaml v4 load() is safe by default — no code execution, no unsafe types
+    // load() is safe by default: no code execution, no unsafe types
     parsed = jsyaml.load(yamlText);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

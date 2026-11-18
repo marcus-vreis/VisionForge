@@ -223,7 +223,10 @@ def _run_reproduce_command(
         parser.exit(2, f"visionforge: {_one_line(exc)}\n")
     # Logs and whatever a library prints go to stderr: stdout is the JSON alone.
     with contextlib.redirect_stdout(sys.stderr):
-        setup_logger(log_dir=args.output / "logs" if args.output else None)
+        try:
+            setup_logger(log_dir=args.output / "logs" if args.output else None)
+        except OSError as exc:
+            parser.exit(2, f"visionforge: {_one_line(exc)}\n")
         try:
             report = run_reproduction(plan, runner_for)
         except ValueError as exc:
