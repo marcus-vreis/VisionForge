@@ -8403,3 +8403,64 @@ Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS
 - *Make the Drive the only origin.* Simpler to explain, and it would take away the zip URL and the public catalogs that work today.
 - *Lift the header panel's state into the page and share it with the selector.* One request less per menu opening, at the price of threading the panel's eight handlers through the header; the selector asking for itself keeps the two apart.
 - *A fifth `kind` in the device selection.* The selection is saved in the config as this machine's device; Colab is where the run goes, not a device of this machine, so it is a separate choice.
+
+## ADR-212 — A multi-user server mode in this repository: threat model, route inventory and phases (proposal)
+
+**Date:** 2026-11-18
+**Status:** Proposed. Nothing here is built; this ADR fixes what has to be true before the first line of server code, and each phase gets its own ADR when it lands.
+**Extends:** ADR-075 (one run queue per server), ADR-114 (profiles are output folders, not access control), ADR-179 (security headers)
+
+**Context:** VisionForge is a local tool: the browser and the Python process are on the same machine and belong to the same person. ADR-114 let a lab share one `visionforge gui --host` and said in its title what it was not: access control. Issue 352 asks for the other thing: one server for many people, each signing in, each seeing only their own runs and datasets, a queue that says how many jobs are ahead and not whose, datasets that arrive by upload and are deleted after use, and sign-in with GitHub and other accounts to publish weights and runs.
+
+The code as it is on 2026-11-18 (`development`, b95c6919), read through the FastAPI app's own route table:
+
+- **Identity is a header the client writes.** 79 of the 163 routes read `X-VF-Profile`; the server believes it. Any client can send any slug.
+- **84 routes do not read the profile at all:**
+  - 16 are read-only and hold nothing personal: the schemas, `/api/tasks`, the code tour, `/api/system/info`, `/api/device/info`, the model defaults, `/api/health`, `GET /api/update` and the SPA.
+  - 18 read a dataset from a path of the server's disk that the client names: the `dataset/stats`, `samples`, `detect`, `preview_*` and `audit` routes of every task, `/api/dataset/file`, and the explorer's `summary`, `images`, `thumb` and `scan`. `/api/dataset/file` is confined to an allow-list, and that list is one per process: a folder one person probed is readable by all.
+  - 28 write to a path of the server's disk that the client names: the explorer's merge, resplit, incorporate and COCO import/export jobs (25 routes, with job ids nobody owns), `/api/dataset/download`, `/api/sample-dataset` and `/api/dvc/prepare`.
+  - 6 act on the desktop of the machine the server runs on: the tkinter pickers (`/api/dataset/pick`, `/api/checkpoint/pick`, `/api/detection/dataset/pick_yaml`) and the Drive for desktop routes (`/api/colab/drive/folders`, `open`, `continue`).
+  - 16 hold state every user shares: `/api/credentials` (the dataset providers' keys), `/api/profiles` (anyone lists, creates and renames), `/api/queue` and `DELETE /api/queue/{run_id}` (every job with its profile and name, cancellable by anyone), `/api/experiment/events`, `status` and `result/{run_id}`, `/api/artifacts/{path}` (everything under `outputs/`, every profile's), the custom tasks' delete, hide and unhide, and `/api/update/apply`.
+- **Code a user brings runs inside the server process.** A training is `asyncio.to_thread(block.run)`: a thread of the server, with its memory, its files and its tokens. A custom task is a Python file loaded with `exec_module` (`tasks/registry.py`). The 22 `torch.load` calls of the package all pass `weights_only=True`, but a detection checkpoint goes to `YOLO(weights_path)`, and Ultralytics 8.4.60 sets `weights_only=False` when the caller does not say (`ultralytics/utils/patches.py`): a `.pt` a user supplies for detection is a pickle the server executes.
+- **Tokens are plain files.** The Hugging Face, GitHub, Zenodo, W&B and Comet tokens of a profile are text files under the config folder, found from the profile's slug. Whoever sends that slug publishes with that token.
+- **What already exists.** `HostOriginGuard` refuses a foreign `Host` or `Origin`; the CSP and the fixed headers are on every response; `reveal`, `dvc/prepare`, the Drive `open`/`continue` and `update/apply` already answer only a loopback client.
+
+**Threat model.** What is protected: each person's datasets, runs, checkpoints and tokens; the server's disk and GPU; the other tenants' time in the queue. Who is assumed hostile in phase 1: any signed-in user, and anyone on the network who is not signed in. Who is trusted: the operator, and in phase 0 the members of the group.
+
+| Threat | Today | Needed |
+| --- | --- | --- |
+| Pass for someone else | send their slug in `X-VF-Profile` | identity from an authenticated session only; the header is ignored |
+| Read or delete another's runs | `/api/artifacts`, `/api/experiment/*`, `/api/queue` are shared | every route that names a run checks its owner; the queue answers a count |
+| Read the server's disk | dataset routes take any path | every path resolves inside the user's own root; no native dialogs |
+| Write over the server's disk | explorer jobs and downloads take any output path | same confinement; jobs owned by who started them |
+| Run code as the server | custom task, detection `.pt`, the training thread | phase 0: accepted, said in the docs; phase 1: one process per job with no access to the server's files, or the feature is off |
+| Use another's publishing token | plain file found from the slug | read only for the session's user; encrypted at rest in phase 1 |
+| Starve the others | one queue, no limits | per-user limits on queued jobs, disk and upload size |
+| Fill the disk with an archive | zip downloads are extracted as they come | size and entry limits before extraction |
+| Take over a browser session | not applicable (no session) | HttpOnly, Secure, SameSite cookie; the existing Origin check covers cross-site posts |
+| Leftover data | datasets stay where the user put them | uploaded datasets deleted at the end of the run, the deletion logged and written to `run.json` |
+
+**Decision:**
+
+- **One repository, one flag.** Server mode is `visionforge gui --server`, off by default. Without it nothing changes: the local tool keeps its pickers, its folder buttons and its header. A fork is rejected: every fix would be made twice.
+- **Phase 0, a group that trusts its members.** VisionForge writes no login. An authenticating reverse proxy (oauth2-proxy or Authelia, with GitHub or Google) sits in front; VisionForge listens on loopback, accepts the user name only in a header from the proxy's address (`--trusted-proxy`), and refuses to start in server mode without one. That name is the profile; `X-VF-Profile` from the client is ignored and `/api/profiles` stops creating and renaming.
+- **In server mode every route is in one of four classes,** declared where the route is declared and checked by a test that walks the app's route table, so a new route without a class fails the suite:
+  - *open*: the 16 read-only routes;
+  - *owner*: the 79 that read the profile today, plus the queue, the events, the status, the result, the artifacts and the explorer jobs, each checking that the run or job is the session user's;
+  - *confined*: every route that takes a dataset path, which must resolve inside that user's dataset root;
+  - *off*: the native pickers, `reveal`, the Drive for desktop routes, `update/apply`, the shared `/api/credentials`, and the custom tasks. An *off* route answers 404 and the GUI hides its button, with the reason where a person would look for it.
+- **The queue answers a number.** A user sees their own jobs in full and, of the rest, only how many are ahead.
+- **Phase 0 does not isolate code.** A member can supply a detection checkpoint, and with it run code as the server. The install guide says so in its first paragraph, and that is why phase 0 is for a group that already shares the machine.
+- **Phase 1, open multi-user,** needs, in this order: each job in its own process with its own working folder and no read access to the config folder (a container where the host has one); upload of datasets in resumable parts with a per-user quota and archive limits; deletion at the end of the run, logged and recorded in `run.json`; tokens encrypted at rest and OAuth with GitHub for publishing; per-user limits in the queue. Custom tasks and user-supplied checkpoints stay off until the first item is done.
+- **Colab in server mode** is the Drive through Google's API with the user's consent, not Drive for desktop, and waits for phase 1.
+
+**Consequences:** the local tool pays nothing: the flag is off and the classes only bite in server mode. Phase 0 is small (a header reader, the class of each route, owner checks, path confinement) and is useful by itself to the lab ADR-114 was written for, which today has organisation and no privacy. The route-class test turns "did someone remember to protect the new route" into a failing check. The hard part is phase 1's process isolation; until it exists, VisionForge must not be offered to people who do not trust each other, and the docs say so.
+
+**Not verified:** the inventory comes from the route table and each route's dependencies, not from reading the 163 handlers; a route that reads the profile may still take a path outside it, and phase 0 starts by reading each one. Nobody has tried to break the current `--host` mode on purpose. The Ultralytics behaviour was read in the installed 8.4.60 only.
+
+**Alternatives considered:**
+
+- *A fork for the server.* Two code bases for one trainer; rejected in the issue.
+- *VisionForge's own passwords.* Password storage, reset, lockout and 2FA are a product of their own, and a proxy that does them well exists. Revisit only if someone needs a server with no identity provider.
+- *One VisionForge process per user behind a spawner (the JupyterHub way).* Real isolation with little new code, and it fits phase 1's "one process per job" well. It loses the shared queue, which is the point of sharing one GPU; kept as the fallback if confinement inside one process proves leaky.
+- *Keep the header and add a shared password.* It protects the server from the network and nobody from each other.
