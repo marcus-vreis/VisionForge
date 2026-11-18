@@ -26,7 +26,11 @@ def cuda_context_broken() -> bool:
     context, and importing it here cost the first run ~3 s on the event loop.
     """
     torch = sys.modules.get("torch")
-    if torch is None or not torch.cuda.is_initialized():
+    # ``sys.modules`` holds torch from the first line of its import. While a
+    # job's thread is still importing it, ``torch.cuda`` (or its functions) does
+    # not exist yet, and neither does a context that could be broken.
+    is_initialized = getattr(getattr(torch, "cuda", None), "is_initialized", None)
+    if torch is None or is_initialized is None or not is_initialized():
         return False
     try:
         torch.zeros(1, device="cuda")

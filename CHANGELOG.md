@@ -13,6 +13,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Fixed
+
+- Enviar um segundo treino nos primeiros segundos do primeiro, com o servidor recém-aberto, respondia 500: a checagem da GPU lia o `torch` enquanto a thread do primeiro job ainda o importava. Agora um `torch` pela metade conta como "sem contexto de GPU para quebrar" e o segundo treino entra na fila.
+
 ### Added
 
 - **Modo servidor (experimental, ainda não treina).** `visionforge gui --server --trusted-proxy <endereço>` põe o VisionForge atrás de um proxy que faz o login (oauth2-proxy, Authelia): só o proxy é atendido, a conta que ele informa vira o perfil da pessoa e o perfil que o navegador mandar é ignorado. Nesta versão respondem o histórico e os tokens de cada pessoa e a rota nova `GET /api/session`; datasets, treino, fila e Colab respondem 404 até serem revistos. Cada rota tem uma classe (`open`, `owner`, `confined`, `off`) conferida por teste. Sem `--server` nada muda. Guia em `docs/gui/servidor.md` (ADR-212, ADR-213).

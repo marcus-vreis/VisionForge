@@ -8556,7 +8556,9 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 
 **Known limits:** the config is validated before it is confined, and its own validators say whether `base_dir` or `weights_path` exists, so the 422 of a path outside the scope can differ from that of a path that does not exist. `status.queued` still counts every waiting job on the server. A data YAML or a CSV inside a shared dataset may name files elsewhere; the operator controls those.
 
-**Not verified:** no training was started in server mode: the tests record the submission and stop there, and the queue tests place jobs by hand. Nothing ran behind a real proxy.
+**Not verified:** nothing ran behind a real proxy; no GPU run, and only classification was trained (see the amendment).
+
+**Amended 2026-11-18: a real run.** The real server, in server mode in a temporary folder, trained a one-epoch classification on the CPU for one account while a second account submitted 40 ms later: the second job queued and ran next, each run landed in its owner's folder and History, the second account got an idle status, 404 and 404 for the first one's status, result and stop, and a plot of the first run answered 200 to its owner and 403 to the other. The first attempt found a bug that is not server mode's: the second submission answered 500, because `cuda_context_broken` reads `sys.modules["torch"]`, which holds the module from the first line of its import, while the first job's thread was still importing it and `torch.cuda` did not exist yet. A torch without `cuda.is_initialized` now reads as no context to break. A local install had the same window on a cold server: two submissions within the three seconds of the first import.
 
 **Alternatives considered:**
 
