@@ -39,6 +39,7 @@ visionforge gui --server --trusted-proxy 127.0.0.1 --allowed-host visionforge.me
 | `--server` | Liga o modo servidor. Sem ela nada muda. |
 | `--trusted-proxy <endereço>` | IP (ou bloco CIDR, como `172.18.0.0/16`) do proxy de login. Obrigatória: sem ela o servidor não sobe. Pode repetir. |
 | `--user-header <nome>` | Cabeçalho em que o proxy informa a conta. O padrão é `X-Forwarded-User` (oauth2-proxy); no Authelia é `Remote-User`. |
+| `--datasets-dir <pasta>` | Pasta de datasets que todos podem **ler**. Pode repetir. A pasta precisa existir. |
 | `--allowed-host <nome>` | O nome público pelo qual as pessoas chegam (o do proxy). |
 
 Deixe o VisionForge escutando só em `127.0.0.1` (o padrão) quando o proxy roda
@@ -58,6 +59,27 @@ firewall.
 *Não verificado:* nenhuma instalação real com oauth2-proxy ou Authelia foi
 feita ainda; o comportamento acima foi testado com pedidos simulados.
 
+## Onde ficam os datasets
+
+No modo servidor uma pessoa só consegue apontar para duas áreas do disco:
+
+- **A pasta dela:** `outputs/profiles/<perfil>/datasets/`, criada no primeiro
+  acesso. Ainda não há envio de dataset pela tela, então hoje quem põe arquivos
+  ali é quem administra o servidor.
+- **As pastas compartilhadas:** as que o servidor recebeu em `--datasets-dir`.
+  Servem para os datasets que o grupo todo usa.
+
+`GET /api/session` devolve essas pastas em `dataset_dirs`, a da pessoa
+primeiro. O caminho do dataset precisa ser completo e estar dentro de uma
+delas; qualquer outro é recusado com a mensagem "Neste servidor o dataset
+precisa estar na sua pasta de datasets ou numa pasta compartilhada". Os nomes
+de subpasta (`train`, `images`, `train.csv`) não podem conter `..` nem começar
+na raiz do disco.
+
+Um limite conhecido: no manifesto CSV da regressão, uma linha pode citar uma
+imagem por caminho completo. O servidor não abre esse arquivo, mas a contagem
+de "imagens ausentes" revela se ele existe.
+
 ## O que responde hoje
 
 | Função | No modo servidor |
@@ -66,7 +88,8 @@ feita ainda; o comportamento acima foi testado com pedidos simulados.
 | Histórico: listar, abrir e apagar os **seus** runs | sim |
 | Tokens de publicação (Hugging Face, GitHub, Zenodo, W&B, Comet) do **seu** perfil | sim |
 | `GET /api/session` (quem entrou) | sim |
-| Telas de dataset e Laboratório de datasets | ainda não (precisam ficar presas à pasta de cada pessoa) |
+| Ler um dataset para conferir: divisões, contagem por classe, amostras e miniaturas, nas cinco tarefas | sim, só na **sua** pasta de datasets e nas pastas compartilhadas |
+| Baixar dataset, dataset de exemplo, prévia de aumento e de pré-processamento, auditoria e Laboratório de datasets | ainda não |
 | Treinar, estratégias, avaliar, exportar | ainda não (cada rota será revista) |
 | Fila e progresso do treino | ainda não (hoje mostram os jobs de todos) |
 | Seletor de pasta, "abrir pasta", atualizar o VisionForge, Colab, tarefas próprias, credenciais de download | desligados no modo servidor |

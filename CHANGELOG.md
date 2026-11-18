@@ -16,6 +16,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 ### Added
 
 - **Modo servidor (experimental, ainda não treina).** `visionforge gui --server --trusted-proxy <endereço>` põe o VisionForge atrás de um proxy que faz o login (oauth2-proxy, Authelia): só o proxy é atendido, a conta que ele informa vira o perfil da pessoa e o perfil que o navegador mandar é ignorado. Nesta versão respondem o histórico e os tokens de cada pessoa e a rota nova `GET /api/session`; datasets, treino, fila e Colab respondem 404 até serem revistos. Cada rota tem uma classe (`open`, `owner`, `confined`, `off`) conferida por teste. Sem `--server` nada muda. Guia em `docs/gui/servidor.md` (ADR-212, ADR-213).
+- Modo servidor: cada pessoa lê datasets só da própria pasta (`outputs/profiles/<perfil>/datasets/`) e das pastas que o servidor compartilha com `--datasets-dir`. As rotas que conferem um dataset (divisões, contagem por classe, amostras e miniaturas, nas cinco tarefas) passam a responder; um caminho fora dessas pastas é recusado antes de qualquer leitura. `GET /api/session` informa as pastas em `dataset_dirs` (ADR-214).
 
 ### Changed
 

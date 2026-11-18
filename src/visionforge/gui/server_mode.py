@@ -9,6 +9,8 @@ header; nothing else may. With the mode on, :class:`ServerModeGate`:
 - turns the user the proxy names into that person's profile and overwrites
   ``X-VF-Profile`` with it, so every route that works in a profile (ADR-114)
   works in the signed-in person's, whatever the browser sent;
+- binds the folders the person may read datasets from: their own and the ones
+  the operator shares (``--datasets-dir``, ADR-214);
 - answers 404 for every route that is not ready for several people.
 
 Every route has a class in :data:`ROUTE_CLASSES`; a test compares the table
@@ -33,8 +35,10 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 from starlette.websockets import WebSocketClose
 
+from visionforge.gui.api.dataset_scope import DatasetScope, dataset_scope
 from visionforge.gui.api.profiles import (
     PROFILE_HEADER,
+    Profile,
     ProfileError,
     ensure_profile,
     slugify,
@@ -240,10 +244,21 @@ ROUTE_CLASSES: dict[str, RouteClass] = {
     "GET /{path:path}": "open",
 }
 
-# The ``owner`` routes whose handler was read and found to work only inside the
-# profile it is given. The rest answer 404 in server mode until they are read.
-OWNER_READY: frozenset[str] = frozenset(
+# The ``owner`` and ``confined`` routes whose handler was read: an ``owner`` one
+# works only inside the profile it is given, a ``confined`` one types every path
+# of its request with ``DatasetDir`` or ``DatasetPart`` (ADR-214). The rest
+# answer 404 in server mode until they are read.
+READY: frozenset[str] = frozenset(
     {
+        "POST /api/anomaly/dataset/stats",
+        "POST /api/dataset/detect",
+        "GET /api/dataset/file",
+        "POST /api/dataset/samples",
+        "POST /api/dataset/stats",
+        "POST /api/detection/dataset/samples",
+        "POST /api/detection/dataset/stats",
+        "POST /api/regression/dataset/stats",
+        "POST /api/segmentation/dataset/stats",
         "DELETE /api/comet/token",
         "GET /api/comet/token",
         "PUT /api/comet/token",
@@ -280,6 +295,8 @@ class ServerMode:
     enabled: bool = False
     trusted: tuple[Network, ...] = ()
     user_header: str = DEFAULT_USER_HEADER
+    # Folders the operator shares with everyone, read-only (``--datasets-dir``).
+    datasets: tuple[Path, ...] = ()
 
     @classmethod
     def from_options(
@@ -288,20 +305,23 @@ class ServerMode:
         enabled: bool,
         trusted_proxies: Iterable[str] = (),
         user_header: str = DEFAULT_USER_HEADER,
+        datasets_dirs: Iterable[str | Path] = (),
     ) -> ServerMode:
         """Validate what the command line gave.
 
         Raises:
             ServerModeError: ``--trusted-proxy`` or ``--user-header`` without
                 ``--server``; server mode with no trusted proxy; an address that
-                is not an IP or a CIDR block; an empty header name.
+                is not an IP or a CIDR block; an empty header name; a
+                ``--datasets-dir`` that is not a folder.
         """
         proxies = [p.strip() for p in trusted_proxies if p.strip()]
         header = user_header.strip()
+        shared = [Path(d) for d in datasets_dirs]
         if not enabled:
-            if proxies or header != DEFAULT_USER_HEADER:
+            if proxies or shared or header != DEFAULT_USER_HEADER:
                 raise ServerModeError(
-                    "--trusted-proxy and --user-header need --server."
+                    "--trusted-proxy, --user-header and --datasets-dir need --server."
                 )
             return cls()
         if not proxies:
@@ -320,7 +340,17 @@ class ServerMode:
                 raise ServerModeError(
                     f"--trusted-proxy {proxy!r} is not an IP address or a CIDR block."
                 ) from exc
-        return cls(enabled=True, trusted=tuple(networks), user_header=header)
+        for folder in shared:
+            if not folder.is_dir():
+                raise ServerModeError(
+                    f"--datasets-dir {str(folder)!r} is not a folder."
+                )
+        return cls(
+            enabled=True,
+            trusted=tuple(networks),
+            user_header=header,
+            datasets=tuple(folder.resolve() for folder in shared),
+        )
 
     def trusts(self, client_host: str | None) -> bool:
         """True when ``client_host`` is one of the proxies' addresses."""
@@ -429,7 +459,7 @@ def _not_a_page(path: str) -> bool:
 def answers(key: str) -> bool:
     """True when the route ``key`` answers in server mode today."""
     kind = ROUTE_CLASSES.get(key)
-    return kind == "open" or (kind == "owner" and key in OWNER_READY)
+    return kind == "open" or (kind in ("owner", "confined") and key in READY)
 
 
 class ServerModeGate:
@@ -476,7 +506,22 @@ class ServerModeGate:
             return
         signed = _with_profile(scope, profile.slug)
         signed.setdefault("state", {})["vf_user"] = user
-        await self.app(signed, receive, send)
+        try:
+            own = own_datasets_dir(profile)
+        except OSError as exc:
+            response = JSONResponse({"detail": str(exc)}, status_code=500)
+            await response(scope, receive, send)
+            return
+        with dataset_scope(DatasetScope(readable=(own, *mode.datasets))):
+            await self.app(signed, receive, send)
+
+
+def own_datasets_dir(profile: Profile) -> Path:
+    """The signed-in person's own dataset folder, made when missing."""
+    root = profile.root if profile.root is not None else profile.models_dir.parent
+    folder = (root / "datasets").resolve()
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
 
 
 def _with_profile(scope: Scope, slug: str | None) -> Scope:
@@ -503,7 +548,7 @@ async def _refuse(
 
 __all__ = [
     "DEFAULT_USER_HEADER",
-    "OWNER_READY",
+    "READY",
     "ROUTE_CLASSES",
     "RouteClass",
     "ServerMode",

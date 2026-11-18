@@ -200,6 +200,7 @@ Imports `blocks/`, `tasks/`, `core/`, `models/` and `utils/`. React + shadcn/ui 
 | `api/dataset_tools_routes.py` | `POST /api/dataset/preview_preprocess` (the preprocessing strip, PNGs under `outputs/preview_cache/`) and `POST /api/sample-dataset` (the guide's synthetic datasets) (ADR-115). |
 | `api/profiles_routes.py` | Profile endpoints mounted by the shared router, with output directories resolved per request (ADR-132). |
 | `security.py` | Refuses requests whose `Host` or `Origin` does not name this server (DNS rebinding and cross-site requests to the local server). |
+| `api/dataset_scope.py` | The folders one request may read datasets from (server mode, ADR-214): the `DatasetScope` the gate binds per request, and the `DatasetDir` and `DatasetPart` field types that refuse a path outside it while the body is validated. With no scope bound they accept what `str` accepts. |
 | `server_mode.py` | `visionforge gui --server` (ADR-212, ADR-213): answers only the login proxy, turns the user it names into the profile of the request, and holds the server-mode class of every route (`ROUTE_CLASSES`); a route that is not ready for several people is 404. Off by default. |
 | `api/datasets_routes.py` | Dataset, picker and credential endpoints split out of `routes.py` (`/api/dataset/*`, `/api/<task>/dataset/*`, `/api/checkpoint/pick`, `/api/credentials`) (ADR-132). |
 | `api/runs_routes.py` · `api/run_history.py` | Run list and delete endpoints; pure parsing of `run.json` for the list, the detail and the resume rules, with no FastAPI import (ADR-132). |

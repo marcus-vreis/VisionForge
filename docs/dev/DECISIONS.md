@@ -8496,3 +8496,35 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *A FastAPI dependency per route instead of a middleware.* It would see the matched route for free, and it would run beside the profile dependency with no guaranteed order; the header has to be overwritten before any handler reads it.
 - *Open every `owner` route now, since each already resolves a profile.* The training routes take dataset paths in their body, and a route that resolves a profile can still read outside it. Reading first is the point.
 - *The readable slug alone as the folder.* Two accounts that fold to the same slug would share runs and tokens.
+
+## ADR-214 — In server mode a request reads datasets only from the person's own folder and the folders the operator shares
+
+**Date:** 2026-11-18
+**Status:** Accepted
+**Extends:** ADR-212 (the server-mode proposal), ADR-213 (the gate)
+
+**Context:** ADR-213 left the 45 `confined` routes closed: each takes a dataset path the client writes, and on a server that path could be anyone's folder or the server's own files. The routes that only read a dataset to show it (splits, counts per class, samples, thumbnails) are what the Dados step needs first. They share one shape: an absolute `base_dir` and names inside it (`train`, `images`, `train.csv`). `/api/dataset/file` serves a thumbnail from an allow-list of folders "the user probed this session", and that list is one per process: on a server it is everybody's.
+
+**Decision:**
+
+- A person has a dataset folder, `outputs/profiles/<slug>/datasets/`, made by the gate on their first request. The operator shares folders with everyone, read-only, with `--datasets-dir <folder>` (repeatable; it must exist, and it needs `--server`).
+- The gate binds a `DatasetScope` for each request, in a context variable: the person's folder first, then the shared ones, all resolved. `GET /api/session` lists them in `dataset_dirs`. A local install binds none.
+- Two field types carry the rule (`gui/api/dataset_scope.py`), and the request models of the dataset routes use them in place of `str`:
+  - `DatasetDir`, for `base_dir`: with a scope bound it must be absolute, not start with `~`, and resolve inside the scope; the model keeps the resolved path, so the handler works on the path that was checked.
+  - `DatasetPart`, for a name inside the dataset: with a scope bound it may only go down (no `..`, no root, no drive, no `~`), read both as a Windows and as a POSIX path.
+  - With no scope bound both accept what `str` accepts: the local tool is unchanged, and so is the OpenAPI document.
+- A path outside the scope fails the validation of the body (422 with the reason), before any handler runs.
+- `_is_inside_allowed_root`, behind `/api/dataset/file`, asks the request's scope when one is bound and ignores the process-wide list.
+- Nine `confined` routes are read and open in server mode: `/api/dataset/detect`, `stats`, `samples` and `file`, the detection `stats` and `samples`, and the segmentation, anomaly and regression `stats`. A test finds the request model of every open `confined` route in the OpenAPI document and fails when one has a plain `str` field that is not on a short list of fields that are not paths.
+
+**Consequences:** the Dados step can inspect a dataset on a server. Nobody can add a dataset through the GUI yet: the download, the sample dataset and the Laboratório de datasets write to the disk and stay closed until a write scope (the person's own folder only) exists; until then the operator places the files. The two previews stay closed because they serve their images through `/api/artifacts`, which is still everyone's. `OWNER_READY` is now `READY`, since it lists open `confined` routes too.
+
+**Known limits:** a regression manifest may name an image by an absolute path; the handler does not open it, but the count of missing images tells whether the file exists. A symlink inside a dataset folder that points outside is followed for the names inside (`DatasetPart` checks the text, not the target); in phase 0 only the operator can create one.
+
+**Not verified:** the validators run in the request's context because FastAPI validates the body in the task the middleware calls; that was exercised through the real app with a test client, not behind a real proxy. The 36 other `confined` routes were not read.
+
+**Alternatives considered:**
+
+- *Check the path in each handler.* Nine handlers today and 45 in the end, each a place to forget; the type is checked by a test.
+- *Inspect the JSON body in the gate.* The gate would have to know which strings are paths, and it would check a path the handler then reads again in another spelling.
+- *A fixed list of dataset names instead of paths.* Cleaner for a server, and it would fork the request models and the forms from the local tool, which names folders.

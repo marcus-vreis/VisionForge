@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse
 from loguru import logger
 
 from visionforge import __version__
+from visionforge.gui.api.dataset_scope import current_scope
 from visionforge.gui.api.error_messages import validation_error_handler
 from visionforge.gui.api.http_responses import (
     NOT_FOUND_TEXT,
@@ -134,7 +135,15 @@ async def session(request: Request) -> dict[str, Any]:
     mode = mode_of(request.app)
     user = getattr(request.state, "vf_user", None) if mode.enabled else None
     profile = request.headers.get(PROFILE_HEADER) if user is not None else None
-    return {"server_mode": mode.enabled, "user": user, "profile": profile}
+    scope = current_scope() if user is not None else None
+    return {
+        "server_mode": mode.enabled,
+        "user": user,
+        "profile": profile,
+        # Where this person's datasets may live: their own folder first, then
+        # the ones the operator shares (ADR-214). Empty on a local install.
+        "dataset_dirs": [str(p) for p in scope.readable] if scope else [],
+    }
 
 
 def _profiles_dir() -> Path:

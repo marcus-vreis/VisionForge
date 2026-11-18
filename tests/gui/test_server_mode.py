@@ -15,11 +15,14 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from visionforge.gui.api import routes
+from visionforge.gui.api.dataset_scope import DatasetScope, dataset_scope
 from visionforge.gui.api.profiles import is_valid_slug
+from visionforge.gui.api.schemas import DatasetStatsRequest
 from visionforge.gui.server_mode import (
-    OWNER_READY,
+    READY,
     ROUTE_CLASSES,
     ServerMode,
     ServerModeError,
@@ -123,8 +126,8 @@ def test_a_request_finds_its_route_in_the_table() -> None:
     assert route_key("GET", "/openapi.json") is None
 
 
-def test_only_owner_routes_are_marked_as_read() -> None:
-    assert {ROUTE_CLASSES[key] for key in OWNER_READY} == {"owner"}
+def test_only_owner_and_confined_routes_are_marked_as_read() -> None:
+    assert {ROUTE_CLASSES[key] for key in READY} == {"owner", "confined"}
 
 
 def test_a_route_the_table_does_not_know_is_refused() -> None:
@@ -132,7 +135,8 @@ def test_a_route_the_table_does_not_know_is_refused() -> None:
     assert answers("GET /api/health")
     assert answers("GET /api/runs")
     assert not answers("GET /api/queue")
-    assert not answers("POST /api/dataset/stats")
+    assert answers("POST /api/dataset/stats")
+    assert not answers("POST /api/dataset/download")
     assert not answers("POST /api/dataset/pick")
 
 
@@ -163,7 +167,12 @@ def test_a_local_install_reports_no_session() -> None:
     from visionforge.gui.server import app
 
     body = TestClient(app, base_url="http://localhost").get("/api/session").json()
-    assert body == {"server_mode": False, "user": None, "profile": None}
+    assert body == {
+        "server_mode": False,
+        "user": None,
+        "profile": None,
+        "dataset_dirs": [],
+    }
 
 
 def test_a_client_that_is_not_the_proxy_is_refused(served: Any) -> None:
@@ -190,7 +199,11 @@ def test_the_user_the_proxy_names_gets_their_own_profile(
 ) -> None:
     body = _client(served).get("/api/session", headers=USER).json()
     slug = user_slug("ana@lab.org")
-    assert body == {"server_mode": True, "user": "ana@lab.org", "profile": slug}
+    assert (body["server_mode"], body["user"], body["profile"]) == (
+        True,
+        "ana@lab.org",
+        slug,
+    )
     assert (tmp_path / "profiles" / slug / "models").is_dir()
     assert _client(served).get("/api/runs", headers=USER).json() == []
 
@@ -220,7 +233,8 @@ def test_the_browser_cannot_pick_another_profile(served: Any, tmp_path: Path) ->
         ("GET", "/api/queue"),
         ("GET", "/api/experiment/events"),
         ("GET", "/api/artifacts/outputs/models/x.png"),
-        ("POST", "/api/dataset/stats"),
+        ("POST", "/api/dataset/download"),
+        ("POST", "/api/explorer/summary"),
         ("POST", "/api/experiment/run"),
         ("GET", "/api/colab/status"),
         ("GET", "/api/brand-new"),
@@ -234,6 +248,148 @@ def test_a_route_not_ready_for_several_people_is_404(
     response = _client(served).request(method, path, headers=USER)
     assert response.status_code == 404
     assert "servidor" in response.json()["detail"]
+
+
+# --- Datasets: each person reads only their own folder and the shared ones (ADR-214)
+
+
+def _png(path: Path) -> Path:
+    from PIL import Image
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (4, 4), (200, 30, 30)).save(path)
+    return path
+
+
+@pytest.fixture
+def shared(served: Any, tmp_path: Path) -> Path:
+    """A dataset the operator shares: ``beans`` with two classes in ``train``."""
+    root = tmp_path / "shared"
+    _png(root / "beans" / "train" / "healthy" / "a.png")
+    _png(root / "beans" / "train" / "healthy" / "b.png")
+    _png(root / "beans" / "train" / "rust" / "c.png")
+    served.state.server_mode = ServerMode.from_options(
+        enabled=True, trusted_proxies=[PROXY], datasets_dirs=[root]
+    )
+    return root.resolve()
+
+
+def test_without_a_scope_the_path_types_accept_what_a_string_accepts() -> None:
+    req = DatasetStatsRequest(base_dir="relative/folder", train_dir="../elsewhere")
+    assert (req.base_dir, req.train_dir) == ("relative/folder", "../elsewhere")
+
+
+def test_a_dataset_folder_must_sit_in_the_scope(tmp_path: Path) -> None:
+    inside = tmp_path / "mine" / "beans"
+    inside.mkdir(parents=True)
+    (tmp_path / "other").mkdir()
+    with dataset_scope(DatasetScope(readable=((tmp_path / "mine").resolve(),))):
+        assert DatasetStatsRequest(base_dir=str(inside)).base_dir == str(
+            inside.resolve()
+        )
+        sneaky = str(tmp_path / "mine" / ".." / "other")
+        for outside in (str(tmp_path / "other"), sneaky, "mine/beans", "~", "  "):
+            with pytest.raises(ValidationError):
+                DatasetStatsRequest(base_dir=outside)
+
+
+@pytest.mark.parametrize(
+    "part", ["../other", "a/../../b", "/etc", "C:\\Windows", "\\\\host\\share", "~/x"]
+)
+def test_a_name_inside_the_dataset_may_only_go_down(tmp_path: Path, part: str) -> None:
+    with dataset_scope(DatasetScope(readable=(tmp_path.resolve(),))):
+        assert DatasetStatsRequest(base_dir=str(tmp_path), train_dir="a/b").train_dir
+        with pytest.raises(ValidationError):
+            DatasetStatsRequest(base_dir=str(tmp_path), train_dir=part)
+
+
+def test_every_path_of_an_open_dataset_route_is_typed() -> None:
+    from visionforge.gui.api import schemas
+    from visionforge.gui.server import app
+
+    # Text fields that name a column, not a place on the disk.
+    not_paths = {"image_column"}
+    paths = app.openapi()["paths"]
+    checked = 0
+    for key in sorted(READY):
+        method, template = key.split(" ", 1)
+        if ROUTE_CLASSES[key] != "confined" or method != "POST":
+            continue
+        body = paths[template]["post"]["requestBody"]["content"]["application/json"]
+        model = getattr(schemas, body["schema"]["$ref"].rsplit("/", 1)[1])
+        for name, field in model.model_fields.items():
+            if field.annotation is str and name not in not_paths:
+                assert field.metadata, f"{model.__name__}.{name} is a plain str"
+        checked += 1
+    assert checked == 8
+
+
+def test_the_session_says_where_the_datasets_may_live(
+    served: Any, shared: Path, tmp_path: Path
+) -> None:
+    body = _client(served).get("/api/session", headers=USER).json()
+    own = (tmp_path / "profiles" / user_slug("ana@lab.org") / "datasets").resolve()
+    assert body["dataset_dirs"] == [str(own), str(shared)]
+    assert own.is_dir()
+
+
+def test_a_shared_dataset_can_be_read(served: Any, shared: Path) -> None:
+    client = _client(served)
+    stats = client.post(
+        "/api/dataset/stats", json={"base_dir": str(shared / "beans")}, headers=USER
+    )
+    assert stats.status_code == 200
+    train = stats.json()["splits"]["train"]
+    assert (train["total_images"], train["classes"]) == (3, {"healthy": 2, "rust": 1})
+    image = shared / "beans" / "train" / "rust" / "c.png"
+    served_file = client.get(
+        "/api/dataset/file", params={"path": str(image)}, headers=USER
+    )
+    assert served_file.status_code == 200
+
+
+def test_a_folder_outside_the_scope_cannot_be_read(
+    served: Any, shared: Path, tmp_path: Path
+) -> None:
+    client = _client(served)
+    client.get("/api/session", headers={"X-Forwarded-User": "bia@lab.org"})
+    theirs = tmp_path / "profiles" / user_slug("bia@lab.org") / "datasets"
+    secret = _png(tmp_path / "secret" / "train" / "x" / "s.png")
+    for base in (theirs, tmp_path / "secret", tmp_path / "profiles"):
+        for route in ("/api/dataset/stats", "/api/dataset/detect"):
+            refused = client.post(route, json={"base_dir": str(base)}, headers=USER)
+            assert refused.status_code == 422, (route, base)
+    climbing = client.post(
+        "/api/dataset/stats",
+        json={"base_dir": str(shared / "beans"), "train_dir": "../../secret/train"},
+        headers=USER,
+    )
+    assert climbing.status_code == 422
+    assert secret.is_file()
+
+
+def test_a_folder_someone_else_opened_is_not_served(
+    served: Any, shared: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from visionforge.gui.api import datasets_routes
+
+    secret = _png(tmp_path / "secret" / "s.png")
+    monkeypatch.setattr(
+        datasets_routes, "_ALLOWED_DATASET_ROOTS", {secret.parent.resolve()}
+    )
+    response = _client(served).get(
+        "/api/dataset/file", params={"path": str(secret.resolve())}, headers=USER
+    )
+    assert response.status_code == 403
+
+
+def test_the_shared_folders_need_the_flag_and_must_exist(tmp_path: Path) -> None:
+    with pytest.raises(ServerModeError, match="need --server"):
+        ServerMode.from_options(enabled=False, datasets_dirs=[tmp_path])
+    with pytest.raises(ServerModeError, match="not a folder"):
+        ServerMode.from_options(
+            enabled=True, trusted_proxies=[PROXY], datasets_dirs=[tmp_path / "nope"]
+        )
 
 
 def _run_cli(argv: list[str]) -> dict[str, Any]:
