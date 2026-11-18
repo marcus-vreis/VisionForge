@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useT } from "../i18n/useT";
 import { barClearance } from "../lib/bar-clearance";
 import { showQueueButton } from "../lib/run-control";
+import type { ColabDeviceChoice } from "./ColabTarget";
 import { DeviceSelector, type DeviceSelection } from "./DeviceSelector";
 
 interface BottomBarProps {
@@ -19,6 +20,8 @@ interface BottomBarProps {
   serverRunning: boolean;
   selection: DeviceSelection;
   onSelectionChange: (next: DeviceSelection) => void;
+  /** Colab as a place to train, in the device selector (ADR-211). */
+  colab?: ColabDeviceChoice;
   isRunning: boolean;
   /** Something is running or waiting: the button adds to the line (ADR-159). */
   queueMode?: boolean;
@@ -44,6 +47,7 @@ export function BottomBar({
   serverRunning,
   selection,
   onSelectionChange,
+  colab,
   isRunning,
   queueMode = false,
   notice,
@@ -292,6 +296,7 @@ export function BottomBar({
           selection={selection}
           onChange={onSelectionChange}
           variant="bottom"
+          colab={colab}
         />
       </div>
     </div>

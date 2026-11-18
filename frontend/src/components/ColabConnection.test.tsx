@@ -155,47 +155,26 @@ describe("parseDatasetSource", () => {
 describe("ColabPanel when connected", () => {
   const connected = { ...installed, logged_in: true, account: "a@b.c" };
 
-  it("offers training only when the open task can train on Colab", () => {
-    expect(panel({ status: connected })).not.toContain("data-colab-train");
-    const html = panel({ status: connected, onTrain: noop });
-    expect(html).toContain("data-colab-train");
-    expect(html).toContain(pt.colab.train);
-    // The GPU is the app's own dropdown, labelled, starting on T4: no native <select>.
-    expect(html).not.toContain("<select");
-    expect(html).toContain('aria-labelledby="colab-accelerator-label"');
-    expect(html).toMatch(/<button[^>]*title="GPU"[^>]*>T4</);
+  it("sends training to the device selector instead of offering it here", () => {
+    const html = panel({ status: connected });
+    expect(html).toContain("data-colab-train-hint");
+    expect(html).toContain(pt.colab.target.panelHint);
+    expect(html).not.toContain("data-colab-train>");
+    expect(html).not.toContain(`>${pt.colab.train}</button>`);
   });
 
-  it("splits the panel in titled sections: account, training, runtimes", () => {
-    const html = panel({ status: connected, onTrain: noop, sessions: [] });
-    const titles = [pt.colab.sectionAccount, pt.colab.trainTitle, pt.colab.sessionsTitle];
+  it("splits the panel in titled sections: account, runtimes", () => {
+    const html = panel({ status: connected, sessions: [] });
+    const titles = [pt.colab.sectionAccount, pt.colab.sessionsTitle];
     const at = titles.map((title) => html.indexOf(`<section aria-label="${title}"`));
     expect(at.every((i) => i >= 0)).toBe(true);
     expect([...at].sort((a, b) => a - b)).toEqual(at);
   });
 
-  it("keeps the longer copy behind closed disclosures", () => {
-    const html = panel({ status: connected, onTrain: noop });
+  it("keeps the longer copy behind a closed disclosure", () => {
+    const html = panel({ status: connected });
     expect(html).toContain(`>${pt.colab.howItWorks}</summary>`);
-    expect(html).toContain(`>${pt.colab.learnMore}</summary>`);
     expect(html).not.toContain("<details open");
-  });
-
-  it("turns training off with the reason while the strategy is Réplicas", () => {
-    const html = panel({
-      status: connected,
-      onTrain: noop,
-      trainBlocked: pt.colab.replicatesBlocked,
-    });
-    expect(html).toContain("data-colab-train-blocked");
-    expect(html).toContain(pt.colab.replicatesBlocked);
-    expect(html).toMatch(new RegExp(`<button[^>]*disabled=""[^>]*>${pt.colab.train}</button>`));
-  });
-
-  it("keeps training on without a reason", () => {
-    const html = panel({ status: connected, onTrain: noop });
-    expect(html).not.toContain("data-colab-train-blocked");
-    expect(html).not.toMatch(new RegExp(`<button[^>]*disabled=""[^>]*>${pt.colab.train}</button>`));
   });
 
   it("lists the runtimes alive and stops only the ones VisionForge started", () => {

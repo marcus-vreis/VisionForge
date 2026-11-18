@@ -7,7 +7,6 @@ import { GuideMenu } from "./GuideMenu";
 import { ProfileMenu } from "./ProfileMenu";
 import { TaskColorDot } from "./TaskColorDot";
 import { ThemeSwitch } from "./ThemeSwitch";
-import type { ColabLaunch } from "../api/client";
 import { ColabConnection } from "./ColabConnection";
 import { UpdateNotice } from "./UpdateNotice";
 
@@ -71,8 +70,6 @@ export function Header({
   onChangeProfile,
   onNewProfile,
   profileSlug,
-  onTrainColab,
-  colabTrainBlocked,
   taskColor,
 }: {
   /** O nome no chip do perfil; sem ele (antes da introdução) o chip não aparece. */
@@ -82,10 +79,6 @@ export function Header({
   onChangeName?: () => void;
   /** Slug do perfil em uso: o canto do Colab recomeça quando ele muda (ADR-163). */
   profileSlug?: string;
-  /** Treina o experimento aberto no Colab (ADR-163); só vem na classificação. */
-  onTrainColab?: (launch: ColabLaunch) => void;
-  /** Por que o experimento aberto não treina no Colab agora (Réplicas, ADR-056). */
-  colabTrainBlocked?: string;
   /** Abre um guia escolhido no menu (ADR-104, ADR-115). */
   onGuide?: (id: GuideId) => void;
   /** Opens the "Começando do zero" page from the guide menu. */
@@ -195,11 +188,7 @@ export function Header({
         style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}
       >
         {taskColor && <TaskColorDot {...taskColor} />}
-        <ColabConnection
-          key={profileSlug ?? "default"}
-          onTrain={onTrainColab}
-          trainBlocked={colabTrainBlocked}
-        />
+        <ColabConnection key={profileSlug ?? "default"} />
         {/* Two real buttons rather than one that flips: each language is a
             target of its own, and aria-pressed says which one is on. */}
         <div

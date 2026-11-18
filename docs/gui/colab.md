@@ -8,8 +8,28 @@ que o código faz hoje. Tudo aqui sai do código atual
 [ADR-163](https://github.com/marcus-vreis/VisionForge/blob/development/docs/dev/DECISIONS.md)
 (treino no Colab pela CLI oficial) e
 [ADR-164](https://github.com/marcus-vreis/VisionForge/blob/development/docs/dev/DECISIONS.md)
-(dataset no Google Drive, com o consentimento na GUI). O que o código não define
+(dataset no Google Drive, com o consentimento na GUI) e ADR-211 (o Colab no
+seletor de dispositivo). O que o código não define
 ou que nunca rodou com uma conta real está em *O que não foi verificado*.
+
+## Como treinar
+
+1. No cabeçalho, o botão **colab** instala a CLI e faz o login com o Google
+   (uma vez por perfil).
+2. Na barra de baixo, abra o seletor de dispositivo (onde se escolhe a GPU) e
+   clique numa das GPUs do **Google Colab**: `T4`, `L4`, `A100`, `H100` ou
+   `G4`. O botão passa a mostrar `COLAB · T4`, o saldo em compute units e os
+   runtimes ativos. Escolher um dispositivo local volta para este computador.
+3. Na etapa **Dados** aparece o cartão **Dataset para o Colab**: escolha uma
+   pasta do "Meu Drive" ou informe um link (URL de zip, `torchvision:nome`,
+   `hf:dono/nome`).
+4. Abra a etapa **Revisão** e clique em **Treinar no Colab**.
+
+Uma pasta do PC que o Drive para desktop só espelha como **backup** fica em
+"Computadores", não em "Meu Drive", e a máquina do Colab não a alcança: copie
+o dataset para dentro de "Meu Drive". As opções do Colab ficam desligadas, com
+o motivo, fora da classificação e nas estratégias Réplicas e comparação
+replicada (ADR-211).
 
 ## Como funciona
 
@@ -84,7 +104,7 @@ Respostas de erro que o código define:
 
 ## Dataset no Google Drive
 
-- No painel, **Escolher pasta no Drive** navega pelas pastas do "Meu Drive"
+- No cartão da etapa Dados, **Escolher pasta no Drive** navega pelas pastas do "Meu Drive"
   deste computador: clique para entrar, **Usar esta pasta** para confirmar. O
   caminho no Colab aparece antes de confirmar. O navegador não sai do Drive e
   não usa a API do Google: ele lê a pasta local que o Drive para desktop
@@ -94,7 +114,7 @@ Respostas de erro que o código define:
   links, pastas ocultas e as que começam com ponto ficam de fora. Um `rel`
   com `..` ou caminho absoluto é recusado. As duas rotas só atendem este
   computador (`403` de outra origem).
-- Sem o Drive para desktop, o painel mostra três passos (instalar, colocar o
+- Sem o Drive para desktop, o cartão mostra três passos (instalar, colocar o
   dataset no "Meu Drive", voltar e escolher) e um campo para digitar a pasta
   "Meu Drive" quando a detecção não a acha.
 - O servidor traduz a pasta escolhida para `/content/drive/MyDrive/...` e manda a
@@ -130,10 +150,11 @@ Respostas de erro que o código define:
 
 ## O que não foi verificado
 
-- Nada aqui foi rodado com uma conta Google real ao escrever este guia; é leitura
-  do código e das decisões. Os testes do repositório usam uma CLI falsa.
-- A detecção do "Meu Drive" nunca rodou numa máquina com o Google Drive para
-  desktop instalado (risco registrado na ADR-164). O navegador de pastas foi
-  conferido com a pasta digitada apontando para uma pasta local comum.
+- O login, o saldo e a lista de runtimes foram conferidos com uma conta Google
+  real em 2026-11-18. Alocar a VM, montar o Drive nela e treinar, não: essa
+  parte é leitura do código e das decisões, e os testes usam uma CLI falsa.
+- A detecção do "Meu Drive" e o navegador de pastas foram conferidos numa
+  máquina Windows com o Google Drive para desktop (`G:\Meu Drive`), em
+  2026-11-18. A montagem na VM e o treino a partir dessa pasta, não.
 - A CLI é jovem e muda; a versão fixada e o texto em inglês que o código lê dela
   (como "Please visit" e "Mounted at") são a proteção. Outra versão pode quebrar.

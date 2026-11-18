@@ -20,6 +20,8 @@ import { buildDefaults } from "../lib/schema-defaults";
 import { countChanged, errorsUnder } from "../lib/steps";
 import { useAutoExperimentName } from "../lib/use-auto-experiment-name";
 import { AugmentPreview } from "./AugmentPreview";
+import { ColabDatasetCard } from "./ColabTarget";
+import { ColabTargetContext } from "../lib/colab-target-context";
 import { DatasetPicker } from "./DatasetPicker";
 import { DatasetStats } from "./DatasetStats";
 import { DatasetAudit } from "./DatasetAudit";
@@ -1964,6 +1966,9 @@ export function ParamPanel({
   const trainingData = (formData["training"] ?? {}) as Record<string, unknown>;
   const dataData = (formData["data"] ?? {}) as Record<string, unknown>;
   const baseDir = String(dataData["base_dir"] ?? "");
+  // While Colab is the place to train, the dataset is the one asked for it
+  // (ADR-211): the step is missing when that origin is, not the local folder.
+  const colabTarget = useContext(ColabTargetContext);
   const gridHyperparameters = (((formData["grid_search"] ??
     {}) as Record<string, unknown>)["hyperparameters"] ?? {}) as Record<
     string,
@@ -2322,10 +2327,12 @@ export function ParamPanel({
         "task",
         "model.num_classes",
       ]),
-      missing: baseDir.trim() === "",
+      missing: colabTarget ? colabTarget.problem !== null : baseDir.trim() === "",
       errors: errorsIn(["data", "task", "model.num_classes"], dataElsewhere),
       content: (
         <div style={stepStack}>
+          {/* Only while Colab is the place to train (ADR-211). */}
+          <ColabDatasetCard />
           <div style={card}>
             <div style={sectionLabel}>{t.paramPanel.kickers.dataset}</div>
             <DatasetPicker

@@ -11,9 +11,17 @@ import {
   runSweep,
   runTaskCv,
   runColabExperiment,
-  type ColabLaunch,
 } from "./api/client";
 import type { CvPayload } from "./components/CvCard";
+import {
+  colabBlock,
+  colabDataProblem,
+  colabLaunchOf,
+  defaultColabSetup,
+  type ColabSetup,
+} from "./lib/colab-target";
+import { ColabTargetContext } from "./lib/colab-target-context";
+import { loadMyDriveRoot } from "./lib/drive-consent";
 import type { PanelStrategy } from "./components/ExperimentHeader";
 import type { SweepPayload } from "./components/SweepCard";
 import type { ReplicatesPayload } from "./lib/replicates-form";
@@ -173,6 +181,12 @@ export default function App() {
     kind: "cuda",
     gpu_ids: null,
   });
+  // Where the next training runs: this machine, or the account's Colab picked
+  // in the device selector (ADR-211). `device` stays this machine's choice.
+  const [target, setTarget] = useState<"local" | "colab">("local");
+  const [colabSetup, setColabSetup] = useState<ColabSetup>(() =>
+    defaultColabSetup(loadMyDriveRoot()),
+  );
   const [userName, setUserName] = useState(() => readUserName());
   // "convite" na primeira visita; um id de guia quando escolhido no menu do
   // cabeçalho (ADR-115).
@@ -612,14 +626,39 @@ export default function App() {
   const setActiveStrategy = (s: PanelStrategy) =>
     setStrategyByTask((prev) => ({ ...prev, [activeKey]: s }));
 
-  const handleTrain = async (colab?: ColabLaunch) => {
+  // Why the open experiment cannot train on Colab: another task, or a strategy
+  // that is several runs (ADR-056, ADR-193).
+  const colabBlocked = colabBlock({
+    task: activeKey,
+    custom: isCustomTask(activeTask),
+    strategy: activeStrategy,
+  });
+  // Colab stays picked across tabs, and counts only where it can train.
+  const colabOn = target === "colab" && colabBlocked !== "task";
+  const classificationBaseDir = String(
+    ((formData["data"] ?? {}) as Record<string, unknown>)["base_dir"] ?? "",
+  );
+  const colabProblem = colabOn ? colabDataProblem(colabSetup, classificationBaseDir) : null;
+
+  // What the Dados step shows while Colab is picked; null on this machine.
+  const colabTarget = useMemo(
+    () =>
+      colabOn
+        ? {
+            setup: colabSetup,
+            onChange: (patch: Partial<ColabSetup>) =>
+              setColabSetup((prev) => ({ ...prev, ...patch })),
+            formBaseDir: classificationBaseDir,
+            problem: colabProblem,
+          }
+        : null,
+    [colabOn, colabSetup, classificationBaseDir, colabProblem],
+  );
+
+  const handleTrain = async () => {
     // A Colab run (ADR-163) is a classification payload sent to another route.
-    if (colab && (activeKey !== "classification" || isCustomTask(activeTask))) return;
-    // Colab trains one config.block; a replicate set is not one (ADR-056),
-    // nor is a replicated comparison (ADR-193).
-    if (colab && (activeStrategy === "replicates" || activeStrategy === "replicatedComparison")) {
-      return;
-    }
+    const colab = colabOn ? colabLaunchOf(colabSetup, classificationBaseDir) : undefined;
+    if (colabOn && (colabBlocked !== null || !colab)) return;
     // Classification encodes most strategies in config.block, so its payload
     // already carries them, and its panel only reports "replicates", which is
     // not a block. That one, like the standalone panels' strategies, lives in
@@ -932,9 +971,17 @@ export default function App() {
     ? null
     : activeStep !== "review"
       ? t.bottomBar.trainLockedReview
-      : !datasetReady
-        ? t.bottomBar.trainLockedData
-        : null;
+      : colabOn && colabBlocked === "replicates"
+        ? t.colab.replicatesBlocked
+        : colabOn && colabBlocked === "comparison"
+          ? t.colab.comparisonBlocked
+          : colabOn
+            ? colabProblem !== null
+              ? t.colab.target.lockedData
+              : null
+            : !datasetReady
+              ? t.bottomBar.trainLockedData
+              : null;
 
   return (
     <div
@@ -1017,20 +1064,6 @@ export default function App() {
         onChangeProfile={() => setPickProfile(true)}
         onNewProfile={() => setNewProfile(true)}
         profileSlug={profile?.slug}
-        onTrainColab={
-          activeKey === "classification" && !isCustomTask(activeTask)
-            ? (launch) => void handleTrain(launch)
-            : undefined
-        }
-        colabTrainBlocked={
-          activeKey !== "classification"
-            ? undefined
-            : activeStrategy === "replicates"
-              ? t.colab.replicatesBlocked
-              : activeStrategy === "replicatedComparison"
-                ? t.colab.comparisonBlocked
-                : undefined
-        }
         taskColor={
           isCustomTask(activeTask)
             ? {
@@ -1216,6 +1249,7 @@ export default function App() {
             onImportApplied={takeImport}
           />
         ) : (
+          <ColabTargetContext.Provider value={colabTarget}>
           <ParamPanel
             task={activeTask}
             schema={schema}
@@ -1235,6 +1269,7 @@ export default function App() {
             pendingImport={pendingImports[activeKey]}
             onImportApplied={takeImport}
           />
+          </ColabTargetContext.Provider>
         )}
         </StepNavContext.Provider>
         </ContentBoundary>
@@ -1273,13 +1308,36 @@ export default function App() {
         onQueue={() => setShowQueue(true)}
         onTrain={() => void handleTrain()}
         disabled={submitting}
-        trainLabel={t.app.train[activeStrategy] ?? t.app.train.simple}
+        trainLabel={
+          colabOn && colabBlocked === null
+            ? t.colab.target.train
+            : (t.app.train[activeStrategy] ?? t.app.train.simple)
+        }
         lockReason={trainLockReason}
         historyCount={historyCount}
         queuedCount={queuedCount}
         serverRunning={serverBusy}
         selection={device}
-        onSelectionChange={setDevice}
+        onSelectionChange={(next) => {
+          setDevice(next);
+          setTarget("local");
+        }}
+        colab={{
+          active: colabOn,
+          accelerator: colabSetup.accelerator,
+          blocked:
+            colabBlocked === "task"
+              ? t.colab.target.onlyClassification
+              : colabBlocked === "replicates"
+                ? t.colab.replicatesBlocked
+                : colabBlocked === "comparison"
+                  ? t.colab.comparisonBlocked
+                  : undefined,
+          onPick: (accelerator) => {
+            setColabSetup((prev) => ({ ...prev, accelerator }));
+            setTarget("colab");
+          },
+        }}
         isRunning={status.status === "running"}
         queueMode={queueMode}
         notice={queueNotice}
