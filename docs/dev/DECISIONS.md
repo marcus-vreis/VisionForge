@@ -8380,3 +8380,26 @@ Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS
 
 **Amended 2026-11-18: four gaps found in review.** A metric the reproduction reports as NaN or infinite, where the group has a `pi95`, counts as outside (exit 1); before, it left the verdict at `no_interval` and exit 0. A replicate group whose reproduction has no test split exits 2: the group's aggregates are test scores and cannot judge validation ones. The recorded value and the delta are reported only for the seed's own finished run: a single run re-trained with `--seed` other than its recorded seed, or a replicate that stopped or failed, gets `recorded: null`. A `--output` that is a file, or a config whose `training` or `output` is not a mapping, exits 2 instead of a traceback.
 
+## ADR-211 — Colab is chosen where the GPU is chosen, and its dataset is asked on the Dados step
+
+**Date:** 2026-11-18
+**Status:** Accepted
+**Amends:** ADR-163 (training on Colab through the official CLI), ADR-164 (dataset in Google Drive)
+
+**Context:** ADR-163 put everything about Colab in one panel of the header: installing the CLI, signing in, and also a second "train" button with its own dataset field and GPU dropdown. The GUI then had two ways to start a training, and the one for Colab bypassed the Revisão step and the Treinar button every other run goes through. The first use with a real account showed the cost: the person looked for Colab where the GPU is picked, and pointed Drive for desktop at the local dataset folder as a backup, which lands under "Computers" and not "My Drive", so the VM cannot reach it; nothing on screen said so.
+
+**Decision:**
+
+- The device selector of the bottom bar offers the account's Colab under this machine's devices: one button per GPU (`T4`, `L4`, `A100`, `H100`, `G4`). With it picked, the usual Treinar button reads "Treinar no Colab" and sends the classification to `/api/colab/experiment/run`. Picking a local device goes back to this machine. Nothing changes on the server.
+- While Colab is picked, the selector's button shows what only Colab has: the GPU asked for, the balance in compute units and the runtimes alive (`/api/colab/usage`, `/api/colab/sessions`). The status is asked when the selector mounts and each time its menu opens; the balance and the runtimes only once connected and on screen.
+- The Dados step of the classification shows a card that asks where the VM takes the dataset from: a folder of "My Drive" (the browser of ADR-203) or a link (zip URL, `torchvision:`, `hf:`), and whether the run is also saved to the Drive. The card says that a backup-only folder is not in "My Drive". The step counts as filled when that origin can be sent, and Treinar stays locked, with the reason, until then.
+- The options are off, with the reason, while the account is not connected, on another task, and for Réplicas and the replicated comparison (ADR-056, ADR-193).
+- The header panel keeps the install, the login, the account and the runtimes, and points to the selector for training.
+
+**Consequences:** one way to start a training. A Colab run now passes the Revisão step like any other. The three origins stay: the Drive is the first option, not the only one, because a public dataset by link costs no upload. The Revisão step still shows the form's local folder under "Pasta base", not the Colab origin, and the number of classes is still the form's, since the VM's dataset is not read here before the run.
+
+**Alternatives considered:**
+
+- *Make the Drive the only origin.* Simpler to explain, and it would take away the zip URL and the public catalogs that work today.
+- *Lift the header panel's state into the page and share it with the selector.* One request less per menu opening, at the price of threading the panel's eight handlers through the header; the selector asking for itself keeps the two apart.
+- *A fifth `kind` in the device selection.* The selection is saved in the config as this machine's device; Colab is where the run goes, not a device of this machine, so it is a separate choice.

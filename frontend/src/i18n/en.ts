@@ -143,15 +143,10 @@ export const en: Dict = {
     noRate: "No runtime is active now; the hours left depend on the GPU you pick.",
     usageFailed: "Failed to read the balance.",
     loadFailed: "Failed to reach the server.",
-    trainTitle: "Train on Colab",
-    trainSource: "Dataset: zip URL, torchvision:name or hf:owner/name",
-    driveSource: "Dataset in Google Drive",
     driveRoot: "This computer's \"My Drive\" folder",
     driveRootPlaceholder: "G:\\My Drive",
     driveRootOther: "use another \"My Drive\" folder",
     driveExport: "Also save the run to Drive",
-    driveNote:
-      "The VM mounts your Drive and copies the folder before training; Google asks for permission on every runtime. With no folder chosen, the form's dataset folder is used.",
     driveChecking: "Looking for Google Drive for desktop…",
     driveFolder: "Dataset folder",
     driveFolderPlaceholder: "empty = the form's folder",
@@ -171,15 +166,40 @@ export const en: Dict = {
     driveStep3: "Come back here and choose the folder.",
     sourcePlaceholder: "https://…/dataset.zip",
     badSource: "Use an http(s) URL of a zip, torchvision:<name> or hf:<owner/name>.",
-    accelerator: "GPU",
-    train: "train on Colab",
-    trainNote:
-      "It joins the same queue as local training and the live tab follows it. With \"save to Drive\", the run also goes to MyDrive/VisionForge/runs.",
     // The strategy step has Replicates on (ADR-056): Colab trains one run.
     replicatesBlocked:
       "Replicates run on this computer only: Colab trains one run at a time. Set the strategy back to Single run to train on Colab.",
     comparisonBlocked:
       "The replicated comparison runs on this computer only: Colab trains one run at a time. Set the strategy back to Single run to train on Colab.",
+    // Colab as a place to train, in the device selector (ADR-211).
+    target: {
+      menuTitle: "google colab",
+      option: (gpu: string) => `Colab · ${gpu}`,
+      optionSubtitle: "Your Google account's GPU",
+      pill: (gpu: string) => `COLAB · ${gpu}`,
+      account: (email: string) => `account ${email}`,
+      balance: (units: string) => `${units} CU`,
+      balanceTitle: (units: string) => `Balance: ${units} compute units`,
+      runtimes: (n: number) => (n === 1 ? "1 active runtime" : `${n} active runtimes`),
+      allocated: (hardware: string) => `allocated: ${hardware}`,
+      notConnected: "To use it: install the CLI and sign in with Google from the colab button in the header.",
+      onlyClassification: "Colab trains classification only, for now.",
+      train: "▶ Train on Colab",
+      lockedData: "Say where Colab takes the dataset from, on the Data step, to unlock Train",
+      panelHint:
+        "To train: pick Colab in the device selector, beside the Train button. The dataset is asked on the Data step.",
+      dataKicker: "// dataset for colab",
+      dataIntro:
+        "The training will run on Colab, and its machine cannot read this computer's folders. Say where it takes the dataset from.",
+      kind: "Dataset origin",
+      kindDrive: "My Drive folder",
+      kindLink: "Link or catalog",
+      linkLabel: "Zip URL, torchvision:name or hf:owner/name",
+      backupNote:
+        "A PC folder that Drive for desktop only mirrors as a backup lives under \"Computers\", not \"My Drive\", and Colab cannot reach it. Copy the dataset into \"My Drive\".",
+      noFolder: "Pick the dataset folder in My Drive.",
+      formFolder: (path: string) => `With no folder picked, the form's own is used: ${path}`,
+    },
     sessionsTitle: "Active runtimes",
     sessionsNone: "No runtime is alive.",
     stopSession: "stop",

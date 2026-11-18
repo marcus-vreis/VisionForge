@@ -150,15 +150,10 @@ export const pt = {
     noRate: "Nenhum runtime ativo agora; as horas restantes dependem da GPU escolhida.",
     usageFailed: "Não foi possível ler o saldo.",
     loadFailed: "Não foi possível falar com o servidor.",
-    trainTitle: "Treinar no Colab",
-    trainSource: "Dataset: URL de zip, torchvision:nome ou hf:dono/nome",
-    driveSource: "Dataset no Google Drive",
     driveRoot: "Pasta \"Meu Drive\" deste computador",
     driveRootPlaceholder: "G:\\Meu Drive",
     driveRootOther: "usar outra pasta \"Meu Drive\"",
     driveExport: "Salvar o run também no Drive",
-    driveNote:
-      "A VM monta o seu Drive e copia a pasta antes de treinar; o Google pede permissão a cada runtime. Sem pasta escolhida, vale a pasta do dataset do formulário.",
     driveChecking: "Procurando o Google Drive para desktop…",
     driveFolder: "Pasta do dataset",
     driveFolderPlaceholder: "vazio = pasta do formulário",
@@ -178,16 +173,41 @@ export const pt = {
     driveStep3: "Volte aqui e escolha a pasta.",
     sourcePlaceholder: "https://…/dataset.zip",
     badSource: "Use uma URL http(s) de um zip, torchvision:<nome> ou hf:<dono/nome>.",
-    accelerator: "GPU",
-    train: "treinar no Colab",
-    trainNote:
-      "Entra na mesma fila dos treinos locais e a aba ao vivo acompanha. Com \"Salvar no Drive\", o run vai também para MyDrive/VisionForge/runs.",
     // The strategy step has Réplicas on (ADR-056): Colab trains one run.
     replicatesBlocked:
       "Réplicas roda só neste computador: o Colab treina uma execução por vez. Volte a estratégia para Treino simples para treinar no Colab.",
     // The same for the replicated comparison (ADR-193).
     comparisonBlocked:
       "A comparação replicada roda só neste computador: o Colab treina uma execução por vez. Volte a estratégia para Treino simples para treinar no Colab.",
+    // Colab as a place to train, in the device selector (ADR-211).
+    target: {
+      menuTitle: "google colab",
+      option: (gpu: string) => `Colab · ${gpu}`,
+      optionSubtitle: "GPU da sua conta Google",
+      pill: (gpu: string) => `COLAB · ${gpu}`,
+      account: (email: string) => `conta ${email}`,
+      balance: (units: string) => `${units} CU`,
+      balanceTitle: (units: string) => `Saldo: ${units} compute units`,
+      runtimes: (n: number) => (n === 1 ? "1 runtime ativo" : `${n} runtimes ativos`),
+      allocated: (hardware: string) => `alocado: ${hardware}`,
+      notConnected: "Para usar: instale a CLI e entre com o Google no botão colab do cabeçalho.",
+      onlyClassification: "O Colab treina só classificação por enquanto.",
+      train: "▶ Treinar no Colab",
+      lockedData: "Diga de onde o Colab tira o dataset, na etapa Dados, para liberar o Treinar",
+      panelHint:
+        "Para treinar: escolha Colab no seletor de dispositivo, ao lado do botão Treinar. O dataset é pedido na etapa Dados.",
+      dataKicker: "// dataset para o colab",
+      dataIntro:
+        "O treino vai rodar no Colab, e a máquina de lá não lê as pastas deste computador. Diga de onde ela tira o dataset.",
+      kind: "Origem do dataset",
+      kindDrive: "Pasta no Meu Drive",
+      kindLink: "Link ou catálogo",
+      linkLabel: "URL de zip, torchvision:nome ou hf:dono/nome",
+      backupNote:
+        "Uma pasta do PC que o Drive para desktop só espelha como backup fica em \"Computadores\", não em \"Meu Drive\", e o Colab não a alcança. Copie o dataset para dentro de \"Meu Drive\".",
+      noFolder: "Escolha a pasta do dataset no Meu Drive.",
+      formFolder: (path: string) => `Sem pasta escolhida, vale a do formulário: ${path}`,
+    },
     sessionsTitle: "Runtimes ativos",
     sessionsNone: "Nenhum runtime ativo.",
     stopSession: "parar",
