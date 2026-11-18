@@ -2809,6 +2809,14 @@ export const en: Dict = {
       actual === predicted ? `${actual} ✓` : `${actual} → read as ${predicted}`,
     lrChart: "Learning rate",
     confusionTitle: (epoch: number) => `Validation confusion matrix · epoch ${epoch}`,
+    confusionBestTitle: (epoch: number) =>
+      `Validation confusion matrix · best epoch (${epoch})`,
+    confusionLatestIsBest: (epoch: number) =>
+      `Validation confusion matrix · epoch ${epoch} · the best so far`,
+    f1Chart: "Validation macro F1",
+    recallChart: "Validation recall per class",
+    recallOmitted: (shown: number, omitted: number) =>
+      `The ${shown} classes with the lowest recall now; ${omitted} ${omitted === 1 ? "other is" : "others are"} left out.`,
     confusionAxes: "rows: true class · columns: predicted class",
     topTitle: (epoch: number) => `Most frequent validation confusions · epoch ${epoch}`,
     topRow: (actual: string, predicted: string) => `${actual} read as ${predicted}`,

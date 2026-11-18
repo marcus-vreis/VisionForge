@@ -4,12 +4,17 @@ import type { TrainingEvent } from "../types/run";
 import {
   bestEpoch,
   bestRule,
+  classRecall,
+  confusionAt,
   curveOf,
   formatValue,
   latestConfusion,
   liveUnits,
+  macroF1,
+  macroF1Curve,
   metricKey,
   overridesSummary,
+  recallCurves,
   type EpochEnd,
 } from "./live-results";
 import { storySpecFor } from "./story-family";
@@ -194,5 +199,94 @@ describe("liveUnits and insights", () => {
     expect(units[0].insight?.epoch).toBe(2);
     // The next trial has not explained anything yet: no picture of the last one.
     expect(units[1].insight).toBeNull();
+  });
+});
+
+describe("confusionAt", () => {
+  it("takes the confusion of the epoch asked for, not the latest", () => {
+    const first = { classes: ["a", "b"], matrix: [[1, 0], [0, 1]] };
+    const second = { classes: ["a", "b"], matrix: [[0, 1], [1, 0]] };
+    const epochs = [epoch(1, { confusion: first }), epoch(2, { confusion: second })];
+    expect(confusionAt(epochs, 1)).toEqual(first);
+  });
+
+  it("is null for an epoch that did not run or sent none", () => {
+    expect(confusionAt([epoch(1)], 1)).toBeNull();
+    expect(confusionAt([epoch(1)], 4)).toBeNull();
+  });
+});
+
+describe("classRecall and macroF1", () => {
+  // a: 8 right, 2 read as b. b: 3 right, 1 read as a. c: no image, none predicted.
+  const matrix = [
+    [8, 2, 0],
+    [1, 3, 0],
+    [0, 0, 0],
+  ];
+
+  it("divides each row's diagonal by the row, and has no recall for an empty row", () => {
+    expect(classRecall(matrix)).toEqual([0.8, 0.75, null]);
+  });
+
+  it("averages F1 over the classes that were seen or predicted", () => {
+    // a: 2*8/(16+1+2) = 16/19; b: 2*3/(6+2+1) = 6/9; c is left out.
+    expect(macroF1(matrix)).toBeCloseTo((16 / 19 + 6 / 9) / 2, 10);
+  });
+
+  it("counts a class that was only predicted as an F1 of zero", () => {
+    // a: 2 right, 2 read as b; b has no image: F1(a) = 4/6, F1(b) = 0.
+    expect(macroF1([[2, 2], [0, 0]])).toBeCloseTo((4 / 6 + 0) / 2, 10);
+  });
+
+  it("is null for a matrix with no image", () => {
+    expect(macroF1([[0, 0], [0, 0]])).toBeNull();
+  });
+});
+
+describe("macroF1Curve and recallCurves", () => {
+  const classes = ["a", "b"];
+  const epochs = [
+    epoch(1, { confusion: { classes, matrix: [[1, 1], [1, 1]] } }),
+    epoch(2),
+    epoch(3, { confusion: { classes, matrix: [[2, 0], [1, 1]] } }),
+  ];
+
+  it("has one F1 point per epoch that sent a matrix", () => {
+    const curve = macroF1Curve(epochs);
+    expect(curve.map((p) => p.epoch)).toEqual([1, 3]);
+    expect(curve[0].value).toBeCloseTo(0.5, 10);
+    // a: 4/(4+1+0) = 0.8; b: 2/(2+0+1) = 2/3.
+    expect(curve[1].value).toBeCloseTo((0.8 + 2 / 3) / 2, 10);
+  });
+
+  it("has one recall line per class", () => {
+    const { series, omitted } = recallCurves(epochs, 8);
+    expect(omitted).toBe(0);
+    expect(series.map((s) => s.name)).toEqual(["a", "b"]);
+    expect(series[0].points).toEqual([
+      { epoch: 1, value: 0.5 },
+      { epoch: 3, value: 1 },
+    ]);
+    expect(series[1].points).toEqual([
+      { epoch: 1, value: 0.5 },
+      { epoch: 3, value: 0.5 },
+    ]);
+  });
+
+  it("keeps the classes with the lowest latest recall when there are too many", () => {
+    const many = ["a", "b", "c"];
+    const { series, omitted } = recallCurves(
+      [epoch(1, { confusion: { classes: many, matrix: [[9, 1, 0], [5, 5, 0], [0, 3, 7]] } })],
+      2,
+    );
+    // Latest recall: a 0.9, b 0.5, c 0.7. The two lowest stay, in class order.
+    expect(series.map((s) => s.name)).toEqual(["b", "c"]);
+    expect(omitted).toBe(1);
+  });
+
+  it("is empty when the epochs sent only the list of top confusions", () => {
+    const top = { classes: ["a", "b"], top: [[0, 1, 2]] as [number, number, number][] };
+    expect(recallCurves([epoch(1, { confusion: top })], 8).series).toEqual([]);
+    expect(macroF1Curve([epoch(1, { confusion: top })])).toEqual([]);
   });
 });

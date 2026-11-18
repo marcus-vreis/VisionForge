@@ -438,9 +438,10 @@ export function TrainingOverlay({
       <div
         data-tour="training-sheet"
         style={{
-          // "Como funciona" puts the steps beside the code, and the code wants
-          // the width; the log and the results keep the narrow sheet.
-          width: tab === "story" ? "min(1080px, 100%)" : "min(720px, 100%)",
+          // "Como funciona" puts the steps beside the code and the results
+          // put their charts side by side: both want the width. The log keeps
+          // the narrow sheet, where its lines read best.
+          width: tab === "log" ? "min(720px, 100%)" : "min(1080px, 100%)",
           background: "rgb(var(--lt-surface, 12 14 18) / 0.95)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 18,
@@ -748,7 +749,7 @@ export function TrainingOverlay({
             role="tabpanel"
             id="training-panel-results"
             aria-labelledby="training-tab-results"
-            style={{ maxHeight: 420, overflowY: "auto" }}
+            style={{ maxHeight: "min(640px, 62vh)", overflowY: "auto" }}
           >
             <LiveResults events={progressEvents} spec={story} accent={taskAccent} />
           </div>
