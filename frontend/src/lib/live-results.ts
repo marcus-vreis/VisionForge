@@ -188,3 +188,82 @@ export function latestConfusion(
   }
   return null;
 }
+
+/** The confusion one epoch sent, or null when it did not run or sent none. */
+export function confusionAt(epochs: readonly EpochEnd[], epoch: number): LiveConfusion | null {
+  const confusion = epochs.find((e) => e.epoch === epoch)?.confusion;
+  return confusion && confusion.classes.length > 0 ? confusion : null;
+}
+
+/** Recall of each class: the diagonal over its row. A class with no validation
+ *  image has none (null), which is not the same as zero. */
+export function classRecall(matrix: readonly (readonly number[])[]): (number | null)[] {
+  return matrix.map((row, i) => {
+    const total = row.reduce((sum, n) => sum + n, 0);
+    return total > 0 ? row[i] / total : null;
+  });
+}
+
+/** Macro F1 of a confusion matrix: the mean of 2TP / (2TP + FP + FN) over the
+ *  classes that were seen or predicted. A class that was only predicted counts
+ *  as zero; one that was neither is left out. Null when no class counts. */
+export function macroF1(matrix: readonly (readonly number[])[]): number | null {
+  let sum = 0;
+  let counted = 0;
+  for (let i = 0; i < matrix.length; i += 1) {
+    const tp = matrix[i][i];
+    const actual = matrix[i].reduce((total, n) => total + n, 0);
+    const predicted = matrix.reduce((total, row) => total + row[i], 0);
+    if (actual + predicted === 0) continue;
+    sum += (2 * tp) / (actual + predicted);
+    counted += 1;
+  }
+  return counted > 0 ? sum / counted : null;
+}
+
+/** Macro F1 of the validation, one point per epoch that sent a full matrix. */
+export function macroF1Curve(epochs: readonly EpochEnd[]): CurvePoint[] {
+  const points: CurvePoint[] = [];
+  for (const e of epochs) {
+    const value = e.confusion?.matrix ? macroF1(e.confusion.matrix) : null;
+    if (value !== null) points.push({ epoch: e.epoch, value });
+  }
+  return points;
+}
+
+export interface ClassCurve {
+  name: string;
+  /** Position of the class in the run's class list, which picks its color. */
+  index: number;
+  points: CurvePoint[];
+}
+
+/**
+ * Validation recall of each class across the epochs, from the matrices they
+ * sent. More than `limit` lines cannot be told apart, so only the classes with
+ * the lowest latest recall are kept (they are the ones to look at), in class
+ * order; `omitted` counts the rest.
+ */
+export function recallCurves(
+  epochs: readonly EpochEnd[],
+  limit: number,
+): { series: ClassCurve[]; omitted: number } {
+  const withMatrix = epochs.filter((e) => e.confusion?.matrix);
+  const last = withMatrix.at(-1)?.confusion;
+  if (!last?.matrix) return { series: [], omitted: 0 };
+  const all: ClassCurve[] = last.classes.map((name, index) => ({ name, index, points: [] }));
+  for (const e of withMatrix) {
+    const matrix = e.confusion?.matrix;
+    if (!matrix || matrix.length !== all.length) continue;
+    classRecall(matrix).forEach((value, index) => {
+      if (value !== null) all[index].points.push({ epoch: e.epoch, value });
+    });
+  }
+  const drawn = all.filter((c) => c.points.length > 0);
+  if (drawn.length <= limit) return { series: drawn, omitted: 0 };
+  const lowest = [...drawn]
+    .sort((a, b) => (a.points.at(-1)?.value ?? 0) - (b.points.at(-1)?.value ?? 0) || a.index - b.index)
+    .slice(0, limit)
+    .sort((a, b) => a.index - b.index);
+  return { series: lowest, omitted: drawn.length - limit };
+}
