@@ -5,6 +5,7 @@ import {
   colabBlock,
   colabDataProblem,
   colabLaunchOf,
+  colabOriginLabel,
   defaultColabSetup,
 } from "./colab-target";
 
@@ -127,5 +128,30 @@ describe("colabAccountFacts", () => {
   it("has no balance before the account answered or when it reports none", () => {
     expect(colabAccountFacts(null, null)).toEqual({ balance: null, runtimes: 0, allocated: [] });
     expect(colabAccountFacts({ ...usage, balance: null }, []).balance).toBeNull();
+  });
+});
+
+describe("colabOriginLabel", () => {
+  it("names the folder as the VM sees it once the Drive browser picked one", () => {
+    const setup = {
+      ...drive,
+      drivePath: "G:\\Meu Drive\\beans",
+      driveRemote: "/content/drive/MyDrive/beans",
+    };
+    expect(colabOriginLabel(setup, "")).toBe("/content/drive/MyDrive/beans");
+  });
+
+  it("falls back to the typed folder, then to the form's own", () => {
+    expect(colabOriginLabel({ ...drive, drivePath: "G:\\Meu Drive\\beans" }, "x")).toBe(
+      "G:\\Meu Drive\\beans",
+    );
+    expect(colabOriginLabel(drive, "G:\\Meu Drive\\coffee")).toBe("G:\\Meu Drive\\coffee");
+  });
+
+  it("is the link itself for a link origin, and empty while nothing is set", () => {
+    expect(colabOriginLabel({ ...drive, kind: "link", link: " hf:beans/beans " }, "x")).toBe(
+      "hf:beans/beans",
+    );
+    expect(colabOriginLabel(drive, " ")).toBe("");
   });
 });

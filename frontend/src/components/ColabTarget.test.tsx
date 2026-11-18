@@ -118,6 +118,11 @@ describe("ColabDatasetCard", () => {
     expect(html).not.toContain("data-colab-dataset-problem");
   });
 
+  it("warns that a link's dataset is not read here, so the class count is the form's", () => {
+    expect(card({ kind: "link" })).toContain(c.linkClasses);
+    expect(card({})).not.toContain(c.linkClasses);
+  });
+
   it("takes a link instead, and refuses one the VM cannot download", () => {
     const empty = card({ kind: "link" });
     expect(empty).toContain('data-colab-dataset="link"');

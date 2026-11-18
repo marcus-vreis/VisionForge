@@ -118,3 +118,13 @@ export function colabAccountFacts(
     allocated: [...new Set(alive.map((s) => s.hardware).filter(Boolean))],
   };
 }
+
+/**
+ * The dataset origin in one line, for the Revisão step: the link, or the Drive
+ * folder as the VM sees it when the browser gave that path, else the folder
+ * here. Empty while nothing is set.
+ */
+export function colabOriginLabel(setup: ColabSetup, formBaseDir: string): string {
+  if (setup.kind === "link") return setup.link.trim();
+  return setup.driveRemote ?? (setup.drivePath.trim() || formBaseDir.trim());
+}

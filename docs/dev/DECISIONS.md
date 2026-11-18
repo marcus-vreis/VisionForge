@@ -8396,7 +8396,7 @@ Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS
 - The options are off, with the reason, while the account is not connected, on another task, and for Réplicas and the replicated comparison (ADR-056, ADR-193).
 - The header panel keeps the install, the login, the account and the runtimes, and points to the selector for training.
 
-**Consequences:** one way to start a training. A Colab run now passes the Revisão step like any other. The three origins stay: the Drive is the first option, not the only one, because a public dataset by link costs no upload. The Revisão step still shows the form's local folder under "Pasta base", not the Colab origin, and the number of classes is still the form's, since the VM's dataset is not read here before the run.
+**Consequences:** one way to start a training. A Colab run now passes the Revisão step like any other. The three origins stay: the Drive is the first option, not the only one, because a public dataset by link costs no upload. A Drive folder picked in the card is also a folder of this computer, so it fills the form's dataset folder and the form reads its splits and classes as for a local dataset; the Revisão step adds a row with where the VM takes the dataset from. A link's dataset is not read here before the run, so its task type and number of classes stay the form's, and the card says so.
 
 **Alternatives considered:**
 

@@ -197,6 +197,9 @@ export const en: Dict = {
       linkLabel: "Zip URL, torchvision:name or hf:owner/name",
       backupNote:
         "A PC folder that Drive for desktop only mirrors as a backup lives under \"Computers\", not \"My Drive\", and Colab cannot reach it. Copy the dataset into \"My Drive\".",
+      linkClasses:
+        "A link's dataset is not read on this computer: check the Task type and the number of classes right below.",
+      reviewOrigin: "Dataset on Colab",
       noFolder: "Pick the dataset folder in My Drive.",
       formFolder: (path: string) => `With no folder picked, the form's own is used: ${path}`,
     },
