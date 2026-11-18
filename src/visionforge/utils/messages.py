@@ -1798,6 +1798,31 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Pedido recusado: ele veio de uma página que não é do VisionForge.",
         "en": "Request refused: it came from a page that is not VisionForge's.",
     },
+    # ── Server mode (gui/server_mode.py) ─────────────────────────────────────
+    "server.untrusted_client": {
+        "pt": (
+            "Pedido recusado: em modo servidor o VisionForge só responde ao proxy "
+            "que faz o login. Abra o endereço do proxy, não o desta porta."
+        ),
+        "en": (
+            "Request refused: in server mode VisionForge only answers the proxy "
+            "that signs people in. Open the proxy's address, not this port's."
+        ),
+    },
+    "server.no_user": {
+        "pt": (
+            "Pedido recusado: o proxy não disse quem é você (cabeçalho {header} "
+            "ausente ou inválido). Entre de novo ou avise quem cuida do servidor."
+        ),
+        "en": (
+            "Request refused: the proxy did not say who you are (header {header} "
+            "missing or invalid). Sign in again or tell whoever runs the server."
+        ),
+    },
+    "server.route_off": {
+        "pt": "Esta função não está disponível quando o VisionForge roda como servidor.",
+        "en": "This feature is not available when VisionForge runs as a server.",
+    },
     # ── "Open folder" ────────────────────────────────────────────────────────
     "reveal.foreign_origin": {
         "pt": "A pasta só pode ser aberta pela página do próprio VisionForge.",

@@ -46,6 +46,7 @@ Três páginas de entrada, uma para cada leitor:
 | enviar um relatório a um repositório do GitHub | [GitHub](github.md) |
 | versionar uma execução com DVC | [DVC](dvc.md) |
 | saber onde ficam tokens e chaves | [Tokens](tokens.md) |
+| instalar um VisionForge para várias pessoas (experimental) | [Modo servidor](servidor.md) |
 
 ## Estender
 

@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -22,6 +22,7 @@ from visionforge.gui.api.http_responses import (
     TAG_SPA,
     TAG_SYSTEM,
 )
+from visionforge.gui.api.profiles import PROFILE_HEADER
 from visionforge.gui.api.routes import router as api_router
 from visionforge.gui.security import (
     HostOriginGuard,
@@ -30,6 +31,7 @@ from visionforge.gui.security import (
     SpaContentSecurityPolicy,
     is_wildcard,
 )
+from visionforge.gui.server_mode import ServerMode, ServerModeGate, mode_of
 from visionforge.utils.third_party_privacy import apply_env_opt_outs
 
 # The trainers are imported only when a run starts (GUI-11, #202), and importing
@@ -122,6 +124,26 @@ async def health() -> dict[str, str]:
     return {"version": __version__, "spa_bundle": _BOOT_SPA_BUNDLE}
 
 
+@app.get("/api/session", tags=[TAG_SYSTEM])
+async def session(request: Request) -> dict[str, Any]:
+    """Whether this is a server for several people, and who the proxy says is asking.
+
+    ``user`` and ``profile`` are null on a local install, where the browser
+    still picks the profile (ADR-114).
+    """
+    mode = mode_of(request.app)
+    user = getattr(request.state, "vf_user", None) if mode.enabled else None
+    profile = request.headers.get(PROFILE_HEADER) if user is not None else None
+    return {"server_mode": mode.enabled, "user": user, "profile": profile}
+
+
+def _profiles_dir() -> Path:
+    """Where profiles live, read per request as the routes do (ADR-114)."""
+    from visionforge.gui.api import routes
+
+    return routes._PROFILES_DIR
+
+
 # CORS sits inside HostOriginGuard on purpose (Sonar S8414 wants it outermost):
 # a foreign Host or Origin is refused before any CORS header is added (ADR-178).
 app.add_middleware(  # NOSONAR python:S8414
@@ -132,6 +154,10 @@ app.add_middleware(  # NOSONAR python:S8414
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Inside the Host and Origin guard: in server mode only the login proxy is
+# answered, the user it names becomes the profile, and a route that is not
+# ready for several people is 404 (ADR-213). Off, it passes everything through.
+app.add_middleware(ServerModeGate, profiles_dir=_profiles_dir)
 # Added last so it runs first: a request for another name, or a state change
 # from another site's page, never reaches CORS or a route (DNS rebinding, CSRF).
 app.add_middleware(HostOriginGuard)
@@ -193,13 +219,15 @@ def start_server(
     port: int = 8000,
     open_browser: bool = True,
     allowed_hosts: Sequence[str] = (),
+    server_mode: ServerMode | None = None,
 ) -> None:
     """Start the VisionForge GUI server.
 
     ``open_browser`` is False when the updater restarts the server: the page the
     researcher had open reloads itself, and a second tab would only confuse.
     ``allowed_hosts`` are the extra names the server answers to (``--allowed-host``):
-    a lab server's DNS alias, or a reverse proxy's public name.
+    a lab server's DNS alias, or a reverse proxy's public name. ``server_mode``
+    are the options of ``--server`` (ADR-213); ``None`` is the local tool.
     """
     import webbrowser
 
@@ -209,6 +237,14 @@ def start_server(
     app.state.bind_host = host
     policy = HostPolicy.for_bind(host, allowed_hosts)
     app.state.host_policy = policy
+    app.state.server_mode = server_mode or ServerMode()
+    if app.state.server_mode.enabled:
+        logger.info(
+            "Server mode: answering only the login proxy at {}; user from {}",
+            ", ".join(str(n) for n in app.state.server_mode.trusted),
+            app.state.server_mode.user_header,
+        )
+        open_browser = False
     logger.info(
         "Starting VisionForge GUI at http://{}:{}", host, port
     )  # NOSONAR python:S5332 - local server URL

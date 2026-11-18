@@ -419,6 +419,33 @@ def main() -> None:
         ),
     )
     gui_parser.add_argument(
+        "--server",
+        action="store_true",
+        help=(
+            "serve several people behind a reverse proxy that signs them in "
+            "(experimental, ADR-213); needs --trusted-proxy"
+        ),
+    )
+    gui_parser.add_argument(
+        "--trusted-proxy",
+        action="append",
+        default=[],
+        metavar="ADDRESS",
+        help=(
+            "IP address or CIDR block of the login proxy, the only client "
+            "answered in --server mode; repeatable"
+        ),
+    )
+    gui_parser.add_argument(
+        "--user-header",
+        default="X-Forwarded-User",
+        metavar="NAME",
+        help=(
+            "header in which the proxy names the signed-in user "
+            "(default X-Forwarded-User)"
+        ),
+    )
+    gui_parser.add_argument(
         "--no-browser",
         action="store_true",
         help="do not open a browser tab (used when an update restarts the GUI)",
@@ -584,6 +611,16 @@ def main() -> None:
 
     if args.command == "gui":
         from visionforge.gui.server import start_server
+        from visionforge.gui.server_mode import ServerMode, ServerModeError
+
+        try:
+            server_mode = ServerMode.from_options(
+                enabled=args.server,
+                trusted_proxies=args.trusted_proxy,
+                user_header=args.user_header,
+            )
+        except ServerModeError as exc:
+            parser.error(str(exc))
 
         # The updater relaunches with VISIONFORGE_NO_BROWSER rather than the flag:
         # the relaunch runs the *new* version, and an environment variable it does
@@ -594,6 +631,7 @@ def main() -> None:
             port=args.port,
             open_browser=not quiet,
             allowed_hosts=args.allowed_host,
+            server_mode=server_mode,
         )
         return
 
