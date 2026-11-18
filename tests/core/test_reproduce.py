@@ -465,7 +465,8 @@ def test_a_non_finite_or_missing_record_is_none() -> None:
 
 
 def test_a_replicate_seed_records_its_own_child_value() -> None:
-    plan = _plan("replicates", {"group": {}}, child={"metrics": {R2: 0.81}})
+    child = {"seed": 0, "status": "success", "metrics": {R2: 0.81}}
+    plan = _plan("replicates", {"group": {}}, child=child)
     assert recorded_value(plan, R2, "test") == pytest.approx(0.81)
     assert recorded_value(_plan("replicates", {"group": {}}), R2, "test") is None
 
@@ -757,3 +758,83 @@ def test_a_config_that_does_not_validate_trains_nothing(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="epochs"):
         run_reproduction(plan, lambda task: runner)
     assert runner.configs == []
+
+
+# ------------------------------------------------- review findings (2026-11-18)
+
+
+def test_reading_never_extracts_the_bundle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bundle = _bundle(tmp_path, _single_run(tmp_path))
+
+    def refuse(*args: Any, **kwargs: Any) -> None:
+        raise AssertionError("the bundle was extracted")
+
+    monkeypatch.setattr(zipfile.ZipFile, "extract", refuse)
+    monkeypatch.setattr(zipfile.ZipFile, "extractall", refuse)
+    assert read_bundle_record(bundle).config["name"] == "reg"
+
+
+def test_a_non_finite_reproduced_metric_with_an_interval_is_outside() -> None:
+    # The runner reported the metric, but as NaN: the reproduction did not
+    # produce the value the group recorded, so it cannot pass as "no interval".
+    rows = compare_metrics([R2], {R2: 0.8}, {R2: None}, {}, {R2: (0.6, 1.0)})
+    assert rows[0]["inside"] is False
+    assert overall_verdict(rows) == "outside_interval"
+
+
+def test_a_replicate_seed_whose_training_gave_nan_exits_outside(
+    tmp_path: Path,
+) -> None:
+    group_dir = _replicate_group(tmp_path, values={0: 0.80, 1: 0.82, 2: 0.81})
+    plan = plan_reproduction(_bundle(tmp_path, group_dir))
+    runner = FakeRunner({R2: float("nan"), MAE: 0.1})
+    report = run_reproduction(plan, lambda task: runner)
+    assert report["verdict"] == "outside_interval"
+
+
+def test_a_group_reproduced_without_its_test_split_is_refused(
+    tmp_path: Path,
+) -> None:
+    group_dir = _replicate_group(tmp_path, values={0: 0.80, 1: 0.82, 2: 0.81})
+    plan = plan_reproduction(_bundle(tmp_path, group_dir))
+    # No test split here: the runner only has validation scores, which the
+    # group's test aggregates cannot judge.
+    runner = FakeRunner({}, selection={R2: 0.81})
+    with pytest.raises(ReproduceError, match="test split"):
+        run_reproduction(plan, lambda task: runner)
+
+
+def test_a_single_run_with_another_seed_has_no_recorded_value(
+    tmp_path: Path,
+) -> None:
+    plan = plan_reproduction(_bundle(tmp_path, _single_run(tmp_path)), seed=3)
+    report = run_reproduction(plan, lambda task: FakeRunner({R2: 0.75}))
+    row = report["metrics"][0]
+    assert (row["recorded"], row["delta"]) == (None, None)
+    same = plan_reproduction(_bundle(tmp_path, tmp_path / "run", "b2.zip"), seed=7)
+    assert recorded_value(same, R2, "test") == pytest.approx(0.8)
+
+
+def test_a_stopped_replicate_is_not_a_recorded_baseline() -> None:
+    child = {"seed": 0, "status": "stopped", "metrics": {R2: 0.4}}
+    plan = _plan("replicates", {"group": {}}, child=child)
+    assert recorded_value(plan, R2, "test") is None
+
+
+@pytest.mark.parametrize("section", ["training", "output"])
+def test_a_config_section_that_is_not_a_mapping_is_refused(
+    tmp_path: Path, section: str
+) -> None:
+    config = {**_config(tmp_path), section: ["not", "a", "mapping"]}
+    with pytest.raises(ReproduceError, match=section):
+        pick_seed("single", {}, config, None)
+        reproduction_config(config, name="x", seed=1, data={}, output=None)
+
+
+def test_an_output_that_is_a_file_is_refused(tmp_path: Path) -> None:
+    out = tmp_path / "out.txt"
+    out.write_text("x", encoding="utf-8")
+    with pytest.raises(ReproduceError, match="out.txt"):
+        plan_reproduction(_bundle(tmp_path, _single_run(tmp_path)), output=out)

@@ -8378,3 +8378,5 @@ Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS
 - *Extract with `import_experiment_bundle`.* It writes into the profile's models folder, more than a check needs.
 - *Train through `build_task_block`.* It returns no run result, so the metrics would have to be parsed back from files.
 
+**Amended 2026-11-18: four gaps found in review.** A metric the reproduction reports as NaN or infinite, where the group has a `pi95`, counts as outside (exit 1); before, it left the verdict at `no_interval` and exit 0. A replicate group whose reproduction has no test split exits 2: the group's aggregates are test scores and cannot judge validation ones. The recorded value and the delta are reported only for the seed's own finished run: a single run re-trained with `--seed` other than its recorded seed, or a replicate that stopped or failed, gets `recorded: null`. A `--output` that is a file, or a config whose `training` or `output` is not a mapping, exits 2 instead of a traceback.
+
