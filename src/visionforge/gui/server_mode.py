@@ -11,9 +11,9 @@ header; nothing else may. With the mode on, :class:`ServerModeGate`:
   works in the signed-in person's, whatever the browser sent;
 - answers 404 for every route that is not ready for several people.
 
-Every route has a class in :data:`ROUTE_CLASSES`; a test walks the app's route
-table, so a new route without one fails the suite. A route the table does not
-know is refused: the gate fails closed.
+Every route has a class in :data:`ROUTE_CLASSES`; a test compares the table
+with the routes the app serves, so a new route without one fails the suite. A
+request the table does not know is refused: the gate fails closed.
 
 With the mode off (the default) the gate passes every request through.
 """
@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import ipaddress
+import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,7 +30,6 @@ from typing import Any, Literal
 
 from starlette.datastructures import Headers
 from starlette.responses import JSONResponse
-from starlette.routing import Match
 from starlette.types import ASGIApp, Receive, Scope, Send
 from starlette.websockets import WebSocketClose
 
@@ -49,6 +49,12 @@ MAX_USER_LEN = 254
 
 # The proxy's own liveness probe carries no user.
 HEALTH_ROUTE = "GET /api/health"
+
+# The SPA fallback: every page, and every asset of the bundle.
+SPA_ROUTE = "GET /{path:path}"
+_API_DOCUMENTS = frozenset(
+    {"/openapi.json", "/docs", "/redoc", "/docs/oauth2-redirect"}
+)
 
 _SLUG_BASE_LEN = 29
 _DIGEST_LEN = 10
@@ -370,14 +376,54 @@ def user_slug(user: str) -> str:
     return f"{base}-{digest}"
 
 
-def route_key(scope: Scope) -> str | None:
-    """``"METHOD /path/{template}"`` of the route that will answer, if any."""
-    method = scope.get("method", "GET")
-    for route in getattr(scope.get("app"), "routes", ()):
-        match, _ = route.matches(scope)
-        if match is Match.FULL:
-            return f"{'GET' if method == 'HEAD' else method} {route.path}"
+_PARAM = re.compile(r"{[^{}:]+(:path)?}")
+
+
+def _pattern(template: str) -> re.Pattern[str]:
+    """``/api/runs/{run_id}`` as a pattern; ``{x:path}`` also takes slashes."""
+    parts: list[str] = []
+    end = 0
+    for found in _PARAM.finditer(template):
+        parts.append(re.escape(template[end : found.start()]))
+        parts.append(".*" if found.group(1) else "[^/]+")
+        end = found.end()
+    parts.append(re.escape(template[end:]))
+    return re.compile("".join(parts))
+
+
+def _specificity(key: str) -> tuple[int, int, int]:
+    """Sort key: a literal path before one with parameters, the catch-all last."""
+    template = key.split(" ", 1)[1]
+    return (template.count(":path}"), template.count("{"), -len(template))
+
+
+def _matchers() -> list[tuple[str, re.Pattern[str], str]]:
+    rows = []
+    for key in sorted(ROUTE_CLASSES, key=_specificity):
+        method, template = key.split(" ", 1)
+        rows.append((method, _pattern(template), key))
+    return rows
+
+
+# The table is matched here, not through the app's router: how a router keeps
+# the routes of an included one changes between FastAPI versions, and a gate
+# that cannot find a route must not depend on that.
+_MATCHERS = _matchers()
+
+
+def route_key(method: str, path: str) -> str | None:
+    """The ``ROUTE_CLASSES`` key of the route that answers ``method path``."""
+    asked = "GET" if method == "HEAD" else method
+    for route_method, pattern, key in _MATCHERS:
+        if route_method == asked and pattern.fullmatch(path):
+            return None if key == SPA_ROUTE and _not_a_page(path) else key
     return None
+
+
+def _not_a_page(path: str) -> bool:
+    """True for a path the SPA fallback matches and that is no page of the SPA:
+    an ``/api`` address no route serves, and the API documents."""
+    return path == "/api" or path.startswith("/api/") or path in _API_DOCUMENTS
 
 
 def answers(key: str) -> bool:
@@ -408,8 +454,8 @@ class ServerModeGate:
         if scope["type"] == "websocket":
             await _refuse(scope, receive, send, 404, "server.route_off")
             return
-        key = route_key(scope)
-        if key is not None and not answers(key):
+        key = route_key(scope["method"], scope["path"])
+        if key is None or not answers(key):
             await _refuse(scope, receive, send, 404, "server.route_off")
             return
         raw = Headers(scope=scope).get(mode.user_header)

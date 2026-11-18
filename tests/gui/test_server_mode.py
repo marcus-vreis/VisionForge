@@ -14,7 +14,6 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
-from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from visionforge.gui.api import routes
@@ -26,6 +25,7 @@ from visionforge.gui.server_mode import (
     ServerModeError,
     answers,
     normalize_user,
+    route_key,
     user_slug,
 )
 
@@ -91,14 +91,36 @@ def test_two_accounts_never_share_a_folder() -> None:
 def test_every_route_of_the_app_has_a_class() -> None:
     from visionforge.gui.server import app
 
+    # The OpenAPI document lists every route however the routers are split;
+    # ``app.routes`` hides an included router's children on newer FastAPI.
     served = {
-        f"{method} {route.path}"
-        for route in app.routes
-        if isinstance(route, APIRoute)
-        for method in route.methods - {"HEAD"}
+        f"{method.upper()} {path}"
+        for path, operations in app.openapi()["paths"].items()
+        for method in operations
     }
-    assert served - set(ROUTE_CLASSES) == set(), "routes with no server-mode class"
-    assert set(ROUTE_CLASSES) - served == set(), "classes of routes that are gone"
+    # OpenAPI drops the ``:path`` converter.
+    classed = {key.replace(":path}", "}") for key in ROUTE_CLASSES}
+    assert served - classed == set(), "routes with no server-mode class"
+    assert classed - served == set(), "classes of routes that are gone"
+
+
+def test_a_request_finds_its_route_in_the_table() -> None:
+    assert route_key("GET", "/api/runs") == "GET /api/runs"
+    assert route_key("HEAD", "/api/health") == "GET /api/health"
+    assert route_key("DELETE", "/api/runs/20261118_1") == "DELETE /api/runs/{run_id}"
+    assert route_key("GET", "/api/detection/schema") == "GET /api/detection/schema"
+    assert route_key("GET", "/api/custom/mine/schema") == "GET /api/custom/{key}/schema"
+    assert (
+        route_key("GET", "/api/artifacts/outputs/a/b.png")
+        == "GET /api/artifacts/{file_path:path}"
+    )
+    assert route_key("GET", "/assets/index.js") == "GET /{path:path}"
+    assert route_key("GET", "/") == "GET /{path:path}"
+    assert route_key("POST", "/api/explorer/scan") == "POST /api/explorer/scan"
+    assert route_key("OPTIONS", "/api/runs") is None
+    assert route_key("POST", "/api/nothing") is None
+    assert route_key("GET", "/api/nothing") is None
+    assert route_key("GET", "/openapi.json") is None
 
 
 def test_only_owner_routes_are_marked_as_read() -> None:
@@ -201,6 +223,9 @@ def test_the_browser_cannot_pick_another_profile(served: Any, tmp_path: Path) ->
         ("POST", "/api/dataset/stats"),
         ("POST", "/api/experiment/run"),
         ("GET", "/api/colab/status"),
+        ("GET", "/api/brand-new"),
+        ("OPTIONS", "/api/runs"),
+        ("GET", "/openapi.json"),
     ],
 )
 def test_a_route_not_ready_for_several_people_is_404(
