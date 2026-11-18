@@ -27,9 +27,14 @@ from visionforge.utils.messages import tr
 
 @dataclass(frozen=True)
 class DatasetScope:
-    """The resolved folders one request may read datasets from, own folder first."""
+    """The resolved folders one request may read datasets from, own folder first.
+
+    ``owner`` is the profile of the signed-in person: the routes that list or
+    stop jobs show and touch only that profile's (ADR-215).
+    """
 
     readable: tuple[Path, ...]
+    owner: str = ""
 
     def holds(self, path: Path) -> bool:
         """True when the resolved ``path`` is one of the folders or inside one."""

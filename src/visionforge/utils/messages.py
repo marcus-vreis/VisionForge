@@ -1839,6 +1839,30 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "the dataset folder: {value}"
         ),
     },
+    "server.config_path": {
+        "pt": (
+            "Neste servidor o campo {field} precisa apontar para a sua pasta ou, "
+            "se for só leitura, para uma pasta compartilhada."
+        ),
+        "en": (
+            "On this server the field {field} must point into your folder or, "
+            "when it is only read, into a shared one."
+        ),
+    },
+    "server.config_name": {
+        "pt": (
+            "Neste servidor o campo {field} precisa ser o nome de um modelo, não "
+            "um caminho nem um endereço: {value}"
+        ),
+        "en": (
+            "On this server the field {field} must be the name of a model, not a "
+            "path or an address: {value}"
+        ),
+    },
+    "server.config_forbidden": {
+        "pt": "O campo {field} não pode ser usado quando o VisionForge roda como servidor.",
+        "en": "The field {field} cannot be used when VisionForge runs as a server.",
+    },
     "server.route_off": {
         "pt": "Esta função não está disponível quando o VisionForge roda como servidor.",
         "en": "This feature is not available when VisionForge runs as a server.",

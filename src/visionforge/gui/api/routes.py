@@ -26,6 +26,7 @@ from visionforge.gui.api.colab_run_routes import (
 from visionforge.gui.api.comet_routes import build_comet_router
 from visionforge.gui.api.custom_task_routes import build_custom_task_run_router
 from visionforge.gui.api.custom_task_routes import router as custom_tasks_router
+from visionforge.gui.api.dataset_scope import current_scope
 from visionforge.gui.api.dataset_tools_routes import router as dataset_tools_router
 from visionforge.gui.api.datasets_routes import router as datasets_router
 from visionforge.gui.api.dvc_routes import build_dvc_router
@@ -546,6 +547,14 @@ async def serve_artifact(file_path: str) -> FileResponse:
 
     if not resolved.is_relative_to(outputs_dir):
         raise HTTPException(403, tr("file.access_denied"))
+
+    # In server mode ``outputs/`` holds everybody's runs: a person is served
+    # only what sits under their own profile folder (ADR-215).
+    scope = current_scope()
+    if scope is not None and scope.owner:
+        own = (_PROFILES_DIR / scope.owner).resolve()
+        if not resolved.is_relative_to(own):
+            raise HTTPException(403, tr("file.access_denied"))
 
     if not resolved.is_file():
         raise HTTPException(404, tr("file.not_found"))

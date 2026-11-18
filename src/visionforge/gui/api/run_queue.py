@@ -209,6 +209,11 @@ class RunQueue:
         """The terminal snapshot of a finished run, or None if not recorded."""
         return self._records.get(run_id)
 
+    def profile_of(self, run_id: str) -> str | None:
+        """Whose the running or waiting job ``run_id`` is; None if not here."""
+        jobs = [self._active, *self._pending]
+        return next((j.profile for j in jobs if j and j.run_id == run_id), None)
+
     def reset(self) -> None:
         """Drop all state. For tests — a live server has no reason to call it."""
         self._pending.clear()
@@ -305,6 +310,14 @@ class RunLanes:
             snapshot = queue.record(run_id)
             if snapshot is not None:
                 return snapshot
+        return None
+
+    def profile_of(self, run_id: str) -> str | None:
+        """Whose the running or waiting job ``run_id`` is, in whichever lane."""
+        for queue in self._lanes.values():
+            profile = queue.profile_of(run_id)
+            if profile is not None:
+                return profile
         return None
 
     def snapshots(self) -> list[dict[str, Any]]:
