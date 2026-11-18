@@ -159,8 +159,10 @@ describe("ColabPanel when connected", () => {
     const html = panel({ status: connected });
     expect(html).toContain("data-colab-train-hint");
     expect(html).toContain(pt.colab.target.panelHint);
+    // No second "train" button, GPU dropdown or dataset field in the panel.
     expect(html).not.toContain("data-colab-train>");
-    expect(html).not.toContain(`>${pt.colab.train}</button>`);
+    expect(html).not.toContain("colab-accelerator-label");
+    expect(html).not.toContain('id="colab-source"');
   });
 
   it("splits the panel in titled sections: account, runtimes", () => {

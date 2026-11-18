@@ -150,15 +150,10 @@ export const pt = {
     noRate: "Nenhum runtime ativo agora; as horas restantes dependem da GPU escolhida.",
     usageFailed: "Não foi possível ler o saldo.",
     loadFailed: "Não foi possível falar com o servidor.",
-    trainTitle: "Treinar no Colab",
-    trainSource: "Dataset: URL de zip, torchvision:nome ou hf:dono/nome",
-    driveSource: "Dataset no Google Drive",
     driveRoot: "Pasta \"Meu Drive\" deste computador",
     driveRootPlaceholder: "G:\\Meu Drive",
     driveRootOther: "usar outra pasta \"Meu Drive\"",
     driveExport: "Salvar o run também no Drive",
-    driveNote:
-      "A VM monta o seu Drive e copia a pasta antes de treinar; o Google pede permissão a cada runtime. Sem pasta escolhida, vale a pasta do dataset do formulário.",
     driveChecking: "Procurando o Google Drive para desktop…",
     driveFolder: "Pasta do dataset",
     driveFolderPlaceholder: "vazio = pasta do formulário",
@@ -178,10 +173,6 @@ export const pt = {
     driveStep3: "Volte aqui e escolha a pasta.",
     sourcePlaceholder: "https://…/dataset.zip",
     badSource: "Use uma URL http(s) de um zip, torchvision:<nome> ou hf:<dono/nome>.",
-    accelerator: "GPU",
-    train: "treinar no Colab",
-    trainNote:
-      "Entra na mesma fila dos treinos locais e a aba ao vivo acompanha. Com \"Salvar no Drive\", o run vai também para MyDrive/VisionForge/runs.",
     // The strategy step has Réplicas on (ADR-056): Colab trains one run.
     replicatesBlocked:
       "Réplicas roda só neste computador: o Colab treina uma execução por vez. Volte a estratégia para Treino simples para treinar no Colab.",

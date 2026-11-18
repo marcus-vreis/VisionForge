@@ -143,15 +143,10 @@ export const en: Dict = {
     noRate: "No runtime is active now; the hours left depend on the GPU you pick.",
     usageFailed: "Failed to read the balance.",
     loadFailed: "Failed to reach the server.",
-    trainTitle: "Train on Colab",
-    trainSource: "Dataset: zip URL, torchvision:name or hf:owner/name",
-    driveSource: "Dataset in Google Drive",
     driveRoot: "This computer's \"My Drive\" folder",
     driveRootPlaceholder: "G:\\My Drive",
     driveRootOther: "use another \"My Drive\" folder",
     driveExport: "Also save the run to Drive",
-    driveNote:
-      "The VM mounts your Drive and copies the folder before training; Google asks for permission on every runtime. With no folder chosen, the form's dataset folder is used.",
     driveChecking: "Looking for Google Drive for desktop…",
     driveFolder: "Dataset folder",
     driveFolderPlaceholder: "empty = the form's folder",
@@ -171,10 +166,6 @@ export const en: Dict = {
     driveStep3: "Come back here and choose the folder.",
     sourcePlaceholder: "https://…/dataset.zip",
     badSource: "Use an http(s) URL of a zip, torchvision:<name> or hf:<owner/name>.",
-    accelerator: "GPU",
-    train: "train on Colab",
-    trainNote:
-      "It joins the same queue as local training and the live tab follows it. With \"save to Drive\", the run also goes to MyDrive/VisionForge/runs.",
     // The strategy step has Replicates on (ADR-056): Colab trains one run.
     replicatesBlocked:
       "Replicates run on this computer only: Colab trains one run at a time. Set the strategy back to Single run to train on Colab.",

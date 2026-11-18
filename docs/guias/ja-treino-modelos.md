@@ -48,7 +48,7 @@ réplicas** com réplicas, e assim por diante) fica na barra de baixo, junto de
 | Grad-CAM | detalhe da execução, **Grad-CAM** | [Depois do treino](../gui/depois-do-treino.md) |
 | MLflow, W&B, Comet | **Perfis**: liga o envio por perfil | [MLflow](../gui/mlflow.md), [W&B](../gui/wandb.md), [Comet](../gui/comet.md) |
 | publicar (Hub, Zenodo, GitHub, DVC) | detalhe da execução, grupo **Publicar** | [Hub](../gui/hugging-face-hub.md), [Zenodo](../gui/zenodo.md), [GitHub](../gui/github.md), [DVC](../gui/dvc.md) |
-| treinar no Colab | botão do Colab, só para classificação | [Colab](../gui/colab.md) |
+| treinar no Colab | seletor de dispositivo (ao lado do Treinar), só para classificação | [Colab](../gui/colab.md) |
 | linha de comando | `visionforge run` com o YAML exportado na etapa Revisão | [Linha de comando](#linha-de-comando), abaixo |
 
 As estratégias disponíveis mudam com a tarefa; a página
