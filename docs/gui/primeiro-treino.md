@@ -71,7 +71,9 @@ visionforge run meu_experimento.yaml
 ## 4. Treinar
 
 **Treinar** abre o painel de treino. A aba **Log** mostra uma linha por época;
-**Resultados** mostra as curvas enquanto o treino roda;
+**Resultados** mostra as curvas enquanto o treino roda e, na classificação, a
+matriz de confusão da validação da última época e da melhor, o F1 macro e o
+recall de cada classe;
 [**Código ao vivo**](codigo.md) mostra o passo em que o treino está e o código
 real desse passo. **Minimizar** devolve a tela; o treino continua.
 

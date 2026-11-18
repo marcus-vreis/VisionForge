@@ -10,12 +10,15 @@ import { useT } from "../i18n/useT";
 import {
   bestEpoch,
   bestRule,
+  confusionAt,
   curveOf,
   liveUnits,
   metricKey,
   formatValue,
   latestConfusion,
+  macroF1Curve,
   overridesSummary,
+  recallCurves,
   type BestEpoch,
   type CurvePoint,
   type InsightEvent,
@@ -24,6 +27,25 @@ import type { StorySpec } from "../lib/story-family";
 import { overfittingSince } from "../lib/training-story";
 import type { LiveConfusion, TrainingEvent } from "../types/run";
 
+
+/** More recall lines than this cannot be told apart in one chart. */
+const RECALL_LINES = 8;
+
+/** One hue per class, spread around the wheel; the lightness follows the theme
+ *  as the train and validation colors do. */
+function classColor(index: number, classes: number): string {
+  const hue = Math.round((index * 360) / Math.max(classes, 1) + 30) % 360;
+  return `oklch(calc(0.8 - var(--lt-flip, 0) * 0.3) 0.15 ${hue})`;
+}
+
+/** Charts and matrices sit side by side on the wide sheet and stack on a
+ *  narrow window. */
+const sideBySide = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))",
+  gap: 12,
+  alignItems: "start",
+};
 
 interface LiveResultsProps {
   events: readonly TrainingEvent[];
@@ -56,6 +78,12 @@ export function LiveResults({ events, spec, accent }: LiveResultsProps) {
   const closed = units.filter((u) => u.closed);
   const multiUnit = units.some((u) => u.index !== null);
   const confusion = latestConfusion(epochs);
+  const latestIsBest = confusion !== null && best !== null && confusion.epoch === best.epoch;
+  // The matrix of the epoch the saved checkpoint comes from, when it is not
+  // the one already on screen.
+  const bestMatrix = best && !latestIsBest ? confusionAt(epochs, best.epoch) : null;
+  const recall = recallCurves(epochs, RECALL_LINES);
+  const classCount = confusion?.confusion.classes.length ?? 0;
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
@@ -81,30 +109,68 @@ export function LiveResults({ events, spec, accent }: LiveResultsProps) {
           {t.trainingStory.overfitting(overfit)}
         </div>
       )}
-      <LiveChart
-        title={r.lossChart}
-        series={[
-          { name: label("train_loss"), color: TRAIN_COLOR, points: curveOf(epochs, "train_loss") },
-          { name: label("val_loss"), color: VAL_COLOR, points: curveOf(epochs, "val_loss") },
-        ]}
-        best={best}
-        accent={accent}
-      />
-      <LiveChart
-        title={label(metric)}
-        series={[{ name: label(metric), color: VAL_COLOR, points: curveOf(epochs, metric) }]}
-        best={best}
-        accent={accent}
-      />
-      <LiveChart
-        title={r.lrChart}
-        series={[{ name: r.lrChart, color: TRAIN_COLOR, points: curveOf(epochs, "lr") }]}
-        best={best}
-        accent={accent}
-      />
+      <div style={sideBySide}>
+        <LiveChart
+          title={r.lossChart}
+          series={[
+            { name: label("train_loss"), color: TRAIN_COLOR, points: curveOf(epochs, "train_loss") },
+            { name: label("val_loss"), color: VAL_COLOR, points: curveOf(epochs, "val_loss") },
+          ]}
+          best={best}
+          accent={accent}
+        />
+        <LiveChart
+          title={label(metric)}
+          series={[{ name: label(metric), color: VAL_COLOR, points: curveOf(epochs, metric) }]}
+          best={best}
+          accent={accent}
+        />
+        <LiveChart
+          title={r.f1Chart}
+          series={[{ name: r.f1Chart, color: VAL_COLOR, points: macroF1Curve(epochs) }]}
+          best={best}
+          accent={accent}
+        />
+        <LiveChart
+          title={r.recallChart}
+          series={recall.series.map((c) => ({
+            name: c.name,
+            color: classColor(c.index, classCount),
+            points: c.points,
+          }))}
+          note={recall.omitted > 0 ? r.recallOmitted(recall.series.length, recall.omitted) : undefined}
+          best={best}
+          accent={accent}
+        />
+        <LiveChart
+          title={r.lrChart}
+          series={[{ name: r.lrChart, color: TRAIN_COLOR, points: curveOf(epochs, "lr") }]}
+          best={best}
+          accent={accent}
+        />
+      </div>
       {current?.insight && <GradCamGallery insight={current.insight} accent={accent} />}
       {confusion && (
-        <ConfusionView epoch={confusion.epoch} confusion={confusion.confusion} accent={accent} />
+        <div style={sideBySide}>
+          <ConfusionView
+            title={
+              latestIsBest && confusion.confusion.matrix
+                ? r.confusionLatestIsBest(confusion.epoch)
+                : undefined
+            }
+            epoch={confusion.epoch}
+            confusion={confusion.confusion}
+            accent={accent}
+          />
+          {best && bestMatrix?.matrix && (
+            <ConfusionView
+              title={r.confusionBestTitle(best.epoch)}
+              epoch={best.epoch}
+              confusion={bestMatrix}
+              accent={accent}
+            />
+          )}
+        </div>
       )}
       {multiUnit && closed.length > 0 && (
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -165,14 +231,16 @@ const caption = {
   marginBottom: 6,
 };
 
-/** The latest epoch's validation confusion: the matrix, its cells shaded by the
- *  share of their row, or the most frequent mistakes when there are too many
- *  classes for a grid. */
+/** One epoch's validation confusion: the matrix, its cells shaded by the share
+ *  of their row, or the most frequent mistakes when there are too many classes
+ *  for a grid. `title` replaces the matrix's "epoch N" heading. */
 function ConfusionView({
+  title,
   epoch,
   confusion,
   accent,
 }: {
+  title?: string;
   epoch: number;
   confusion: LiveConfusion;
   accent: string;
@@ -182,6 +250,9 @@ function ConfusionView({
   const box = {
     margin: 0,
     padding: 12,
+    // A grid item is as wide as its content unless told otherwise, and a wide
+    // matrix would push the sheet: it scrolls inside its own box instead.
+    minWidth: 0,
     background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
     border: "1px solid var(--vf-panel-stroke)",
     borderRadius: 12,
@@ -191,7 +262,7 @@ function ConfusionView({
     return (
       <figure style={box} data-confusion="matrix">
         <figcaption style={caption}>
-          <span style={{ color: accent }}>//</span> {r.confusionTitle(epoch)}
+          <span style={{ color: accent }}>//</span> {title ?? r.confusionTitle(epoch)}
           <div style={{ letterSpacing: "0.04em", textTransform: "none", marginTop: 2 }}>
             {r.confusionAxes}
           </div>
@@ -346,11 +417,14 @@ interface ChartSeries {
 function LiveChart({
   title,
   series: all,
+  note,
   best,
   accent,
 }: {
   title: string;
   series: ChartSeries[];
+  /** A line under the legend, e.g. which series were left out. */
+  note?: string;
   best: BestEpoch | null;
   accent: string;
 }) {
@@ -363,6 +437,7 @@ function LiveChart({
       style={{
         margin: 0,
         padding: 12,
+        minWidth: 0,
         background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 12,
@@ -390,6 +465,11 @@ function LiveChart({
               ● {s.name}
             </span>
           ))}
+        {note && (
+          <span style={{ flexBasis: "100%", letterSpacing: "0.04em", textTransform: "none" }}>
+            {note}
+          </span>
+        )}
       </figcaption>
       <LineChart
         title={title}

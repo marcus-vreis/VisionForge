@@ -127,8 +127,10 @@ describe("the training sheet's tabs", () => {
     expect(html).toContain("$ visionforge train --task classification");
   });
 
-  it("widens the sheet for the steps and the code, and only for them", async () => {
+  it("widens the sheet for the code and for the charts, and keeps the log narrow", async () => {
     expect(await storySheet("pt")).toContain("min(1080px, 100%)");
+    expect(sheet("pt", "results")).toContain("min(1080px, 100%)");
+    expect(sheet("pt", "results")).not.toContain("min(720px, 100%)");
     expect(sheet("pt", "log")).toContain("min(720px, 100%)");
     expect(sheet("pt", "log")).not.toContain("min(1080px, 100%)");
   });

@@ -3086,6 +3086,14 @@ export const pt = {
       actual === predicted ? `${actual} ✓` : `${actual} → lida como ${predicted}`,
     lrChart: "Learning rate",
     confusionTitle: (epoch: number) => `Matriz de confusão da validação · época ${epoch}`,
+    confusionBestTitle: (epoch: number) =>
+      `Matriz de confusão da validação · melhor época (${epoch})`,
+    confusionLatestIsBest: (epoch: number) =>
+      `Matriz de confusão da validação · época ${epoch} · a melhor até aqui`,
+    f1Chart: "F1 macro da validação",
+    recallChart: "Recall por classe na validação",
+    recallOmitted: (shown: number, omitted: number) =>
+      `As ${shown} classes com o menor recall agora; ${omitted} ${omitted === 1 ? "outra fica" : "outras ficam"} de fora.`,
     confusionAxes: "linhas: classe verdadeira · colunas: classe prevista",
     topTitle: (epoch: number) => `Confusões mais frequentes na validação · época ${epoch}`,
     topRow: (actual: string, predicted: string) => `${actual} lida como ${predicted}`,
