@@ -205,6 +205,9 @@ export const pt = {
       linkLabel: "URL de zip, torchvision:nome ou hf:dono/nome",
       backupNote:
         "Uma pasta do PC que o Drive para desktop só espelha como backup fica em \"Computadores\", não em \"Meu Drive\", e o Colab não a alcança. Copie o dataset para dentro de \"Meu Drive\".",
+      linkClasses:
+        "O dataset de um link não é lido neste computador: confira o Tipo de tarefa e o Nº de classes logo abaixo.",
+      reviewOrigin: "Dataset no Colab",
       noFolder: "Escolha a pasta do dataset no Meu Drive.",
       formFolder: (path: string) => `Sem pasta escolhida, vale a do formulário: ${path}`,
     },

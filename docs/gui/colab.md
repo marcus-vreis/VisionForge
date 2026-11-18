@@ -22,7 +22,10 @@ ou que nunca rodou com uma conta real está em *O que não foi verificado*.
    runtimes ativos. Escolher um dispositivo local volta para este computador.
 3. Na etapa **Dados** aparece o cartão **Dataset para o Colab**: escolha uma
    pasta do "Meu Drive" ou informe um link (URL de zip, `torchvision:nome`,
-   `hf:dono/nome`).
+   `hf:dono/nome`). Uma pasta do Drive também é uma pasta deste computador:
+   ao escolhê-la, o formulário lê as divisões e as classes dela como num
+   dataset local. O dataset de um link não é lido aqui, então confira o tipo
+   de tarefa e o número de classes.
 4. Abra a etapa **Revisão** e clique em **Treinar no Colab**.
 
 Uma pasta do PC que o Drive para desktop só espelha como **backup** fica em
@@ -150,9 +153,14 @@ Respostas de erro que o código define:
 
 ## O que não foi verificado
 
-- O login, o saldo e a lista de runtimes foram conferidos com uma conta Google
-  real em 2026-11-18. Alocar a VM, montar o Drive nela e treinar, não: essa
-  parte é leitura do código e das decisões, e os testes usam uma CLI falsa.
+- Com uma conta Google real, em 2026-11-18, foram conferidos o login, o saldo,
+  a lista de runtimes e um treino inteiro com origem por link
+  (`torchvision:cifar10`, 1 época numa T4): a VM foi alocada, treinou, o run
+  voltou para o Histórico com a origem `colab` e a VM foi liberada. Do clique
+  ao run importado foram cerca de 30 minutos, quase todos na preparação da VM
+  e do dataset, sem progresso na tela.
+- Montar o Drive na VM e treinar a partir de uma pasta dele nunca rodou com
+  conta real: essa parte é leitura do código, e os testes usam uma CLI falsa.
 - A detecção do "Meu Drive" e o navegador de pastas foram conferidos numa
   máquina Windows com o Google Drive para desktop (`G:\Meu Drive`), em
   2026-11-18. A montagem na VM e o treino a partir dessa pasta, não.

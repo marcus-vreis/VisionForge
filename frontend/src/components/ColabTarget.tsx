@@ -137,7 +137,13 @@ const KICKER: CSSProperties = {
 
 /** The Dados step's card while Colab is the place to train: where the VM takes
  *  the dataset from. Draws nothing while the training runs on this machine. */
-export function ColabDatasetCard() {
+export function ColabDatasetCard({
+  onLocalFolder,
+}: {
+  /** A Drive folder was picked: it is also a folder of this computer, so the
+   *  form can read its splits and classes as it does for a local dataset. */
+  onLocalFolder?: (path: string) => void;
+} = {}) {
   const target = useContext(ColabTargetContext);
   const t = useT();
   if (target === null) return null;
@@ -169,7 +175,10 @@ export function ColabDatasetCard() {
             }}
             folder={setup.drivePath}
             remote={setup.driveRemote}
-            onPick={(drivePath, driveRemote) => onChange({ drivePath, driveRemote })}
+            onPick={(drivePath, driveRemote) => {
+              onChange({ drivePath, driveRemote });
+              if (drivePath.trim() !== "") onLocalFolder?.(drivePath);
+            }}
           />
           {setup.drivePath.trim() === "" && formBaseDir.trim() !== "" && (
             <p style={DIM}>{c.target.formFolder(formBaseDir)}</p>
@@ -182,14 +191,17 @@ export function ColabDatasetCard() {
           <p style={DIM}>{c.target.backupNote}</p>
         </>
       ) : (
-        <TextField
-          label={c.target.linkLabel}
-          value={setup.link}
-          onChange={(link) => onChange({ link })}
-          placeholder={c.sourcePlaceholder}
-          error={typedBadLink ? c.badSource : undefined}
-          mono
-        />
+        <>
+          <TextField
+            label={c.target.linkLabel}
+            value={setup.link}
+            onChange={(link) => onChange({ link })}
+            placeholder={c.sourcePlaceholder}
+            error={typedBadLink ? c.badSource : undefined}
+            mono
+          />
+          <p style={DIM}>{c.target.linkClasses}</p>
+        </>
       )}
       <label style={CHECK_ROW}>
         <input

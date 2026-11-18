@@ -21,6 +21,7 @@ import { countChanged, errorsUnder } from "../lib/steps";
 import { useAutoExperimentName } from "../lib/use-auto-experiment-name";
 import { AugmentPreview } from "./AugmentPreview";
 import { ColabDatasetCard } from "./ColabTarget";
+import { colabOriginLabel } from "../lib/colab-target";
 import { ColabTargetContext } from "../lib/colab-target-context";
 import { DatasetPicker } from "./DatasetPicker";
 import { DatasetStats } from "./DatasetStats";
@@ -2243,6 +2244,15 @@ export function ParamPanel({
       step: "data",
       rows: [
         row(labels.base_dir, baseDir),
+        // Where the VM takes the dataset from, while Colab trains (ADR-211).
+        ...(colabTarget
+          ? [
+              row(
+                t.colab.target.reviewOrigin,
+                colabOriginLabel(colabTarget.setup, colabTarget.formBaseDir),
+              ),
+            ]
+          : []),
         row(labels.task, formData["task"], "task"),
         row(
           labels.num_classes,
@@ -2332,7 +2342,14 @@ export function ParamPanel({
       content: (
         <div style={stepStack}>
           {/* Only while Colab is the place to train (ADR-211). */}
-          <ColabDatasetCard />
+          <ColabDatasetCard
+            onLocalFolder={(path) =>
+              setFormData((prev) => {
+                const sec = (prev["data"] ?? {}) as Record<string, unknown>;
+                return { ...prev, data: { ...sec, base_dir: path } };
+              })
+            }
+          />
           <div style={card}>
             <div style={sectionLabel}>{t.paramPanel.kickers.dataset}</div>
             <DatasetPicker
