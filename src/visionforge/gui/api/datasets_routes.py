@@ -20,6 +20,7 @@ from pydantic import SecretStr
 
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.gui.api.dataset_download import credentials_in_play, download_dataset
+from visionforge.gui.api.dataset_scope import current_scope
 from visionforge.gui.api.error_messages import unexpected_error
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST_TEXT,
@@ -120,7 +121,14 @@ def _remember_dataset_root(base_dir: str | Path) -> None:
 
 
 def _is_inside_allowed_root(path: Path) -> bool:
-    """True iff ``path`` resolves inside one of the remembered dataset roots."""
+    """True iff ``path`` resolves inside one of the remembered dataset roots.
+
+    In server mode the remembered roots are everybody's, so the request's own
+    scope decides instead (ADR-214).
+    """
+    scope = current_scope()
+    if scope is not None:
+        return scope.holds(path)
     for root in _ALLOWED_DATASET_ROOTS:
         try:
             if path.is_relative_to(root):

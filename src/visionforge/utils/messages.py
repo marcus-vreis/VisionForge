@@ -1819,6 +1819,26 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "missing or invalid). Sign in again or tell whoever runs the server."
         ),
     },
+    "server.dataset_outside": {
+        "pt": (
+            "Neste servidor o dataset precisa estar na sua pasta de datasets ou "
+            "numa pasta compartilhada, com o caminho completo."
+        ),
+        "en": (
+            "On this server the dataset must be in your dataset folder or in a "
+            "shared one, given by its full path."
+        ),
+    },
+    "server.dataset_part": {
+        "pt": (
+            "Neste servidor um nome de subpasta ou de arquivo do dataset não pode "
+            "sair da pasta do dataset: {value}"
+        ),
+        "en": (
+            "On this server a sub-folder or file name of the dataset cannot leave "
+            "the dataset folder: {value}"
+        ),
+    },
     "server.route_off": {
         "pt": "Esta função não está disponível quando o VisionForge roda como servidor.",
         "en": "This feature is not available when VisionForge runs as a server.",

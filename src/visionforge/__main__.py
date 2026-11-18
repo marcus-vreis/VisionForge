@@ -437,6 +437,16 @@ def main() -> None:
         ),
     )
     gui_parser.add_argument(
+        "--datasets-dir",
+        action="append",
+        default=[],
+        metavar="FOLDER",
+        help=(
+            "folder of datasets every signed-in user may read in --server mode, "
+            "besides their own; repeatable"
+        ),
+    )
+    gui_parser.add_argument(
         "--user-header",
         default="X-Forwarded-User",
         metavar="NAME",
@@ -618,6 +628,7 @@ def main() -> None:
                 enabled=args.server,
                 trusted_proxies=args.trusted_proxy,
                 user_header=args.user_header,
+                datasets_dirs=args.datasets_dir,
             )
         except ServerModeError as exc:
             parser.error(str(exc))

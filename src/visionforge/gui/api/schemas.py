@@ -7,6 +7,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
+from visionforge.gui.api.dataset_scope import DatasetDir, DatasetPart
 from visionforge.gui.api.profiles import (
     ProfileSettings,
     ProfileSettingsUpdate,
@@ -331,7 +332,7 @@ class RunSummary(BaseModel):
 class DatasetDetectRequest(BaseModel):
     """Path to a candidate dataset root for split auto-detection."""
 
-    base_dir: str
+    base_dir: DatasetDir
 
 
 class DatasetDetectResponse(BaseModel):
@@ -612,7 +613,7 @@ class RunTestResponse(BaseModel):
 class DatasetSamplesRequest(BaseModel):
     """Request thumbnail paths for the first N images per class in a split."""
 
-    base_dir: str
+    base_dir: DatasetDir
     split: Literal["train", "val", "test"] = "train"
     per_class: int = 4
 
@@ -677,7 +678,7 @@ class AugmentPreviewResponse(BaseModel):
 class DetectionDatasetStatsRequest(BaseModel):
     """Path to a YOLO-layout dataset root for annotation distribution analysis."""
 
-    base_dir: str
+    base_dir: DatasetDir
 
 
 class DetectionSplitStats(BaseModel):
@@ -719,7 +720,7 @@ class DetectionDatasetStatsResponse(BaseModel):
 class DetectionDatasetSamplesRequest(BaseModel):
     """A YOLO dataset root to crop one labelled example per class from."""
 
-    base_dir: str
+    base_dir: DatasetDir
     split: Literal["train", "val", "test"] = "train"
     per_class: int = Field(default=3, ge=1, le=8)
 
@@ -743,12 +744,12 @@ class DetectionDatasetSamplesResponse(BaseModel):
 class SegmentationDatasetStatsRequest(BaseModel):
     """Paired image/mask dataset root + dir names for pre-training inspection."""
 
-    base_dir: str
-    images_subdir: str = "images"
-    masks_subdir: str = "masks"
-    train_dir: str = "train"
-    val_dir: str = "val"
-    test_dir: str = "test"
+    base_dir: DatasetDir
+    images_subdir: DatasetPart = "images"
+    masks_subdir: DatasetPart = "masks"
+    train_dir: DatasetPart = "train"
+    val_dir: DatasetPart = "val"
+    test_dir: DatasetPart = "test"
 
 
 class SegmentationSplitStats(BaseModel):
@@ -778,10 +779,10 @@ class SegmentationDatasetStatsResponse(BaseModel):
 class AnomalyDatasetStatsRequest(BaseModel):
     """MVTec-style dataset root + dir names for pre-training inspection."""
 
-    base_dir: str
-    train_dir: str = "train"
-    test_dir: str = "test"
-    normal_dir: str = "good"
+    base_dir: DatasetDir
+    train_dir: DatasetPart = "train"
+    test_dir: DatasetPart = "test"
+    normal_dir: DatasetPart = "good"
 
 
 class AnomalyDatasetStatsResponse(BaseModel):
@@ -819,11 +820,11 @@ class RegressionSplitStats(BaseModel):
 class RegressionDatasetStatsRequest(BaseModel):
     """CSV-manifest dataset root + column names for pre-training inspection."""
 
-    base_dir: str
-    images_dir: str = "images"
-    train_csv: str = "train.csv"
-    val_csv: str = "val.csv"
-    test_csv: str = "test.csv"
+    base_dir: DatasetDir
+    images_dir: DatasetPart = "images"
+    train_csv: DatasetPart = "train.csv"
+    val_csv: DatasetPart = "val.csv"
+    test_csv: DatasetPart = "test.csv"
     image_column: str = "image"
     target_columns: list[str] = Field(default_factory=lambda: ["target"])
 
@@ -926,10 +927,10 @@ class SystemInfo(BaseModel):
 class DatasetStatsRequest(BaseModel):
     """Path to a dataset root for class distribution analysis."""
 
-    base_dir: str
-    train_dir: str = "train"
-    val_dir: str = "val"
-    test_dir: str = "test"
+    base_dir: DatasetDir
+    train_dir: DatasetPart = "train"
+    val_dir: DatasetPart = "val"
+    test_dir: DatasetPart = "test"
 
 
 class SplitStats(BaseModel):
