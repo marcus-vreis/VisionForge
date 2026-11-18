@@ -8464,3 +8464,35 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *VisionForge's own passwords.* Password storage, reset, lockout and 2FA are a product of their own, and a proxy that does them well exists. Revisit only if someone needs a server with no identity provider.
 - *One VisionForge process per user behind a spawner (the JupyterHub way).* Real isolation with little new code, and it fits phase 1's "one process per job" well. It loses the shared queue, which is the point of sharing one GPU; kept as the fallback if confinement inside one process proves leaky.
 - *Keep the header and add a shared password.* It protects the server from the network and nobody from each other.
+
+## ADR-213 — Server mode starts as a gate: only the login proxy is answered, it names the user, and a route answers only once it has a class and was read
+
+**Date:** 2026-11-18
+**Status:** Accepted
+**Extends:** ADR-212 (the server-mode proposal), ADR-114 (profiles are output folders), ADR-178 (the Host and Origin guard)
+
+**Context:** ADR-212 proposed phase 0 of a multi-user server: a group that trusts its members, behind a reverse proxy that signs them in. Its inventory found 84 routes that ignore the profile and 79 that believe a header the browser writes. Phase 0 cannot land in one change: each of the 163 routes has to be read before it may answer several people. What can land first is the part every later change stands on: who is asking, and a rule that keeps a route closed until someone has read it.
+
+**Decision:**
+
+- `visionforge gui --server --trusted-proxy <address>` turns the mode on. It is off by default and experimental. Without `--trusted-proxy` the command stops with the reason; `--trusted-proxy` and `--user-header` without `--server` stop too.
+- `ServerModeGate` (`gui/server_mode.py`) is an ASGI middleware inside the Host and Origin guard. Off, it passes every request through. On:
+  - a client whose address is not one of the trusted proxies gets 403: someone who reaches the port directly could write the user header themselves;
+  - the account comes from the proxy's header (`X-Forwarded-User`, or `--user-header`), trimmed and case-folded; missing or unusable is 401. `GET /api/health` alone needs no user, for the proxy's probe;
+  - the account becomes a profile: the folder is `<readable part>-<10 hex of the SHA-256 of the whole name>`, made on the first request. The digest is what keeps `a.b@lab.org` and `a-b@lab.org` apart, since both fold to the same readable part;
+  - the gate overwrites `X-VF-Profile` on the request with that folder. The 79 routes that resolve a profile keep their code and now work in the signed-in person's folder, whatever the browser sent.
+- Every route has a class in one table, `ROUTE_CLASSES`: `open`, `owner`, `confined` or `off` (ADR-212). A test compares the table with the app's route table in both directions, so a new route without a class, or a class of a route that is gone, fails the suite.
+- **The gate fails closed.** In server mode a route answers only when it is `open`, or `owner` and listed in `OWNER_READY`, the routes whose handler was read. Anything else is 404 with a message that says the feature is not available on a server: `off`, `confined`, the `owner` routes not read yet, a route the table does not know, and every WebSocket.
+- This change reads and opens the History (`GET /api/runs`, `GET` and `DELETE /api/runs/{run_id}`, which look only inside the profile's models folder) and the 18 token routes (a file found from the profile). `GET /api/session` is new and `open`: whether the server is in server mode, and the account and profile of who asks.
+
+**Consequences:** server mode cannot train yet: the dataset routes, the training routes, the queue and the events are closed, and the guide says so in its first paragraph. Each later change opens a group of routes after reading it (confinement of dataset paths to a per-user folder, owner checks on the queue and events, then training). The GUI does not read `/api/session` yet and shows buttons that answer 404. The routes that check for a loopback client today (`reveal`, `dvc/prepare`, the Drive routes, `update/apply`) would be fooled by a proxy on the same machine, whose address is loopback; they are `off`, so the gate refuses them before that check runs.
+
+**Amends ADR-212:** the class of a route is declared in one table and not where the route is declared. The guarantee is the same (the test fails for a route without a class), the change does not touch 163 decorators, and the whole policy can be read in one place. `--trusted-proxy` does not force a loopback bind: the proxy may run in another container, and the address check is what protects the port.
+
+**Not verified:** no install behind a real oauth2-proxy or Authelia; the gate was exercised with simulated requests from a trusted and an untrusted address. The 21 `owner` routes opened here were read; the other 50 were not.
+
+**Alternatives considered:**
+
+- *A FastAPI dependency per route instead of a middleware.* It would see the matched route for free, and it would run beside the profile dependency with no guaranteed order; the header has to be overwritten before any handler reads it.
+- *Open every `owner` route now, since each already resolves a profile.* The training routes take dataset paths in their body, and a route that resolves a profile can still read outside it. Reading first is the point.
+- *The readable slug alone as the folder.* Two accounts that fold to the same slug would share runs and tokens.

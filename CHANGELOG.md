@@ -13,6 +13,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Added
+
+- **Modo servidor (experimental, ainda não treina).** `visionforge gui --server --trusted-proxy <endereço>` põe o VisionForge atrás de um proxy que faz o login (oauth2-proxy, Authelia): só o proxy é atendido, a conta que ele informa vira o perfil da pessoa e o perfil que o navegador mandar é ignorado. Nesta versão respondem o histórico e os tokens de cada pessoa e a rota nova `GET /api/session`; datasets, treino, fila e Colab respondem 404 até serem revistos. Cada rota tem uma classe (`open`, `owner`, `confined`, `off`) conferida por teste. Sem `--server` nada muda. Guia em `docs/gui/servidor.md` (ADR-212, ADR-213).
+
 ### Changed
 
 - Aba **Resultados** do painel de treino: a folha alarga (como em "Código ao vivo") e os gráficos ficam lado a lado, empilhando numa janela estreita. Na classificação, a matriz de confusão da validação aparece para a última época e também para a melhor (a do checkpoint salvo), e há dois gráficos novos tirados das matrizes de cada época: F1 macro e recall por classe (com mais de 8 classes, as 8 de menor recall). Nada muda no treino nem no `run.json` (ADR-161).

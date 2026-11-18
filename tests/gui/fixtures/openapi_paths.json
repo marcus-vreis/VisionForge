@@ -976,6 +976,19 @@
       "segmentation"
     ]
   },
+  "GET /api/session": {
+    "operationId": "session_api_session_get",
+    "parameters": [],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      }
+    },
+    "tags": [
+      "system"
+    ]
+  },
   "GET /api/system/info": {
     "operationId": "get_system_info_api_system_info_get",
     "parameters": [

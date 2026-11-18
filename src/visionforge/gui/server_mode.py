@@ -1,0 +1,471 @@
+"""Server mode: who is asking, and which routes answer (ADR-212, ADR-213).
+
+``visionforge gui --server`` puts the GUI behind a reverse proxy that signs
+people in (oauth2-proxy, Authelia). The proxy tells who the person is in a
+header; nothing else may. With the mode on, :class:`ServerModeGate`:
+
+- answers only the proxy's address (``--trusted-proxy``): a client that
+  reaches the port directly could write the user header itself;
+- turns the user the proxy names into that person's profile and overwrites
+  ``X-VF-Profile`` with it, so every route that works in a profile (ADR-114)
+  works in the signed-in person's, whatever the browser sent;
+- answers 404 for every route that is not ready for several people.
+
+Every route has a class in :data:`ROUTE_CLASSES`; a test walks the app's route
+table, so a new route without one fails the suite. A route the table does not
+know is refused: the gate fails closed.
+
+With the mode off (the default) the gate passes every request through.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import ipaddress
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Literal
+
+from starlette.datastructures import Headers
+from starlette.responses import JSONResponse
+from starlette.routing import Match
+from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.websockets import WebSocketClose
+
+from visionforge.gui.api.profiles import (
+    PROFILE_HEADER,
+    ProfileError,
+    ensure_profile,
+    slugify,
+)
+from visionforge.utils.messages import LANG_HEADER, message, resolve_lang
+
+# The header oauth2-proxy sets on the request it forwards (``--pass-user-headers``).
+DEFAULT_USER_HEADER = "X-Forwarded-User"
+
+# An account name is an e-mail address or a login; nothing longer is one.
+MAX_USER_LEN = 254
+
+# The proxy's own liveness probe carries no user.
+HEALTH_ROUTE = "GET /api/health"
+
+_SLUG_BASE_LEN = 29
+_DIGEST_LEN = 10
+
+Network = ipaddress.IPv4Network | ipaddress.IPv6Network
+
+RouteClass = Literal["open", "owner", "confined", "off"]
+"""What a route needs before it may answer in server mode.
+
+- ``open``: reads nothing personal.
+- ``owner``: works in the profile of the signed-in person, or on a run or job
+  that is theirs.
+- ``confined``: takes a dataset path, which must sit inside that person's own
+  dataset folder.
+- ``off``: acts on the server's own desktop, runs code a user brings, or holds
+  state every user would share; it has no place in server mode.
+"""
+
+ROUTE_CLASSES: dict[str, RouteClass] = {
+    "POST /api/anomaly/compare": "owner",
+    "POST /api/anomaly/dataset/stats": "confined",
+    "POST /api/anomaly/replicated-comparison": "owner",
+    "POST /api/anomaly/replicates": "owner",
+    "POST /api/anomaly/run": "owner",
+    "GET /api/anomaly/schema": "open",
+    "POST /api/anomaly/sweep": "owner",
+    "GET /api/artifacts/{file_path:path}": "owner",
+    "POST /api/checkpoint/pick": "off",
+    "POST /api/classification/replicated-comparison": "owner",
+    "POST /api/classification/replicates": "owner",
+    "GET /api/code-tour": "open",
+    "GET /api/code-tour/{task}": "open",
+    "POST /api/colab/drive/continue": "off",
+    "GET /api/colab/drive/folders": "off",
+    "POST /api/colab/drive/open": "off",
+    "POST /api/colab/experiment/run": "off",
+    "POST /api/colab/install": "off",
+    "POST /api/colab/login/cancel": "off",
+    "POST /api/colab/login/finish": "off",
+    "POST /api/colab/login/start": "off",
+    "POST /api/colab/logout": "off",
+    "GET /api/colab/sessions": "off",
+    "POST /api/colab/sessions/stop": "off",
+    "GET /api/colab/status": "off",
+    "GET /api/colab/usage": "off",
+    "POST /api/comet/runs/{run_id}/retry": "owner",
+    "DELETE /api/comet/token": "owner",
+    "GET /api/comet/token": "owner",
+    "PUT /api/comet/token": "owner",
+    "GET /api/credentials": "off",
+    "POST /api/credentials": "off",
+    "DELETE /api/credentials/{provider}": "off",
+    "DELETE /api/custom/{key}": "off",
+    "POST /api/custom/{key}/hide": "off",
+    "POST /api/custom/{key}/replicated-comparison": "off",
+    "POST /api/custom/{key}/replicates": "off",
+    "POST /api/custom/{key}/run": "off",
+    "GET /api/custom/{key}/schema": "off",
+    "POST /api/custom/{key}/sweep": "off",
+    "POST /api/custom/{key}/unhide": "off",
+    "POST /api/dataset/audit": "confined",
+    "POST /api/dataset/detect": "confined",
+    "POST /api/dataset/download": "confined",
+    "GET /api/dataset/file": "confined",
+    "POST /api/dataset/pick": "off",
+    "POST /api/dataset/preview_augment": "confined",
+    "POST /api/dataset/preview_preprocess": "confined",
+    "POST /api/dataset/samples": "confined",
+    "POST /api/dataset/stats": "confined",
+    "POST /api/detection/compare": "owner",
+    "POST /api/detection/dataset/pick_yaml": "off",
+    "POST /api/detection/dataset/samples": "confined",
+    "POST /api/detection/dataset/stats": "confined",
+    "POST /api/detection/replicated-comparison": "owner",
+    "POST /api/detection/replicates": "owner",
+    "POST /api/detection/run": "owner",
+    "GET /api/detection/schema": "open",
+    "POST /api/detection/sweep": "owner",
+    "GET /api/device/info": "open",
+    "POST /api/dvc/export": "owner",
+    "POST /api/dvc/prepare": "off",
+    "GET /api/dvc/preview": "owner",
+    "GET /api/experiment/events": "owner",
+    "GET /api/experiment/result/{run_id}": "owner",
+    "POST /api/experiment/run": "owner",
+    "GET /api/experiment/status": "owner",
+    "POST /api/explorer/coco/export/preview": "confined",
+    "GET /api/explorer/coco/export/{job_id}": "confined",
+    "POST /api/explorer/coco/export/{job_id}/apply": "confined",
+    "POST /api/explorer/coco/export/{job_id}/cancel": "confined",
+    "POST /api/explorer/coco/export/{job_id}/plan": "confined",
+    "POST /api/explorer/coco/import/preview": "confined",
+    "GET /api/explorer/coco/import/{job_id}": "confined",
+    "POST /api/explorer/coco/import/{job_id}/apply": "confined",
+    "POST /api/explorer/coco/import/{job_id}/cancel": "confined",
+    "POST /api/explorer/coco/import/{job_id}/plan": "confined",
+    "POST /api/explorer/images": "confined",
+    "POST /api/explorer/incorporate/preview": "confined",
+    "GET /api/explorer/incorporate/{job_id}": "confined",
+    "POST /api/explorer/incorporate/{job_id}/apply": "confined",
+    "POST /api/explorer/incorporate/{job_id}/cancel": "confined",
+    "POST /api/explorer/incorporate/{job_id}/plan": "confined",
+    "POST /api/explorer/merge/preview": "confined",
+    "GET /api/explorer/merge/{job_id}": "confined",
+    "POST /api/explorer/merge/{job_id}/apply": "confined",
+    "POST /api/explorer/merge/{job_id}/cancel": "confined",
+    "POST /api/explorer/merge/{job_id}/plan": "confined",
+    "POST /api/explorer/resplit/preview": "confined",
+    "GET /api/explorer/resplit/{job_id}": "confined",
+    "POST /api/explorer/resplit/{job_id}/apply": "confined",
+    "POST /api/explorer/resplit/{job_id}/cancel": "confined",
+    "POST /api/explorer/resplit/{job_id}/plan": "confined",
+    "POST /api/explorer/scan": "confined",
+    "GET /api/explorer/scan/{job_id}": "confined",
+    "POST /api/explorer/scan/{job_id}/cancel": "confined",
+    "POST /api/explorer/summary": "confined",
+    "GET /api/explorer/thumb": "confined",
+    "POST /api/github/export": "owner",
+    "GET /api/github/preview": "owner",
+    "DELETE /api/github/token": "owner",
+    "GET /api/github/token": "owner",
+    "PUT /api/github/token": "owner",
+    "GET /api/health": "open",
+    "POST /api/hub/export": "owner",
+    "GET /api/hub/preview": "owner",
+    "DELETE /api/hub/token": "owner",
+    "GET /api/hub/token": "owner",
+    "PUT /api/hub/token": "owner",
+    "POST /api/model/defaults": "open",
+    "POST /api/model/learning-rate-plan": "open",
+    "GET /api/profiles": "owner",
+    "POST /api/profiles": "off",
+    "PUT /api/profiles/{slug}": "off",
+    "GET /api/queue": "owner",
+    "DELETE /api/queue/{run_id}": "owner",
+    "POST /api/regression/compare": "owner",
+    "POST /api/regression/cv": "owner",
+    "POST /api/regression/dataset/stats": "confined",
+    "POST /api/regression/replicated-comparison": "owner",
+    "POST /api/regression/replicates": "owner",
+    "POST /api/regression/run": "owner",
+    "GET /api/regression/schema": "open",
+    "POST /api/regression/sweep": "owner",
+    "GET /api/runs": "owner",
+    "DELETE /api/runs/{run_id}": "owner",
+    "GET /api/runs/{run_id}": "owner",
+    "POST /api/runs/{run_id}/batch_predict": "owner",
+    "GET /api/runs/{run_id}/bundle": "owner",
+    "GET /api/runs/{run_id}/export_md": "owner",
+    "POST /api/runs/{run_id}/export_onnx": "owner",
+    "POST /api/runs/{run_id}/gradcam": "owner",
+    "POST /api/runs/{run_id}/mlflow/retry": "owner",
+    "POST /api/runs/{run_id}/resume": "owner",
+    "POST /api/runs/{run_id}/reveal": "off",
+    "POST /api/runs/{run_id}/test": "owner",
+    "POST /api/sample-dataset": "confined",
+    "GET /api/schema": "open",
+    "POST /api/segmentation/compare": "owner",
+    "POST /api/segmentation/cv": "owner",
+    "POST /api/segmentation/dataset/stats": "confined",
+    "POST /api/segmentation/replicated-comparison": "owner",
+    "POST /api/segmentation/replicates": "owner",
+    "POST /api/segmentation/run": "owner",
+    "GET /api/segmentation/schema": "open",
+    "POST /api/segmentation/sweep": "owner",
+    "GET /api/session": "open",
+    "GET /api/system/info": "open",
+    "GET /api/tasks": "open",
+    "GET /api/update": "open",
+    "POST /api/update/apply": "off",
+    "POST /api/wandb/runs/{run_id}/retry": "owner",
+    "DELETE /api/wandb/token": "owner",
+    "GET /api/wandb/token": "owner",
+    "PUT /api/wandb/token": "owner",
+    "POST /api/zenodo/export": "owner",
+    "GET /api/zenodo/preview": "owner",
+    "DELETE /api/zenodo/sandbox/token": "owner",
+    "GET /api/zenodo/sandbox/token": "owner",
+    "PUT /api/zenodo/sandbox/token": "owner",
+    "DELETE /api/zenodo/token": "owner",
+    "GET /api/zenodo/token": "owner",
+    "PUT /api/zenodo/token": "owner",
+    "GET /{path:path}": "open",
+}
+
+# The ``owner`` routes whose handler was read and found to work only inside the
+# profile it is given. The rest answer 404 in server mode until they are read.
+OWNER_READY: frozenset[str] = frozenset(
+    {
+        "DELETE /api/comet/token",
+        "GET /api/comet/token",
+        "PUT /api/comet/token",
+        "DELETE /api/github/token",
+        "GET /api/github/token",
+        "PUT /api/github/token",
+        "DELETE /api/hub/token",
+        "GET /api/hub/token",
+        "PUT /api/hub/token",
+        "GET /api/runs",
+        "DELETE /api/runs/{run_id}",
+        "GET /api/runs/{run_id}",
+        "DELETE /api/wandb/token",
+        "GET /api/wandb/token",
+        "PUT /api/wandb/token",
+        "DELETE /api/zenodo/sandbox/token",
+        "GET /api/zenodo/sandbox/token",
+        "PUT /api/zenodo/sandbox/token",
+        "DELETE /api/zenodo/token",
+        "GET /api/zenodo/token",
+        "PUT /api/zenodo/token",
+    }
+)
+
+
+class ServerModeError(ValueError):
+    """The server-mode options cannot be used as given."""
+
+
+@dataclass(frozen=True)
+class ServerMode:
+    """The options of ``--server``; the default is the mode off."""
+
+    enabled: bool = False
+    trusted: tuple[Network, ...] = ()
+    user_header: str = DEFAULT_USER_HEADER
+
+    @classmethod
+    def from_options(
+        cls,
+        *,
+        enabled: bool,
+        trusted_proxies: Iterable[str] = (),
+        user_header: str = DEFAULT_USER_HEADER,
+    ) -> ServerMode:
+        """Validate what the command line gave.
+
+        Raises:
+            ServerModeError: ``--trusted-proxy`` or ``--user-header`` without
+                ``--server``; server mode with no trusted proxy; an address that
+                is not an IP or a CIDR block; an empty header name.
+        """
+        proxies = [p.strip() for p in trusted_proxies if p.strip()]
+        header = user_header.strip()
+        if not enabled:
+            if proxies or header != DEFAULT_USER_HEADER:
+                raise ServerModeError(
+                    "--trusted-proxy and --user-header need --server."
+                )
+            return cls()
+        if not proxies:
+            raise ServerModeError(
+                "--server needs --trusted-proxy <address>: the address of the "
+                "reverse proxy that signs people in. Without it anyone who "
+                "reaches the port could name themselves in the user header."
+            )
+        if not header or header.lower() == PROFILE_HEADER.lower():
+            raise ServerModeError(f"--user-header cannot be {user_header!r}.")
+        networks: list[Network] = []
+        for proxy in proxies:
+            try:
+                networks.append(ipaddress.ip_network(proxy, strict=False))
+            except ValueError as exc:
+                raise ServerModeError(
+                    f"--trusted-proxy {proxy!r} is not an IP address or a CIDR block."
+                ) from exc
+        return cls(enabled=True, trusted=tuple(networks), user_header=header)
+
+    def trusts(self, client_host: str | None) -> bool:
+        """True when ``client_host`` is one of the proxies' addresses."""
+        if client_host is None:
+            return False
+        try:
+            address = ipaddress.ip_address(client_host)
+        except ValueError:
+            return False
+        mapped = getattr(address, "ipv4_mapped", None)
+        if mapped is not None:
+            address = mapped
+        return any(
+            address.version == network.version and address in network
+            for network in self.trusted
+        )
+
+
+OFF = ServerMode()
+
+
+def mode_of(app: Any) -> ServerMode:
+    """The mode ``start_server`` stored on ``app``, or off."""
+    mode = getattr(getattr(app, "state", None), "server_mode", None)
+    return mode if isinstance(mode, ServerMode) else OFF
+
+
+def normalize_user(raw: str | None) -> str | None:
+    """The account name the proxy sent, in one spelling; ``None`` if unusable.
+
+    Case is folded: an identity provider that sends ``Ana@lab.org`` today and
+    ``ana@lab.org`` tomorrow means the same account.
+    """
+    if raw is None:
+        return None
+    user = raw.strip().casefold()
+    if not user or len(user) > MAX_USER_LEN:
+        return None
+    if any(not ch.isprintable() or ch.isspace() for ch in user):
+        return None
+    return user
+
+
+def user_slug(user: str) -> str:
+    """The profile folder of the account ``user`` (already normalised).
+
+    The readable part comes from the name and the tail is a digest of the whole
+    name: ``a.b@lab.org`` and ``a-b@lab.org`` fold to the same readable part and
+    must not share a folder.
+    """
+    digest = hashlib.sha256(user.encode("utf-8")).hexdigest()[:_DIGEST_LEN]
+    base = slugify(user)[:_SLUG_BASE_LEN].rstrip("-_") or "u"
+    return f"{base}-{digest}"
+
+
+def route_key(scope: Scope) -> str | None:
+    """``"METHOD /path/{template}"`` of the route that will answer, if any."""
+    method = scope.get("method", "GET")
+    for route in getattr(scope.get("app"), "routes", ()):
+        match, _ = route.matches(scope)
+        if match is Match.FULL:
+            return f"{'GET' if method == 'HEAD' else method} {route.path}"
+    return None
+
+
+def answers(key: str) -> bool:
+    """True when the route ``key`` answers in server mode today."""
+    kind = ROUTE_CLASSES.get(key)
+    return kind == "open" or (kind == "owner" and key in OWNER_READY)
+
+
+class ServerModeGate:
+    """ASGI middleware applying :class:`ServerMode` to every request."""
+
+    def __init__(self, app: ASGIApp, profiles_dir: Callable[[], Path]) -> None:
+        self.app = app
+        self._profiles_dir = profiles_dir
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
+        mode = mode_of(scope.get("app"))
+        if not mode.enabled:
+            await self.app(scope, receive, send)
+            return
+        client = scope.get("client")
+        if not mode.trusts(client[0] if client else None):
+            await _refuse(scope, receive, send, 403, "server.untrusted_client")
+            return
+        if scope["type"] == "websocket":
+            await _refuse(scope, receive, send, 404, "server.route_off")
+            return
+        key = route_key(scope)
+        if key is not None and not answers(key):
+            await _refuse(scope, receive, send, 404, "server.route_off")
+            return
+        raw = Headers(scope=scope).get(mode.user_header)
+        if raw is None and key == HEALTH_ROUTE:
+            await self.app(_with_profile(scope, None), receive, send)
+            return
+        user = normalize_user(raw)
+        if user is None:
+            await _refuse(
+                scope, receive, send, 401, "server.no_user", header=mode.user_header
+            )
+            return
+        try:
+            profile = ensure_profile(user_slug(user), user, self._profiles_dir())
+        except ProfileError as exc:
+            response = JSONResponse({"detail": str(exc)}, status_code=500)
+            await response(scope, receive, send)
+            return
+        signed = _with_profile(scope, profile.slug)
+        signed.setdefault("state", {})["vf_user"] = user
+        await self.app(signed, receive, send)
+
+
+def _with_profile(scope: Scope, slug: str | None) -> Scope:
+    """``scope`` with ``X-VF-Profile`` set to ``slug`` and the client's dropped."""
+    name = PROFILE_HEADER.lower().encode("latin-1")
+    headers = [(k, v) for k, v in scope["headers"] if k.lower() != name]
+    if slug is not None:
+        headers.append((name, slug.encode("latin-1")))
+    return {**scope, "headers": headers}
+
+
+async def _refuse(
+    scope: Scope, receive: Receive, send: Send, status: int, key: str, **params: str
+) -> None:
+    if scope["type"] == "websocket":
+        await WebSocketClose(code=1008)(scope, receive, send)
+        return
+    lang = resolve_lang(Headers(scope=scope).get(LANG_HEADER))
+    response = JSONResponse(
+        {"detail": message(lang, key, **params)}, status_code=status
+    )
+    await response(scope, receive, send)
+
+
+__all__ = [
+    "DEFAULT_USER_HEADER",
+    "OWNER_READY",
+    "ROUTE_CLASSES",
+    "RouteClass",
+    "ServerMode",
+    "ServerModeError",
+    "ServerModeGate",
+    "answers",
+    "mode_of",
+    "normalize_user",
+    "route_key",
+    "user_slug",
+]
