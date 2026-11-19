@@ -219,6 +219,23 @@ describe("the screen on a shared server", () => {
     expect(shared).not.toContain(pt.profile.integrations);
   });
 
+  it("the profile menu offers W&B and Comet, not local MLflow, once the profile is editable", () => {
+    // What a server sends since ADR-223: the profile opens, MLflow's retry stays off.
+    setSession({
+      ...SERVER,
+      closed: [ROUTE.profileCreate, ROUTE.mlflowRetry],
+    });
+    const shared = menu();
+    expect(shared).toContain(pt.profile.integrations);
+    expect(shared).toContain(pt.wandb.label.replaceAll("&", "&amp;"));
+    expect(shared).toContain(pt.comet.label);
+    expect(shared).not.toContain("data-mlflow-switch");
+    expect(shared).not.toContain(pt.profile.createTitle);
+
+    setSession(LOCAL_SESSION);
+    expect(menu()).toContain("data-mlflow-switch");
+  });
+
   it("the sample dataset button is gone", () => {
     const button = () => render(<SampleDatasetButton task="classification" onApply={noop} />);
     expect(button()).toContain('data-sample-task="classification"');

@@ -9,14 +9,15 @@
 > ONNX. Cada pessoa pode baixar um dataset, criar o de exemplo e usar o
 > Laboratório de datasets, gravando só na própria pasta. Um run pode ser
 > baixado (ZIP, Markdown) e publicado no Hugging Face Hub, no Zenodo e no
-> GitHub com o token de quem o treinou. O Colab, o DVC e as integrações
-> (MLflow, W&B, Comet) não estão disponíveis, e a tela não os mostra. E ele é
+> GitHub com o token de quem o treinou. Cada pessoa pode mandar os próprios
+> treinos ao Weights & Biases e ao Comet, com a própria chave. O Colab, o DVC
+> e o MLflow local não estão disponíveis, e a tela não os mostra. E ele é
 > para um **grupo que já confia entre
 > si**: o treino roda dentro do processo do servidor, sem isolamento entre as
 > pessoas. Não ofereça este servidor a desconhecidos.
 
 Esta página sai do código atual (`gui/server_mode.py`) e das decisões ADR-212
-a ADR-222. O que não foi testado está marcado como *não verificado*.
+a ADR-223. O que não foi testado está marcado como *não verificado*.
 
 ## O que muda em relação ao uso local
 
@@ -68,9 +69,17 @@ Num servidor compartilhado a página é a mesma, com menos botões:
   pastas aceitas, como no campo do dataset. O run também pode ser baixado
   ("Bundle do experimento" e "Markdown") e publicado no Hugging Face Hub, no
   Zenodo e no GitHub; o DVC não aparece (veja "Tirar um run do servidor").
-- **O menu do seu nome** mostra a conta com que você entrou e a sua pasta. Não
-  há outro perfil para escolher, e as integrações (MLflow, W&B, Comet) ainda
-  não são configuráveis ali.
+- **Na primeira visita** a página pergunta como chamar você e qual saudação
+  prefere. A resposta fica no seu perfil, no servidor: vale em qualquer
+  navegador, e "Trocar nome", no menu, muda depois. A conta e a pasta não
+  mudam com o nome.
+- **O menu do seu nome** mostra a conta com que você entrou e a sua pasta, e
+  não há outro perfil para escolher. Em **Integrações** você liga o envio dos
+  seus próximos treinos ao Weights & Biases e ao Comet: escolha o projeto e
+  salve a sua chave, que fica guardada no servidor, só para o seu perfil, e
+  nunca volta para a tela. Se um envio falhar, o run mostra o aviso e o botão
+  de reenviar. O MLflow local não aparece: ele grava num arquivo do disco do
+  servidor, que você não teria como abrir.
 - **Guia:** o tour da interface e o guia do primeiro treino, que usa o
   dataset de exemplo. *Não verificado:* o guia do primeiro treino percorrido
   até o fim num servidor.
@@ -175,7 +184,10 @@ que não existe: não dá para ler o progresso, o resultado nem parar.
 | Baixar o ZIP ou o Markdown do run | sim, só dos **seus** runs |
 | Publicar no Hugging Face Hub, no Zenodo e no GitHub | sim, com o **seu** token, salvo no seu perfil |
 | Publicar num repositório DVC | não num servidor (roda o git e o DVC do servidor numa pasta do disco dele) |
-| Reenviar para MLflow, W&B ou Comet | ainda não (dependem das integrações por perfil) |
+| Ver e editar o **seu** perfil: nome, saudação e integrações | sim; o perfil de outra pessoa não aparece nem pode ser editado |
+| Enviar treinos ao Weights & Biases e ao Comet, e reenviar um run | sim, com a **sua** chave, salva no seu perfil |
+| MLflow local (ligar e reenviar) | não num servidor (grava num arquivo do disco dele, que ninguém abriria) |
+| Criar outro perfil | não num servidor (o perfil é a conta do login) |
 | Seletor de pasta, "abrir pasta", atualizar o VisionForge, Colab, tarefas próprias, credenciais de download | desligados no modo servidor |
 
 ## Estratégias num servidor
@@ -303,6 +315,15 @@ foram servidas à página (200); a auditoria contou 48, 16 e 16 imagens nas
 três divisões; uma auditoria de `C:\Windows` respondeu 422. *Não verificado:*
 as prévias vistas nos painéis da tela neste modo (os pedidos foram feitos
 direto às rotas).
+
+Perfil e integrações, no mesmo dia e arranjo: a lista de perfis trouxe só o
+da conta; a primeira visita perguntou o nome e a saudação, e a resposta ficou
+gravada no perfil; o menu mostrou Weights & Biases e Comet, sem MLflow, e
+ligar e desligar o W&B foi salvo no perfil. Editar o perfil `default`
+respondeu 404, ligar o MLflow 422 e criar um perfil 404. *Não verificado:* um
+envio real ao W&B ou ao Comet neste modo, que pede uma chave de verdade (nos
+testes o W&B é simulado e confere de quem é a chave usada no reenvio; o do
+Comet só confere quem alcança a rota).
 
 ## Tirar um run do servidor
 

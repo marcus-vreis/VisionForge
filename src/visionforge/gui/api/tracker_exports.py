@@ -32,14 +32,21 @@ class ExportSidecar(Protocol):
         """``RUNNING`` while the export is open, else its terminal status."""
 
 
-def profile_trackers(profile: Profile, outputs: Path) -> tuple[TrackerFactory, ...]:
-    """The exporters this profile turned on, writing their stores under ``outputs``."""
+def profile_trackers(
+    profile: Profile, outputs: Path, *, local_store: bool = True
+) -> tuple[TrackerFactory, ...]:
+    """The exporters this profile turned on, writing their stores under ``outputs``.
+
+    ``local_store`` is False on a server: MLflow writes a file on this
+    machine's disk that the person could not open, so it is left out there
+    even when a profile carried over from a local install has it on (ADR-223).
+    """
     from visionforge.core.comet_tracking import CometTarget, CometTracker
     from visionforge.core.mlflow_tracking import MlflowTracker
     from visionforge.core.wandb_tracking import WandbTarget, WandbTracker
 
     factories: list[TrackerFactory] = []
-    if profile.settings.mlflow.enabled:
+    if local_store and profile.settings.mlflow.enabled:
         factories.append(partial(MlflowTracker, outputs / "mlflow", profile.slug))
     wandb = profile.settings.wandb
     if wandb.enabled:

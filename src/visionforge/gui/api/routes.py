@@ -496,7 +496,9 @@ def _tracker_factories(
 
 def _profile_trackers(profile: Profile) -> tuple[TrackerFactory, ...]:
     """The exporters this profile turned on (ADR-170, ADR-172, ADR-197)."""
-    return profile_trackers(profile, _PROFILES_DIR.parent.resolve())
+    return profile_trackers(
+        profile, _PROFILES_DIR.parent.resolve(), local_store=current_scope() is None
+    )
 
 
 # Starting one run: classification here and on Colab, then each standalone
