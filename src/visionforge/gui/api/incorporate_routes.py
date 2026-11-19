@@ -21,7 +21,9 @@ from visionforge.core.dataset_incorporate import (
     plan_incorporation,
     suggest_name,
 )
+from visionforge.gui.api.dataset_scope import DatasetDir
 from visionforge.gui.api.datasets_routes import _is_inside_allowed_root
+from visionforge.gui.api.derived_jobs import destination_parent, placement
 from visionforge.gui.api.explorer_routes import ExplorerRequest, _split_dirs
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST_TEXT,
@@ -54,7 +56,7 @@ _CONFLICT_CODES = {
 class PreviewRequest(ExplorerRequest):
     """The opened dataset plus the folder with the new images."""
 
-    source_dir: str
+    source_dir: DatasetDir
 
 
 class PlanRequest(BaseModel):
@@ -165,7 +167,7 @@ async def incorporate_apply(job_id: str, req: ApplyRequest) -> dict[str, Any]:
         validate_path_component(req.dest_name)
     except ValueError as exc:
         raise HTTPException(400, tr("incorporate.bad_dest_name")) from exc
-    if (analysis.base_root.parent / req.dest_name).exists():
+    if (destination_parent(analysis.base_root) / req.dest_name).exists():
         raise HTTPException(409, tr("incorporate.dest_exists", name=req.dest_name))
     try:
         plan = plan_incorporation(
@@ -174,7 +176,9 @@ async def incorporate_apply(job_id: str, req: ApplyRequest) -> dict[str, Any]:
             ratios=req.ratios,
             seed=req.seed,
         )
-        started = _JOBS.start_apply(analysis, plan, req.dest_name)
+        started = _JOBS.start_apply(
+            analysis, plan, req.dest_name, **placement(analysis.base_root)
+        )
     except IncorporateError as exc:
         raise _refuse(exc) from exc
     except JobBusyError as exc:

@@ -1,4 +1,5 @@
 import { useT } from "../i18n/useT";
+import { useDestHint } from "../lib/dest-hint";
 import { reasonRows } from "../lib/dataset-coco";
 import { ghostButton, mono } from "./datasetExplorerStyles";
 import { ActionRow, ApplyButton, LabStep } from "./DatasetLabParts";
@@ -76,6 +77,7 @@ export function DestinationRow({
   onApply: () => void;
 }) {
   const t = useT().datasetCoco;
+  const destHint = useDestHint(t.destHint);
   const error = name !== "" && !ok ? t.destInvalid : (problem ?? undefined);
   return (
     <LabStep title={t.destTitle}>
@@ -84,7 +86,7 @@ export function DestinationRow({
           label={t.destName}
           value={name}
           onChange={onName}
-          hint={t.destHint}
+          hint={destHint}
           mono
           error={error}
         />

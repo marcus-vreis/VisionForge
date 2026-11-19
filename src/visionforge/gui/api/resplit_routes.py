@@ -25,8 +25,14 @@ from visionforge.core.dataset_resplit import (
     plan_resplit,
     suggest_name,
 )
+from visionforge.gui.api.dataset_scope import DatasetPart
 from visionforge.gui.api.datasets_routes import _is_inside_allowed_root
-from visionforge.gui.api.derived_jobs import DerivedJob, JobBusyError
+from visionforge.gui.api.derived_jobs import (
+    DerivedJob,
+    JobBusyError,
+    destination_parent,
+    placement,
+)
 from visionforge.gui.api.explorer_routes import ExplorerRequest, _split_dirs
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST_TEXT,
@@ -56,7 +62,7 @@ _CONFLICT_CODES = {
 class ResplitPreviewRequest(ExplorerRequest):
     """The opened dataset plus, optionally, a ``path,group`` CSV (ADR-150)."""
 
-    group_csv: str | None = None
+    group_csv: DatasetPart | None = None
 
 
 class ResplitPlanRequest(BaseModel):
@@ -175,12 +181,14 @@ async def resplit_apply(job_id: str, req: ResplitApplyRequest) -> dict[str, Any]
     except ValueError as exc:
         raise HTTPException(400, tr("resplit.bad_dest_name")) from exc
     try:
-        if (analysis.root.parent / req.dest_name).exists():
+        if (destination_parent(analysis.root) / req.dest_name).exists():
             raise HTTPException(409, tr("resplit.dest_exists", name=req.dest_name))
         plan = _plan(analysis, req)
         # A dataset or group file edited after the preview would make it a lie.
         await asyncio.to_thread(check_unchanged, analysis)
-        started = _JOBS.start_apply(analysis, plan, req.dest_name)
+        started = _JOBS.start_apply(
+            analysis, plan, req.dest_name, **placement(analysis.root)
+        )
     except ResplitError as exc:
         raise _refuse(exc) from exc
     except JobBusyError as exc:

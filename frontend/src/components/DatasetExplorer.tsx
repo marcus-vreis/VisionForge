@@ -12,6 +12,8 @@ import { openResultForm } from "../lib/dataset-incorporate";
 import { canOpenLab, datasetName, middleTruncate, summaryNotes, type SummaryNote } from "../lib/dataset-lab";
 import { runPicker } from "../lib/picker-feedback";
 import { useT } from "../i18n/useT";
+import { ROUTE, useRouteOpen } from "../lib/session";
+import { ServerFoldersNote } from "./ServerFoldersNote";
 import { DatasetLab } from "./DatasetLab";
 import { DatasetPicker } from "./DatasetPicker";
 import { Segmented, TextField } from "./controls";
@@ -84,6 +86,7 @@ type LabState = { cocoOnly: boolean } | null;
  *  the overview and the tools live (ADR-165..169). */
 export function DatasetExplorer() {
   const t = useT().datasetExplorer;
+  const canPick = useRouteOpen(ROUTE.pickFolder);
   const lab = useT().datasetLab;
   const [form, setForm] = useState<ExplorerForm>(makeDefaultExplorerForm());
   const [opened, setOpened] = useState<ExplorerForm | null>(null);
@@ -160,6 +163,7 @@ export function DatasetExplorer() {
           <div className="vf-lab-row__actions">
             <button
               type="button"
+              hidden={!canPick}
               style={ghostButton}
               title={t.browseTitle}
               onClick={() =>
@@ -178,6 +182,8 @@ export function DatasetExplorer() {
           </div>
         </div>
       )}
+      {/* The classification picker above lists them itself. */}
+      {form.task !== "classification" && <ServerFoldersNote />}
       {pickNote && <div style={text}>{pickNote}</div>}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
         <ActionButton disabled={!canOpen} onClick={() => void load(form)}>

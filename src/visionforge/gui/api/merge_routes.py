@@ -22,8 +22,14 @@ from visionforge.core.dataset_merge import (
     plan_merge,
     suggest_merge_name,
 )
+from visionforge.gui.api.dataset_scope import DatasetDir, DatasetPart
 from visionforge.gui.api.datasets_routes import _is_inside_allowed_root
-from visionforge.gui.api.derived_jobs import DerivedJob, JobBusyError
+from visionforge.gui.api.derived_jobs import (
+    DerivedJob,
+    JobBusyError,
+    destination_parent,
+    placement,
+)
 from visionforge.gui.api.explorer_routes import ExplorerRequest, _split_dirs
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST_TEXT,
@@ -54,10 +60,10 @@ _CONFLICT_CODES = {
 class MergePreviewRequest(ExplorerRequest):
     """The opened dataset (A) plus the folder of the other one (B)."""
 
-    other_dir: str
-    other_train_dir: str = "train"
-    other_val_dir: str = "val"
-    other_test_dir: str = "test"
+    other_dir: DatasetDir
+    other_train_dir: DatasetPart = "train"
+    other_val_dir: DatasetPart = "val"
+    other_test_dir: DatasetPart = "test"
 
 
 class MergePlanRequest(BaseModel):
@@ -175,12 +181,13 @@ async def merge_apply(job_id: str, req: MergeApplyRequest) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(400, tr("merge.bad_dest_name")) from exc
     try:
-        if (analysis.roots["a"].parent / req.dest_name).exists():
+        root = analysis.roots["a"]
+        if (destination_parent(root) / req.dest_name).exists():
             raise HTTPException(409, tr("merge.dest_exists", name=req.dest_name))
         plan = plan_merge(analysis, req.mapping)
         # A source edited after the preview would make the preview a lie.
         await asyncio.to_thread(ensure_sources_unchanged, analysis)
-        started = _JOBS.start_apply(analysis, plan, req.dest_name)
+        started = _JOBS.start_apply(analysis, plan, req.dest_name, **placement(root))
     except MergeError as exc:
         raise _refuse(exc) from exc
     except JobBusyError as exc:

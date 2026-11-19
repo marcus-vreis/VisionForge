@@ -31,8 +31,14 @@ from visionforge.core.dataset_coco_import import (
     suggest_import_name,
 )
 from visionforge.gui.api.coco_jobs import CocoJobs
+from visionforge.gui.api.dataset_scope import DatasetDir
 from visionforge.gui.api.datasets_routes import _is_inside_allowed_root
-from visionforge.gui.api.derived_jobs import DerivedJob, JobBusyError
+from visionforge.gui.api.derived_jobs import (
+    DerivedJob,
+    JobBusyError,
+    destination_parent,
+    placement,
+)
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST_TEXT,
     CONFLICT_TEXT,
@@ -60,13 +66,13 @@ _CONFLICT_CODES = {_DEST_EXISTS, "coco.base_changed"}
 class CocoExportPreviewRequest(BaseModel):
     """The YOLO detection dataset the explorer has opened."""
 
-    base_dir: str
+    base_dir: DatasetDir
 
 
 class CocoImportPreviewRequest(BaseModel):
     """The folder with the COCO annotation files and images."""
 
-    source_dir: str
+    source_dir: DatasetDir
 
 
 class CocoPlanRequest(BaseModel):
@@ -180,7 +186,7 @@ async def coco_export_plan(job_id: str, req: CocoPlanRequest) -> dict[str, Any]:
     """The preview again, and the destination name checked when one is given."""
     analysis: ExportAnalysis = _preview_job(job_id, ExportAnalysis).analysis
     if req.dest_name is not None:
-        _check_dest(analysis.root.parent, req.dest_name)
+        _check_dest(destination_parent(analysis.root), req.dest_name)
     return {**analysis.summary(), "dest_name": req.dest_name}
 
 
@@ -195,11 +201,13 @@ async def coco_export_plan(job_id: str, req: CocoPlanRequest) -> dict[str, Any]:
 async def coco_export_apply(job_id: str, req: CocoApplyRequest) -> dict[str, Any]:
     """Start writing the COCO dataset; poll ``/{job_id}`` of the returned job."""
     analysis: ExportAnalysis = _preview_job(job_id, ExportAnalysis).analysis
-    _check_dest(analysis.root.parent, req.dest_name)
+    _check_dest(destination_parent(analysis.root), req.dest_name)
     try:
         # A dataset edited after the preview would make it a lie.
         await asyncio.to_thread(check_export_unchanged, analysis)
-        started = _JOBS.start_export_apply(analysis, req.dest_name)
+        started = _JOBS.start_export_apply(
+            analysis, req.dest_name, **placement(analysis.root)
+        )
     except CocoError as exc:
         raise _refuse(exc) from exc
     except JobBusyError as exc:
@@ -253,7 +261,7 @@ async def coco_import_plan(job_id: str, req: CocoImportPlanRequest) -> dict[str,
     analysis: ImportAnalysis = _preview_job(job_id, ImportAnalysis).analysis
     plan = _import_plan(analysis, req.splits)
     if req.dest_name is not None:
-        _check_dest(analysis.root.parent, req.dest_name)
+        _check_dest(destination_parent(analysis.root), req.dest_name)
     return plan.summary()
 
 
@@ -268,13 +276,15 @@ async def coco_import_plan(job_id: str, req: CocoImportPlanRequest) -> dict[str,
 async def coco_import_apply(job_id: str, req: CocoImportApplyRequest) -> dict[str, Any]:
     """Start writing the YOLO dataset; poll ``/{job_id}`` of the returned job."""
     analysis: ImportAnalysis = _preview_job(job_id, ImportAnalysis).analysis
-    _check_dest(analysis.root.parent, req.dest_name)
+    _check_dest(destination_parent(analysis.root), req.dest_name)
     plan = _import_plan(analysis, req.splits)
     try:
         plan.require_ready()
         # A folder edited after the preview would make it a lie.
         await asyncio.to_thread(check_import_unchanged, analysis)
-        started = _JOBS.start_import_apply(analysis, plan, req.dest_name)
+        started = _JOBS.start_import_apply(
+            analysis, plan, req.dest_name, **placement(analysis.root)
+        )
     except CocoError as exc:
         raise _refuse(exc) from exc
     except JobBusyError as exc:

@@ -11,6 +11,7 @@ what the user saw.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from visionforge.core.dataset_coco import (
     ExportAnalysis,
@@ -58,7 +59,7 @@ class CocoJobs(DerivedJobs):
         return job
 
     def start_export_apply(
-        self, analysis: ExportAnalysis, dest_name: str
+        self, analysis: ExportAnalysis, dest_name: str, **placed: Any
     ) -> DerivedJob:
         """Launch the write of an export.
 
@@ -69,7 +70,11 @@ class CocoJobs(DerivedJobs):
 
         def run() -> None:
             result = build_coco_export(
-                analysis, dest_name, token=job.token, on_progress=job.progress
+                analysis,
+                dest_name,
+                token=job.token,
+                on_progress=job.progress,
+                **placed,
             )
             if result is None:
                 job.state = "cancelled"
@@ -103,7 +108,11 @@ class CocoJobs(DerivedJobs):
         return job
 
     def start_import_apply(
-        self, analysis: ImportAnalysis, plan: ImportPlan, dest_name: str
+        self,
+        analysis: ImportAnalysis,
+        plan: ImportPlan,
+        dest_name: str,
+        **placed: Any,
     ) -> DerivedJob:
         """Launch the write of an import.
 
@@ -114,7 +123,12 @@ class CocoJobs(DerivedJobs):
 
         def run() -> None:
             result = build_coco_import(
-                analysis, plan, dest_name, token=job.token, on_progress=job.progress
+                analysis,
+                plan,
+                dest_name,
+                token=job.token,
+                on_progress=job.progress,
+                **placed,
             )
             if result is None:
                 job.state = "cancelled"

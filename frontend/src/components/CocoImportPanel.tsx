@@ -32,6 +32,8 @@ import {
 import { runPicker } from "../lib/picker-feedback";
 import { errorMessage as message, useJobPolling } from "../lib/useJobPolling";
 import { useT } from "../i18n/useT";
+import { ROUTE, useRouteOpen } from "../lib/session";
+import { ServerFoldersNote } from "./ServerFoldersNote";
 import { CocoJobBar, DestinationRow, ReasonSummary } from "./CocoParts";
 import { TextField } from "./controls";
 import {
@@ -198,6 +200,7 @@ export function CocoImportPanel({
   const t = useT().datasetCoco;
   const ex = useT().datasetExplorer;
   const lab = useT().datasetLab;
+  const canPick = useRouteOpen(ROUTE.pickFolder);
   const [sourceDir, setSourceDir] = useState("");
   const [pickNote, setPickNote] = useState<string | null>(null);
   const [previewJob, setPreviewJob] =
@@ -348,6 +351,7 @@ export function CocoImportPanel({
             <>
               <button
                 type="button"
+                hidden={!canPick}
                 style={ghostButton}
                 title={t.browseTitle}
                 onClick={() =>
@@ -379,6 +383,7 @@ export function CocoImportPanel({
             mono
           />
         </ActionRow>
+        <ServerFoldersNote />
         {pickNote && <div style={text}>{pickNote}</div>}
       </LabStep>
 

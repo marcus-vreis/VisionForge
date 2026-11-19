@@ -9,6 +9,7 @@ import { ServerFoldersNote } from "../components/ServerFoldersNote";
 import { LanguageContext } from "../i18n/context";
 import { pt } from "../i18n/pt";
 import { offeredGuides } from "./guides";
+import { useDestHint } from "./dest-hint";
 import { DEFAULT_PROFILE_INFO } from "./profile";
 import {
   LOCAL_SESSION,
@@ -242,6 +243,14 @@ describe("the screen on a shared server", () => {
     expect(note).toContain(pt.server.foldersTitleRun);
     expect(note).not.toContain(pt.server.foldersTitle);
     expect(note).toContain("/srv/shared");
+  });
+
+  it("a derived dataset's name says where it lands: beside its source, or in the own folder", () => {
+    const Hint = () => <span>{useDestHint("beside the original")}</span>;
+    expect(render(<Hint />)).toContain("beside the original");
+    setSession(SERVER);
+    expect(render(<Hint />)).toContain(pt.server.destHint);
+    expect(render(<Hint />)).not.toContain("beside the original");
   });
 
   it("the datasets button is gone with nothing behind it", () => {

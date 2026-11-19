@@ -8,6 +8,7 @@ what an incorporate preview and apply run and report.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from visionforge.core.dataset_explorer import ExplorerTask
 from visionforge.core.dataset_incorporate import (
@@ -75,7 +76,7 @@ class IncorporateJobs(DerivedJobs):
         return job
 
     def start_apply(
-        self, analysis: Analysis, plan: Plan, dest_name: str
+        self, analysis: Analysis, plan: Plan, dest_name: str, **placed: Any
     ) -> IncorporateJob:
         """Launch the write.
 
@@ -86,7 +87,12 @@ class IncorporateJobs(DerivedJobs):
 
         def run() -> None:
             result = build_incorporated_dataset(
-                analysis, plan, dest_name, token=job.token, on_progress=job.progress
+                analysis,
+                plan,
+                dest_name,
+                token=job.token,
+                on_progress=job.progress,
+                **placed,
             )
             if result is None:
                 job.state = "cancelled"

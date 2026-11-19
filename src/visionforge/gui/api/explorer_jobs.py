@@ -18,6 +18,7 @@ from loguru import logger
 
 from visionforge.core.cancellation import CancellationToken
 from visionforge.core.dataset_explorer import DatasetIndex, scan_integrity
+from visionforge.gui.api.derived_jobs import job_owner
 
 _KEEP = 8
 
@@ -29,6 +30,7 @@ class ScanBusyError(RuntimeError):
 @dataclass
 class ScanJob:
     job_id: str
+    owner: str = ""
     state: str = "running"  # running | done | cancelled | failed
     done: int = 0
     total: int = 0
@@ -60,13 +62,15 @@ class ScanJobs:
         Raises:
             ScanBusyError: if another scan is still running.
         """
+        owner = job_owner()
         with self._lock:
-            if any(j.state == "running" for j in self._jobs.values()):
+            mine = [j for j in self._jobs.values() if j.owner == owner]
+            if any(j.state == "running" for j in mine):
                 raise ScanBusyError("a scan is already running")
-            job = ScanJob(job_id=uuid.uuid4().hex)
+            job = ScanJob(job_id=uuid.uuid4().hex, owner=owner)
             self._jobs[job.job_id] = job
-            while len(self._jobs) > _KEEP:
-                self._jobs.popitem(last=False)
+            for old in mine[: max(0, len(mine) + 1 - _KEEP)]:
+                del self._jobs[old.job_id]
         threading.Thread(
             target=self._run, args=(job, index, max_images), daemon=True
         ).start()
@@ -90,8 +94,10 @@ class ScanJobs:
         job.state = "cancelled" if result["cancelled"] else "done"
 
     def get(self, job_id: str) -> ScanJob | None:
+        """The scan, for whoever started it; ``None`` for anybody else (ADR-220)."""
         with self._lock:
-            return self._jobs.get(job_id)
+            job = self._jobs.get(job_id)
+        return job if job is not None and job.owner == job_owner() else None
 
     def cancel(self, job_id: str) -> bool:
         job = self.get(job_id)
