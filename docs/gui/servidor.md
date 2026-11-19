@@ -122,6 +122,26 @@ que não existe: não dá para ler o progresso, o resultado nem parar.
 A interface ainda não sabe do modo servidor: ela mostra botões que respondem
 404. Isso muda quando a tela passar a ler `GET /api/session`.
 
+## O que já foi testado de verdade
+
+Em 18/11/2026, numa pasta temporária, com o servidor real em
+`--server --trusted-proxy 127.0.0.1 --datasets-dir <pasta>` e duas pessoas
+simuladas pelo cabeçalho que o proxy enviaria:
+
+- Ana treinou uma classificação de 1 época em CPU (ResNet-18, 48 imagens de
+  treino de uma pasta compartilhada); o run terminou em 9 s e foi para a pasta
+  dela.
+- Bia enviou o dela 40 ms depois: entrou na fila, rodou em seguida e foi para a
+  pasta dela. Cada uma vê só o próprio run no histórico.
+- Bia não conseguiu ler o status, o resultado nem parar o run da Ana (status
+  parado, 404 e 404), e um gráfico do run da Ana respondeu 200 para Ana e 403
+  para Bia.
+- Um treino apontando para uma pasta fora do alcance foi recusado com 422 e não
+  entrou na fila.
+
+*Não verificado:* um proxy de login real na frente, GPU, as outras quatro
+tarefas, e mais de duas pessoas ao mesmo tempo.
+
 ## Perguntas comuns
 
 **Os runs antigos do perfil "default" aparecem?** Não. No modo servidor
