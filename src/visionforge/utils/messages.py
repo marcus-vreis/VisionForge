@@ -1863,14 +1863,23 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "O campo {field} não pode ser usado quando o VisionForge roda como servidor.",
         "en": "The field {field} cannot be used when VisionForge runs as a server.",
     },
-    "server.config_block": {
+    "server.config_axis": {
         "pt": (
-            "A estratégia {block} ainda não está disponível quando o VisionForge "
-            "roda como servidor. Use o treino simples."
+            "Neste servidor uma busca, comparação ou variante não pode alterar o "
+            "campo {field}: só campos de número, de escolha e o nome do modelo."
         ),
         "en": (
-            "The {block} strategy is not available yet when VisionForge runs as "
-            "a server. Use the plain run."
+            "On this server a search, a comparison or a variant cannot change the "
+            "field {field}: only number and choice fields, and the model name."
+        ),
+    },
+    "server.config_block": {
+        "pt": (
+            "O bloco {block} ainda não está disponível quando o VisionForge "
+            "roda como servidor."
+        ),
+        "en": (
+            "The {block} block is not available yet when VisionForge runs as a server."
         ),
     },
     "server.route_off": {
