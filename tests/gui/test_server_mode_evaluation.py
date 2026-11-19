@@ -276,4 +276,4 @@ def test_the_session_no_longer_lists_these_actions_as_closed(
     closed = client.get("/api/session", headers=ANA).json()["closed"]
     for action in (*ACTIONS, "resume"):
         assert f"POST /api/runs/{{run_id}}/{action}" not in closed
-    assert "GET /api/runs/{run_id}/bundle" in closed
+    assert "POST /api/runs/{run_id}/mlflow/retry" in closed

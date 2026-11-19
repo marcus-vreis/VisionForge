@@ -7,14 +7,16 @@
 > o progresso e o histórico de cada um. Um run pronto pode ser retomado, testado
 > em outro dataset, explicado com Grad-CAM, usado em lote e exportado para
 > ONNX. Cada pessoa pode baixar um dataset, criar o de exemplo e usar o
-> Laboratório de datasets, gravando só na própria pasta. A publicação de um
-> run e o Colab ainda não estão disponíveis, e a tela não os mostra. E ele é
+> Laboratório de datasets, gravando só na própria pasta. Um run pode ser
+> baixado (ZIP, Markdown) e publicado no Hugging Face Hub, no Zenodo e no
+> GitHub com o token de quem o treinou. O Colab, o DVC e as integrações
+> (MLflow, W&B, Comet) não estão disponíveis, e a tela não os mostra. E ele é
 > para um **grupo que já confia entre
 > si**: o treino roda dentro do processo do servidor, sem isolamento entre as
 > pessoas. Não ofereça este servidor a desconhecidos.
 
 Esta página sai do código atual (`gui/server_mode.py`) e das decisões ADR-212
-a ADR-220. O que não foi testado está marcado como *não verificado*.
+a ADR-221. O que não foi testado está marcado como *não verificado*.
 
 ## O que muda em relação ao uso local
 
@@ -60,8 +62,9 @@ Num servidor compartilhado a página é a mesma, com menos botões:
   formulário" e o que dá para fazer com o modelo: retomar um run parado,
   testar em outro dataset, Grad-CAM, inferência em lote e exportar ONNX. Onde
   a ação pede uma pasta de imagens, o caminho é digitado e a página lista as
-  pastas aceitas, como no campo do dataset. Baixar o ZIP, o relatório em
-  Markdown e publicar ainda não aparecem.
+  pastas aceitas, como no campo do dataset. O run também pode ser baixado
+  ("Bundle do experimento" e "Markdown") e publicado no Hugging Face Hub, no
+  Zenodo e no GitHub; o DVC não aparece (veja "Tirar um run do servidor").
 - **O menu do seu nome** mostra a conta com que você entrou e a sua pasta. Não
   há outro perfil para escolher, e as integrações (MLflow, W&B, Comet) ainda
   não são configuráveis ali.
@@ -166,7 +169,10 @@ que não existe: não dá para ler o progresso, o resultado nem parar.
 | Retomar um run parado | sim; o config guardado é conferido de novo, como num treino novo |
 | Testar em outro dataset, Grad-CAM, inferência em lote | sim, com imagens das **suas** pastas ou das compartilhadas; o resultado vai para a pasta do run |
 | Exportar ONNX | sim, sempre para a pasta do run |
-| Baixar o ZIP ou o Markdown do run, publicar (Hub, Zenodo, GitHub, DVC), reenviar para MLflow, W&B ou Comet | ainda não (cada rota será revista) |
+| Baixar o ZIP ou o Markdown do run | sim, só dos **seus** runs |
+| Publicar no Hugging Face Hub, no Zenodo e no GitHub | sim, com o **seu** token, salvo no seu perfil |
+| Publicar num repositório DVC | não num servidor (roda o git e o DVC do servidor numa pasta do disco dele) |
+| Reenviar para MLflow, W&B ou Comet | ainda não (dependem das integrações por perfil) |
 | Seletor de pasta, "abrir pasta", atualizar o VisionForge, Colab, tarefas próprias, credenciais de download | desligados no modo servidor |
 
 ## Estratégias num servidor
@@ -279,6 +285,36 @@ incorporar, mesclar e as conversões COCO rodando de verdade neste modo (os
 pedidos e a regra de destino são os mesmos e estão cobertos por testes; só o
 redividir foi executado), e duas pessoas usando o Laboratório ao mesmo tempo
 fora dos testes.
+
+Sobre um run de classificação treinado ali, no mesmo dia e arranjo: o ZIP foi
+baixado (41,5 MB), o Markdown também, e as prévias do Hugging Face Hub, do
+Zenodo e do GitHub listaram os arquivos do run sem contatar nenhum serviço;
+um envio ao Hub sem token salvo respondeu 409 e a prévia do DVC 404. *Não
+verificado:* um envio real ao Hub, ao Zenodo ou ao GitHub neste modo (nos
+testes o envio é simulado e confere de quem é o token usado).
+
+## Tirar um run do servidor
+
+- **Baixar.** "Bundle do experimento" baixa um ZIP com o registro do run, os
+  pesos e os gráficos; "Markdown" baixa o cartão do modelo. Os dois saem pelo
+  navegador, direto para o seu computador.
+- **Publicar.** Hugging Face Hub, Zenodo e GitHub funcionam como no uso local:
+  você salva o token no painel de cada um, confere a prévia e envia. O token
+  fica guardado no servidor, separado por perfil, e só é usado nos envios do
+  seu perfil. Um envio sem token salvo responde 409; ninguém usa o token de
+  outra pessoa.
+- **Só o dono.** Para outra pessoa o run não existe (404), em todas essas
+  ações.
+- **O que entra no pacote.** Só arquivos de dentro da pasta do run. Um
+  arquivo ligado (link) ou fora dela é recusado, como no uso local.
+- **DVC.** Desligado num servidor: ele roda o git e o DVC instalados no
+  servidor sobre uma pasta do disco do servidor, com a identidade de quem
+  opera a máquina. Baixe o ZIP e versione no seu computador.
+
+O cartão em Markdown e o `run.json` do ZIP trazem os caminhos do servidor
+(a pasta do run, a do dataset). Quem publica o arquivo publica esses caminhos;
+os pacotes do Hub, do Zenodo e do GitHub levam um registro público, sem
+esses caminhos.
 
 ## Pôr um dataset no servidor
 
