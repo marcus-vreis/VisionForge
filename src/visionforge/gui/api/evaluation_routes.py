@@ -22,6 +22,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Header, HTTPException
 from loguru import logger
 
+from visionforge.gui.api.config_scope import profile_root
+from visionforge.gui.api.dataset_scope import current_scope
 from visionforge.gui.api.datasets_routes import _remember_dataset_root
 from visionforge.gui.api.detection_export import export_detection_run
 from visionforge.gui.api.detection_testing import evaluate_detection_run
@@ -53,6 +55,9 @@ from visionforge.gui.api.schemas import (
 from visionforge.utils.config import ExperimentConfig
 from visionforge.utils.messages import tr
 
+# Server mode's alone: a run whose recorded checkpoint is not its owner's (ADR-218).
+_FOREIGN_CHECKPOINT_TEXT = "The run's checkpoint is outside its owner's folder"
+
 
 def build_evaluation_router(
     find_run_dir: Callable[[str, Profile], Path | None],
@@ -76,6 +81,7 @@ def build_evaluation_router(
         responses={
             400: {"description": BAD_REQUEST_TEXT},
             404: {"description": NOT_FOUND_TEXT},
+            409: {"description": _FOREIGN_CHECKPOINT_TEXT},
             500: {"description": SERVER_ERROR_TEXT},
         },
     )
@@ -98,6 +104,7 @@ def build_evaluation_router(
         responses={
             400: {"description": BAD_REQUEST_TEXT},
             404: {"description": NOT_FOUND_TEXT},
+            409: {"description": _FOREIGN_CHECKPOINT_TEXT},
             500: {"description": SERVER_ERROR_TEXT},
         },
     )
@@ -119,6 +126,7 @@ def build_evaluation_router(
         responses={
             400: {"description": BAD_REQUEST_TEXT},
             404: {"description": NOT_FOUND_TEXT},
+            409: {"description": _FOREIGN_CHECKPOINT_TEXT},
             500: {"description": SERVER_ERROR_TEXT},
         },
     )
@@ -145,6 +153,7 @@ def build_evaluation_router(
         responses={
             400: {"description": BAD_REQUEST_TEXT},
             404: {"description": NOT_FOUND_TEXT},
+            409: {"description": _FOREIGN_CHECKPOINT_TEXT},
             500: {"description": SERVER_ERROR_TEXT},
         },
     )
@@ -181,7 +190,37 @@ def _checkpoint_run_dir(
         raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
     _reject_group_action(run_dir)
     _reject_custom_task_action(run_dir, action)
+    _reject_foreign_checkpoint(run_dir, profile)
     return run_dir
+
+
+def _reject_foreign_checkpoint(run_dir: Path, profile: Profile) -> None:
+    """On a server, refuse a run whose recorded checkpoint is not its owner's.
+
+    Every action here loads ``artifacts.model`` from ``run.json``, and loading a
+    detection checkpoint unpickles it. A run trained on the server records a
+    file in its own folder; anything else is not loaded (ADR-218). A record
+    that cannot be read is left to the executor, which reports it.
+
+    Raises:
+        HTTPException: 409, in server mode only.
+    """
+    if current_scope() is None:
+        return
+    try:
+        data = json.loads((run_dir / RUN_FILENAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    artifacts = data.get("artifacts") if isinstance(data, dict) else None
+    recorded = artifacts.get("model") if isinstance(artifacts, dict) else None
+    if not recorded:
+        return
+    try:
+        inside = Path(str(recorded)).resolve().is_relative_to(profile_root(profile))
+    except (OSError, RuntimeError):
+        inside = False
+    if not inside:
+        raise HTTPException(409, tr("server.checkpoint_outside", run=run_dir.name))
 
 
 async def _run_off_loop[Req, Resp](

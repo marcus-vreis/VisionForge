@@ -31,7 +31,8 @@ import {
 } from "../api/client";
 import type { Dict } from "../i18n/pt";
 import { useI18n, useT } from "../i18n/useT";
-import { ROUTE, routeOpen, strategyRoute, useSession } from "../lib/session";
+import { ROUTE, routeOpen, strategyRoute, useRouteOpen, useSession } from "../lib/session";
+import { ServerFoldersNote } from "./ServerFoldersNote";
 import { formatBytes, shortDigest } from "../lib/dataset-identity";
 import { metricCi } from "../lib/metric-ci";
 import { metricLabel } from "../lib/metric-labels";
@@ -998,6 +999,7 @@ export function RunDetailPanel({
         />
         <BrowseButton onClick={() => void pickBatchFolder()} />
       </div>
+      <ServerFoldersNote title={t.server.foldersTitleRun} />
       <ExportToggle
         label={t.runDetail.batch.recursive}
         value={batchForm.recursive}
@@ -1021,6 +1023,7 @@ export function RunDetailPanel({
         />
         <BrowseButton onClick={() => void pickGradcamFolder()} />
       </div>
+      <ServerFoldersNote title={t.server.foldersTitleRun} />
       <FormField
         label={t.runDetail.gradcam.samples}
         value={String(gradcamForm.num_samples)}
@@ -1108,6 +1111,7 @@ export function RunDetailPanel({
         />
         <BrowseButton onClick={() => void pickFolder()} />
       </div>
+      <ServerFoldersNote title={t.server.foldersTitleRun} />
       <div style={{ fontSize: 13, lineHeight: 1.6, color: "var(--vf-text-muted)" }}>
         {testFolderHint(t, detail)}
       </div>
@@ -1764,9 +1768,12 @@ function RunButton({
   );
 }
 
-/** The native folder picker's button beside a path field. */
+/** The native folder picker's button beside a path field. A shared server has
+ *  no dialog to open, so the button is absent there and the path is typed. */
 function BrowseButton({ onClick }: { onClick: () => void }) {
   const t = useT();
+  const canPick = useRouteOpen(ROUTE.pickFolder);
+  if (!canPick) return null;
   return (
     <button
       type="button"

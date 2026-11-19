@@ -4,14 +4,16 @@
 > ele identifica quem entrou, lê datasets das pastas de cada pessoa e das
 > compartilhadas, **treina um job por vez** nas cinco tarefas, com as
 > estratégias (validação cruzada, busca, comparação, réplicas), e mostra a fila,
-> o progresso e o histórico de cada um. A avaliação depois do treino, o envio de
-> datasets pela tela e o Colab ainda não estão disponíveis, e a tela não os
-> mostra. E ele é para um **grupo que já confia entre
+> o progresso e o histórico de cada um. Um run pronto pode ser retomado, testado
+> em outro dataset, explicado com Grad-CAM, usado em lote e exportado para
+> ONNX. O envio de datasets pela tela, a publicação de um run e o Colab ainda
+> não estão disponíveis, e a tela não os mostra. E ele é para um **grupo que já
+> confia entre
 > si**: o treino roda dentro do processo do servidor, sem isolamento entre as
 > pessoas. Não ofereça este servidor a desconhecidos.
 
 Esta página sai do código atual (`gui/server_mode.py`) e das decisões ADR-212
-a ADR-217. O que não foi testado está marcado como *não verificado*.
+a ADR-218. O que não foi testado está marcado como *não verificado*.
 
 ## O que muda em relação ao uso local
 
@@ -47,9 +49,12 @@ Num servidor compartilhado a página é a mesma, com menos botões:
 - **Sem o botão "datasets"** (baixar e Laboratório), sem "criar dataset de
   exemplo", sem as prévias de aumento e de pré-processamento e sem a auditoria.
 - **Sem Colab**, sem aviso de atualização e sem as abas de tarefas próprias.
-- **No Histórico**, um run mostra métricas, gráficos e "Carregar no
-  formulário". Retomar, testar, Grad-CAM, exportar ONNX, baixar o ZIP e
-  publicar ainda não aparecem.
+- **No Histórico**, um run mostra métricas, gráficos, "Carregar no
+  formulário" e o que dá para fazer com o modelo: retomar um run parado,
+  testar em outro dataset, Grad-CAM, inferência em lote e exportar ONNX. Onde
+  a ação pede uma pasta de imagens, o caminho é digitado e a página lista as
+  pastas aceitas, como no campo do dataset. Baixar o ZIP, o relatório em
+  Markdown e publicar ainda não aparecem.
 - **O menu do seu nome** mostra a conta com que você entrou e a sua pasta. Não
   há outro perfil para escolher, e as integrações (MLflow, W&B, Comet) ainda
   não são configuráveis ali.
@@ -147,7 +152,10 @@ que não existe: não dá para ler o progresso, o resultado nem parar.
 | Fila | sim: os **seus** jobs e, dos outros, só quantos estão na frente |
 | Progresso, resultado e gráficos de um run | sim, só dos **seus** |
 | Estratégias: validação cruzada, busca (grid, random, Optuna), comparação de modelos, réplicas e comparação replicada, nas cinco tarefas | sim, com as mesmas regras do treino simples e a regra dos eixos abaixo |
-| Retomar, testar, Grad-CAM, exportar ONNX, publicar | ainda não (cada rota será revista) |
+| Retomar um run parado | sim; o config guardado é conferido de novo, como num treino novo |
+| Testar em outro dataset, Grad-CAM, inferência em lote | sim, com imagens das **suas** pastas ou das compartilhadas; o resultado vai para a pasta do run |
+| Exportar ONNX | sim, sempre para a pasta do run |
+| Baixar o ZIP ou o Markdown do run, publicar (Hub, Zenodo, GitHub, DVC), reenviar para MLflow, W&B ou Comet | ainda não (cada rota será revista) |
 | Seletor de pasta, "abrir pasta", atualizar o VisionForge, Colab, tarefas próprias, credenciais de download | desligados no modo servidor |
 
 ## Estratégias num servidor
@@ -173,7 +181,27 @@ A recusa vem antes da fila: o pedido responde 422 com o nome do campo e nada
 Na classificação, a validação cruzada, as buscas, o transfer learning e a
 comparação de modelos vão dentro do próprio pedido de treino (o campo
 `block`); todos são aceitos. Os dois valores de `block` que não treinam
-(`batch_prediction` e `export_onnx`) respondem 422 até a avaliação ser revista.
+(`batch_prediction` e `export_onnx`) respondem 422: num servidor a inferência
+em lote e a exportação são feitas a partir do run, no Histórico.
+
+## Usar um run pronto num servidor
+
+- **Só o dono age sobre o run.** Para outra pessoa o run não existe (404).
+- **As imagens vêm das pastas aceitas.** A pasta do teste, do Grad-CAM e da
+  inferência em lote precisa estar na sua pasta de datasets ou numa
+  compartilhada, com o caminho completo; fora disso a resposta é 422.
+- **O que é gravado fica na pasta do run.** Num servidor não dá para escolher
+  outro destino para o CSV das predições nem para o arquivo ONNX: um pedido
+  com caminho de saída responde 422.
+- **O checkpoint é o do próprio run.** Se o registro do run apontar para um
+  arquivo fora da sua pasta, a ação é recusada (409) e nada é carregado.
+- **Retomar** confere o config guardado como um treino novo: se o dataset saiu
+  das pastas aceitas desde então, a resposta é 422.
+
+Essas ações (menos retomar, que entra na fila) rodam na hora, fora da fila, e
+usam a CPU ou a GPU junto com o treino que estiver em andamento. Num servidor
+com uma GPU só, um Grad-CAM ou um teste grande durante o treino de outra pessoa
+disputa memória com ele.
 
 Uma estratégia é **um job** na fila, do primeiro ao último treino. Uma busca
 longa segura a fila para as outras pessoas até terminar ou ser parada; não há
@@ -214,6 +242,15 @@ comparação replicada com uma variante `model.weights_path` responderam 422; o
 passo Estratégia mostrou as seis opções da classificação. *Não verificado:*
 as estratégias das outras quatro tarefas treinando de verdade (só os pedidos
 foram testados), Optuna, e uma estratégia parada no meio neste modo.
+
+No mesmo dia e arranjo, sobre um run de classificação treinado ali: o teste em
+outra pasta (16 imagens de uma pasta compartilhada) gravou métricas e
+gráficos no run; o Grad-CAM gerou 2 mapas; a inferência em lote gravou o CSV
+de 16 predições na pasta do run; a exportação ONNX gravou o arquivo na pasta
+do run e a validação contra o PyTorch passou. Um teste apontando para
+`C:/Windows` e pedidos com caminho de saída para o CSV e para o ONNX
+responderam 422. *Não verificado:* retomar um run parado de verdade (só o
+pedido foi testado), e essas ações nas outras quatro tarefas neste modo.
 
 ## Perguntas comuns
 

@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
-from visionforge.gui.api.dataset_scope import DatasetDir, DatasetPart
+from visionforge.gui.api.dataset_scope import DatasetDir, DatasetPart, RunFolderFile
 from visionforge.gui.api.profiles import (
     ProfileSettings,
     ProfileSettingsUpdate,
@@ -504,7 +504,7 @@ class RunTestRequest(BaseModel):
     follow them is not comparable anyway.
     """
 
-    data_dir: str
+    data_dir: DatasetDir
     label: str | None = None
 
 
@@ -519,7 +519,7 @@ class ExportOnnxRequest(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    output_onnx: str | None = None
+    output_onnx: RunFolderFile = None
     opset_version: int = 17
     dynamic_axes: bool = True
     run_validate: bool = Field(default=True, alias="validate")
@@ -544,8 +544,8 @@ class BatchPredictRequest(BaseModel):
     file without clobbering previous ones.
     """
 
-    input_dir: str
-    output_csv: str | None = None
+    input_dir: DatasetDir
+    output_csv: RunFolderFile = None
     recursive: bool = True
     class_names: list[str] | None = None
 
@@ -562,7 +562,7 @@ class BatchPredictResponse(BaseModel):
 class GradCamRequest(BaseModel):
     """Settings for generating Grad-CAM overlays from a run's checkpoint."""
 
-    input_dir: str
+    input_dir: DatasetDir
     num_samples: int = Field(default=8, ge=1, le=64)
     target_class: int | None = None
     alpha: float = Field(default=0.5, ge=0.0, le=1.0)

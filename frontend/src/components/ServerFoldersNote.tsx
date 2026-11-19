@@ -6,9 +6,10 @@ import { useSession } from "../lib/session";
  * A server has no folder dialog to open (the dialog would open on the server's
  * own screen), so the "browse" button is gone there and the path is typed. This
  * says which paths the server accepts: the person's own folder first, then the
- * ones the operator shares. Nothing on a local install.
+ * ones the operator shares. Nothing on a local install. `title` rewords the
+ * first line where the field is not the training dataset.
  */
-export function ServerFoldersNote() {
+export function ServerFoldersNote({ title }: { title?: string }) {
   const t = useT();
   const session = useSession();
   if (!session.server_mode || session.dataset_dirs.length === 0) return null;
@@ -26,7 +27,7 @@ export function ServerFoldersNote() {
         color: "var(--vf-text-dim)",
       }}
     >
-      <div>{t.server.foldersTitle}</div>
+      <div>{title ?? t.server.foldersTitle}</div>
       <ul style={{ margin: "6px 0", paddingLeft: 18 }}>
         {session.dataset_dirs.map((dir, index) => (
           <li key={dir}>

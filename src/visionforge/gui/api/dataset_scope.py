@@ -97,6 +97,18 @@ def _relative_part(raw: str) -> str:
 DatasetDir = Annotated[str, AfterValidator(_confined_dir)]
 """A dataset folder. In server mode it must be absolute and sit in the scope."""
 
+
+def _run_folder_only(raw: str | None) -> str | None:
+    """``raw`` as is on a local install; on a server only an empty one passes."""
+    if current_scope() is not None and raw is not None and raw.strip():
+        raise ValueError(tr("server.output_fixed"))
+    return raw
+
+
+RunFolderFile = Annotated[str | None, AfterValidator(_run_folder_only)]
+"""Where an action on a run writes its file. In server mode it stays empty, and
+the file goes into the run's own folder (ADR-218)."""
+
 DatasetPart = Annotated[str, AfterValidator(_relative_part)]
 """A name inside a dataset folder (``train``, ``images``, ``train.csv``). In
 server mode it may only go down: no ``..``, no root, no drive, no ``~``."""
