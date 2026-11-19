@@ -138,9 +138,11 @@ ROUTE_CLASSES: dict[str, RouteClass] = {
     "GET /api/detection/schema": "open",
     "POST /api/detection/sweep": "owner",
     "GET /api/device/info": "open",
-    "POST /api/dvc/export": "owner",
+    # DVC runs the server's own git and DVC on a folder of the server's disk
+    # (ADR-221): it has no meaning for a person at a browser elsewhere.
+    "POST /api/dvc/export": "off",
     "POST /api/dvc/prepare": "off",
-    "GET /api/dvc/preview": "owner",
+    "GET /api/dvc/preview": "off",
     "GET /api/experiment/events": "owner",
     "GET /api/experiment/result/{run_id}": "owner",
     "POST /api/experiment/run": "owner",
@@ -341,6 +343,16 @@ READY: frozenset[str] = frozenset(
         "GET /api/runs",
         "DELETE /api/runs/{run_id}",
         "GET /api/runs/{run_id}",
+        # How a run leaves the server: each takes a run id, packages files from
+        # inside that run's folder and uses its owner's own token (ADR-221).
+        "GET /api/runs/{run_id}/bundle",
+        "GET /api/runs/{run_id}/export_md",
+        "POST /api/github/export",
+        "GET /api/github/preview",
+        "POST /api/hub/export",
+        "GET /api/hub/preview",
+        "POST /api/zenodo/export",
+        "GET /api/zenodo/preview",
         # What a finished run offers: each loads the run's own checkpoint and
         # reads its dataset path through ``DatasetDir`` (ADR-218).
         "POST /api/runs/{run_id}/batch_predict",

@@ -139,7 +139,8 @@ def test_a_route_the_table_does_not_know_is_refused() -> None:
     assert answers("POST /api/experiment/run")
     assert answers("POST /api/classification/replicates")
     assert answers("POST /api/runs/{run_id}/resume")
-    assert not answers("GET /api/runs/{run_id}/bundle")
+    assert answers("GET /api/runs/{run_id}/bundle")
+    assert not answers("POST /api/runs/{run_id}/mlflow/retry")
     assert answers("POST /api/dataset/stats")
     assert answers("POST /api/dataset/download")
     assert not answers("POST /api/dataset/audit")
@@ -240,7 +241,7 @@ def test_the_browser_cannot_pick_another_profile(served: Any, tmp_path: Path) ->
         ("POST", "/api/profiles"),
         ("POST", "/api/dataset/audit"),
         ("POST", "/api/dataset/preview_augment"),
-        ("GET", "/api/runs/some_run/bundle"),
+        ("POST", "/api/runs/some_run/mlflow/retry"),
         ("GET", "/api/colab/status"),
         ("GET", "/api/brand-new"),
         ("OPTIONS", "/api/runs"),
@@ -373,7 +374,7 @@ def test_the_session_lists_the_routes_that_do_not_answer(served: Any) -> None:
     assert set(closed) == {key for key in ROUTE_CLASSES if not answers(key)}
     # What the screen hides is what the gate refuses, and nothing else.
     assert "POST /api/dataset/pick" in closed
-    assert "GET /api/runs/{run_id}/bundle" in closed
+    assert "POST /api/runs/{run_id}/mlflow/retry" in closed
     assert "POST /api/classification/replicates" not in closed
     assert "POST /api/experiment/run" not in closed
     assert "GET /api/session" not in closed

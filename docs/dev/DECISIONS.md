@@ -8715,3 +8715,29 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Hard-link into the person's folder.* Free on disk, and it ties a person's dataset to files the operator may replace or remove in place; a copy is theirs.
 - *Keep one job at a time for the whole server.* It protects the disk, and one person's long analysis would answer "busy" to everyone else with no way to see why.
 - *Per-owner registries.* A dictionary of registries keyed by owner; the owner on the job does the same with one lock and one place to look a job up.
+
+## ADR-221 — In server mode a run leaves the server through its owner: download, and publish with the owner's token
+
+**Date:** 2026-11-19
+**Status:** Accepted
+**Extends:** ADR-213 (the gate), ADR-140 (the bundle), ADR-171, ADR-174, ADR-175 (the publishers), ADR-176 (DVC)
+
+**Context:** a run trained on a server could be used there (ADR-218) and could not be taken out: the ZIP, the Markdown card and the publishers still answered 404. Reading them found nothing to confine. Each takes a run id and looks the run up in the caller's profile (`find(run_id, profile)`), which on a server is the signed-in person's. Each packager takes its files from inside the run folder and refuses a path outside it and a linked file (`_contained_file`, `_safe_file`). A publisher sends with `read_token(service, profile)`, a file per profile that the token routes, open since ADR-213, already write; no publisher falls back to a key of the machine. DVC is the exception: it runs the server's own `git` and `dvc` on a folder of the server's disk, commits with the identity of whoever operates the machine, and its router already refuses a client that is not the machine itself.
+
+**Decision:**
+
+- Eight routes join `READY`: `GET /api/runs/{run_id}/bundle`, `GET /api/runs/{run_id}/export_md`, and `preview` and `export` of `/api/hub`, `/api/zenodo` and `/api/github`. No handler changes.
+- The two DVC routes that were waiting (`preview`, `export`) become `off`, like `prepare`: the feature is about a repository on the machine the page is opened on, which on a server is nobody's.
+- The tracker retries (MLflow, W&B, Comet) stay closed: they need the integrations a profile turns on, which a server cannot configure yet.
+- The page changes nothing: the buttons appear because the server stops listing the routes, and the DVC panel stays absent.
+
+**Consequences:** a person can download their run and publish it under their own account, and nobody else can do either: the run does not exist for them and their token is never read for another profile. The local tool is unchanged.
+
+**Known limits:** a bundle is built in the server's temporary folder and streamed; several large downloads at once use that much disk for as long as they last. The Markdown card and the `run.json` inside the plain ZIP carry the server's absolute paths (the run folder, the dataset), which the person then holds; the Hub, Zenodo and GitHub packages carry a public record without them (ADR-171, ADR-174, ADR-175). Tokens are stored on the server, per profile, readable by whoever operates it.
+
+**Not verified:** nothing ran behind a real login proxy. The downloads and the three previews ran for real in this mode; no real upload to the Hub, Zenodo or GitHub was made there (the tests record the upload and check whose token it carries).
+
+**Alternatives considered:**
+
+- *Add a second containment check in the routes.* The packagers already refuse what is outside the run folder, for the local tool too; a copy of that rule in the routes would be a second place to keep right.
+- *Open DVC against a folder inside the person's profile.* It would still commit as the server's git user and push with the server's credentials and remotes; a person's repository belongs on their machine, fed by the ZIP.
