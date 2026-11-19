@@ -8595,3 +8595,35 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *A list of features in the page ("on a server, hide these").* Two lists to keep equal; the one in the page would be wrong the day a route opened.
 - *Disable instead of hide.* Honest about what exists, but most of the page would be grey, and the reason would be the same sentence everywhere.
 - *Confine the axes of a search now.* It is the right end state, and it belongs with the strategies, which are read together (23 routes); until then the block is closed.
+
+**Amended 2026-11-19:** ADR-217 reads the axes and opens the strategies; `closed_blocks` now lists only the two blocks that do not train.
+
+## ADR-217 — In server mode a strategy runs, and what it rewrites per trial is read like the config
+
+**Date:** 2026-11-19
+**Status:** Accepted
+**Extends:** ADR-215 (the config), ADR-216 (which closed the searches)
+
+**Context:** ADR-216 closed every classification `block` but the plain run, because a search sets fields of the config for each trial after `confine_config` has walked it. The other strategies have the same shape and were still closed by the gate: a sweep (`search_space`), a paired comparison (`variants`) and a model comparison (`model_names`) each apply dotted names to the base config once per trial. Twenty routes and five values of `block` were waiting on one question: what may be rewritten.
+
+**Decision:**
+
+- `confine_axes(config_type, axes)` reads the dotted names a strategy sets. An axis may name only a field whose annotation holds numbers, text, switches or choices (`int`, `float`, `bool`, `str`, `Literal`, an enum, and lists, tuples and unions of those). A path, a `dict`, a config section, `Any` and a name the config does not have are refused with 422. So are a name inside the dataset (`DATASET_PARTS`), a custom model, `block` and the search spaces themselves, which are text or choices by type. The rule is by annotation, not by value, so a field that is `None` in the base config (`model.weights_path`) is still seen as a path, and a field added later is closed unless it is plain.
+- A model name an axis offers (`model.name`, `model.timm_model`) is checked like the field itself: every text inside the offered value (a list, a `choice` spec's options, one variant's value) must be a plain name. `YOLO("../x.pt")` unpickles that file.
+- The value an axis offers for any other open field is not read: the trial validates it against the config.
+- Every strategy start confines its base config like a plain run, after the profile scopes its output: comparison, sweep, K-fold, replicates and paired comparison. `confine_config` calls `confine_axes` on `grid_search.hyperparameters` and `random_search.search_space`, so the classification blocks follow the same rule through `/api/experiment/run`.
+- The twenty strategy routes of the built-in tasks join `READY`. `OPEN_BLOCKS` becomes every block that trains; `batch_prediction` and `export_onnx` stay closed and are read with the evaluation routes. The custom-task strategies stay `off` with the custom tasks.
+- `cross_validation.group_manifest` is a path the loader resolves against the dataset folder and refuses outside it: a relative one only has to go down (`DATASET_FILES`); an absolute one is checked like any path.
+- The page changes nothing: it asks by route key and by `closed_blocks` (ADR-216), so the strategies appear when the server stops listing them.
+
+**Consequences:** on a server a person can cross-validate, search, compare and replicate, and no trial reads or writes outside what the base config was allowed. A search cannot vary the dataset or the weights there: that takes one job per dataset. The local tool is unchanged, since neither function does anything with no scope bound.
+
+**Known limits:** a strategy is one job in the queue from its first trial to its last, and nothing caps the number of trials: a long search holds the queue for everyone until it ends or its owner stops it. The rule trusts the annotations: a text field that named a file would have to be added to one of the sets of ADR-215, which the suite enforces for every text field of the five configs.
+
+**Not verified:** nothing ran behind a real login proxy. Only a classification grid search trained for real in this mode (two trials, CPU); for the other tasks and strategies the requests were tested and the training was not. Optuna and stopping a strategy midway were not tried in this mode.
+
+**Alternatives considered:**
+
+- *Check each offered value against the field's rule (allow a search over datasets inside the scope).* It needs the type of the field and the validators that resolve it, per trial combination; a config validator that joins or expands a path would be one more thing to mirror. Varying the dataset inside one search is rare, and a job per dataset does it.
+- *Confine inside the trial, when the config is built.* The scope is bound to the request, and the trial runs later from the queue in a worker thread; and a refusal would come after GPU time was spent, as a failed trial instead of a 422.
+- *A list of the fields a search may vary.* Shorter to read, and wrong the day a config gains a field; the annotation rule fails closed instead.

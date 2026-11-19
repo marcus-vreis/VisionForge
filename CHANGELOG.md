@@ -15,7 +15,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
-- Modo servidor: na classificação, um eixo do grid search ou do random search (`data.base_dir`, `model.weights_path`, `output.models_dir`) podia apontar para fora das pastas da pessoa, porque a busca reescreve o config a cada trial, depois da conferência. O modo servidor agora só aceita o treino simples na classificação e responde 422 para os outros valores de `block` (ADR-216). O modo servidor ainda não saiu em nenhuma versão.
+- Modo servidor: na classificação, um eixo do grid search ou do random search (`data.base_dir`, `model.weights_path`, `output.models_dir`) podia apontar para fora das pastas da pessoa, porque a busca reescreve o config a cada trial, depois da conferência. Agora o que uma busca reescreve também é conferido (ADR-216, ADR-217). O modo servidor ainda não saiu em nenhuma versão.
 - Enviar um segundo treino nos primeiros segundos do primeiro, com o servidor recém-aberto, respondia 500: a checagem da GPU lia o `torch` enquanto a thread do primeiro job ainda o importava. Agora um `torch` pela metade conta como "sem contexto de GPU para quebrar" e o segundo treino entra na fila.
 
 ### Added
@@ -24,6 +24,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - Modo servidor: cada pessoa lê datasets só da própria pasta (`outputs/profiles/<perfil>/datasets/`) e das pastas que o servidor compartilha com `--datasets-dir`. As rotas que conferem um dataset (divisões, contagem por classe, amostras e miniaturas, nas cinco tarefas) passam a responder; um caminho fora dessas pastas é recusado antes de qualquer leitura. `GET /api/session` informa as pastas em `dataset_dirs` (ADR-214).
 - Modo servidor: treina um run por vez nas cinco tarefas. O dataset e os pesos precisam estar na pasta da pessoa ou numa compartilhada, tudo o que o run grava vai para a pasta dela, o nome do modelo não pode ser um caminho e `custom_model` é recusado. A fila mostra os jobs de quem pede e, dos outros, só quantos estão na frente (`others_ahead`); o progresso, o resultado e os arquivos de um run só respondem ao dono (ADR-215).
 - Modo servidor: a tela mostra só o que o servidor atende. `GET /api/session` passa a listar as rotas fechadas (`closed`) e os valores de `block` recusados (`closed_blocks`); a página lê isso antes de desenhar e esconde o seletor de pasta, as estratégias, o botão de datasets, as prévias, o Colab, o aviso de atualização e as ações do Histórico que ainda não funcionam. Sob o campo do dataset aparecem as pastas que o servidor aceita, e o menu do nome mostra a conta do login (ADR-216).
+- Modo servidor: as estratégias funcionam nas cinco tarefas (validação cruzada, busca, comparação de modelos, réplicas e comparação replicada). O config base segue as regras do treino simples; uma busca, uma comparação ou uma variante só pode alterar campos de número, de escolha e o nome do modelo, e responde 422 se tentar alterar um caminho, um nome dentro do dataset, uma seção inteira ou o `block` (ADR-217).
 
 ### Changed
 

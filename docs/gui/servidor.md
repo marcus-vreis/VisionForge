@@ -2,15 +2,16 @@
 
 > **Leia antes de instalar.** O modo servidor está em construção. Nesta versão
 > ele identifica quem entrou, lê datasets das pastas de cada pessoa e das
-> compartilhadas, **treina um run por vez** nas cinco tarefas e mostra a fila,
-> o progresso e o histórico de cada um. As estratégias (réplicas, comparação,
-> busca), a avaliação depois do treino, o envio de datasets pela tela e o Colab
-> ainda não estão disponíveis, e a tela não os mostra. E ele é para um **grupo que já confia entre
+> compartilhadas, **treina um job por vez** nas cinco tarefas, com as
+> estratégias (validação cruzada, busca, comparação, réplicas), e mostra a fila,
+> o progresso e o histórico de cada um. A avaliação depois do treino, o envio de
+> datasets pela tela e o Colab ainda não estão disponíveis, e a tela não os
+> mostra. E ele é para um **grupo que já confia entre
 > si**: o treino roda dentro do processo do servidor, sem isolamento entre as
 > pessoas. Não ofereça este servidor a desconhecidos.
 
 Esta página sai do código atual (`gui/server_mode.py`) e das decisões ADR-212
-a ADR-216. O que não foi testado está marcado como *não verificado*.
+a ADR-217. O que não foi testado está marcado como *não verificado*.
 
 ## O que muda em relação ao uso local
 
@@ -39,7 +40,10 @@ Num servidor compartilhado a página é a mesma, com menos botões:
   não na sua. O caminho do dataset é digitado, e logo abaixo do campo a página
   lista as pastas que o servidor aceita: a sua primeiro, depois as
   compartilhadas. Copie uma delas e complete com o nome do dataset.
-- **Só "Treino simples"** no passo Estratégia, nas cinco tarefas.
+- **As estratégias aparecem como na instalação local** (validação cruzada,
+  busca, comparação, réplicas). Uma busca ou uma variante só pode variar campos
+  de número, de escolha e o nome do modelo: o dataset, os pesos e as pastas
+  ficam os do formulário (veja "Estratégias num servidor").
 - **Sem o botão "datasets"** (baixar e Laboratório), sem "criar dataset de
   exemplo", sem as prévias de aumento e de pré-processamento e sem a auditoria.
 - **Sem Colab**, sem aviso de atualização e sem as abas de tarefas próprias.
@@ -142,12 +146,38 @@ que não existe: não dá para ler o progresso, o resultado nem parar.
 | Treinar um run simples (classificação, detecção, segmentação, regressão, anomalia) | sim, com dataset e pesos das **suas** pastas ou das compartilhadas |
 | Fila | sim: os **seus** jobs e, dos outros, só quantos estão na frente |
 | Progresso, resultado e gráficos de um run | sim, só dos **seus** |
-| Estratégias (réplicas, comparação, busca, validação cruzada), retomar, testar, Grad-CAM, exportar ONNX, publicar | ainda não (cada rota será revista) |
+| Estratégias: validação cruzada, busca (grid, random, Optuna), comparação de modelos, réplicas e comparação replicada, nas cinco tarefas | sim, com as mesmas regras do treino simples e a regra dos eixos abaixo |
+| Retomar, testar, Grad-CAM, exportar ONNX, publicar | ainda não (cada rota será revista) |
 | Seletor de pasta, "abrir pasta", atualizar o VisionForge, Colab, tarefas próprias, credenciais de download | desligados no modo servidor |
 
-Na classificação, a validação cruzada e as buscas vão dentro do próprio pedido
-de treino (o campo `block`), não por uma rota separada. No modo servidor esse
-pedido só aceita o treino simples e responde 422 para o resto.
+## Estratégias num servidor
+
+Uma estratégia treina vários runs a partir de um config base. O config base
+segue as regras do treino simples: dataset e pesos nas suas pastas ou nas
+compartilhadas, tudo o que é gravado na sua pasta.
+
+Busca, comparação e variantes mudam campos do config a cada treino, depois
+dessa conferência. Por isso, num servidor, o que elas podem mudar é limitado:
+
+| O que a estratégia tenta variar | Resposta |
+| --- | --- |
+| Um número, um liga/desliga ou uma escolha (`training.learning_rate`, `training.batch_size`, `training.optimizer`) | aceito |
+| O nome do modelo (`model.name`, `model.timm_model`) | aceito, se cada valor for um nome e não um caminho ou endereço |
+| Um caminho (`data.base_dir`, `model.weights_path`, tudo em `output`) | 422 |
+| Um nome dentro do dataset (`data.train_dir`, `data.train_csv`) | 422 |
+| Uma seção inteira (`data`, `model`), o `block` ou o próprio espaço de busca | 422 |
+
+A recusa vem antes da fila: o pedido responde 422 com o nome do campo e nada
+é treinado. Para comparar datasets ou pesos diferentes, envie um job para cada.
+
+Na classificação, a validação cruzada, as buscas, o transfer learning e a
+comparação de modelos vão dentro do próprio pedido de treino (o campo
+`block`); todos são aceitos. Os dois valores de `block` que não treinam
+(`batch_prediction` e `export_onnx`) respondem 422 até a avaliação ser revista.
+
+Uma estratégia é **um job** na fila, do primeiro ao último treino. Uma busca
+longa segura a fila para as outras pessoas até terminar ou ser parada; não há
+limite de treinos por job.
 
 ## O que já foi testado de verdade
 
@@ -175,6 +205,15 @@ fechada, o campo do dataset listou as duas pastas, o passo Estratégia mostrou
 só "Treino simples" nas cinco tarefas, e o detalhe de um run treinado ali
 mostrou métricas, gráficos e "Carregar no formulário". *Não verificado:* a
 tela em celular e com leitor de tela neste modo.
+
+Em 19/11/2026, no mesmo arranjo (servidor real, proxy de teste, CPU): um grid
+search de classificação com dois valores de learning rate rodou os dois
+treinos de 1 época, gravou tudo na pasta da pessoa e apareceu no Histórico
+como um grupo de 2 runs; o mesmo pedido com um eixo `data.base_dir` e uma
+comparação replicada com uma variante `model.weights_path` responderam 422; o
+passo Estratégia mostrou as seis opções da classificação. *Não verificado:*
+as estratégias das outras quatro tarefas treinando de verdade (só os pedidos
+foram testados), Optuna, e uma estratégia parada no meio neste modo.
 
 ## Perguntas comuns
 
