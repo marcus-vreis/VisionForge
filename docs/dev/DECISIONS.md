@@ -8656,3 +8656,33 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Let the output path be anywhere in the person's folder.* A second rule and a second type for a need nobody has on a server: the file is downloaded from the run, not picked up from a path.
 - *Open the two classification blocks instead.* They name a checkpoint and an output file as config paths; confining them would repeat what the run routes already guarantee by taking a run id.
 - *Put the evaluation actions in the queue.* It would settle the shared-GPU limit, and it changes how the page waits for their result (a request today, a job then); it belongs with a decision about fairness, not with opening the routes.
+
+## ADR-219 — In server mode a person writes a dataset into their own folder only, with their own key
+
+**Date:** 2026-11-19
+**Status:** Accepted
+**Extends:** ADR-214 (the dataset scope), ADR-055 (downloads), ADR-115 (the sample dataset)
+
+**Context:** on a server only the operator could put data there, by sharing a folder. The two routes that write a dataset were closed: `POST /api/dataset/download` writes wherever `out_dir` says, and `POST /api/sample-dataset` writes into `datasets/` under the server's working folder, shared by everyone. A download also falls back to the keys saved on the machine and to the process environment (`resolve_credential`, `load_dataset(token=None)`), which on a server are the operator's; and the Kaggle client takes its key only from `KAGGLE_API_TOKEN`, which `download_kaggle` sets in the process.
+
+**Decision:**
+
+- `DatasetScope` gains `own`, the signed-in person's dataset folder, which the gate already made and listed first in `readable`. It is the only place a request may write a dataset.
+- `DatasetDownloadRequest.out_dir` is typed `OwnDatasetDir`: on a server an absolute path that resolves to a sub-folder of `own`. The folder itself is refused, so two downloads cannot mix their split folders at its root; a shared folder, another person's folder and a scope with no `own` are refused.
+- The sample dataset is written under `own` on a server (`_sample_root`), so each person has their own copy and the 200 "already there" answer speaks of their folder, not of someone else's.
+- On a server a download uses only the key its request carries (`_credential`). With none, Roboflow answers that a key is needed, and the Hub client is given `token=False`, which sends no token, where `None` would let it read one from the environment or from the server account's saved login.
+- Kaggle is refused on a server with a message that says why and what to do. Putting a person's key in the process environment would hand it to every other download running in that process.
+- The download's 422 hides its body, because the body may hold a key (`quiet_validation_route`). It now names the rule when `out_dir`'s own validator is what refused the request, still without repeating anything the request carried.
+- The page asks for a folder name, not a path, on a server, shows where the dataset will land, leaves Kaggle out of the providers, and takes the Roboflow key and the Hub token as fields of this one download (the saved-key controls call the credential routes, which stay off). The datasets sheet shows only the tabs whose routes answer.
+
+**Consequences:** a person can bring a public dataset, or a private one with their own key, to a server without the operator, and nothing they download lands where another person reads or writes. The first-training guide is offered again there, since it needs only the sample dataset. The local tool is unchanged: the type accepts what `str` accepts, the sample goes to `datasets/`, and the saved keys are used as before.
+
+**Known limits:** no disk quota per person and no cap on concurrent downloads; a download runs at once, outside the queue. The Hub's cache sits in the home of the account the server runs as, so a second download of the same dataset is served from it. A key typed for a download travels in the request body, like on a local install, and the proxy in front must be TLS for that to be private. The Laboratory (explore, merge, re-split, incorporate, COCO), the previews and the audit are still closed.
+
+**Not verified:** nothing ran behind a real login proxy. A torchvision download and the sample dataset ran for real in this mode; Roboflow and Hugging Face were exercised only through recorded clients. The first-training guide was not walked through on a server.
+
+**Alternatives considered:**
+
+- *Let a download go anywhere in the scope.* The shared folders are the operator's; a person writing there changes what everyone trains on.
+- *Per-person saved keys.* The right end state for convenience, and it needs the credential store moved under the profile (it is one file per machine today); typing the key per download is safe now.
+- *Set and unset `KAGGLE_API_TOKEN` around a Kaggle download.* The client authenticates at import, once per process, and two downloads at once would race on the variable; a lock would serialize every Kaggle download and still leave the first key authenticated.

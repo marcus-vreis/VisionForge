@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDatasetDownloadPayload,
+  datasetFolderName,
   makeDefaultDatasetForm,
+  ownDatasetPath,
 } from "./dataset-download";
 
 describe("dataset-download payload", () => {
@@ -60,5 +62,29 @@ describe("dataset-download payload", () => {
     expect(buildDatasetDownloadPayload(form).token).toBeNull();
     form.token = "hf_xxx";
     expect(buildDatasetDownloadPayload(form).token).toBe("hf_xxx");
+  });
+});
+
+describe("a download on a shared server", () => {
+  it("lands in a folder of the person's own dataset folder", () => {
+    expect(ownDatasetPath("/srv/vf/profiles/ana/datasets", "cifar10")).toBe(
+      "/srv/vf/profiles/ana/datasets/cifar10",
+    );
+    expect(ownDatasetPath("/srv/vf/profiles/ana/datasets/", " cifar10 ")).toBe(
+      "/srv/vf/profiles/ana/datasets/cifar10",
+    );
+  });
+
+  it("joins with the separator the server's own path uses", () => {
+    expect(ownDatasetPath("C:\\vf\\profiles\\ana\\datasets", "beans")).toBe(
+      "C:\\vf\\profiles\\ana\\datasets\\beans",
+    );
+  });
+
+  it("names the folder after the dataset when none is typed", () => {
+    expect(datasetFolderName("cifar10")).toBe("cifar10");
+    expect(datasetFolderName(" owner/project-name ")).toBe("owner-project-name");
+    expect(datasetFolderName("../../etc")).toBe("etc");
+    expect(datasetFolderName("")).toBe("");
   });
 });

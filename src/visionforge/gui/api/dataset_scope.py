@@ -30,11 +30,14 @@ class DatasetScope:
     """The resolved folders one request may read datasets from, own folder first.
 
     ``owner`` is the profile of the signed-in person: the routes that list or
-    stop jobs show and touch only that profile's (ADR-215).
+    stop jobs show and touch only that profile's (ADR-215). ``own`` is that
+    person's dataset folder, the only place a request may write a dataset
+    (ADR-219); it is one of ``readable``.
     """
 
     readable: tuple[Path, ...]
     owner: str = ""
+    own: Path | None = None
 
     def holds(self, path: Path) -> bool:
         """True when the resolved ``path`` is one of the folders or inside one."""
@@ -98,12 +101,40 @@ DatasetDir = Annotated[str, AfterValidator(_confined_dir)]
 """A dataset folder. In server mode it must be absolute and sit in the scope."""
 
 
+def _own_new_dir(raw: str) -> str:
+    """``raw`` resolved, when it is a folder inside the person's own; else refused.
+
+    The own folder itself is refused too: a download writes split folders, and
+    a second one into the same place would mix two datasets.
+    """
+    scope = current_scope()
+    if scope is None:
+        return raw
+    text = raw.strip()
+    candidate = Path(text)
+    if scope.own is None or not text or text.startswith("~"):
+        raise ValueError(tr("server.dataset_write_outside"))
+    if not candidate.is_absolute():
+        raise ValueError(tr("server.dataset_write_outside"))
+    try:
+        resolved = candidate.resolve()
+    except (OSError, RuntimeError) as exc:
+        raise ValueError(tr("server.dataset_write_outside")) from exc
+    if resolved == scope.own or not resolved.is_relative_to(scope.own):
+        raise ValueError(tr("server.dataset_write_outside"))
+    return str(resolved)
+
+
 def _run_folder_only(raw: str | None) -> str | None:
     """``raw`` as is on a local install; on a server only an empty one passes."""
     if current_scope() is not None and raw is not None and raw.strip():
         raise ValueError(tr("server.output_fixed"))
     return raw
 
+
+OwnDatasetDir = Annotated[str, AfterValidator(_own_new_dir)]
+"""A folder a dataset is written into. In server mode it must be absolute and
+sit inside the signed-in person's own dataset folder (ADR-219)."""
 
 RunFolderFile = Annotated[str | None, AfterValidator(_run_folder_only)]
 """Where an action on a run writes its file. In server mode it stays empty, and

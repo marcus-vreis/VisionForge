@@ -285,6 +285,9 @@ READY: frozenset[str] = frozenset(
         "DELETE /api/queue/{run_id}",
         "POST /api/anomaly/dataset/stats",
         "POST /api/dataset/detect",
+        # Writes a dataset, into the person's own folder only (ADR-219).
+        "POST /api/dataset/download",
+        "POST /api/sample-dataset",
         "GET /api/dataset/file",
         "POST /api/dataset/samples",
         "POST /api/dataset/stats",
@@ -562,7 +565,7 @@ class ServerModeGate:
             await response(scope, receive, send)
             return
         with dataset_scope(
-            DatasetScope(readable=(own, *mode.datasets), owner=profile.slug)
+            DatasetScope(readable=(own, *mode.datasets), owner=profile.slug, own=own)
         ):
             await self.app(signed, receive, send)
 

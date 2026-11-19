@@ -141,7 +141,8 @@ def test_a_route_the_table_does_not_know_is_refused() -> None:
     assert answers("POST /api/runs/{run_id}/resume")
     assert not answers("GET /api/runs/{run_id}/bundle")
     assert answers("POST /api/dataset/stats")
-    assert not answers("POST /api/dataset/download")
+    assert answers("POST /api/dataset/download")
+    assert not answers("POST /api/dataset/audit")
     assert not answers("POST /api/dataset/pick")
 
 
@@ -237,7 +238,7 @@ def test_the_browser_cannot_pick_another_profile(served: Any, tmp_path: Path) ->
         ("POST", "/api/dataset/pick"),
         ("POST", "/api/update/apply"),
         ("POST", "/api/profiles"),
-        ("POST", "/api/dataset/download"),
+        ("POST", "/api/dataset/audit"),
         ("POST", "/api/explorer/summary"),
         ("GET", "/api/runs/some_run/bundle"),
         ("GET", "/api/colab/status"),
@@ -312,7 +313,8 @@ def test_every_path_of_an_open_dataset_route_is_typed() -> None:
     from visionforge.gui.server import app
 
     # Text fields that name a column, not a place on the disk.
-    not_paths = {"image_column"}
+    # A dataset id at its provider and a task key are not places either.
+    not_paths = {"image_column", "dataset", "task"}
     paths = app.openapi()["paths"]
     checked = 0
     for key in sorted(READY):
@@ -325,7 +327,7 @@ def test_every_path_of_an_open_dataset_route_is_typed() -> None:
             if field.annotation is str and name not in not_paths:
                 assert field.metadata, f"{model.__name__}.{name} is a plain str"
         checked += 1
-    assert checked == 11
+    assert checked == 13
 
 
 def test_the_session_says_where_the_datasets_may_live(

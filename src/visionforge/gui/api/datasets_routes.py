@@ -74,7 +74,9 @@ credentials_router = APIRouter(
 
 # Same for the download: its body can hold an api_key or token.
 download_router = APIRouter(
-    route_class=quiet_validation_route("download.request_invalid")
+    route_class=quiet_validation_route(
+        "download.request_invalid", {"out_dir": "server.dataset_write_outside"}
+    )
 )
 
 

@@ -1,5 +1,6 @@
 import { lazy, useState } from "react";
 import { useT } from "../i18n/useT";
+import { ROUTE, routeOpen, useSession } from "../lib/session";
 import { LazySurface } from "./ErrorBoundary";
 
 // The sheet itself stays in the entry, so its tab survives closing it; what it
@@ -28,7 +29,14 @@ interface DatasetsOverlayProps {
  */
 export function DatasetsOverlay({ open, onClose }: DatasetsOverlayProps) {
   const t = useT();
-  const [tab, setTab] = useState<Tab>("get");
+  const session = useSession();
+  // A shared server may offer only one of the two (ADR-219): the tab of the
+  // other is absent, and the sheet opens on what there is.
+  const tabs = (["get", "explore"] as const).filter((id) =>
+    routeOpen(session, id === "get" ? ROUTE.datasetDownload : ROUTE.datasetLab),
+  );
+  const [chosen, setTab] = useState<Tab>("get");
+  const tab = tabs.includes(chosen) ? chosen : (tabs[0] ?? "get");
   if (!open) return null;
 
   return (
@@ -139,7 +147,7 @@ export function DatasetsOverlay({ open, onClose }: DatasetsOverlayProps) {
             flexShrink: 0,
           }}
         >
-          {(["get", "explore"] as const).map((id) => (
+          {tabs.map((id) => (
             <button
               key={id}
               type="button"

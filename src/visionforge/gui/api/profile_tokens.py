@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import os
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine, Mapping
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Annotated, Any, Literal
@@ -49,12 +49,17 @@ class ProfileToken(BaseModel):
     token: SecretStr
 
 
-def quiet_validation_route(message_key: str) -> type[APIRoute]:
+def quiet_validation_route(
+    message_key: str, explained: Mapping[str, str] | None = None
+) -> type[APIRoute]:
     """A route class whose 422 says ``tr(message_key)`` instead of the input.
 
     FastAPI's default 422 echoes the request body, and here the body can hold a
-    token.
+    token. ``explained`` maps a field to the message of the one rule its own
+    validator enforces: when that validator is what refused the body, the 422
+    says so, still without the input (ADR-219).
     """
+    reasons = dict(explained or {})
 
     class QuietRoute(APIRoute):
         def get_route_handler(
@@ -65,8 +70,16 @@ def quiet_validation_route(message_key: str) -> type[APIRoute]:
             async def handle(request: Request) -> Response:
                 try:
                     return await handler(request)
-                except RequestValidationError:
-                    raise HTTPException(422, tr(message_key)) from None
+                except RequestValidationError as exc:
+                    refused = [
+                        reasons[str(error["loc"][-1])]
+                        for error in exc.errors()
+                        if error.get("type") == "value_error"
+                        and error.get("loc")
+                        and str(error["loc"][-1]) in reasons
+                    ]
+                    key = refused[0] if refused else message_key
+                    raise HTTPException(422, tr(key)) from None
 
             return handle
 

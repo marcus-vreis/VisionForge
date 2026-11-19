@@ -1863,6 +1863,29 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "O campo {field} não pode ser usado quando o VisionForge roda como servidor.",
         "en": "The field {field} cannot be used when VisionForge runs as a server.",
     },
+    "server.dataset_write_outside": {
+        "pt": (
+            "Neste servidor um dataset só pode ser gravado numa subpasta da sua "
+            "pasta de datasets, com o caminho completo."
+        ),
+        "en": (
+            "On this server a dataset can only be written into a sub-folder of "
+            "your dataset folder, given by its full path."
+        ),
+    },
+    "server.kaggle_closed": {
+        "pt": (
+            "O download do Kaggle não está disponível neste servidor: o cliente do "
+            "Kaggle lê a chave de uma variável do processo, que seria de todos. "
+            "Baixe no seu computador e peça ao operador para compartilhar a pasta."
+        ),
+        "en": (
+            "Kaggle downloads are not available on this server: the Kaggle client "
+            "reads its key from a variable of the process, which would be "
+            "everyone's. Download on your computer and ask the operator to share "
+            "the folder."
+        ),
+    },
     "server.output_fixed": {
         "pt": (
             "Neste servidor o arquivo é gravado na pasta do próprio run; deixe o "

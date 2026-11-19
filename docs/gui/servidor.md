@@ -6,14 +6,15 @@
 > estratégias (validação cruzada, busca, comparação, réplicas), e mostra a fila,
 > o progresso e o histórico de cada um. Um run pronto pode ser retomado, testado
 > em outro dataset, explicado com Grad-CAM, usado em lote e exportado para
-> ONNX. O envio de datasets pela tela, a publicação de um run e o Colab ainda
-> não estão disponíveis, e a tela não os mostra. E ele é para um **grupo que já
+> ONNX. Cada pessoa pode baixar um dataset ou criar o de exemplo na própria
+> pasta. O Laboratório de datasets, a publicação de um run e o Colab ainda não
+> estão disponíveis, e a tela não os mostra. E ele é para um **grupo que já
 > confia entre
 > si**: o treino roda dentro do processo do servidor, sem isolamento entre as
 > pessoas. Não ofereça este servidor a desconhecidos.
 
 Esta página sai do código atual (`gui/server_mode.py`) e das decisões ADR-212
-a ADR-218. O que não foi testado está marcado como *não verificado*.
+a ADR-219. O que não foi testado está marcado como *não verificado*.
 
 ## O que muda em relação ao uso local
 
@@ -46,8 +47,13 @@ Num servidor compartilhado a página é a mesma, com menos botões:
   busca, comparação, réplicas). Uma busca ou uma variante só pode variar campos
   de número, de escolha e o nome do modelo: o dataset, os pesos e as pastas
   ficam os do formulário (veja "Estratégias num servidor").
-- **Sem o botão "datasets"** (baixar e Laboratório), sem "criar dataset de
-  exemplo", sem as prévias de aumento e de pré-processamento e sem a auditoria.
+- **O botão "datasets" abre só "Baixar".** O formulário pede o nome de uma
+  pasta, não um caminho, e mostra para onde o dataset vai: uma subpasta da sua
+  pasta de datasets. Não há Kaggle na lista, e a chave do Roboflow ou do
+  Hugging Face é digitada a cada download (veja "Pôr um dataset no servidor").
+  O Laboratório ainda não aparece.
+- **"Criar dataset de exemplo"** grava o exemplo na sua pasta de datasets.
+- **Sem as prévias** de aumento e de pré-processamento e sem a auditoria.
 - **Sem Colab**, sem aviso de atualização e sem as abas de tarefas próprias.
 - **No Histórico**, um run mostra métricas, gráficos, "Carregar no
   formulário" e o que dá para fazer com o modelo: retomar um run parado,
@@ -58,8 +64,9 @@ Num servidor compartilhado a página é a mesma, com menos botões:
 - **O menu do seu nome** mostra a conta com que você entrou e a sua pasta. Não
   há outro perfil para escolher, e as integrações (MLflow, W&B, Comet) ainda
   não são configuráveis ali.
-- **Guia:** só o tour da interface. O guia do primeiro treino depende do
-  dataset de exemplo.
+- **Guia:** o tour da interface e o guia do primeiro treino, que usa o
+  dataset de exemplo. *Não verificado:* o guia do primeiro treino percorrido
+  até o fim num servidor.
 
 Na primeira visita a página pergunta o seu nome. Ele serve só para a saudação
 e fica no seu navegador; a conta continua sendo a do login.
@@ -147,7 +154,9 @@ que não existe: não dá para ler o progresso, o resultado nem parar.
 | Tokens de publicação (Hugging Face, GitHub, Zenodo, W&B, Comet) do **seu** perfil | sim |
 | `GET /api/session` (quem entrou, as pastas de dataset e o que está fechado) | sim |
 | Ler um dataset para conferir: divisões, contagem por classe, amostras e miniaturas, nas cinco tarefas | sim, só na **sua** pasta de datasets e nas pastas compartilhadas |
-| Baixar dataset, dataset de exemplo, prévia de aumento e de pré-processamento, auditoria e Laboratório de datasets | ainda não |
+| Baixar dataset (torchvision, Roboflow, Hugging Face) e criar o dataset de exemplo | sim, só para uma subpasta da **sua** pasta de datasets |
+| Baixar do Kaggle | não num servidor (o cliente lê a chave de uma variável do processo, que seria de todos) |
+| Prévia de aumento e de pré-processamento, auditoria e Laboratório de datasets | ainda não |
 | Treinar um run simples (classificação, detecção, segmentação, regressão, anomalia) | sim, com dataset e pesos das **suas** pastas ou das compartilhadas |
 | Fila | sim: os **seus** jobs e, dos outros, só quantos estão na frente |
 | Progresso, resultado e gráficos de um run | sim, só dos **seus** |
@@ -251,6 +260,44 @@ do run e a validação contra o PyTorch passou. Um teste apontando para
 `C:/Windows` e pedidos com caminho de saída para o CSV e para o ONNX
 responderam 422. *Não verificado:* retomar um run parado de verdade (só o
 pedido foi testado), e essas ações nas outras quatro tarefas neste modo.
+
+Ainda em 19/11/2026: o dataset de exemplo da regressão foi criado na pasta da
+pessoa (201, e 200 na segunda vez, sem regravar); um download do torchvision
+(MNIST, 2 imagens por classe) gravou 40 imagens numa subpasta dela e a
+contagem por classe leu de volta; downloads para a pasta compartilhada e para
+a raiz da pasta própria responderam 422, o do Kaggle 400 com a explicação, e
+o do Roboflow sem chave 400. *Não verificado:* um download real do Roboflow
+ou do Hugging Face neste modo (só com os clientes simulados nos testes).
+
+## Pôr um dataset no servidor
+
+Há três caminhos:
+
+1. **O operador compartilha uma pasta** com `--datasets-dir`. Todos leem,
+   ninguém grava pela tela.
+2. **Baixar pela tela** (botão "datasets"). O dataset vai para
+   `outputs/profiles/<seu perfil>/datasets/<nome da pasta>`. Só você lê essa
+   pasta.
+3. **"Criar dataset de exemplo"**, no campo do dataset de cada tarefa: um
+   conjunto pequeno e sintético, gravado na mesma pasta, para um primeiro
+   treino.
+
+Regras do download num servidor:
+
+- **Destino.** Sempre uma subpasta da sua pasta de datasets. Um pedido para
+  outra pasta (uma compartilhada, a de outra pessoa, a raiz da sua) responde
+  422 e nada é baixado.
+- **Chaves.** As chaves salvas na máquina e as variáveis de ambiente do
+  servidor são do operador e não são usadas. A chave do Roboflow e o token do
+  Hugging Face vão no próprio pedido, valem para aquele download e não são
+  guardados. Sem token, o Hugging Face baixa só datasets públicos.
+- **Kaggle.** Fechado: o cliente do Kaggle só lê a chave de uma variável do
+  processo, e pôr a sua ali a entregaria aos downloads das outras pessoas.
+  Baixe no seu computador e peça ao operador para compartilhar a pasta.
+
+Limites que o operador precisa conhecer: não há cota de disco por pessoa nem
+limite de downloads ao mesmo tempo, e o download roda na hora, fora da fila.
+O cache do Hugging Face fica na conta com que o servidor roda.
 
 ## Perguntas comuns
 

@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException, Response
 from loguru import logger
 
 from visionforge.core.detection_data import resolve_yolo_split
+from visionforge.gui.api.dataset_scope import current_scope
 from visionforge.gui.api.datasets_routes import _IMAGE_EXTS, _remember_dataset_root
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST_TEXT,
@@ -119,9 +120,7 @@ async def sample_dataset(
             write.
     """
     try:
-        built = await asyncio.to_thread(
-            create_sample_dataset, _SAMPLE_DATASETS_DIR, req.task
-        )
+        built = await asyncio.to_thread(create_sample_dataset, _sample_root(), req.task)
     except SampleTaskError as exc:
         raise HTTPException(400, str(exc)) from exc
     except SampleDatasetExistsError as exc:
@@ -143,6 +142,15 @@ async def sample_dataset(
         counts=built.counts,
         targets=built.targets,
     )
+
+
+def _sample_root() -> Path:
+    """Where the sample dataset goes: ``datasets/``, or on a server the signed-in
+    person's own dataset folder, the only one they may write (ADR-219)."""
+    scope = current_scope()
+    if scope is not None and scope.own is not None:
+        return scope.own
+    return _SAMPLE_DATASETS_DIR
 
 
 def _empty_preview(message: str) -> PreprocessPreviewResponse:
