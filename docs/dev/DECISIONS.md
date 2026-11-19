@@ -8741,3 +8741,28 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 
 - *Add a second containment check in the routes.* The packagers already refuse what is outside the run folder, for the local tool too; a copy of that rule in the routes would be a second place to keep right.
 - *Open DVC against a folder inside the person's profile.* It would still commit as the server's git user and push with the server's credentials and remotes; a person's repository belongs on their machine, fed by the ZIP.
+
+## ADR-222 — In server mode a preview's images are written inside the person's profile
+
+**Date:** 2026-11-19
+**Status:** Accepted
+**Extends:** ADR-214 (the dataset scope), ADR-215 (the artifact route)
+
+**Context:** three dataset routes were still closed on a server: the augmentation preview, the preprocessing preview and the audit. All three read a dataset; the two previews also write a few PNGs and return their paths, which the page loads through `/api/artifacts/{path}`. Two things were in the way. Their `base_dir` was plain text (a `Path` for the audit). And the previews write into `outputs/preview_cache`, one folder for the process: each render first deletes the PNGs already there, so on a server one person's preview would erase another's, and the artifact route, which in server mode serves a person only what sits under their profile folder (ADR-215), would refuse the images anyway.
+
+**Decision:**
+
+- `base_dir` of the three requests is typed `DatasetDir`. The audit's split paths and group manifest were already confined to the dataset root by `audit_dataset` and `load_group_manifest`, so they stay as they are.
+- `dataset_scope.preview_cache(local)` says where a preview writes: `local` (`outputs/preview_cache`) on a local install, and on a server `preview_cache/` beside the person's dataset folder, inside their profile. Both previews use it. The images land where the artifact route already serves their owner from, and a render clears only its owner's earlier ones.
+- The three routes join `READY`. The page changes nothing: its preview and audit panels hide by route key (ADR-216) and appear when the server stops listing them.
+
+**Consequences:** on a server a person sees what their augmentation and preprocessing do to an image, and audits a dataset for duplicates across splits, before training. Nothing one person previews is visible to, or erased by, another. The local tool is unchanged.
+
+**Known limits:** the previews and the audit run at once, in a worker thread, outside the queue; an audit hashes every image of the dataset. A preview folder holds one render per kind and class and is never larger than a handful of PNGs, but it is not removed when a profile stops being used.
+
+**Not verified:** nothing ran behind a real login proxy. The three routes ran for real in this mode against a shared dataset, and the images were fetched through the artifact route; the panels themselves were not opened in the page there.
+
+**Alternatives considered:**
+
+- *A cache folder named after the person under `outputs/preview_cache`.* It keeps the previews together, and the artifact route would need a second place it serves a person from; the profile folder is already that place.
+- *Return the images inline (base64) on a server.* No file to place, and a different response shape for the page in one mode only.

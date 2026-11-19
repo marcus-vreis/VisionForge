@@ -286,6 +286,11 @@ READY: frozenset[str] = frozenset(
         "GET /api/queue",
         "DELETE /api/queue/{run_id}",
         "POST /api/anomaly/dataset/stats",
+        # Read a dataset in the scope; a preview writes its images inside the
+        # person's own profile (ADR-222).
+        "POST /api/dataset/audit",
+        "POST /api/dataset/preview_augment",
+        "POST /api/dataset/preview_preprocess",
         "POST /api/dataset/detect",
         # Writes a dataset, into the person's own folder only (ADR-219).
         # The Laboratory: each reads a dataset in the scope, its jobs belong

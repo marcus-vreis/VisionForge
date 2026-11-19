@@ -279,4 +279,3 @@ def test_every_laboratory_route_answers_on_a_server(client: TestClient) -> None:
     closed = client.get("/api/session", headers=ANA).json()["closed"]
     assert [key for key in closed if "/api/explorer/" in key] == []
     assert len([key for key in READY if "/api/explorer/" in key]) == 31
-    assert "POST /api/dataset/preview_augment" in closed

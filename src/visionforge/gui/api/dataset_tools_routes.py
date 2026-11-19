@@ -22,7 +22,7 @@ from fastapi import APIRouter, HTTPException, Response
 from loguru import logger
 
 from visionforge.core.detection_data import resolve_yolo_split
-from visionforge.gui.api.dataset_scope import current_scope
+from visionforge.gui.api.dataset_scope import current_scope, preview_cache
 from visionforge.gui.api.datasets_routes import _IMAGE_EXTS, _remember_dataset_root
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST_TEXT,
@@ -210,7 +210,7 @@ def _fresh_cache_dir(name: str) -> Path:
     Deterministic per source class, so repeated previews don't accumulate
     hundreds of files.
     """
-    cache_dir = _PREVIEW_CACHE_DIR / name
+    cache_dir = preview_cache(_PREVIEW_CACHE_DIR) / name
     cache_dir.mkdir(parents=True, exist_ok=True)
     for old in cache_dir.glob("*.png"):
         with contextlib.suppress(OSError):

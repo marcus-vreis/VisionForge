@@ -16,6 +16,7 @@ from starlette.background import BackgroundTask
 
 from visionforge.core.dataset_audit import audit_dataset
 from visionforge.core.experiment_bundle import export_experiment_bundle
+from visionforge.gui.api.dataset_scope import DatasetDir
 from visionforge.gui.api.http_responses import TAG_DATASETS, TAG_RUNS
 from visionforge.gui.api.profiles import PROFILE_HEADER, Profile
 from visionforge.utils.messages import tr
@@ -25,7 +26,7 @@ class DatasetAuditRequest(BaseModel):
     """Image split paths and optional researcher-supplied grouping metadata."""
 
     model_config = ConfigDict(extra="forbid")
-    base_dir: Path
+    base_dir: DatasetDir
     splits: dict[str, str] | None = None
     group_manifest: Path | None = None
     strict_groups: bool = Field(default=False)
@@ -130,7 +131,7 @@ def build_evidence_router(
         try:
             return await asyncio.to_thread(
                 audit_dataset,
-                req.base_dir,
+                Path(req.base_dir),
                 req.splits,
                 group_manifest=req.group_manifest,
                 strict_groups=req.strict_groups,

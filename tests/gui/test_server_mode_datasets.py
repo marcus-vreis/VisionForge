@@ -246,4 +246,3 @@ def test_the_session_no_longer_lists_these_routes_as_closed(
     assert "POST /api/dataset/download" not in closed
     assert "POST /api/sample-dataset" not in closed
     assert "POST /api/credentials" in closed
-    assert "POST /api/dataset/preview_augment" in closed
