@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { artifactUrl, downloadRunMarkdown } from "../api/client";
 import { useT } from "../i18n/useT";
+import { ROUTE, useRouteOpen } from "../lib/session";
 import { metricLabel } from "../lib/metric-labels";
 import { metricCi } from "../lib/metric-ci";
 import { isCrossValidationReport } from "../lib/report-shape";
@@ -140,6 +141,7 @@ export function ResultsView({
   onOpenInHistory,
 }: ResultsViewProps) {
   const t = useT();
+  const canMarkdown = useRouteOpen(ROUTE.runMarkdown);
   const metricLabels: Record<string, string> = t.resultsView.metricLabels;
   const plotLabels: Record<string, string> = t.plots.labels;
   const graphics = result.artifacts?.graphics ?? [];
@@ -200,25 +202,27 @@ export function ResultsView({
             {result.run_id}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => void downloadRunMarkdown(result.run_id)}
-          title={t.modelCard.title}
-          style={{
-            padding: "8px 14px",
-            background: "var(--accent-soft)",
-            border: `1px solid ${taskAccent}`,
-            borderRadius: 10,
-            color: "var(--vf-text)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            letterSpacing: "0.10em",
-            textTransform: "uppercase",
-            cursor: "pointer",
-          }}
-        >
-          {t.modelCard.button}
-        </button>
+        {canMarkdown && (
+          <button
+            type="button"
+            onClick={() => void downloadRunMarkdown(result.run_id)}
+            title={t.modelCard.title}
+            style={{
+              padding: "8px 14px",
+              background: "var(--accent-soft)",
+              border: `1px solid ${taskAccent}`,
+              borderRadius: 10,
+              color: "var(--vf-text)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              letterSpacing: "0.10em",
+              textTransform: "uppercase",
+              cursor: "pointer",
+            }}
+          >
+            {t.modelCard.button}
+          </button>
+        )}
         <button
           type="button"
           onClick={onClose}

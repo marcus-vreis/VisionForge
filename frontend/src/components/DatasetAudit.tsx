@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { auditDataset, type DatasetAuditReport } from "../api/client";
 import { useT } from "../i18n/useT";
 import { TextField, Toggle } from "./controls";
+import { ROUTE, useRouteOpen } from "../lib/session";
 
 interface DatasetAuditProps {
   baseDir: string;
@@ -55,7 +56,7 @@ export function DatasetAuditResult({ report }: { report: DatasetAuditReport }) {
 }
 
 /** Run an image audit only on request, against the current configured splits. */
-export function DatasetAudit({ baseDir, trainDir, valDir, testDir }: DatasetAuditProps) {
+function DatasetAuditInner({ baseDir, trainDir, valDir, testDir }: DatasetAuditProps) {
   const t = useT();
   const [manifest, setManifest] = useState("");
   const [strict, setStrict] = useState(false);
@@ -102,4 +103,9 @@ export function DatasetAudit({ baseDir, trainDir, valDir, testDir }: DatasetAudi
       {current?.report && <DatasetAuditResult report={current.report} />}
     </section>
   );
+}
+
+/** Absent where the server does not run the audit (a shared server, ADR-216). */
+export function DatasetAudit(props: Parameters<typeof DatasetAuditInner>[0]) {
+  return useRouteOpen(ROUTE.datasetAudit) ? <DatasetAuditInner {...props} /> : null;
 }

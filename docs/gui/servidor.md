@@ -5,12 +5,12 @@
 > compartilhadas, **treina um run por vez** nas cinco tarefas e mostra a fila,
 > o progresso e o histórico de cada um. As estratégias (réplicas, comparação,
 > busca), a avaliação depois do treino, o envio de datasets pela tela e o Colab
-> ainda respondem "não disponível". E ele é para um **grupo que já confia entre
+> ainda não estão disponíveis, e a tela não os mostra. E ele é para um **grupo que já confia entre
 > si**: o treino roda dentro do processo do servidor, sem isolamento entre as
 > pessoas. Não ofereça este servidor a desconhecidos.
 
 Esta página sai do código atual (`gui/server_mode.py`) e das decisões ADR-212
-e ADR-213. O que não foi testado está marcado como *não verificado*.
+a ADR-216. O que não foi testado está marcado como *não verificado*.
 
 ## O que muda em relação ao uso local
 
@@ -28,6 +28,32 @@ poderia escolher o perfil de outra. No modo servidor:
   mandar como perfil é ignorado.
 - **O que não está pronto responde 404**, com a mensagem "Esta função não está
   disponível quando o VisionForge roda como servidor".
+- **A tela mostra só o que funciona.** Ao abrir, a página pergunta ao servidor
+  o que ele oferece e esconde o resto (veja "Como a tela muda").
+
+## Como a tela muda
+
+Num servidor compartilhado a página é a mesma, com menos botões:
+
+- **Sem "procurar pasta".** O seletor abriria uma janela na tela do servidor,
+  não na sua. O caminho do dataset é digitado, e logo abaixo do campo a página
+  lista as pastas que o servidor aceita: a sua primeiro, depois as
+  compartilhadas. Copie uma delas e complete com o nome do dataset.
+- **Só "Treino simples"** no passo Estratégia, nas cinco tarefas.
+- **Sem o botão "datasets"** (baixar e Laboratório), sem "criar dataset de
+  exemplo", sem as prévias de aumento e de pré-processamento e sem a auditoria.
+- **Sem Colab**, sem aviso de atualização e sem as abas de tarefas próprias.
+- **No Histórico**, um run mostra métricas, gráficos e "Carregar no
+  formulário". Retomar, testar, Grad-CAM, exportar ONNX, baixar o ZIP e
+  publicar ainda não aparecem.
+- **O menu do seu nome** mostra a conta com que você entrou e a sua pasta. Não
+  há outro perfil para escolher, e as integrações (MLflow, W&B, Comet) ainda
+  não são configuráveis ali.
+- **Guia:** só o tour da interface. O guia do primeiro treino depende do
+  dataset de exemplo.
+
+Na primeira visita a página pergunta o seu nome. Ele serve só para a saudação
+e fica no seu navegador; a conta continua sendo a do login.
 
 ## Como ligar
 
@@ -110,17 +136,18 @@ que não existe: não dá para ler o progresso, o resultado nem parar.
 | Abrir a página, esquemas dos formulários, informações do sistema | sim |
 | Histórico: listar, abrir e apagar os **seus** runs | sim |
 | Tokens de publicação (Hugging Face, GitHub, Zenodo, W&B, Comet) do **seu** perfil | sim |
-| `GET /api/session` (quem entrou) | sim |
+| `GET /api/session` (quem entrou, as pastas de dataset e o que está fechado) | sim |
 | Ler um dataset para conferir: divisões, contagem por classe, amostras e miniaturas, nas cinco tarefas | sim, só na **sua** pasta de datasets e nas pastas compartilhadas |
 | Baixar dataset, dataset de exemplo, prévia de aumento e de pré-processamento, auditoria e Laboratório de datasets | ainda não |
-| Treinar um run (classificação, detecção, segmentação, regressão, anomalia) | sim, com dataset e pesos das **suas** pastas ou das compartilhadas |
+| Treinar um run simples (classificação, detecção, segmentação, regressão, anomalia) | sim, com dataset e pesos das **suas** pastas ou das compartilhadas |
 | Fila | sim: os **seus** jobs e, dos outros, só quantos estão na frente |
 | Progresso, resultado e gráficos de um run | sim, só dos **seus** |
 | Estratégias (réplicas, comparação, busca, validação cruzada), retomar, testar, Grad-CAM, exportar ONNX, publicar | ainda não (cada rota será revista) |
 | Seletor de pasta, "abrir pasta", atualizar o VisionForge, Colab, tarefas próprias, credenciais de download | desligados no modo servidor |
 
-A interface ainda não sabe do modo servidor: ela mostra botões que respondem
-404. Isso muda quando a tela passar a ler `GET /api/session`.
+Na classificação, a validação cruzada e as buscas vão dentro do próprio pedido
+de treino (o campo `block`), não por uma rota separada. No modo servidor esse
+pedido só aceita o treino simples e responde 422 para o resto.
 
 ## O que já foi testado de verdade
 
@@ -141,6 +168,13 @@ simuladas pelo cabeçalho que o proxy enviaria:
 
 *Não verificado:* um proxy de login real na frente, GPU, as outras quatro
 tarefas, e mais de duas pessoas ao mesmo tempo.
+
+No mesmo dia, a tela foi aberta num navegador atrás de um proxy de teste que
+só acrescenta o cabeçalho da conta: a página abriu sem chamar nenhuma rota
+fechada, o campo do dataset listou as duas pastas, o passo Estratégia mostrou
+só "Treino simples" nas cinco tarefas, e o detalhe de um run treinado ali
+mostrou métricas, gráficos e "Carregar no formulário". *Não verificado:* a
+tela em celular e com leitor de tela neste modo.
 
 ## Perguntas comuns
 

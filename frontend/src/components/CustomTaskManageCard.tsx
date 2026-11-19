@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { deleteCustomTask, hideCustomTask } from "../api/client";
 import { useT } from "../i18n/useT";
+import { ROUTE, useRouteOpen } from "../lib/session";
 
 interface CustomTaskManageCardProps {
   taskKey: string;
@@ -25,7 +26,7 @@ const sectionLabel: React.CSSProperties = {
  * wrote, so it asks them to type the key: a second click is not evidence of
  * intent, typing the name is.
  */
-export function CustomTaskManageCard({
+function CustomTaskManageCardInner({
   taskKey,
   label,
   onRemoved,
@@ -294,4 +295,9 @@ export function CustomTaskManageCard({
       )}
     </div>
   );
+}
+
+/** Absent on a shared server: a custom task is code, and it is the operator's (ADR-216). */
+export function CustomTaskManageCard(props: Parameters<typeof CustomTaskManageCardInner>[0]) {
+  return useRouteOpen(ROUTE.customTaskManage) ? <CustomTaskManageCardInner {...props} /> : null;
 }

@@ -10,7 +10,10 @@ walks every field and refuses:
   folders; a path the run *writes* must be in the person's own folder;
 - a name inside the dataset that climbs out of it (``train_dir: ../x``);
 - a model name that is a path: ``YOLO("../x.pt")`` would unpickle that file;
-- a custom model, which is code a user brings.
+- a custom model, which is code a user brings;
+- for classification, every ``block`` but the plain run: a search rewrites
+  fields of the config per trial, after this walk, and the other blocks were
+  not read yet.
 
 With no scope bound (the local tool) it does nothing.
 """
@@ -19,6 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from pathlib import Path, PurePosixPath, PureWindowsPath
+from typing import get_args
 
 from fastapi import HTTPException
 from pydantic import BaseModel
@@ -60,11 +64,27 @@ FREE_TEXT = frozenset(
         "data.target_columns",
         "batch_prediction.class_names",
         "batch_prediction.image_extensions",
-        "grid_search.hyperparameters",
-        "random_search.search_space",
         "transfer_learning.unfreeze_from_layer",
     }
 )
+
+
+# Fields whose keys are dotted names of other fields, set for each trial
+# (``{"data.base_dir": [...]}``): what they name is whatever those fields name.
+# Their blocks are closed on a server (``OPEN_BLOCKS``).
+REWRITING = frozenset({"grid_search.hyperparameters", "random_search.search_space"})
+
+# The values of classification's ``block`` a server runs. The others go through
+# the same route, ``/api/experiment/run``, so the gate cannot tell them apart.
+OPEN_BLOCKS = frozenset({"classification"})
+
+
+def closed_blocks() -> list[str]:
+    """The values of classification's ``block`` a server refuses, for the screen."""
+    from visionforge.utils.config import ExperimentConfig
+
+    every = get_args(ExperimentConfig.model_fields["block"].annotation)
+    return sorted(set(every) - OPEN_BLOCKS)
 
 
 def profile_root(profile: Profile) -> Path:
@@ -82,6 +102,9 @@ def confine_config(config: BaseModel, profile: Profile) -> None:
     scope = current_scope()
     if scope is None:
         return
+    block = getattr(config, "block", None)
+    if isinstance(block, str) and block not in OPEN_BLOCKS:
+        raise HTTPException(422, tr("server.config_block", block=block))
     own = profile_root(profile)
     for field, value in _leaves(config, ""):
         problem = _problem(field, value, scope, own)

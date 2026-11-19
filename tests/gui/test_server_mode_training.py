@@ -24,6 +24,9 @@ from visionforge.gui.api.config_scope import (
     FORBIDDEN,
     FREE_TEXT,
     MODEL_NAMES,
+    OPEN_BLOCKS,
+    REWRITING,
+    closed_blocks,
     confine_config,
 )
 from visionforge.gui.api.dataset_scope import DatasetScope, dataset_scope
@@ -61,7 +64,7 @@ def _text_fields(model: type[BaseModel], prefix: str = "") -> Iterator[str]:
 
 
 def test_every_text_field_of_a_config_was_read() -> None:
-    known = MODEL_NAMES | FORBIDDEN | FREE_TEXT
+    known = MODEL_NAMES | FORBIDDEN | FREE_TEXT | REWRITING
     unread = {
         f"{config.__name__}: {field}"
         for config in CONFIGS
@@ -156,6 +159,49 @@ def test_weights_outside_the_scope_are_refused(world: dict[str, Any]) -> None:
         model={"weights_path": str(world["secret"] / "weights.pt")},
     )
     assert "model.weights_path" in _refused(config, world)
+
+
+@pytest.mark.parametrize(
+    ("axis", "target"),
+    [
+        ("data.base_dir", "secret"),
+        ("model.weights_path", "secret/weights.pt"),
+        ("output.models_dir", "secret"),
+        ("model.custom_model", "mine"),
+    ],
+)
+def test_a_search_axis_cannot_name_what_the_config_may_not(
+    world: dict[str, Any], axis: str, target: str
+) -> None:
+    """A grid axis rewrites a field of the config for each trial, after the
+    config was confined: the search is refused whole until its axes are read."""
+    value = (
+        str(world["secret"].parent / target)
+        if "/" in target or target == "secret"
+        else target
+    )
+    config = _classification(
+        world["shared"] / "beans", grid_search={"hyperparameters": {axis: [value]}}
+    ).model_copy(update={"block": "grid_search"})
+    assert "grid_search" in _refused(config, world)
+    confine_config(config, world["profile"])  # the local tool keeps its search
+
+
+@pytest.mark.parametrize("block", sorted(closed_blocks()))
+def test_only_the_plain_run_of_classification_is_open(
+    world: dict[str, Any], block: str
+) -> None:
+    config = _classification(world["shared"] / "beans").model_copy(
+        update={"block": block}
+    )
+    assert block in _refused(config, world)
+
+
+def test_the_closed_blocks_are_every_block_but_the_open_ones() -> None:
+    every = set(typing.get_args(ExperimentConfig.model_fields["block"].annotation))
+    assert OPEN_BLOCKS == {"classification"}
+    assert set(closed_blocks()) == every - OPEN_BLOCKS
+    assert closed_blocks() == sorted(closed_blocks())
 
 
 def test_a_custom_model_is_refused(world: dict[str, Any]) -> None:
@@ -257,3 +303,21 @@ def test_a_run_on_a_folder_outside_the_scope_is_never_queued(
     assert response.status_code == 422
     assert "data.base_dir" in response.json()["detail"]
     assert submitted == []
+
+
+def test_a_search_is_never_queued_on_a_server(
+    served: tuple[TestClient, list[dict[str, Any]]], world: dict[str, Any]
+) -> None:
+    client, submitted = served
+    body = {
+        **_body(world["shared"] / "beans"),
+        "block": "grid_search",
+        "grid_search": {"hyperparameters": {"data.base_dir": [str(world["secret"])]}},
+    }
+    response = client.post("/api/experiment/run", json=body, headers=ANA)
+    assert response.status_code == 422
+    assert "grid_search" in response.json()["detail"]
+    assert submitted == []
+    assert (
+        "grid_search" in client.get("/api/session", headers=ANA).json()["closed_blocks"]
+    )

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { artifactUrl, previewAugment, type AugmentPreviewResponse } from "../api/client";
 import { useT } from "../i18n/useT";
+import { ROUTE, useRouteOpen } from "../lib/session";
 
 interface AugmentPreviewProps {
   baseDir: string;
@@ -10,7 +11,7 @@ interface AugmentPreviewProps {
 /** Renders a strip of randomly-augmented variants of a sample image so the user
  *  can see the train-time augmentation effect (flip/rotation/jitter) before
  *  training. Mirrors the preprocessing preview, but for the random augmentations. */
-export function AugmentPreview({ baseDir, transforms }: AugmentPreviewProps) {
+function AugmentPreviewInner({ baseDir, transforms }: AugmentPreviewProps) {
   const t = useT();
   const [preview, setPreview] = useState<AugmentPreviewResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -138,4 +139,9 @@ export function AugmentPreview({ baseDir, transforms }: AugmentPreviewProps) {
       )}
     </div>
   );
+}
+
+/** Absent where the server does not draw the preview (a shared server, ADR-216). */
+export function AugmentPreview(props: Parameters<typeof AugmentPreviewInner>[0]) {
+  return useRouteOpen(ROUTE.previewAugment) ? <AugmentPreviewInner {...props} /> : null;
 }

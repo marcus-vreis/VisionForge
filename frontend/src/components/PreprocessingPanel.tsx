@@ -8,6 +8,7 @@ import { MenuSelect } from "./controls";
 import { Rich } from "./Rich";
 import { PREPROCESS_KIND_LABELS } from "../lib/preprocess-kinds";
 import { useT } from "../i18n/useT";
+import { ROUTE, useRouteOpen } from "../lib/session";
 
 export interface PreprocessingStep {
   kind: string;
@@ -103,6 +104,7 @@ export function PreprocessingPanel({
     setPreview(null);
   };
 
+  const canPreview = useRouteOpen(ROUTE.previewPreprocess);
   const runPreview = async () => {
     if (!baseDir.trim()) {
       setError(t.preprocessing.needBaseDir);
@@ -215,26 +217,28 @@ export function PreprocessingPanel({
               label: PREPROCESS_KIND_LABELS[k] ?? k,
             }))}
           />
-          <button
-            type="button"
-            onClick={() => void runPreview()}
-            disabled={loading || steps.length === 0}
-            style={{
-              padding: "8px 16px",
-              background: "var(--accent-soft)",
-              border: "1px solid var(--accent-vf)",
-              borderRadius: 8,
-              color: "var(--vf-text)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              letterSpacing: "0.10em",
-              textTransform: "uppercase",
-              cursor: loading || steps.length === 0 ? "not-allowed" : "pointer",
-              opacity: loading || steps.length === 0 ? 0.5 : 1,
-            }}
-          >
-            {loading ? t.preprocessing.generating : t.preprocessing.preview}
-          </button>
+          {canPreview && (
+            <button
+              type="button"
+              onClick={() => void runPreview()}
+              disabled={loading || steps.length === 0}
+              style={{
+                padding: "8px 16px",
+                background: "var(--accent-soft)",
+                border: "1px solid var(--accent-vf)",
+                borderRadius: 8,
+                color: "var(--vf-text)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                letterSpacing: "0.10em",
+                textTransform: "uppercase",
+                cursor: loading || steps.length === 0 ? "not-allowed" : "pointer",
+                opacity: loading || steps.length === 0 ? 0.5 : 1,
+              }}
+            >
+              {loading ? t.preprocessing.generating : t.preprocessing.preview}
+            </button>
+          )}
         </div>
       </div>
 
