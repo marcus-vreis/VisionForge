@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { ApiError, createProfile, fetchProfiles, updateProfile } from "../api/client";
 import { useT } from "../i18n/useT";
+import { ROUTE, getSession, routeOpen } from "../lib/session";
 import { greeting } from "../lib/greeting";
 import {
   DEFAULT_PROFILE_INFO,
@@ -149,7 +150,11 @@ export function WelcomeOverlay({
     const at = (ms: number, fn: () => void) =>
       timers.push(window.setTimeout(fn, ms));
 
-    const load = fetchProfiles()
+    // A shared server has one profile per account and lists none (ADR-216).
+    const listed = routeOpen(getSession(), ROUTE.profiles)
+      ? fetchProfiles()
+      : Promise.reject<ProfileInfo[]>(new Error("no profile list"));
+    const load = listed
       .then((list) => {
         listRef.current = list;
         setProfiles(list);

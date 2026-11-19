@@ -32,6 +32,7 @@ import {
   roundHours,
 } from "../lib/colab-connection";
 import { ACTION, BODY, DIM, ERROR, FIELD, LABEL, LINK, MONO, STACK } from "./colabStyles";
+import { ROUTE, useRouteOpen } from "../lib/session";
 
 const INSTALL_POLL_MS = 2000;
 
@@ -262,7 +263,7 @@ function Connected({ status, usage, usageError, busy, onSwitch }: ColabPanelProp
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** The header chip and its panel; one instance per profile (keyed by the header). */
-export function ColabConnection() {
+function ColabConnectionInner() {
   const t = useT();
   const [status, setStatus] = useState<ColabStatus | null>(null);
   const [usage, setUsage] = useState<ColabUsage | null>(null);
@@ -429,4 +430,9 @@ export function ColabConnection() {
       )}
     </div>
   );
+}
+
+/** Absent on a shared server: the Colab account would be the server's, not the person's (ADR-216). */
+export function ColabConnection() {
+  return useRouteOpen(ROUTE.colab) ? <ColabConnectionInner /> : null;
 }

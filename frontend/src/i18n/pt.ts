@@ -588,6 +588,17 @@ export const pt = {
     failed: "Não foi possível criar o perfil.",
     queueOwner: (name: string) => `perfil ${name}`,
   },
+  // Um servidor para várias pessoas (`visionforge gui --server`, ADR-216).
+  server: {
+    account: (user: string) => `conta: ${user}`,
+    menuNote:
+      "Servidor compartilhado. O que ainda não funciona em um servidor fica escondido.",
+    foldersTitle: "Neste servidor, o dataset precisa estar em uma destas pastas:",
+    folderOwn: "sua pasta",
+    folderShared: "compartilhada",
+    foldersHint: "Cole o caminho completo no campo acima.",
+    foldersLabel: "Pastas de dataset do servidor",
+  },
   datasetsOverlay: {
     kicker: "// datasets",
     title: "Obter dados",
@@ -3494,6 +3505,9 @@ export const pt = {
     inviteTitle: "Quer um guia?",
     inviteBody:
       "Há dois. O tour da interface faz sete paradas curtas pelos pontos principais: onde escolher a tarefa, como apontar o dataset, o que já vem decidido para você e onde os resultados ficam guardados. O primeiro treino leva você por um treino de verdade, com um dataset de exemplo que o VisionForge cria, e espera você fazer cada passo. Dá para sair a qualquer momento — e os dois continuam no menu “guia” do cabeçalho.",
+    // Num servidor compartilhado só o tour é oferecido (ADR-216).
+    inviteBodyTourOnly:
+      "O tour da interface faz paradas curtas pelos pontos principais: onde escolher a tarefa, como apontar o dataset, o que já vem decidido para você e onde os resultados ficam guardados. Dá para sair a qualquer momento — e ele continua no menu “guia” do cabeçalho.",
     notNow: "Agora não",
     next: "Continuar →",
     finish: "Concluir",

@@ -14,6 +14,7 @@ import { DrivePicker } from "./ColabDrivePicker";
 import { Segmented, TextField } from "./controls";
 import { CHECK_ROW, DIM, ERROR } from "./colabStyles";
 import { switchStyle } from "./trackerStyles";
+import { ROUTE, useRouteOpen } from "../lib/session";
 
 /** What the device selector is told about Colab by the page. */
 export interface ColabDeviceChoice {
@@ -43,7 +44,7 @@ const MENU_NOTE: CSSProperties = {
 /** Colab's rows in the device menu: what the account has, then one button per
  *  GPU. Off, with the reason, while the account is not connected or the open
  *  experiment cannot train there. */
-export function ColabDeviceSection({
+function ColabDeviceSectionInner({
   account,
   choice,
 }: {
@@ -214,4 +215,9 @@ export function ColabDatasetCard({
       </label>
     </div>
   );
+}
+
+/** Absent on a shared server, where Colab is off (ADR-216). */
+export function ColabDeviceSection(props: Parameters<typeof ColabDeviceSectionInner>[0]) {
+  return useRouteOpen(ROUTE.colab) ? <ColabDeviceSectionInner {...props} /> : null;
 }

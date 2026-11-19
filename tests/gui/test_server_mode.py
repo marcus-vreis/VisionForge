@@ -7,6 +7,7 @@ browser sends can change it; a route that is not ready for several people is
 
 from __future__ import annotations
 
+import re
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -174,6 +175,8 @@ def test_a_local_install_reports_no_session() -> None:
         "user": None,
         "profile": None,
         "dataset_dirs": [],
+        "closed": [],
+        "closed_blocks": [],
     }
 
 
@@ -332,6 +335,19 @@ def test_the_session_says_where_the_datasets_may_live(
     assert own.is_dir()
 
 
+def test_the_session_lists_the_routes_that_do_not_answer(served: Any) -> None:
+    client = _client(served)
+    closed = client.get("/api/session", headers=USER).json()["closed"]
+    assert closed == sorted(closed)
+    assert set(closed) == {key for key in ROUTE_CLASSES if not answers(key)}
+    # What the screen hides is what the gate refuses, and nothing else.
+    assert "POST /api/dataset/pick" in closed
+    assert "POST /api/classification/replicates" in closed
+    assert "POST /api/experiment/run" not in closed
+    assert "GET /api/session" not in closed
+    assert client.post("/api/dataset/pick", headers=USER).status_code == 404
+
+
 def test_a_shared_dataset_can_be_read(served: Any, shared: Path) -> None:
     client = _client(served)
     stats = client.post(
@@ -428,3 +444,27 @@ def test_the_cli_hands_the_server_options_to_the_server() -> None:
         mode.enabled and mode.trusts("10.0.0.5") and mode.user_header == "Remote-User"
     )
     assert not _run_cli(["gui"])["server_mode"].enabled
+
+
+def test_every_route_the_screen_asks_about_is_one_the_server_knows() -> None:
+    """The GUI hides a button by the key of its route (ADR-216): a key that is
+    not in the table would never be closed, and the button would never hide."""
+    source = (
+        Path(__file__).parents[2] / "frontend" / "src" / "lib" / "session.ts"
+    ).read_text(encoding="utf-8")
+    asked = set(re.findall(r'"((?:GET|POST|PUT|DELETE) /api/[^"]+)"', source))
+    assert len(asked) > 25
+    assert asked <= set(ROUTE_CLASSES), sorted(asked - set(ROUTE_CLASSES))
+
+    # A strategy's route is built from the task and one of these endings.
+    endings = set(re.findall(r'^  \w+: "([\w-]+)",$', source, flags=re.MULTILINE))
+    assert endings == {"cv", "sweep", "compare", "replicates", "replicated-comparison"}
+    built = {
+        key
+        for key in ROUTE_CLASSES
+        if key.startswith("POST /api/") and key.rsplit("/", 1)[-1] in endings
+    }
+    tasks = {key.split("/")[2] for key in built}
+    assert {"classification", "detection", "segmentation", "regression", "anomaly"} <= (
+        tasks
+    )

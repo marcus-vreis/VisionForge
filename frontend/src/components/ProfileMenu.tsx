@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import { useT } from "../i18n/useT";
 import { greeting } from "../lib/greeting";
 import type { ProfileInfo, Pronoun } from "../lib/profile";
+import { ROUTE, routeOpen, useSession } from "../lib/session";
 import { ProfileTrackingSettings } from "./ProfileTrackingSettings";
 
 interface ProfileMenuProps {
@@ -62,6 +63,12 @@ export function ProfileMenu({
   initialOpen = false,
 }: ProfileMenuProps) {
   const t = useT();
+  // On a shared server the profile is the account the login proxy named: there
+  // is none to switch to or create, and its settings are not editable yet
+  // (ADR-216).
+  const session = useSession();
+  const canEditProfile = routeOpen(session, ROUTE.profileUpdate);
+  const canChooseProfile = routeOpen(session, ROUTE.profileCreate);
   const [open, setOpen] = useState(initialOpen);
   const root = useRef<HTMLDivElement>(null);
   const chip = useRef<HTMLButtonElement>(null);
@@ -199,7 +206,45 @@ export function ProfileMenu({
             {name}
           </div>
 
-          {profile && (
+          {session.server_mode && (
+            <div
+              data-server-account
+              style={{
+                marginTop: -8,
+                marginBottom: 16,
+                fontSize: 13,
+                lineHeight: 1.5,
+                color: "var(--vf-text-dim)",
+              }}
+            >
+              {session.user && (
+                <div
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 12,
+                    color: "var(--vf-text)",
+                    overflowWrap: "anywhere",
+                  }}
+                >
+                  {t.server.account(session.user)}
+                </div>
+              )}
+              {session.profile && (
+                <div
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 12,
+                    overflowWrap: "anywhere",
+                  }}
+                >
+                  {t.profile.folder(session.profile)}
+                </div>
+              )}
+              <div style={{ marginTop: 6 }}>{t.server.menuNote}</div>
+            </div>
+          )}
+
+          {profile && canEditProfile && (
             <section aria-label={t.profile.integrations}>
               <div style={SECTION}>
                 {t.profile.integrations}
@@ -213,9 +258,10 @@ export function ProfileMenu({
 
           <div
             style={{
-              marginTop: profile ? 16 : 0,
-              paddingTop: profile ? 10 : 0,
-              borderTop: profile ? "1px solid var(--vf-panel-stroke)" : "none",
+              marginTop: profile && canEditProfile ? 16 : 0,
+              paddingTop: profile && canEditProfile ? 10 : 0,
+              borderTop:
+                profile && canEditProfile ? "1px solid var(--vf-panel-stroke)" : "none",
               display: "flex",
               flexDirection: "column",
               gap: 2,
@@ -224,15 +270,16 @@ export function ProfileMenu({
             <button type="button" style={ACTION} onClick={act(onChangeName)}>
               {t.header.changeName}
             </button>
-            {shared ? (
-              <button type="button" style={ACTION} onClick={act(onSwitchProfile)}>
-                {t.profile.switchProfile}
-              </button>
-            ) : (
-              <button type="button" style={ACTION} onClick={act(onNewProfile)}>
-                {t.profile.createTitle}
-              </button>
-            )}
+            {canChooseProfile &&
+              (shared ? (
+                <button type="button" style={ACTION} onClick={act(onSwitchProfile)}>
+                  {t.profile.switchProfile}
+                </button>
+              ) : (
+                <button type="button" style={ACTION} onClick={act(onNewProfile)}>
+                  {t.profile.createTitle}
+                </button>
+              ))}
           </div>
         </div>
       )}

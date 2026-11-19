@@ -3,10 +3,12 @@ import { useT } from "../i18n/useT";
 import {
   rerunOptions,
   rerunRequest,
+  runFamily,
   type RerunMode,
   type RerunRequest,
   type RerunSource,
 } from "../lib/history-rerun";
+import { routeOpen, strategyRoute, useSession } from "../lib/session";
 import { ActionButton } from "./ui/ActionButton";
 
 /** What History needs from App to send a run back to a form (#200). */
@@ -24,6 +26,11 @@ export function RerunActions({ source, handle }: { source: RerunSource; handle: 
   const r = t.runDetail.rerun;
   const options = rerunOptions(t, source, handle.families);
   const off = options.disabledReason !== null;
+  // A shared server may not run replicates yet (ADR-216).
+  const replicatesOpen = routeOpen(
+    useSession(),
+    strategyRoute(runFamily(source), "replicates"),
+  );
   const send = (mode: RerunMode) => {
     const request = rerunRequest(t, source, handle.families, mode);
     if (request) handle.onRerun(request);
@@ -39,7 +46,7 @@ export function RerunActions({ source, handle }: { source: RerunSource; handle: 
       >
         {r.load}
       </ActionButton>
-      {options.canReplicate && (
+      {options.canReplicate && replicatesOpen && (
         <ActionButton
           icon={<Repeat />}
           onClick={() => send("replicates")}

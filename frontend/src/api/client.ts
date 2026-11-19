@@ -45,6 +45,7 @@ import {
   type ProfileInfo,
   type Pronoun,
 } from "../lib/profile";
+import { LOCAL_SESSION, parseSession, type Session } from "../lib/session";
 import type { JsonSchema } from "../types/schema";
 import type {
   DatasetInfo,
@@ -499,6 +500,19 @@ export async function fetchResult(runId: string): Promise<RunResult> {
 
 export async function fetchRuns(): Promise<RunSummary[]> {
   return request<RunSummary[]>("/runs");
+}
+
+/** What this server offers to whoever is asking (ADR-216).
+ *
+ * An older server has no such route and a failed read says nothing: both read
+ * as a local install, where nothing is closed.
+ */
+export async function fetchSession(): Promise<Session> {
+  try {
+    return parseSession(await request<unknown>("/session"));
+  } catch {
+    return LOCAL_SESSION;
+  }
 }
 
 /** Every profile on the server, the default one first (ADR-114). */

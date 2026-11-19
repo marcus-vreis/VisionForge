@@ -560,6 +560,16 @@ export const en: Dict = {
     failed: "Couldn't create the profile.",
     queueOwner: (name: string) => `profile ${name}`,
   },
+  server: {
+    account: (user: string) => `account: ${user}`,
+    menuNote:
+      "Shared server. What does not work on a server yet is hidden.",
+    foldersTitle: "On this server, the dataset has to be in one of these folders:",
+    folderOwn: "your folder",
+    folderShared: "shared",
+    foldersHint: "Paste the full path into the field above.",
+    foldersLabel: "The server's dataset folders",
+  },
   datasetsOverlay: {
     kicker: "// datasets",
     title: "Get data",
@@ -3207,6 +3217,8 @@ export const en: Dict = {
     inviteTitle: "Want a guide?",
     inviteBody:
       "There are two. The interface tour makes seven quick stops at the main spots: where to pick a task, how to point to your dataset, what's already set up for you and where your results are saved. The first training takes you through a real run on a sample dataset that VisionForge creates, and waits for you to do each step. You can leave at any time — both stay in the header's “guide” menu.",
+    inviteBodyTourOnly:
+      "The interface tour makes quick stops at the main spots: where to pick a task, how to point to your dataset, what's already set up for you and where your results are saved. You can leave at any time — it stays in the header's “guide” menu.",
     notNow: "Not now",
     next: "Next →",
     finish: "Done",

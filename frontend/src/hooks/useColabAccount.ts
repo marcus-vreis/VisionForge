@@ -12,6 +12,7 @@ import {
 } from "../api/client";
 import { colabStage, type ColabStage } from "../lib/colab-connection";
 import { colabAccountFacts, type ColabAccountFacts } from "../lib/colab-target";
+import { ROUTE, getSession, routeOpen } from "../lib/session";
 
 export interface ColabAccount {
   stage: ColabStage | null;
@@ -31,6 +32,7 @@ export function useColabAccount(open: boolean, active: boolean): ColabAccount {
   const [sessions, setSessions] = useState<ColabSessionInfo[] | null>(null);
 
   useEffect(() => {
+    if (!routeOpen(getSession(), ROUTE.colab)) return;
     let alive = true;
     fetchColabStatus()
       .then((s) => alive && setStatus(s))

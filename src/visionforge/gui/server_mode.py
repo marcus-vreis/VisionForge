@@ -473,6 +473,15 @@ def answers(key: str) -> bool:
     return kind == "open" or (kind in ("owner", "confined") and key in READY)
 
 
+def closed_routes() -> list[str]:
+    """The routes that do not answer in server mode today, for the screen.
+
+    The GUI reads this from ``GET /api/session`` and hides what would answer
+    404, so the list of what a server offers lives here and nowhere else.
+    """
+    return sorted(key for key in ROUTE_CLASSES if not answers(key))
+
+
 class ServerModeGate:
     """ASGI middleware applying :class:`ServerMode` to every request."""
 

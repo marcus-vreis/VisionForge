@@ -4,6 +4,7 @@ import { barClearance } from "../lib/bar-clearance";
 import { showQueueButton } from "../lib/run-control";
 import type { ColabDeviceChoice } from "./ColabTarget";
 import { DeviceSelector, type DeviceSelection } from "./DeviceSelector";
+import { datasetsOffered, useSession } from "../lib/session";
 
 interface BottomBarProps {
   onHistory: () => void;
@@ -56,6 +57,9 @@ export function BottomBar({
 }: BottomBarProps) {
   const t = useT();
   const barRef = useRef<HTMLDivElement>(null);
+  // The overlay holds the download card and the Laboratory: with neither on
+  // this server (ADR-216), the button would open an empty sheet.
+  const showDatasets = datasetsOffered(useSession());
   // Publish how much room the page needs under its content; the bar wraps to
   // more rows on narrow screens, so a fixed padding would leave the end covered.
   useEffect(() => {
@@ -171,31 +175,33 @@ export function BottomBar({
         )}
       </button>
 
-      <button
-        type="button"
-        data-tour="datasets"
-        onClick={onDatasets}
-        title={t.bottomBar.datasetsTitle}
-        aria-label={t.bottomBar.datasets}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          padding: "10px 16px",
-          background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
-          border: "1px solid var(--vf-panel-stroke)",
-          borderRadius: 10,
-          color: "var(--vf-text-dim)",
-          fontFamily: "var(--font-mono)",
-          fontSize: 12,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          cursor: "pointer",
-        }}
-      >
-        <span style={{ fontSize: 14 }}>⤓</span>
-        <span className="vf-bottom-bar-label">{t.bottomBar.datasets}</span>
-      </button>
+      {showDatasets && (
+        <button
+          type="button"
+          data-tour="datasets"
+          onClick={onDatasets}
+          title={t.bottomBar.datasetsTitle}
+          aria-label={t.bottomBar.datasets}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "10px 16px",
+            background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
+            border: "1px solid var(--vf-panel-stroke)",
+            borderRadius: 10,
+            color: "var(--vf-text-dim)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 12,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            cursor: "pointer",
+          }}
+        >
+          <span style={{ fontSize: 14 }}>⤓</span>
+          <span className="vf-bottom-bar-label">{t.bottomBar.datasets}</span>
+        </button>
+      )}
 
       {/* Shown while something is waiting or running: the running job's row is
           how it gets stopped when this tab has no training sheet for it (after

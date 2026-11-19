@@ -69,6 +69,7 @@ import {
   type ProfileInfo,
 } from "./lib/profile";
 import { useT } from "./i18n/useT";
+import { ROUTE, routeOpen, useSession } from "./lib/session";
 import { DatasetsOverlay } from "./components/DatasetsOverlay";
 import { CustomAccentsContext } from "./lib/custom-accents";
 import { customAccentMap } from "./lib/task-accent";
@@ -291,9 +292,12 @@ export default function App() {
   // (ADR-137); the choice is per browser.
   // Bumped when a color is chosen, so the stored colors are read again.
   const [colorVersion, setColorVersion] = useState(0);
+  // A researcher's own task is code on the server: a shared server runs none
+  // (ADR-216), so its tab is not offered there.
+  const customTasksOpen = routeOpen(useSession(), ROUTE.customTasks);
   const registeredTasks = useMemo(
-    () => mergeTasks(t, taskDefinitions(t), taskRows),
-    [t, taskRows],
+    () => mergeTasks(t, taskDefinitions(t), customTasksOpen ? taskRows : []),
+    [t, taskRows, customTasksOpen],
   );
   const taskColors = useMemo(() => {
     const stored: Record<string, string> = {};

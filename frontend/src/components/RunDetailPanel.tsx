@@ -31,6 +31,7 @@ import {
 } from "../api/client";
 import type { Dict } from "../i18n/pt";
 import { useI18n, useT } from "../i18n/useT";
+import { ROUTE, routeOpen, strategyRoute, useSession } from "../lib/session";
 import { formatBytes, shortDigest } from "../lib/dataset-identity";
 import { metricCi } from "../lib/metric-ci";
 import { metricLabel } from "../lib/metric-labels";
@@ -205,6 +206,20 @@ export function RunDetailPanel({
   // (batch CSV inference, per-model evaluate) are classification-only and hidden
   // for detection runs.
   const task = runTask(detail);
+  // What a shared server does not answer yet is not offered (ADR-216).
+  const session = useSession();
+  const canResume = routeOpen(session, ROUTE.runResume);
+  const canReveal = routeOpen(session, ROUTE.runReveal);
+  const canTestRun = routeOpen(session, ROUTE.runTest);
+  const canMarkdown = routeOpen(session, ROUTE.runMarkdown);
+  const canDownload = canMarkdown || routeOpen(session, ROUTE.runBundle);
+  const canPublish = {
+    hub: routeOpen(session, ROUTE.hubExport),
+    zenodo: routeOpen(session, ROUTE.zenodoExport),
+    github: routeOpen(session, ROUTE.githubExport),
+    dvc: routeOpen(session, ROUTE.dvcExport),
+  };
+  const canReplicate = routeOpen(session, strategyRoute(task, "replicates"));
   const isDetection = task === "detection";
   // A custom task owns its own training loop, so the built-in post-training
   // actions have no checkpoint contract to load; the API rejects them with 400.
@@ -215,16 +230,21 @@ export function RunDetailPanel({
   // ONNX export: classification + regression + segmentation (shared core helper)
   // and Ultralytics detection (torchvision detection export is not implemented).
   // Anomaly is excluded — PatchCore's memory-bank scoring has no forward graph.
-  const canExportOnnx = isDetection
-    ? detectionBackend === "ultralytics"
-    : !isCustom && task !== "anomaly";
+  const canExportOnnx =
+    routeOpen(session, ROUTE.runExportOnnx) &&
+    (isDetection ? detectionBackend === "ultralytics" : !isCustom && task !== "anomaly");
   // Batch CSV inference: classification + regression (continuous targets) +
   // anomaly (score + threshold decision). Detection/segmentation produce
   // per-box/per-pixel outputs that don't map to a flat row yet (ADR-041 slice 3).
-  const canBatchPredict = !isDetection && !isCustom && task !== "segmentation";
+  const canBatchPredict =
+    routeOpen(session, ROUTE.runBatchPredict) &&
+    !isDetection &&
+    !isCustom &&
+    task !== "segmentation";
   // Grad-CAM: classification + regression + segmentation (conv-based CAM, ADR-053).
   // Detection (Ultralytics) and anomaly (no class/conv target) are excluded.
-  const canGradcam = !isDetection && !isCustom && task !== "anomaly";
+  const canGradcam =
+    routeOpen(session, ROUTE.runGradcam) && !isDetection && !isCustom && task !== "anomaly";
 
   // Another run starts a fresh load (the effect below); `loading` starts true
   // for the first one and is raised again while rendering for each new runId.
@@ -575,12 +595,20 @@ export function RunDetailPanel({
         const replicates = rerun ? rerunRequest(t, detail, rerun.families, "replicates") : null;
         return (
           <NextSteps
-            steps={nextSteps(detail)}
+            // Advice the server cannot act on yet is not given (ADR-216).
+            steps={nextSteps(detail).filter(
+              (step) =>
+                !(step.action === "replicate" && !canReplicate) &&
+                !(step.action === "test" && !canTestRun),
+            )}
             handlers={{
-              resume: detail.resumable ? () => void doResume() : undefined,
+              resume: detail.resumable && canResume ? () => void doResume() : undefined,
               reuse: rerun && load ? () => rerun.onRerun(load) : undefined,
-              replicate: rerun && replicates ? () => rerun.onRerun(replicates) : undefined,
-              test: detail.group ? undefined : openTestForm,
+              replicate:
+                rerun && replicates && canReplicate
+                  ? () => rerun.onRerun(replicates)
+                  : undefined,
+              test: detail.group || !canTestRun ? undefined : openTestForm,
             }}
             disabled={{ resume: resuming }}
           />
@@ -675,15 +703,15 @@ export function RunDetailPanel({
                   </dd>
                 </>
               )}
-              <dt>{t.runDetail.actions.download}</dt>
-              <dd>
+              {canDownload && <dt>{t.runDetail.actions.download}</dt>}
+              <dd hidden={!canDownload}>
                 <DownloadBundleButton
                   key={runId}
                   runId={runId}
                   label={t.runDetail.actions.bundle}
                 />
                 {/* A model card describes a trained model; a group has none. */}
-                {!detail.group && (
+                {!detail.group && canMarkdown && (
                   <ActionButton
                     icon={<FileText />}
                     onClick={() => void downloadRunMarkdown(runId)}
@@ -693,16 +721,16 @@ export function RunDetailPanel({
                   </ActionButton>
                 )}
               </dd>
-              {!detail.group && (
+              {!detail.group && Object.values(canPublish).some(Boolean) && (
                 <>
                   <dt>{t.runDetail.actions.publish}</dt>
                   <dd>
                     <LazySurface>
                       <div className="vf-export-panels" style={{ width: "100%" }}>
-                        <HubExportPanel key={`${activeProfileSlug()}:${runId}`} runId={runId} />
-                        <ZenodoExportPanel key={`zenodo:${activeProfileSlug()}:${runId}`} runId={runId} />
-                        <GitHubExportPanel key={`github:${activeProfileSlug()}:${runId}`} runId={runId} />
-                        <DvcExportPanel key={`dvc:${activeProfileSlug()}:${runId}`} runId={runId} />
+                        {canPublish.hub && <HubExportPanel key={`${activeProfileSlug()}:${runId}`} runId={runId} />}
+                        {canPublish.zenodo && <ZenodoExportPanel key={`zenodo:${activeProfileSlug()}:${runId}`} runId={runId} />}
+                        {canPublish.github && <GitHubExportPanel key={`github:${activeProfileSlug()}:${runId}`} runId={runId} />}
+                        {canPublish.dvc && <DvcExportPanel key={`dvc:${activeProfileSlug()}:${runId}`} runId={runId} />}
                       </div>
                     </LazySurface>
                   </dd>
@@ -768,7 +796,7 @@ export function RunDetailPanel({
 
       // Testing needs a checkpoint, which a group does not have.
       case "tests":
-        return detail.group ? null : (
+        return detail.group || !canTestRun ? null : (
           <Section
             id={testsSectionId}
             title={t.runDetail.tests.title}
@@ -843,7 +871,7 @@ export function RunDetailPanel({
               label={t.runDetail.location.runFolder}
               value={detail.run_dir}
               action={
-                canOfferReveal(detail) ? (
+                canReveal && canOfferReveal(detail) ? (
                   <ActionButton
                     size="sm"
                     icon={<FolderOpen />}
@@ -1118,7 +1146,7 @@ export function RunDetailPanel({
           >
             {t.runDetail.back}
           </button>
-          {detail?.resumable && (
+          {detail?.resumable && canResume && (
             <button
               type="button"
               onClick={() => void doResume()}

@@ -22,6 +22,7 @@ import {
   waitForVersion,
   writeSkipped,
 } from "../lib/update-notice";
+import { ROUTE, useRouteOpen } from "../lib/session";
 
 const MONO: CSSProperties = {
   fontFamily: "var(--font-mono)",
@@ -41,7 +42,7 @@ const LINK: CSSProperties = {
 
 type Phase = "idle" | "confirm" | "updating" | "timeout" | "error";
 
-export function UpdateNotice() {
+function UpdateNoticeInner() {
   const t = useT();
   const u = t.update;
   const [status, setStatus] = useState<UpdateStatus | null>(null);
@@ -272,4 +273,9 @@ export function UpdateNotice() {
       )}
     </div>
   );
+}
+
+/** Absent on a shared server: updating it is the operator's job (ADR-216). */
+export function UpdateNotice() {
+  return useRouteOpen(ROUTE.updateApply) ? <UpdateNoticeInner /> : null;
 }

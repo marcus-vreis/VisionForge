@@ -65,6 +65,7 @@ import {
   Toggle,
   WorkersField,
 } from "./controls";
+import { ROUTE, useOpenStrategies, useRouteOpen } from "../lib/session";
 
 interface ParamPanelProps extends PendingImportProps {
   task: TaskDefinition;
@@ -340,6 +341,7 @@ function WeightsPathField({
   const [picking, setPicking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  const canPickCheckpoint = useRouteOpen(ROUTE.pickCheckpoint);
   const handlePick = async () => {
     setPicking(true);
     setMessage(null);
@@ -412,24 +414,26 @@ function WeightsPathField({
             color: "var(--vf-text)",
           }}
         />
-        <button
-          type="button"
-          onClick={() => void handlePick()}
-          disabled={picking}
-          style={{
-            padding: "0 14px",
-            background: "transparent",
-            border: "1px solid var(--vf-panel-stroke)",
-            borderRadius: 8,
-            color: "var(--vf-text-dim)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            cursor: picking ? "wait" : "pointer",
-            whiteSpace: "nowrap",
-          }}
-        >
-          📁 {picking ? "…" : t.paramPanel.weights.browse}
-        </button>
+        {canPickCheckpoint && (
+          <button
+            type="button"
+            onClick={() => void handlePick()}
+            disabled={picking}
+            style={{
+              padding: "0 14px",
+              background: "transparent",
+              border: "1px solid var(--vf-panel-stroke)",
+              borderRadius: 8,
+              color: "var(--vf-text-dim)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              cursor: picking ? "wait" : "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            📁 {picking ? "…" : t.paramPanel.weights.browse}
+          </button>
+        )}
       </div>
       {message && (
         <span
@@ -481,7 +485,9 @@ function BlockSelector({
   // uma superfície. O ModelComparisonBlock continua no backend; configs YAML
   // legadas com block=model_comparison seguem editáveis e executáveis.
   const t = useT();
-  const options = [
+  // Replicates and the paired comparison have a route of their own, which a
+  // shared server may not answer yet (ADR-216); the rest goes inside the run.
+  const options = useOpenStrategies("classification", [
     { value: "classification", label: t.paramPanel.blocks.simple },
     { value: "cross_validation", label: t.paramPanel.blocks.crossValidation },
     { value: "grid_search", label: t.paramPanel.blocks.gridSearch },
@@ -492,7 +498,7 @@ function BlockSelector({
     ...(comparison
       ? [{ value: REPLICATED_COMPARISON, label: t.taskPanel.replicatedComparison }]
       : []),
-  ];
+  ]);
   return (
     <div
       style={{

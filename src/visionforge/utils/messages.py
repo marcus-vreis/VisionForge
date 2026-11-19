@@ -1863,6 +1863,16 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "O campo {field} não pode ser usado quando o VisionForge roda como servidor.",
         "en": "The field {field} cannot be used when VisionForge runs as a server.",
     },
+    "server.config_block": {
+        "pt": (
+            "A estratégia {block} ainda não está disponível quando o VisionForge "
+            "roda como servidor. Use o treino simples."
+        ),
+        "en": (
+            "The {block} strategy is not available yet when VisionForge runs as "
+            "a server. Use the plain run."
+        ),
+    },
     "server.route_off": {
         "pt": "Esta função não está disponível quando o VisionForge roda como servidor.",
         "en": "This feature is not available when VisionForge runs as a server.",

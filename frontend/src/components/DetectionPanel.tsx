@@ -9,6 +9,7 @@ import { runPicker } from "../lib/picker-feedback";
 import { PickerNote } from "./PickerNote";
 import { sampleDetectionForm } from "../lib/guides/sample-forms";
 import { SampleDatasetButton } from "./SampleDatasetButton";
+import { ServerFoldersNote } from "./ServerFoldersNote";
 import { useState } from "react";
 import {
   fetchTaskSchema,
@@ -51,6 +52,7 @@ import { ReplicatedComparisonCard } from "./ReplicatedComparisonCard";
 import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-form";
 import { SweepCard, type SweepPayload } from "./SweepCard";
 import type { ReplicatesPayload } from "../lib/replicates-form";
+import { ROUTE, useOpenStrategies, useRouteOpen } from "../lib/session";
 
 const COMPARE_METRICS = [
   { value: "map50_95", label: "mAP@50-95" },
@@ -166,6 +168,7 @@ export function DetectionPanel({
     });
   };
 
+  const canPickFolder = useRouteOpen(ROUTE.pickFolder);
   const onPickFolder = async () => {
     setPicking(true);
     try {
@@ -181,6 +184,7 @@ export function DetectionPanel({
     }
   };
 
+  const canPickYaml = useRouteOpen(ROUTE.pickYaml);
   const onPickYaml = async () => {
     setPicking(true);
     try {
@@ -218,12 +222,12 @@ export function DetectionPanel({
 
   const defaults = makeDefaultDetectionForm();
   const datasetPath = formData.data.source === "yaml" ? formData.data.data_yaml : formData.data.base_dir;
-  const strategies: { value: PanelStrategy; label: string }[] = [
+  const strategies = useOpenStrategies<{ value: PanelStrategy; label: string }>("detection", [
     { value: "simple", label: t.paramPanel.blocks.simple },
     { value: "sweep", label: t.taskPanel.sweep },
     { value: "replicates", label: t.taskPanel.replicates },
     { value: "replicatedComparison", label: t.taskPanel.replicatedComparison },
-  ];
+  ]);
   const strategyLabel = strategies.find((s) => s.value === strategy)!.label;
   const suggestion = suggestExperimentName({
     datasetPath, model: formData.model.name,
@@ -304,14 +308,16 @@ export function DetectionPanel({
                       mono
                     />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void onPickFolder()}
-                    disabled={picking}
-                    style={pickButton}
-                  >
-                    {picking ? "…" : t.detectionPanel.dataset.browseFolder}
-                  </button>
+                  {canPickFolder && (
+                    <button
+                      type="button"
+                      onClick={() => void onPickFolder()}
+                      disabled={picking}
+                      style={pickButton}
+                    >
+                      {picking ? "…" : t.detectionPanel.dataset.browseFolder}
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div
@@ -328,17 +334,20 @@ export function DetectionPanel({
                       mono
                     />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void onPickYaml()}
-                    disabled={picking}
-                    style={pickButton}
-                  >
-                    {picking ? "…" : t.detectionPanel.dataset.browseYaml}
-                  </button>
+                  {canPickYaml && (
+                    <button
+                      type="button"
+                      onClick={() => void onPickYaml()}
+                      disabled={picking}
+                      style={pickButton}
+                    >
+                      {picking ? "…" : t.detectionPanel.dataset.browseYaml}
+                    </button>
+                  )}
                 </div>
               )}
               <PickerNote text={pickNote} />
+              <ServerFoldersNote />
               <SampleDatasetButton
                 task="detection"
                 onApply={(path, setup) => setFormData((p) => sampleDetectionForm(p, path, setup))}

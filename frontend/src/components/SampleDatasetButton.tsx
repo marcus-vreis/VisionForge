@@ -3,10 +3,11 @@ import { useT } from "../i18n/useT";
 import { runSample } from "../lib/sample-dataset";
 import type { GuideTask } from "../lib/guides/tasks";
 import type { SampleSetup } from "../lib/guides/types";
+import { ROUTE, useRouteOpen } from "../lib/session";
 
 /** Small button under a task's folder row: creates the sample dataset (or reuses
  *  the one already there) and hands its path to the panel, as the guide does. */
-export function SampleDatasetButton({
+function SampleDatasetButtonInner({
   task,
   onApply,
 }: {
@@ -62,4 +63,9 @@ export function SampleDatasetButton({
       )}
     </div>
   );
+}
+
+/** Absent where the server does not create the sample dataset (a shared server, ADR-216). */
+export function SampleDatasetButton(props: Parameters<typeof SampleDatasetButtonInner>[0]) {
+  return useRouteOpen(ROUTE.sampleDataset) ? <SampleDatasetButtonInner {...props} /> : null;
 }

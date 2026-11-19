@@ -8558,6 +8558,8 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 
 **Not verified:** nothing ran behind a real proxy; no GPU run, and only classification was trained (see the amendment).
 
+**Amended 2026-11-18: a search could leave the scope.** `grid_search.hyperparameters` and `random_search.search_space` were listed here as text that names nothing on the disk. They name fields of the config, which the block sets per trial after the walk. ADR-216 closes every classification `block` but the plain run on a server.
+
 **Amended 2026-11-18: a real run.** The real server, in server mode in a temporary folder, trained a one-epoch classification on the CPU for one account while a second account submitted 40 ms later: the second job queued and ran next, each run landed in its owner's folder and History, the second account got an idle status, 404 and 404 for the first one's status, result and stop, and a plot of the first run answered 200 to its owner and 403 to the other. The first attempt found a bug that is not server mode's: the second submission answered 500, because `cuda_context_broken` reads `sys.modules["torch"]`, which holds the module from the first line of its import, while the first job's thread was still importing it and `torch.cuda` did not exist yet. A torch without `cuda.is_initialized` now reads as no context to break. A local install had the same window on a cold server: two submissions within the three seconds of the first import.
 
 **Alternatives considered:**
@@ -8565,3 +8567,31 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *One queue per person.* Nobody would wait for anybody, on one GPU that cannot be true; the shared queue with a count is what the request asked for.
 - *Hide `others_ahead` too.* The person would see their job waiting with no reason.
 - *Field types in the configs, as in ADR-214.* `utils/` imports nothing of the GUI, and the command line must keep accepting any folder.
+
+## ADR-216 — In server mode the screen asks the server what it offers and hides the rest
+
+**Date:** 2026-11-18
+**Status:** Accepted
+**Extends:** ADR-213 (the gate), ADR-214, ADR-215
+
+**Context:** after ADR-215 a person could train on a server, and the page did not know it was on one. It offered the folder dialog (which would open on the server's screen), four strategies per task, the datasets sheet, Colab and a dozen actions in History; each answered "not available". On opening it also called `/api/profiles` and `/api/colab/status`, both closed. Reading how the page submits a strategy found a hole in ADR-215: classification sends cross-validation and the searches through `/api/experiment/run`, as the `block` field, so the gate let them through; and a search rewrites fields of the config for each trial (`{"data.base_dir": [...]}`) after `confine_config` has walked it. A grid axis could name a dataset, weights or an output folder outside the person's reach. `grid_search.hyperparameters` had been listed as text that names nothing on the disk.
+
+**Decision:**
+
+- `GET /api/session` also returns `closed`, the keys of `ROUTE_CLASSES` that do not answer (`"METHOD /api/template"`), and `closed_blocks`, the values of classification's `block` the server refuses. Both are empty on a local install. The list of what a server offers stays in one place, the table of ADR-213: the page holds no copy of it.
+- With a scope bound, `confine_config` refuses every `block` but `classification` with 422. The two fields that rewrite others are listed apart (`REWRITING`), not as free text.
+- The page reads the session before it is first drawn (`bootSession`, at most 3 s of wait; a slower answer is applied when it comes) and keeps it in a store outside React (`lib/session.ts`). An older server, a failed read and a local install all read as "nothing closed": the server is what refuses, the page only stops offering.
+- A component asks by the key of the route it would call (`ROUTE.pickFolder`, `strategyRoute(task, strategy)`). What is closed is absent, not disabled: a greyed button with "not on a server" on every card would be most of the page. A test on the server side reads `session.ts` and fails if a key it asks about is not in `ROUTE_CLASSES`.
+- Where the folder dialog is gone, the dataset field lists the folders the server accepts (`dataset_dirs`), the person's own first. The profile menu names the account and the profile folder and offers no other profile. The first-run invitation offers the tour alone, and the tour skips the datasets button.
+
+**Consequences:** a person on a server sees a smaller page in which everything works, and each route opened later lights up its button with no change to the page, as long as the button asks by that route's key. A classification search on a server is closed until its axes are confined; the local tool is unchanged. The greeting still asks a name on the first visit and keeps it in the browser, since the profile cannot be renamed there yet.
+
+**Known limits:** the page asks about 32 routes and a route it does not ask about is still offered; opening a closed route by hand still answers 404, which is the rule that counts. The integrations (MLflow, W&B, Comet) are not configurable on a server, because they are saved through `PUT /api/profiles/{slug}`. A session that arrives after the 3 s wait redraws the page with fewer buttons.
+
+**Not verified:** nothing ran behind a real login proxy: the page was opened behind a stand-in that only adds the account header. Not checked at phone width or with a screen reader in this mode. No Playwright test covers server mode.
+
+**Alternatives considered:**
+
+- *A list of features in the page ("on a server, hide these").* Two lists to keep equal; the one in the page would be wrong the day a route opened.
+- *Disable instead of hide.* Honest about what exists, but most of the page would be grey, and the reason would be the same sentence everywhere.
+- *Confine the axes of a search now.* It is the right end state, and it belongs with the strategies, which are read together (23 routes); until then the block is closed.

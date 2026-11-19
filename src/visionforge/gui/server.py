@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse
 from loguru import logger
 
 from visionforge import __version__
+from visionforge.gui.api.config_scope import closed_blocks
 from visionforge.gui.api.dataset_scope import current_scope
 from visionforge.gui.api.error_messages import validation_error_handler
 from visionforge.gui.api.http_responses import (
@@ -32,7 +33,12 @@ from visionforge.gui.security import (
     SpaContentSecurityPolicy,
     is_wildcard,
 )
-from visionforge.gui.server_mode import ServerMode, ServerModeGate, mode_of
+from visionforge.gui.server_mode import (
+    ServerMode,
+    ServerModeGate,
+    closed_routes,
+    mode_of,
+)
 from visionforge.utils.third_party_privacy import apply_env_opt_outs
 
 # The trainers are imported only when a run starts (GUI-11, #202), and importing
@@ -143,6 +149,12 @@ async def session(request: Request) -> dict[str, Any]:
         # Where this person's datasets may live: their own folder first, then
         # the ones the operator shares (ADR-214). Empty on a local install.
         "dataset_dirs": [str(p) for p in scope.readable] if scope else [],
+        # The routes that answer 404 here, as "METHOD /template": what the
+        # screen hides (ADR-216). Empty on a local install, where all answer.
+        "closed": closed_routes() if mode.enabled else [],
+        # Classification sends its strategies inside the run, as ``block``:
+        # the values this server refuses (ADR-216).
+        "closed_blocks": closed_blocks() if mode.enabled else [],
     }
 
 
