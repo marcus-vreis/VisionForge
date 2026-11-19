@@ -29,6 +29,7 @@ from visionforge.core.dataset_explorer import (
     select_images,
     summarize,
 )
+from visionforge.gui.api.dataset_scope import DatasetDir, DatasetPart
 from visionforge.gui.api.datasets_routes import (
     _IMAGE_EXTS,
     SCAN_BASE_MISSING_KEY,
@@ -56,11 +57,11 @@ _SCANS = ScanJobs()
 class ExplorerRequest(BaseModel):
     """Which dataset to open. ``*_dir`` only matter for ImageFolder layouts."""
 
-    base_dir: str
+    base_dir: DatasetDir
     task: ExplorerTask = "classification"
-    train_dir: str = "train"
-    val_dir: str = "val"
-    test_dir: str = "test"
+    train_dir: DatasetPart = "train"
+    val_dir: DatasetPart = "val"
+    test_dir: DatasetPart = "test"
 
 
 class ExplorerImagesRequest(ExplorerRequest):

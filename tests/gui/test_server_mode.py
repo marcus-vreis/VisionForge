@@ -239,7 +239,7 @@ def test_the_browser_cannot_pick_another_profile(served: Any, tmp_path: Path) ->
         ("POST", "/api/update/apply"),
         ("POST", "/api/profiles"),
         ("POST", "/api/dataset/audit"),
-        ("POST", "/api/explorer/summary"),
+        ("POST", "/api/dataset/preview_augment"),
         ("GET", "/api/runs/some_run/bundle"),
         ("GET", "/api/colab/status"),
         ("GET", "/api/brand-new"),
@@ -309,8 +309,33 @@ def test_a_name_inside_the_dataset_may_only_go_down(tmp_path: Path, part: str) -
 
 
 def test_every_path_of_an_open_dataset_route_is_typed() -> None:
-    from visionforge.gui.api import schemas
+    from visionforge.gui.api import (
+        coco_routes,
+        explorer_routes,
+        incorporate_routes,
+        merge_routes,
+        resplit_routes,
+        schemas,
+    )
     from visionforge.gui.server import app
+
+    # Where a request model may live; FastAPI names the Laboratory's by module
+    # when two share a name (``PreviewRequest``).
+    homes = (
+        schemas,
+        explorer_routes,
+        merge_routes,
+        resplit_routes,
+        incorporate_routes,
+        coco_routes,
+    )
+    components = app.openapi()["components"]["schemas"]
+
+    def model_of(ref: str) -> Any:
+        title = components[ref]["title"]
+        found = [getattr(home, title) for home in homes if hasattr(home, title)]
+        assert found, f"no request model named {title}"
+        return found[0]
 
     # Text fields that name a column, not a place on the disk.
     # A dataset id at its provider and a task key are not places either.
@@ -321,13 +346,15 @@ def test_every_path_of_an_open_dataset_route_is_typed() -> None:
         method, template = key.split(" ", 1)
         if ROUTE_CLASSES[key] != "confined" or method != "POST":
             continue
+        if "requestBody" not in paths[template]["post"]:
+            continue  # a cancel: it names a job, and a job has an owner
         body = paths[template]["post"]["requestBody"]["content"]["application/json"]
-        model = getattr(schemas, body["schema"]["$ref"].rsplit("/", 1)[1])
+        model = model_of(body["schema"]["$ref"].rsplit("/", 1)[1])
         for name, field in model.model_fields.items():
             if field.annotation is str and name not in not_paths:
                 assert field.metadata, f"{model.__name__}.{name} is a plain str"
         checked += 1
-    assert checked == 13
+    assert checked == 31
 
 
 def test_the_session_says_where_the_datasets_may_live(

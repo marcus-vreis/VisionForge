@@ -29,6 +29,9 @@ import {
 import { runPicker } from "../lib/picker-feedback";
 import { errorMessage as message, useJobPolling } from "../lib/useJobPolling";
 import { useT } from "../i18n/useT";
+import { ROUTE, useRouteOpen } from "../lib/session";
+import { useDestHint } from "../lib/dest-hint";
+import { ServerFoldersNote } from "./ServerFoldersNote";
 import { Segmented, TextField } from "./controls";
 import { danger, ghostButton, mono, sectionLabel, stepTitle, text } from "./datasetExplorerStyles";
 import { ActionRow, AnalyzeButton, ApplyButton, DataTable, LabStep, LabTool } from "./DatasetLabParts";
@@ -149,6 +152,8 @@ export function IncorporatePanel({
   const t = useT().datasetIncorporate;
   const ex = useT().datasetExplorer;
   const lab = useT().datasetLab;
+  const canPick = useRouteOpen(ROUTE.pickFolder);
+  const destHint = useDestHint(t.destHint);
   const [sourceDir, setSourceDir] = useState("");
   const [pickNote, setPickNote] = useState<string | null>(null);
   const [previewJob, setPreviewJob] = useState<IncorporateJob<IncorporatePreview> | null>(null);
@@ -273,6 +278,7 @@ export function IncorporatePanel({
             <>
               <button
                 type="button"
+                hidden={!canPick}
                 style={ghostButton}
                 onClick={() =>
                   void runPicker(
@@ -303,6 +309,7 @@ export function IncorporatePanel({
             mono
           />
         </ActionRow>
+        <ServerFoldersNote />
         {pickNote && <div style={text}>{pickNote}</div>}
       </LabStep>
 
@@ -400,7 +407,7 @@ export function IncorporatePanel({
                 label={t.destName}
                 value={destName}
                 onChange={setDestName}
-                hint={t.destHint}
+                hint={destHint}
                 mono
                 error={destName !== "" && !destOk ? t.destInvalid : undefined}
               />

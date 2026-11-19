@@ -738,8 +738,12 @@ def build_coco_import(
     token: CancellationToken | None = None,
     on_progress: Callable[[int, int], None] | None = None,
     link: Callable[[Path, Path], None] = os.link,
+    parent: Path | None = None,
 ) -> dict[str, Any] | None:
     """Write the YOLO dataset next to the picked folder. ``None`` if cancelled.
+
+    ``parent`` is the folder the result is created in; ``None`` means next to
+    the source, which is where a local install always writes.
 
     Raises:
         CocoError: the plan is not ready; bad or existing destination name; the
@@ -747,8 +751,9 @@ def build_coco_import(
     """
     plan.require_ready()
     root = analysis.root
+    parent = parent if parent is not None else root.parent
     dest = prepare_destination(
-        root.parent,
+        parent,
         dest_name,
         error=CocoError,
         bad_name_code=_BAD_DEST,
@@ -760,7 +765,7 @@ def build_coco_import(
         return _write(analysis, plan, tmp, dest, token, on_progress, link)
 
     result: dict[str, Any] | None = publish(
-        root.parent, dest, write, error=CocoError, exists_code=_DEST_EXISTS
+        parent, dest, write, error=CocoError, exists_code=_DEST_EXISTS
     )
     if result is None:
         return None

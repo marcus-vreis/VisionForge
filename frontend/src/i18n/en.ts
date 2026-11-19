@@ -570,6 +570,8 @@ export const en: Dict = {
     keyOnce: "Used for this download only; the server does not keep the key.",
     downloadFolder: "Folder name",
     downloadTarget: "It goes into your dataset folder:",
+    destHint:
+      "On this server it goes into your dataset folder; a copy, when the original is a shared one.",
     folderShared: "shared",
     foldersHint: "Paste the full path into the field above.",
     foldersLabel: "The server's dataset folders",

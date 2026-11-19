@@ -8686,3 +8686,32 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Let a download go anywhere in the scope.* The shared folders are the operator's; a person writing there changes what everyone trains on.
 - *Per-person saved keys.* The right end state for convenience, and it needs the credential store moved under the profile (it is one file per machine today); typing the key per download is safe now.
 - *Set and unset `KAGGLE_API_TOKEN` around a Kaggle download.* The client authenticates at import, once per process, and two downloads at once would race on the variable; a lock would serialize every Kaggle download and still leave the first key authenticated.
+
+## ADR-220 — In server mode the dataset Laboratory reads the scope, its jobs have an owner, and what it writes lands in the person's folder
+
+**Date:** 2026-11-19
+**Status:** Accepted
+**Extends:** ADR-214 (the dataset scope), ADR-219 (the own folder), ADR-166, ADR-167 (the derived datasets)
+
+**Context:** the Laboratory is 31 routes under `/api/explorer`: open and page a dataset, an integrity scan, and five features that read a dataset and write a new one (re-split, incorporate, merge, COCO export, COCO import). Three things kept it closed on a server. Its request models took paths as plain text. Its background jobs sat in registries shared by the process: a job id was all it took to read a preview, apply it or cancel it, one running job blocked everyone, and the registries kept only the last few jobs of anyone. And every feature writes its result next to its source (`root.parent / dest_name`), which for a shared dataset is the operator's folder, building it out of hard links to the source files.
+
+**Decision:**
+
+- Every path of a Laboratory request is typed: `DatasetDir` for the dataset and for the second folder of a feature (the other dataset of a merge, the new images, the COCO folder), `DatasetPart` for the split names and the group file. The thumbnail route already asked the scope (`_is_inside_allowed_root`).
+- A job records `owner`, the profile of the request that registered it (`job_owner`, `""` on a local install), and a registry answers a job only to its owner: `get` returns `None` for anybody else, so status, plan, apply and cancel answer 404. "One job at a time" becomes one per person, and a registry drops the oldest jobs of the person registering, so another person's work never evicts a preview about to be applied.
+- The five build functions take `parent`, the folder the result is created in; `None` keeps "next to the source". `derived_jobs.placement(source_root)` decides it per request: nothing on a local install; nothing on a server when the source's parent is inside the person's own folder; otherwise `parent=own` and `link=copy_only`, a link function that always fails, so `link_or_copy` copies every file. The routes check the destination name against that same folder (`destination_parent`).
+- The 31 routes join `READY`.
+- The page hides the folder dialog's button in the Laboratory where the dialog is closed and lists the accepted folders in its place; the hint under a destination name says, on a server, that the result goes into the person's folder and is a copy when the original is shared.
+
+**Consequences:** on a server a person can inspect a shared dataset and derive their own version of it without the operator and without touching what everyone else reads. Their derived dataset shares no inode with the shared one, so nothing done to either can reach the other. The local tool is unchanged: no owner, one job at a time as before, and the result next to its source with hard links.
+
+**Known limits:** a copy costs the dataset's size in the person's folder, and there is no disk quota. Laboratory jobs run at once, outside the training queue: one per person and kind. The suggested destination name is computed next to the source; for a shared source it can already exist in the person's folder, and the apply then answers 409. The index cache and the jobs live in the process: a restart forgets them, as on a local install.
+
+**Not verified:** nothing ran behind a real login proxy. Exploring, the scan and a re-split of a shared dataset ran for real in this mode; incorporate, merge and the COCO conversions were exercised through their requests and the shared placement rule, not run end to end there. Two people using the Laboratory at the same time was tested with the registries and the test client, not with two browsers.
+
+**Alternatives considered:**
+
+- *Refuse to derive from a shared dataset.* One line, and it removes the main use on a server: the data is the operator's, the split is the person's.
+- *Hard-link into the person's folder.* Free on disk, and it ties a person's dataset to files the operator may replace or remove in place; a copy is theirs.
+- *Keep one job at a time for the whole server.* It protects the disk, and one person's long analysis would answer "busy" to everyone else with no way to see why.
+- *Per-owner registries.* A dictionary of registries keyed by owner; the owner on the job does the same with one lock and one place to look a job up.

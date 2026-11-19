@@ -570,6 +570,7 @@ def build_incorporated_dataset(
     token: CancellationToken | None = None,
     on_progress: Callable[[int, int], None] | None = None,
     link: Callable[[Path, Path], None] = os.link,
+    parent: Path | None = None,
 ) -> dict[str, Any] | None:
     """Write the new dataset next to the original. ``None`` if cancelled.
 
@@ -577,13 +578,17 @@ def build_incorporated_dataset(
     ``dest_name`` at the very end; on cancellation or any error it is removed and
     nothing is left at the destination.
 
+    ``parent`` is the folder the result is created in; ``None`` means next to
+    the source, which is where a local install always writes.
+
     Raises:
         IncorporateError: bad or existing destination name; the original or a new
             image changed since the analysis.
     """
     base = analysis.base_root
+    parent = parent if parent is not None else base.parent
     dest = prepare_destination(
-        base.parent,
+        parent,
         dest_name,
         error=IncorporateError,
         bad_name_code=_BAD_DEST,
@@ -595,7 +600,7 @@ def build_incorporated_dataset(
         error=lambda: DatasetChangedError("incorporate.base_changed"),
     )
     result = publish(
-        base.parent,
+        parent,
         dest,
         lambda tmp: _write(analysis, plan, tmp, dest, token, on_progress, link),
         error=IncorporateError,

@@ -6,15 +6,15 @@
 > estratégias (validação cruzada, busca, comparação, réplicas), e mostra a fila,
 > o progresso e o histórico de cada um. Um run pronto pode ser retomado, testado
 > em outro dataset, explicado com Grad-CAM, usado em lote e exportado para
-> ONNX. Cada pessoa pode baixar um dataset ou criar o de exemplo na própria
-> pasta. O Laboratório de datasets, a publicação de um run e o Colab ainda não
-> estão disponíveis, e a tela não os mostra. E ele é para um **grupo que já
-> confia entre
+> ONNX. Cada pessoa pode baixar um dataset, criar o de exemplo e usar o
+> Laboratório de datasets, gravando só na própria pasta. A publicação de um
+> run e o Colab ainda não estão disponíveis, e a tela não os mostra. E ele é
+> para um **grupo que já confia entre
 > si**: o treino roda dentro do processo do servidor, sem isolamento entre as
 > pessoas. Não ofereça este servidor a desconhecidos.
 
 Esta página sai do código atual (`gui/server_mode.py`) e das decisões ADR-212
-a ADR-219. O que não foi testado está marcado como *não verificado*.
+a ADR-220. O que não foi testado está marcado como *não verificado*.
 
 ## O que muda em relação ao uso local
 
@@ -47,11 +47,12 @@ Num servidor compartilhado a página é a mesma, com menos botões:
   busca, comparação, réplicas). Uma busca ou uma variante só pode variar campos
   de número, de escolha e o nome do modelo: o dataset, os pesos e as pastas
   ficam os do formulário (veja "Estratégias num servidor").
-- **O botão "datasets" abre só "Baixar".** O formulário pede o nome de uma
-  pasta, não um caminho, e mostra para onde o dataset vai: uma subpasta da sua
-  pasta de datasets. Não há Kaggle na lista, e a chave do Roboflow ou do
-  Hugging Face é digitada a cada download (veja "Pôr um dataset no servidor").
-  O Laboratório ainda não aparece.
+- **O botão "datasets" abre "Baixar" e "Explorar".** No download, o
+  formulário pede o nome de uma pasta, não um caminho, e mostra para onde o
+  dataset vai: uma subpasta da sua pasta de datasets. Não há Kaggle na lista,
+  e a chave do Roboflow ou do Hugging Face é digitada a cada download (veja
+  "Pôr um dataset no servidor"). No Laboratório, as pastas são digitadas e o
+  que ele cria vai para a sua pasta (veja "O Laboratório num servidor").
 - **"Criar dataset de exemplo"** grava o exemplo na sua pasta de datasets.
 - **Sem as prévias** de aumento e de pré-processamento e sem a auditoria.
 - **Sem Colab**, sem aviso de atualização e sem as abas de tarefas próprias.
@@ -156,7 +157,8 @@ que não existe: não dá para ler o progresso, o resultado nem parar.
 | Ler um dataset para conferir: divisões, contagem por classe, amostras e miniaturas, nas cinco tarefas | sim, só na **sua** pasta de datasets e nas pastas compartilhadas |
 | Baixar dataset (torchvision, Roboflow, Hugging Face) e criar o dataset de exemplo | sim, só para uma subpasta da **sua** pasta de datasets |
 | Baixar do Kaggle | não num servidor (o cliente lê a chave de uma variável do processo, que seria de todos) |
-| Prévia de aumento e de pré-processamento, auditoria e Laboratório de datasets | ainda não |
+| Laboratório de datasets: explorar, conferir, redividir, incorporar imagens, mesclar, exportar e importar COCO | sim; lê as **suas** pastas e as compartilhadas e grava só na sua |
+| Prévia de aumento e de pré-processamento, auditoria | ainda não |
 | Treinar um run simples (classificação, detecção, segmentação, regressão, anomalia) | sim, com dataset e pesos das **suas** pastas ou das compartilhadas |
 | Fila | sim: os **seus** jobs e, dos outros, só quantos estão na frente |
 | Progresso, resultado e gráficos de um run | sim, só dos **seus** |
@@ -269,6 +271,15 @@ a raiz da pasta própria responderam 422, o do Kaggle 400 com a explicação, e
 o do Roboflow sem chave 400. *Não verificado:* um download real do Roboflow
 ou do Hugging Face neste modo (só com os clientes simulados nos testes).
 
+No Laboratório, no mesmo dia e arranjo: um dataset compartilhado de 80 imagens
+foi aberto, conferido e redividido; o resultado foi gravado na pasta da
+pessoa com 80 arquivos copiados e nenhum ligado, e a contagem por classe leu
+de volta; um dataset fora das pastas aceitas respondeu 422. *Não verificado:*
+incorporar, mesclar e as conversões COCO rodando de verdade neste modo (os
+pedidos e a regra de destino são os mesmos e estão cobertos por testes; só o
+redividir foi executado), e duas pessoas usando o Laboratório ao mesmo tempo
+fora dos testes.
+
 ## Pôr um dataset no servidor
 
 Há três caminhos:
@@ -298,6 +309,30 @@ Regras do download num servidor:
 Limites que o operador precisa conhecer: não há cota de disco por pessoa nem
 limite de downloads ao mesmo tempo, e o download roda na hora, fora da fila.
 O cache do Hugging Face fica na conta com que o servidor roda.
+
+## O Laboratório num servidor
+
+O Laboratório lê um dataset e, quando cria outro (redividir, incorporar
+imagens, mesclar, exportar ou importar COCO), nunca muda o original.
+
+- **O que ele lê.** Um dataset da sua pasta ou de uma pasta compartilhada. O
+  mesmo vale para a segunda pasta de cada operação: o outro dataset da mescla,
+  as imagens novas, a pasta COCO. Fora disso a resposta é 422.
+- **Onde ele grava.** Se o dataset aberto é seu, o resultado fica ao lado
+  dele, dentro da sua pasta, como no uso local. Se é compartilhado, o
+  resultado vai para a sua pasta de datasets e é uma **cópia**: nenhum arquivo
+  seu fica ligado (hard link) a um arquivo da pasta compartilhada, que é do
+  operador. Uma cópia ocupa o tamanho do dataset no disco.
+- **Os trabalhos são seus.** Uma análise, uma conferência ou uma gravação em
+  andamento só responde a quem a iniciou; para outra pessoa ela não existe
+  (404). Cada pessoa roda um trabalho de cada tipo por vez, e o de uma não
+  bloqueia o de outra.
+- **O nome sugerido** é calculado ao lado do dataset original. Para um dataset
+  compartilhado, o servidor confere o nome contra a sua pasta na hora de
+  gravar e responde 409 se ele já existir ali; troque o nome.
+
+Limite que o operador precisa conhecer: os trabalhos do Laboratório rodam na
+hora, fora da fila, um por pessoa e por tipo, e não há cota de disco.
 
 ## Perguntas comuns
 

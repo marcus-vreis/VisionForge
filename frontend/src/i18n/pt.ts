@@ -599,6 +599,8 @@ export const pt = {
     keyOnce: "Usada só neste download; o servidor não guarda a chave.",
     downloadFolder: "Nome da pasta",
     downloadTarget: "Vai para a sua pasta de datasets:",
+    destHint:
+      "Neste servidor, fica na sua pasta de datasets; se o original for compartilhado, é uma cópia.",
     folderShared: "compartilhada",
     foldersHint: "Cole o caminho completo no campo acima.",
     foldersLabel: "Pastas de dataset do servidor",
