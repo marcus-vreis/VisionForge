@@ -1886,6 +1886,18 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "the folder."
         ),
     },
+    "server.mlflow_closed": {
+        "pt": (
+            "O MLflow local não está disponível neste servidor: ele grava num "
+            "arquivo do disco do servidor, que você não teria como abrir. Use "
+            "o Weights & Biases ou o Comet, com o seu token."
+        ),
+        "en": (
+            "Local MLflow is not available on this server: it writes to a file "
+            "on the server's disk, which you could not open. Use Weights & "
+            "Biases or Comet, with your own token."
+        ),
+    },
     "server.output_fixed": {
         "pt": (
             "Neste servidor o arquivo é gravado na pasta do próprio run; deixe o "

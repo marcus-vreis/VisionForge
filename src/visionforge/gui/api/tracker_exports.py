@@ -18,6 +18,7 @@ from fastapi import HTTPException
 
 from visionforge.core.run_trackers import TrackerFactory, export_run_record
 from visionforge.gui.api import execution
+from visionforge.gui.api.dataset_scope import current_scope
 from visionforge.gui.api.profile_tokens import read_token
 from visionforge.gui.api.profiles import Profile
 from visionforge.gui.api.run_history import RUN_BAD_JSON_KEY, RUN_FILENAME
@@ -33,13 +34,18 @@ class ExportSidecar(Protocol):
 
 
 def profile_trackers(profile: Profile, outputs: Path) -> tuple[TrackerFactory, ...]:
-    """The exporters this profile turned on, writing their stores under ``outputs``."""
+    """The exporters this profile turned on, writing their stores under ``outputs``.
+
+    On a server MLflow is left out, even when a profile carried over from a
+    local install has it on: it writes a file on this machine's disk that the
+    person could not open (ADR-223). Call it in the request, where the scope is.
+    """
     from visionforge.core.comet_tracking import CometTarget, CometTracker
     from visionforge.core.mlflow_tracking import MlflowTracker
     from visionforge.core.wandb_tracking import WandbTarget, WandbTracker
 
     factories: list[TrackerFactory] = []
-    if profile.settings.mlflow.enabled:
+    if current_scope() is None and profile.settings.mlflow.enabled:
         factories.append(partial(MlflowTracker, outputs / "mlflow", profile.slug))
     wandb = profile.settings.wandb
     if wandb.enabled:

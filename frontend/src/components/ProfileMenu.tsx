@@ -64,8 +64,8 @@ export function ProfileMenu({
 }: ProfileMenuProps) {
   const t = useT();
   // On a shared server the profile is the account the login proxy named: there
-  // is none to switch to or create, and its settings are not editable yet
-  // (ADR-216).
+  // is none to switch to or create (ADR-216); its integrations are the
+  // person's own (ADR-223).
   const session = useSession();
   const canEditProfile = routeOpen(session, ROUTE.profileUpdate);
   const canChooseProfile = routeOpen(session, ROUTE.profileCreate);

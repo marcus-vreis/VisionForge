@@ -8766,3 +8766,30 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 
 - *A cache folder named after the person under `outputs/preview_cache`.* It keeps the previews together, and the artifact route would need a second place it serves a person from; the profile folder is already that place.
 - *Return the images inline (base64) on a server.* No file to place, and a different response shape for the page in one mode only.
+
+## ADR-223 — In server mode a person edits their own profile; W&B and Comet use their key, local MLflow is off
+
+**Date:** 2026-11-19
+**Status:** Accepted
+**Extends:** ADR-213 (the account is the profile), ADR-216 (the page hides closed routes)
+**Amends:** ADR-170 (local MLflow), on a server only
+
+**Context:** the trackers a training feeds (MLflow, ADR-170; Weights & Biases, ADR-172; Comet, ADR-200) are switched on in the profile, through `PUT /api/profiles/{slug}`. That route was `off` on a server and `GET /api/profiles` closed: the first takes any slug, the second lists everybody. So nobody could turn an integration on, the three History retries had nothing to resend, and the page worked on a placeholder profile: the name a person typed stayed in the browser. The token routes of W&B and Comet were already open, each bound to the signed-in person's profile.
+
+**Decision:**
+
+- `GET /api/profiles` answers on a server with one profile: the signed-in person's. `PUT /api/profiles/{slug}` answers for that slug only; any other, `default` included, is 404, the answer for a profile that does not exist. `POST /api/profiles` stays `off`: the profile is the account.
+- W&B and Comet work as on a local install. The settings are the person's, each export is built in the request that starts the training with the key read from their profile, and the two retries already look the run up inside the caller's models folder. W&B's own local files go to `outputs/wandb/<profile>`, one folder per person.
+- Local MLflow is off on a server. Its store is one SQLite file on the server's disk; no route reads it, so the person who turned it on could not open it, and an operator who served it with `mlflow ui` would show every person's parameters to the others. Turning it on answers 422 with the reason, its retry is `off`, and `profile_trackers` leaves it out there even when a profile carried over from a local install has it on.
+- The page: on a server the welcome takes the listed profile as the one in use. While its name is still the login (how `ensure_profile` creates it) it asks the name and the greeting and saves them in the profile; later visits go straight in. The profile menu shows the integrations again, without the MLflow switch, which hides by its route key like everything else (ADR-216).
+
+**Consequences:** a person on a shared server follows their runs in their own W&B or Comet project and resends one that failed. Their name and greeting follow them across browsers. Of the routes that waited for a review since ADR-213, none is left closed: what does not answer on a server is `off` by decision.
+
+**Known limits:** an export runs inside the training job, and a retry at once in a worker thread, outside the queue; a stuck W&B call holds the next queued job up to its timeout, as on a local install (ADR-197), and here that job may be another person's. A person who already typed a name in the browser is asked once more, with that name filled in. The key hint in the menu still says the key is saved "on this computer"; on a server that is the server.
+
+**Not verified:** nothing ran behind a real login proxy. No real export to W&B or Comet ran in this mode: the tests use the fake W&B SDK and check whose key a retry sends; Comet's retry is only checked for who reaches it.
+
+**Alternatives considered:**
+
+- *Keep MLflow, with one store per person inside their profile.* Isolated, and still a file nobody but the operator can open; serving `mlflow ui` per person is a second web application to sign people into.
+- *A separate `/api/me` route for the settings.* A cleaner name, and a second code path for the page's profile menu, which already speaks `/api/profiles`.

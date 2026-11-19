@@ -182,6 +182,29 @@ export function pickStoredProfile(
   return profiles.find((p) => p.slug === stored.slug) ?? null;
 }
 
+/** O perfil de quem entrou num servidor compartilhado, ou null fora dele.
+ *
+ * Num servidor o perfil é a conta que o proxy de login nomeou, e a lista traz
+ * só ele (ADR-223): não há escolha guardada a respeitar.
+ */
+export function accountProfile(
+  serverMode: boolean,
+  profiles: readonly ProfileInfo[],
+): ProfileInfo | null {
+  const only = profiles.length === 1 ? profiles[0] : undefined;
+  return serverMode && only && !only.is_default ? only : null;
+}
+
+/** Se o perfil de uma conta ainda leva o nome da conta.
+ *
+ * O servidor cria o perfil com o login (um e-mail, quase sempre): enquanto for
+ * esse o nome, ninguém disse como quer ser chamado, e a entrada pergunta.
+ */
+export function namedAfterAccount(profile: ProfileInfo, user: string | null): boolean {
+  if (!user) return false;
+  return profile.name.trim().toLowerCase() === user.trim().toLowerCase();
+}
+
 /** Se a entrada mostra a lista de perfis: só quando há mais de um.
  *
  * Com um perfil só não há o que escolher; com dois ou mais a lista aparece a
