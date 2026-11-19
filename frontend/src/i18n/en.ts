@@ -565,6 +565,7 @@ export const en: Dict = {
     menuNote:
       "Shared server. What does not work on a server yet is hidden.",
     foldersTitle: "On this server, the dataset has to be in one of these folders:",
+    foldersTitleRun: "On this server, the images have to be in one of these folders:",
     folderOwn: "your folder",
     folderShared: "shared",
     foldersHint: "Paste the full path into the field above.",

@@ -24,6 +24,7 @@ from visionforge.gui.api.colab_run_routes import (
     build_colab_run_router,
 )
 from visionforge.gui.api.comet_routes import build_comet_router
+from visionforge.gui.api.config_scope import confine_config
 from visionforge.gui.api.custom_task_routes import build_custom_task_run_router
 from visionforge.gui.api.custom_task_routes import router as custom_tasks_router
 from visionforge.gui.api.dataset_scope import current_scope
@@ -426,6 +427,9 @@ async def resume_run(run_id: str, profile: ProfileDep) -> RunResponse:
         ) from exc
 
     config = profile.scope_model(config)
+    # The stored config is read again like a new one: the folders a server
+    # shares may have changed since the run started (ADR-218).
+    confine_config(config, profile)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     job_id = f"{config.name}_{timestamp}"
     return submission._submit_job(

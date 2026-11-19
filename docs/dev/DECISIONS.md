@@ -8627,3 +8627,32 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Check each offered value against the field's rule (allow a search over datasets inside the scope).* It needs the type of the field and the validators that resolve it, per trial combination; a config validator that joins or expands a path would be one more thing to mirror. Varying the dataset inside one search is rare, and a job per dataset does it.
 - *Confine inside the trial, when the config is built.* The scope is bound to the request, and the trial runs later from the queue in a worker thread; and a refusal would come after GPU time was spent, as a failed trial instead of a 422.
 - *A list of the fields a search may vary.* Shorter to read, and wrong the day a config gains a field; the annotation rule fails closed instead.
+
+## ADR-218 — In server mode a finished run can be resumed, tested, explained and exported, inside its owner's reach
+
+**Date:** 2026-11-19
+**Status:** Accepted
+**Extends:** ADR-214 (the dataset types), ADR-215 (the config)
+
+**Context:** after ADR-217 a person could train anything on a server and do nothing with the result but look at it: resuming, testing on another dataset, Grad-CAM, batch prediction and ONNX export still answered 404. The four evaluation routes take a run id and a body; they load the checkpoint `run.json` records (`artifacts.model`), read images from a folder the body names, and write into the run folder or, for the CSV and the ONNX file, wherever the body says. Resuming rebuilds the config from `run.json` and queues it. Loading a detection checkpoint unpickles it.
+
+**Decision:**
+
+- The folder a body names is typed `DatasetDir`, like every dataset path since ADR-214: `RunTestRequest.data_dir`, `GradCamRequest.input_dir`, `BatchPredictRequest.input_dir`. The three routes move from `owner` to `confined`, and the test that walks the bodies of the confined routes covers them.
+- An output path is typed `RunFolderFile`: on a server only an empty one passes (`ExportOnnxRequest.output_onnx`, `BatchPredictRequest.output_csv`), so the file is written into the run's own folder. A person has no other folder on the server worth naming, and one rule (the run folder) is easier to state than a second scope for writes.
+- Before any of the four actions runs, `_reject_foreign_checkpoint` reads `artifacts.model` and answers 409 when it resolves outside the owner's profile folder. A run trained on the server always records a file of its own; the check is there so that what gets unpickled never depends on a `run.json` being as the server left it.
+- Resuming calls `confine_config` on the stored config after the profile scopes its output: the folders a server shares may have changed since the run started, and a stored config is read like a new one.
+- The five routes join `READY`. The classification blocks `batch_prediction` and `export_onnx` stay closed for good on a server: they take a checkpoint path and an output path in the config, and the run routes do the same work from a run id.
+- The page changes little: the actions appear because the server stops listing them. The "browse" button of their folder fields is absent where the folder dialog is closed, and the note of ADR-216 lists the folders the server accepts under each.
+
+**Consequences:** a run trained on a server can be used there. Nothing an action reads comes from outside the person's folders and the shared ones, and nothing it writes leaves the run folder. The local tool is unchanged: the types accept what `str` accepts and the checkpoint check does nothing with no scope bound.
+
+**Known limits:** the four evaluation actions run at once, in a worker thread, outside the queue: they share the CPU or the GPU with whatever job is training, another person's included. `run.json` itself is trusted for everything but the checkpoint path (the model section the action rebuilds, the names of the dataset parts): it sits in the person's own folder, which only the server writes today. Downloading the run (ZIP, Markdown), the publishers and the tracker retries are still closed.
+
+**Not verified:** nothing ran behind a real login proxy. Test, Grad-CAM, batch prediction and ONNX export ran for real on one classification run (CPU); the other four tasks were not run in this mode. Resuming was tested as a request, not by continuing a stopped run.
+
+**Alternatives considered:**
+
+- *Let the output path be anywhere in the person's folder.* A second rule and a second type for a need nobody has on a server: the file is downloaded from the run, not picked up from a path.
+- *Open the two classification blocks instead.* They name a checkpoint and an output file as config paths; confining them would repeat what the run routes already guarantee by taking a run id.
+- *Put the evaluation actions in the queue.* It would settle the shared-GPU limit, and it changes how the page waits for their result (a request today, a job then); it belongs with a decision about fairness, not with opening the routes.

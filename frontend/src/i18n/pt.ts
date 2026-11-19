@@ -594,6 +594,7 @@ export const pt = {
     menuNote:
       "Servidor compartilhado. O que ainda não funciona em um servidor fica escondido.",
     foldersTitle: "Neste servidor, o dataset precisa estar em uma destas pastas:",
+    foldersTitleRun: "Neste servidor, as imagens precisam estar em uma destas pastas:",
     folderOwn: "sua pasta",
     folderShared: "compartilhada",
     foldersHint: "Cole o caminho completo no campo acima.",

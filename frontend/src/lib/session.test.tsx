@@ -236,6 +236,14 @@ describe("the screen on a shared server", () => {
     expect(note.indexOf("ana-lab-org")).toBeLessThan(note.indexOf("/srv/shared"));
   });
 
+  it("under a run's image folder the note speaks of images, not of the dataset", () => {
+    setSession(SERVER);
+    const note = render(<ServerFoldersNote title={pt.server.foldersTitleRun} />);
+    expect(note).toContain(pt.server.foldersTitleRun);
+    expect(note).not.toContain(pt.server.foldersTitle);
+    expect(note).toContain("/srv/shared");
+  });
+
   it("the datasets button is gone with nothing behind it", () => {
     expect(bar()).toContain('data-tour="datasets"');
     setSession(SERVER);

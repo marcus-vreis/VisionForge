@@ -1863,6 +1863,26 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "O campo {field} não pode ser usado quando o VisionForge roda como servidor.",
         "en": "The field {field} cannot be used when VisionForge runs as a server.",
     },
+    "server.output_fixed": {
+        "pt": (
+            "Neste servidor o arquivo é gravado na pasta do próprio run; deixe o "
+            "caminho de saída vazio."
+        ),
+        "en": (
+            "On this server the file is written into the run's own folder; leave "
+            "the output path empty."
+        ),
+    },
+    "server.checkpoint_outside": {
+        "pt": (
+            "O checkpoint registrado no run {run} está fora da sua pasta e não "
+            "pode ser usado neste servidor."
+        ),
+        "en": (
+            "The checkpoint recorded in run {run} is outside your folder and "
+            "cannot be used on this server."
+        ),
+    },
     "server.config_axis": {
         "pt": (
             "Neste servidor uma busca, comparação ou variante não pode alterar o "

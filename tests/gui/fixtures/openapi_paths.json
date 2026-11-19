@@ -2962,6 +2962,7 @@
       },
       "400": {},
       "404": {},
+      "409": {},
       "422": {
         "application/json": "HTTPValidationError"
       },
@@ -2987,6 +2988,7 @@
       },
       "400": {},
       "404": {},
+      "409": {},
       "422": {
         "application/json": "HTTPValidationError"
       },
@@ -3012,6 +3014,7 @@
       },
       "400": {},
       "404": {},
+      "409": {},
       "422": {
         "application/json": "HTTPValidationError"
       },
@@ -3109,6 +3112,7 @@
       },
       "400": {},
       "404": {},
+      "409": {},
       "422": {
         "application/json": "HTTPValidationError"
       },
