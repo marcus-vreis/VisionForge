@@ -16,7 +16,7 @@
 > pessoas. Não ofereça este servidor a desconhecidos.
 
 Esta página sai do código atual (`gui/server_mode.py`) e das decisões ADR-212
-a ADR-221. O que não foi testado está marcado como *não verificado*.
+a ADR-222. O que não foi testado está marcado como *não verificado*.
 
 ## O que muda em relação ao uso local
 
@@ -56,7 +56,10 @@ Num servidor compartilhado a página é a mesma, com menos botões:
   "Pôr um dataset no servidor"). No Laboratório, as pastas são digitadas e o
   que ele cria vai para a sua pasta (veja "O Laboratório num servidor").
 - **"Criar dataset de exemplo"** grava o exemplo na sua pasta de datasets.
-- **Sem as prévias** de aumento e de pré-processamento e sem a auditoria.
+- **As prévias** de aumento e de pré-processamento e a **auditoria** do
+  dataset funcionam como no uso local, sobre um dataset das suas pastas ou das
+  compartilhadas. As imagens de uma prévia ficam numa pasta do seu perfil
+  (`preview_cache`), e cada prévia nova substitui a anterior.
 - **Sem Colab**, sem aviso de atualização e sem as abas de tarefas próprias.
 - **No Histórico**, um run mostra métricas, gráficos, "Carregar no
   formulário" e o que dá para fazer com o modelo: retomar um run parado,
@@ -161,7 +164,7 @@ que não existe: não dá para ler o progresso, o resultado nem parar.
 | Baixar dataset (torchvision, Roboflow, Hugging Face) e criar o dataset de exemplo | sim, só para uma subpasta da **sua** pasta de datasets |
 | Baixar do Kaggle | não num servidor (o cliente lê a chave de uma variável do processo, que seria de todos) |
 | Laboratório de datasets: explorar, conferir, redividir, incorporar imagens, mesclar, exportar e importar COCO | sim; lê as **suas** pastas e as compartilhadas e grava só na sua |
-| Prévia de aumento e de pré-processamento, auditoria | ainda não |
+| Prévia de aumento e de pré-processamento, auditoria do dataset | sim; leem as **suas** pastas e as compartilhadas, e as imagens da prévia ficam no **seu** perfil |
 | Treinar um run simples (classificação, detecção, segmentação, regressão, anomalia) | sim, com dataset e pesos das **suas** pastas ou das compartilhadas |
 | Fila | sim: os **seus** jobs e, dos outros, só quantos estão na frente |
 | Progresso, resultado e gráficos de um run | sim, só dos **seus** |
@@ -292,6 +295,14 @@ Zenodo e do GitHub listaram os arquivos do run sem contatar nenhum serviço;
 um envio ao Hub sem token salvo respondeu 409 e a prévia do DVC 404. *Não
 verificado:* um envio real ao Hub, ao Zenodo ou ao GitHub neste modo (nos
 testes o envio é simulado e confere de quem é o token usado).
+
+Prévias e auditoria, no mesmo dia e arranjo, sobre um dataset compartilhado
+de 80 imagens: a prévia de aumento gravou 2 variantes e a de pré-processamento
+o resultado de um filtro, as duas dentro do perfil da pessoa, e as imagens
+foram servidas à página (200); a auditoria contou 48, 16 e 16 imagens nas
+três divisões; uma auditoria de `C:\Windows` respondeu 422. *Não verificado:*
+as prévias vistas nos painéis da tela neste modo (os pedidos foram feitos
+direto às rotas).
 
 ## Tirar um run do servidor
 

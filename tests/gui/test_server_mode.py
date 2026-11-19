@@ -143,7 +143,7 @@ def test_a_route_the_table_does_not_know_is_refused() -> None:
     assert not answers("POST /api/runs/{run_id}/mlflow/retry")
     assert answers("POST /api/dataset/stats")
     assert answers("POST /api/dataset/download")
-    assert not answers("POST /api/dataset/audit")
+    assert answers("POST /api/dataset/audit")
     assert not answers("POST /api/dataset/pick")
 
 
@@ -239,8 +239,6 @@ def test_the_browser_cannot_pick_another_profile(served: Any, tmp_path: Path) ->
         ("POST", "/api/dataset/pick"),
         ("POST", "/api/update/apply"),
         ("POST", "/api/profiles"),
-        ("POST", "/api/dataset/audit"),
-        ("POST", "/api/dataset/preview_augment"),
         ("POST", "/api/runs/some_run/mlflow/retry"),
         ("GET", "/api/colab/status"),
         ("GET", "/api/brand-new"),
@@ -312,6 +310,7 @@ def test_a_name_inside_the_dataset_may_only_go_down(tmp_path: Path, part: str) -
 def test_every_path_of_an_open_dataset_route_is_typed() -> None:
     from visionforge.gui.api import (
         coco_routes,
+        evidence_routes,
         explorer_routes,
         incorporate_routes,
         merge_routes,
@@ -329,6 +328,7 @@ def test_every_path_of_an_open_dataset_route_is_typed() -> None:
         resplit_routes,
         incorporate_routes,
         coco_routes,
+        evidence_routes,
     )
     components = app.openapi()["components"]["schemas"]
 
@@ -355,7 +355,7 @@ def test_every_path_of_an_open_dataset_route_is_typed() -> None:
             if field.annotation is str and name not in not_paths:
                 assert field.metadata, f"{model.__name__}.{name} is a plain str"
         checked += 1
-    assert checked == 31
+    assert checked == 34
 
 
 def test_the_session_says_where_the_datasets_may_live(

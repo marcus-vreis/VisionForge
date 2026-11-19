@@ -640,7 +640,7 @@ class DatasetSamplesResponse(BaseModel):
 class PreprocessPreviewRequest(BaseModel):
     """Request a strip of preview images for a preprocessing pipeline."""
 
-    base_dir: str
+    base_dir: DatasetDir
     split: Literal["train", "val", "test"] = "train"
     class_name: str | None = None  # None → first class found
     steps: list[dict[str, Any]] = []  # each: {kind, ...params}
@@ -668,7 +668,7 @@ class PreprocessPreviewResponse(BaseModel):
 class AugmentPreviewRequest(BaseModel):
     """Request a strip of randomly-augmented variants of one dataset image."""
 
-    base_dir: str
+    base_dir: DatasetDir
     split: Literal["train", "val", "test"] = "train"
     class_name: str | None = None  # None → first class found
     transforms: dict[str, Any] = {}  # validated into TransformConfig

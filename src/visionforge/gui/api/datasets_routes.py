@@ -20,7 +20,7 @@ from pydantic import SecretStr
 
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.gui.api.dataset_download import credentials_in_play, download_dataset
-from visionforge.gui.api.dataset_scope import current_scope
+from visionforge.gui.api.dataset_scope import current_scope, preview_cache
 from visionforge.gui.api.error_messages import unexpected_error
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST_TEXT,
@@ -539,7 +539,7 @@ def _render_augment_preview(req: AugmentPreviewRequest) -> AugmentPreviewRespons
             img = TF.adjust_saturation(img, rng.uniform(0.8, 1.2))
         return img
 
-    cache_dir = _AUGMENT_CACHE_DIR
+    cache_dir = preview_cache(_AUGMENT_CACHE_DIR.parent) / _AUGMENT_CACHE_DIR.name
     cache_dir.mkdir(parents=True, exist_ok=True)
     for old in cache_dir.glob("*.png"):
         try:

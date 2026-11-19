@@ -97,6 +97,21 @@ def _relative_part(raw: str) -> str:
     return raw
 
 
+def preview_cache(local: Path) -> Path:
+    """Where a preview's images are written: ``local`` on a local install.
+
+    On a server ``local`` (``outputs/preview_cache``) would be one folder for
+    everyone: a person's preview would be read, and erased, by the next
+    person's. There the images go next to the person's dataset folder, inside
+    their profile, which is also the only place the artifact route serves them
+    from (ADR-222).
+    """
+    scope = current_scope()
+    if scope is None or scope.own is None:
+        return local
+    return scope.own.parent / "preview_cache"
+
+
 DatasetDir = Annotated[str, AfterValidator(_confined_dir)]
 """A dataset folder. In server mode it must be absolute and sit in the scope."""
 
