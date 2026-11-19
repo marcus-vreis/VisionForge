@@ -7,7 +7,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
-from visionforge.gui.api.dataset_scope import DatasetDir, DatasetPart, RunFolderFile
+from visionforge.gui.api.dataset_scope import (
+    DatasetDir,
+    DatasetPart,
+    OwnDatasetDir,
+    RunFolderFile,
+)
 from visionforge.gui.api.profiles import (
     ProfileSettings,
     ProfileSettingsUpdate,
@@ -974,7 +979,7 @@ class DatasetDownloadRequest(BaseModel):
         "torchvision"
     )
     dataset: str
-    out_dir: str
+    out_dir: OwnDatasetDir
     splits: list[str] = ["train", "test"]
     limit: int | None = Field(default=None, ge=1)
     api_key: SecretStr | None = None
