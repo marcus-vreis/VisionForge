@@ -14,6 +14,9 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CI = !!process.env.CI;
 const PORT = Number(process.env.VF_E2E_PORT ?? 8765);
+// A second server, in shared-server mode (ADR-212), for `server-mode.e2e.ts`.
+const SERVER_MODE_PORT = Number(process.env.VF_E2E_SERVER_MODE_PORT ?? PORT + 1);
+const SERVER_MODE_TESTS = "**/server-mode.e2e.ts";
 
 // The `visionforge` executable to start. CI installs it on the PATH; locally the
 // project's own venv is the default.
@@ -52,19 +55,45 @@ export default defineConfig({
       name: "chromium",
       // Locally the Chrome already installed on the machine; CI installs Playwright's chromium.
       use: CI ? { ...devices["Desktop Chrome"] } : { ...devices["Desktop Chrome"], channel: "chrome" },
+      testIgnore: SERVER_MODE_TESTS,
+    },
+    {
+      // The same GUI on a server several people share. Each test opens its own
+      // context with the account header a login proxy would set.
+      name: "server-mode",
+      testMatch: SERVER_MODE_TESTS,
+      use: {
+        ...(CI ? devices["Desktop Chrome"] : { ...devices["Desktop Chrome"], channel: "chrome" }),
+        baseURL: `http://127.0.0.1:${SERVER_MODE_PORT}`,
+      },
     },
   ],
-  webServer: {
-    command: "node e2e/serve.mjs",
-    url: `http://127.0.0.1:${PORT}/api/health`,
-    // A fresh work folder per run: never attach to a server that has someone's runs.
-    reuseExistingServer: false,
-    timeout: 120_000,
-    stdout: "pipe",
-    stderr: "pipe",
-    env: {
-      VF_E2E_EXECUTABLE: executable,
-      VF_E2E_PORT: String(PORT),
+  webServer: [
+    {
+      command: "node e2e/serve.mjs",
+      url: `http://127.0.0.1:${PORT}/api/health`,
+      // A fresh work folder per run: never attach to a server that has someone's runs.
+      reuseExistingServer: false,
+      timeout: 120_000,
+      stdout: "pipe",
+      stderr: "pipe",
+      env: {
+        VF_E2E_EXECUTABLE: executable,
+        VF_E2E_PORT: String(PORT),
+      },
     },
-  },
+    {
+      command: "node e2e/serve.mjs",
+      url: `http://127.0.0.1:${SERVER_MODE_PORT}/api/health`,
+      reuseExistingServer: false,
+      timeout: 120_000,
+      stdout: "pipe",
+      stderr: "pipe",
+      env: {
+        VF_E2E_EXECUTABLE: executable,
+        VF_E2E_PORT: String(SERVER_MODE_PORT),
+        VF_E2E_SERVER_MODE: "1",
+      },
+    },
+  ],
 });

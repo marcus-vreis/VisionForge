@@ -8793,3 +8793,28 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 
 - *Keep MLflow, with one store per person inside their profile.* Isolated, and still a file nobody but the operator can open; serving `mlflow ui` per person is a second web application to sign people into.
 - *A separate `/api/me` route for the settings.* A cleaner name, and a second code path for the page's profile menu, which already speaks `/api/profiles`.
+
+## ADR-224 — The e2e suite runs a second server in server mode, with the browser as the login proxy
+
+**Date:** 2026-11-19
+**Status:** Accepted
+**Extends:** ADR-133 (the Playwright suite), ADR-212 (server mode)
+
+**Context:** eleven slices opened server mode route by route (ADR-212 to ADR-223). Each was tested with the app object under pytest and checked by hand in a browser behind a stand-in proxy; no browser test ran in this mode, so a change to the welcome, the profile menu or the route keys the page hides could break a shared server and pass CI.
+
+**Decision:**
+
+- `playwright.config.ts` starts a second `visionforge gui` through the same `e2e/serve.mjs`, with `VF_E2E_SERVER_MODE=1`: `--server --trusted-proxy 127.0.0.1 --datasets-dir <work>/shared`, in its own work folder (`e2e/.work-server`) and port (8766). A second project, `server-mode`, points its `baseURL` there and runs `e2e/server-mode.e2e.ts`; the `chromium` project ignores that file. `npm run e2e` runs both, so the CI job does not change.
+- The browser plays the login proxy. The server trusts this machine's address, and a context sets `X-Forwarded-User` through `extraHTTPHeaders`: the file's default page and `request` are one account, and a second `browser.newContext` is another. A client with no header checks the 401.
+- The file covers the path a person walks, with two accounts on the one server: the refusal without an account; the first visit's name, saved in the profile; the profile menu (W&B and Comet, no MLflow, no other profile); one epoch on the sample dataset written into the person's own folder, found in the History; the other account's empty History and 404 for that run; and a few refusals of the running process (a dataset path outside the folders, another profile, MLflow, the folder picker).
+
+**Consequences:** the server-mode start-up through the real CLI flags, the gate and the page are exercised together on every pull request, about 35 s more on the e2e job. The suite now needs two free ports.
+
+**Known limits:** one training, of classification; the strategies, the evaluation actions, the downloads, the Laboratory, the publishers and the previews are covered by pytest only. The servers start for every run, also when one project is selected.
+
+**Not verified:** a real login proxy. The header comes from the test itself, so this proves what the server does with an account, not that a proxy sets it or strips a forged one.
+
+**Alternatives considered:**
+
+- *A small proxy process in front, as in the manual checks.* Closer to the deployment, and a third process and port for what `extraHTTPHeaders` already does; it would still not be oauth2-proxy.
+- *oauth2-proxy with a mock identity provider in CI.* The only way to test the real hand-off; a container stack for the e2e job, left for the deployment test of phase 0.
