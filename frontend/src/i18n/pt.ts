@@ -284,6 +284,8 @@ export const pt = {
     // The browser tab title while no run has just ended (the static one in
     // index.html is only what shows before the page loads).
     pageTitle: "VisionForge — Treino local de IA",
+    // The same on a server several people share (`--server`, ADR-212).
+    pageTitleServer: "VisionForge — Treino de IA num servidor compartilhado",
     train: {
       simple: "▶ Treinar",
       cv: "▶ Rodar K-fold",

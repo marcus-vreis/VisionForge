@@ -268,6 +268,7 @@ export const en: Dict = {
     // The browser tab title while no run has just ended (the static one in
     // index.html is only what shows before the page loads).
     pageTitle: "VisionForge — Local AI Training",
+    pageTitleServer: "VisionForge — AI Training on a Shared Server",
     train: {
       simple: "▶ Train",
       cv: "▶ Run K-fold",

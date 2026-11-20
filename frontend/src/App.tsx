@@ -69,7 +69,7 @@ import {
   type ProfileInfo,
 } from "./lib/profile";
 import { useT } from "./i18n/useT";
-import { ROUTE, routeOpen, useSession } from "./lib/session";
+import { ROUTE, getSession, pageTitle, routeOpen, useSession } from "./lib/session";
 import { DatasetsOverlay } from "./components/DatasetsOverlay";
 import { CustomAccentsContext } from "./lib/custom-accents";
 import { customAccentMap } from "./lib/task-accent";
@@ -410,7 +410,7 @@ export default function App() {
     if (status.status === "running") {
       void requestPermission();
       announced.current = null;
-      resetTitle(tRef.current.app.pageTitle);
+      resetTitle(pageTitle(tRef.current.app, getSession()));
       return;
     }
     if (status.status !== "completed" && status.status !== "failed") return;

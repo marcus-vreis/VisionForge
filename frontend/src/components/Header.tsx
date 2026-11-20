@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchSystemInfo } from "../api/client";
 import { useI18n } from "../i18n/useT";
 import type { GuideId } from "../lib/guides";
+import { studioLine } from "../lib/session";
 import type { ProfileInfo, Pronoun } from "../lib/profile";
 import { GuideMenu } from "./GuideMenu";
 import { ProfileMenu } from "./ProfileMenu";
@@ -177,7 +178,8 @@ export function Header({
               marginTop: 4,
             }}
           >
-            local ai studio{version ? ` · v${version}` : ""}
+            {studioLine(sharedServer)}
+            {version ? ` · v${version}` : ""}
           </div>
           <UpdateNotice />
         </div>
