@@ -138,6 +138,38 @@ test("a person trains on a dataset of their own folder and the run is theirs alo
   await context.close();
 });
 
+test("a person deletes a dataset of their own folder, after being asked twice", async ({
+  page,
+  request,
+}) => {
+  // The sample dataset of the training above sits in Ana's own folder.
+  const before = (await (await request.get("/api/datasets/own")).json()).datasets;
+  expect(before.map((d: { name: string }) => d.name)).toEqual(["exemplo-classificacao"]);
+
+  await enter(page, "Ana");
+  await page.locator("[data-tour='datasets']").click();
+  await page.getByRole("tab", { name: pt.datasetsOverlay.tabMine }).click();
+  const list = page.getByRole("region", { name: pt.ownDatasets.title });
+  await expect(list.getByText("exemplo-classificacao", { exact: true })).toBeVisible();
+
+  // The first click only asks; cancelling keeps the folder.
+  const remove = list.getByRole("button", {
+    name: pt.ownDatasets.deleteLabel("exemplo-classificacao"),
+  });
+  await remove.click();
+  await expect(list.getByText(pt.ownDatasets.confirm, { exact: true })).toBeVisible();
+  await list.getByRole("button", { name: pt.ownDatasets.confirmNo }).click();
+  expect((await (await request.get("/api/datasets/own")).json()).datasets).toHaveLength(1);
+
+  await remove.click();
+  await list.getByRole("button", { name: pt.ownDatasets.confirmYes }).click();
+  await expect(
+    list.getByText(pt.ownDatasets.deleted("exemplo-classificacao"), { exact: true }),
+  ).toBeVisible();
+  await expect(list.getByText(pt.ownDatasets.empty, { exact: true })).toBeVisible();
+  expect((await (await request.get("/api/datasets/own")).json()).datasets).toHaveLength(0);
+});
+
 test("the server refuses what is outside a person's folders or off for a server", async ({
   request,
 }) => {

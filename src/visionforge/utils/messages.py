@@ -1937,6 +1937,25 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "The {block} block is not available yet when VisionForge runs as a server."
         ),
     },
+    "own_dataset.not_found": {
+        "pt": "Não há um dataset chamado '{name}' na sua pasta.",
+        "en": "There is no dataset named '{name}' in your folder.",
+    },
+    "own_dataset.jobs_running": {
+        "pt": (
+            "Você tem um treino rodando ou na fila, e ele pode estar lendo este "
+            "dataset. Espere terminar (ou cancele na fila) e apague depois."
+        ),
+        "en": (
+            "You have a training running or waiting, and it may be reading this "
+            "dataset. Wait for it to end (or cancel it in the queue) and delete "
+            "afterwards."
+        ),
+    },
+    "own_dataset.delete_failed": {
+        "pt": "Não foi possível apagar o dataset '{name}': {reason}.",
+        "en": "The dataset '{name}' could not be deleted: {reason}.",
+    },
     "server.busy": {
         "pt": (
             "O servidor está ocupado com ações de outras pessoas. Espere um "

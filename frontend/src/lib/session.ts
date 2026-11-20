@@ -55,6 +55,7 @@ export const ROUTE = {
   sampleDataset: "POST /api/sample-dataset",
   datasetDownload: "POST /api/dataset/download",
   datasetLab: "POST /api/explorer/summary",
+  ownDatasets: "GET /api/datasets/own",
   datasetAudit: "POST /api/dataset/audit",
   previewAugment: "POST /api/dataset/preview_augment",
   previewPreprocess: "POST /api/dataset/preview_preprocess",
@@ -137,6 +138,18 @@ export function gigabytes(bytes: number, locale: string): string {
     maximumFractionDigits: 1,
   });
   return `${value} GB`;
+}
+
+/** A folder's size for a list, in the unit that reads best: "340,0 KB",
+ *  "12,3 MB", "3,0 GB". A small dataset must not read as "0,0 MB". */
+export function diskSize(bytes: number, locale: string): string {
+  if (bytes >= GIB) return gigabytes(bytes, locale);
+  const mega = bytes >= 1024 ** 2;
+  const value = (bytes / (mega ? 1024 ** 2 : 1024)).toLocaleString(locale, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+  return `${value} ${mega ? "MB" : "KB"}`;
 }
 
 /** True when nothing that writes will start until the person deletes runs. */

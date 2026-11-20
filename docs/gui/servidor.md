@@ -17,7 +17,7 @@
 > pessoas. Não ofereça este servidor a desconhecidos.
 
 Esta página sai do código atual (`gui/server_mode.py`) e das decisões ADR-212
-a ADR-226. O que não foi testado está marcado como *não verificado*.
+a ADR-227. O que não foi testado está marcado como *não verificado*.
 
 ## O que muda em relação ao uso local
 
@@ -184,6 +184,22 @@ dessas ainda divide o processador ou a GPU com o treino que estiver rodando,
 de qualquer pessoa. As operações do Laboratório não entram na conta; elas já
 têm o próprio limite, uma por pessoa e por tipo.
 
+## Meus datasets
+
+Em **Datasets → Meus datasets** (aba que só existe num servidor) cada pessoa vê
+o que há na própria pasta de datasets, com o tamanho de cada um, e pode apagar
+o que não usa mais.
+
+- Apagar pede confirmação na própria linha ("Apagar de vez? Não dá para
+  desfazer.") e remove a pasta inteira. Não há lixeira.
+- Só aparecem e só podem ser apagadas as pastas que estão diretamente na
+  **sua** pasta. As pastas compartilhadas e as de outras pessoas não entram.
+- Enquanto você tiver um treino rodando ou na fila, o servidor recusa apagar:
+  o treino pode estar lendo o dataset. Espere terminar ou cancele na fila.
+- Um run já treinado continua no Histórico depois que o dataset dele é
+  apagado, mas as ações que releem o dataset (como retomar o treino) deixam de
+  funcionar para ele.
+
 ## Cota de disco
 
 Sem `--quota-gb`, cada pessoa pode encher o disco do servidor. Com
@@ -199,9 +215,8 @@ Sem `--quota-gb`, cada pessoa pode encher o disco do servidor. Com
 - **O que acontece com a pasta cheia:** esses pedidos são recusados (erro 507)
   com o tamanho usado e o limite. Ler, abrir, baixar, publicar e **apagar**
   runs continuam funcionando.
-- **Como liberar espaço:** apagando runs no Histórico; o espaço vale logo em
-  seguida. Os datasets da pasta própria também contam, e hoje só quem opera o
-  servidor consegue apagá-los (não há botão para isso na tela).
+- **Como liberar espaço:** apagando runs no Histórico ou datasets em
+  **Datasets → Meus datasets**; o espaço vale logo em seguida.
 - **Onde a pessoa vê:** o menu do nome mostra "disco: 1,5 GB de 20,0 GB", e
   um aviso quando a pasta está cheia.
 
@@ -237,6 +252,7 @@ for menor que a soma das cotas, ele ainda pode encher.
 | Enviar treinos ao Weights & Biases e ao Comet, e reenviar um run | sim, com a **sua** chave, salva no seu perfil |
 | MLflow local (ligar e reenviar) | não num servidor (grava num arquivo do disco dele, que ninguém abriria) |
 | Criar outro perfil | não num servidor (o perfil é a conta do login) |
+| Listar e apagar os datasets da **sua** pasta ("Meus datasets") | sim; só as pastas diretamente na sua pasta, e não enquanto um treino seu roda ou espera |
 | Seletor de pasta, "abrir pasta", atualizar o VisionForge, Colab, tarefas próprias, credenciais de download | desligados no modo servidor |
 
 ## Estratégias num servidor
@@ -400,6 +416,13 @@ com `--max-actions 1`, 8 auditorias disparadas juntas tiveram 1 resposta 200 e
 7 respostas 429 com o aviso, e uma auditoria logo depois respondeu 200. *Não
 verificado:* o aviso visto na tela de uma ação, e quantas dessas ações uma
 máquina aguenta (2 é um chute para uma GPU).
+
+Meus datasets, em 2026-11-20: a suíte Playwright abre a aba num servidor de
+verdade, vê o dataset de exemplo criado no treino, cancela na primeira
+pergunta (a pasta fica), confirma na segunda e confere que a pasta sumiu. A
+aba foi vista também à mão, com três datasets listados. *Não verificado:* a
+recusa com um treino na fila vista na tela (os testes automáticos cobrem pela
+rota) e apagar um dataset grande, de vários GB.
 
 ## Tirar um run do servidor
 

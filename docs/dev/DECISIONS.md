@@ -8871,3 +8871,31 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Queue these actions as jobs.* It would also keep them off a running training; set aside by the owner for its cost in every action's screen.
 - *Wait for a free slot instead of refusing.* Friendlier for a few seconds, and a request that hangs behind a ten-minute download with no word to the person.
 - *A bound per person.* Fair between people, and four people still run four at once.
+
+## ADR-227 — In server mode a person lists and deletes the datasets of their own folder
+
+**Date:** 2026-11-20
+**Status:** Accepted
+**Extends:** ADR-219 (a person writes datasets only into their own folder), ADR-225 (the disk quota)
+
+**Context:** the quota of ADR-225 counts a person's datasets, and the page could delete runs only. A folder filled by downloaded or derived datasets left its owner locked out of every action that writes, with the operator as the only way out; ADR-225 listed it as a known limit.
+
+**Decision:**
+
+- `gui/api/own_datasets.py` adds two routes, both `owner` and open on a server. `GET /api/datasets/own` lists the folders directly inside the signed-in person's dataset folder, each with its name, path and size (`folder_bytes`). `DELETE /api/datasets/own/{name}` removes one of them with everything in it and answers with its name.
+- What may be deleted is decided by name, not by path: one path segment, a real folder (not a link) whose parent is the person's own folder. Anything else is 404, the answer for a dataset that is not there. The shared folders and other people's are out of reach by construction.
+- While a job of that person runs or waits in the queue the delete answers 409: the job may be reading the dataset, and which one it reads is not worth parsing out of every task's config.
+- On a local install nobody has an own folder: the list is empty, the delete is 404, and the page does not offer the tab.
+- The page: the Datasets sheet gains a third tab, "Meus datasets", on a server. Each row has the size and a delete button that asks in the row itself before deleting. After a delete the list and the session are read again, so the profile menu's disk figure follows. The gate already forgets the person's measured size after any `DELETE` (ADR-225).
+
+**Consequences:** a person at the quota can always get under it on their own. Deleting a dataset does not touch the runs trained on it; actions that read it again (resuming, the default folder of an evaluation) fail for those runs as they would for any dataset that moved.
+
+**Known limits:** there is no trash and no undo. Only whole top-level folders are listed and deleted, not parts of one. A Laboratory job or a preview reading the dataset is not checked, only queued and running trainings. The size of each folder is walked on every listing.
+
+**Not verified:** nothing ran behind a real login proxy. Deleting a dataset of several gigabytes was not timed: the request waits for it.
+
+**Alternatives considered:**
+
+- *Delete by path, typed as `OwnDatasetDir`.* One more place where a path from the browser reaches `rmtree`; a name under a fixed folder cannot point anywhere else.
+- *Refuse only when a job reads this dataset.* Kinder, and it needs the dataset path of every task's config, strategies included; the queue is short-lived and the message says what to do.
+- *A trash folder emptied later.* An undo, and the space is not freed, which is the reason the person is deleting.
