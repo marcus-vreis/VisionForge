@@ -458,6 +458,17 @@ def main() -> None:
         ),
     )
     gui_parser.add_argument(
+        "--max-actions",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "in --server mode, how many heavy actions (evaluating a run, "
+            "downloading or auditing a dataset, publishing) run at once outside "
+            "the queue; the next one is told the server is busy. Default: 2"
+        ),
+    )
+    gui_parser.add_argument(
         "--user-header",
         default="X-Forwarded-User",
         metavar="NAME",
@@ -641,6 +652,7 @@ def main() -> None:
                 user_header=args.user_header,
                 datasets_dirs=args.datasets_dir,
                 quota_gb=args.quota_gb,
+                max_actions=args.max_actions,
             )
         except ServerModeError as exc:
             parser.error(str(exc))

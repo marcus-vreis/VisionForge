@@ -8845,3 +8845,29 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Check inside each handler.* The handler knows what it will write, and thirty-seven of them would each need the call; the gate has one table and one test.
 - *Filesystem quotas (XFS project quotas, ZFS datasets).* A hard limit enforced while writing, the only real one; it depends on the operator's filesystem and privileges, and a write that fails mid-training is a worse message than a refusal before it starts. The two can be used together.
 - *Refuse by free disk space instead of per person.* Protects the disk, and lets one person take all of it.
+
+## ADR-226 — In server mode at most `--max-actions` heavy actions run at once outside the queue
+
+**Date:** 2026-11-20
+**Status:** Accepted
+**Extends:** ADR-218 (the actions of a finished run), ADR-219 (downloads), ADR-221 (publishers), ADR-223 (tracker retries)
+
+**Context:** a training waits in the queue (ADR-185). The evaluation actions, a dataset download or audit, the publishers and the tracker retries do their work inside the request, in a worker thread. Each server-mode decision that opened one listed it as a known limit: nothing bounded how many ran together, so a few people pressing Grad-CAM or downloading at once could exhaust memory or the GPU for everybody. Two designs were on the table: turn these actions into queued jobs, or bound how many run at once. The owner chose the bound: queued jobs mean every action's screen follows a job and may wait hours behind a long training.
+
+**Decision:**
+
+- `gui/action_limit.py` names the routes that count (`HEAVY_ROUTES`, eleven): `test`, `gradcam`, `batch_predict` and `export_onnx` of a run; `dataset/download` and `dataset/audit`; the Hub, Zenodo and GitHub exports; the W&B and Comet retries. `ActionSlots` counts the ones running.
+- `ServerModeGate` takes a slot before the handler of such a route and gives it back when the response is done, whatever the outcome. With `--max-actions` (default 2) taken, the next one is answered 429 with a message saying the server is busy and to try again. Nothing waits in line. The bound is across everybody, not per person.
+- The option needs `--server` and a value of 1 or more. Without `--server` nothing is counted.
+
+**Consequences:** the memory and the threads these actions take are bounded by a number the operator chooses. A person who is refused loses nothing and tries again. The page needed no change: it already shows the server's message where the action was asked.
+
+**Known limits:** the bound does not wait for a training: an action still shares the CPU or the GPU with whatever job is running. One person can hold every slot. The Laboratory jobs and the dataset scan run after their request ends and are not counted; they keep their own bound, one per person and kind (ADR-220). The previews, the sample dataset, the run's ZIP and the reads are not counted. A refused request is not retried by the page.
+
+**Not verified:** nothing ran behind a real login proxy. No measurement of how many of these actions a given machine holds: 2 is a guess for one GPU.
+
+**Alternatives considered:**
+
+- *Queue these actions as jobs.* It would also keep them off a running training; set aside by the owner for its cost in every action's screen.
+- *Wait for a free slot instead of refusing.* Friendlier for a few seconds, and a request that hangs behind a ten-minute download with no word to the person.
+- *A bound per person.* Fair between people, and four people still run four at once.
