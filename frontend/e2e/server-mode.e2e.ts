@@ -54,6 +54,9 @@ test("the first visit asks the name and keeps it in the person's own profile", a
   request,
 }) => {
   await enter(page, "Ana");
+  // The page does not call itself "local" on a shared server.
+  await expect(page).toHaveTitle(pt.app.pageTitleServer);
+  await expect(page.getByText(/shared ai studio/)).toBeVisible();
   const chip = page.getByTitle(pt.profile.menuTitle);
   await expect(chip).toContainText("Ana");
 

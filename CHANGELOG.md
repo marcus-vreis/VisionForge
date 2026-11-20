@@ -18,6 +18,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - Modo servidor: na classificação, um eixo do grid search ou do random search (`data.base_dir`, `model.weights_path`, `output.models_dir`) podia apontar para fora das pastas da pessoa, porque a busca reescreve o config a cada trial, depois da conferência. Agora o que uma busca reescreve também é conferido (ADR-216, ADR-217). O modo servidor ainda não saiu em nenhuma versão.
 - Enviar um segundo treino nos primeiros segundos do primeiro, com o servidor recém-aberto, respondia 500: a checagem da GPU lia o `torch` enquanto a thread do primeiro job ainda o importava. Agora um `torch` pela metade conta como "sem contexto de GPU para quebrar" e o segundo treino entra na fila.
 - Textos que num servidor diziam o lugar errado: a dica da chave do W&B e do Comet dizia "fica salva neste computador", o botão de dataset de exemplo citava `datasets/exemplo-<tarefa>/` e o download falava em "pasta local". Agora dizem o servidor do VisionForge e a sua pasta de datasets, o que vale nos dois usos. A folha de Datasets passa a se chamar "Dados de treino", já que traz também "Explorar" e "Meus datasets".
+- Num servidor a aba do navegador dizia "Treino local de IA" e o cabeçalho "local ai studio". Agora dizem "Treino de IA num servidor compartilhado" e "shared ai studio"; num uso local nada muda.
 
 ### Added
 

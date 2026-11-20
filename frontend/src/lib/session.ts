@@ -217,6 +217,20 @@ function subscribe(notify: () => void): () => void {
   return () => listeners.delete(notify);
 }
 
+/** The browser tab title: "local" on a person's own machine, a shared server
+ *  otherwise (`--server`, ADR-212). */
+export function pageTitle(
+  app: { pageTitle: string; pageTitleServer: string },
+  session: Session,
+): string {
+  return session.server_mode ? app.pageTitleServer : app.pageTitle;
+}
+
+/** The line under the logo, kept in English like the logo itself. */
+export function studioLine(sharedServer: boolean): string {
+  return sharedServer ? "shared ai studio" : "local ai studio";
+}
+
 export function useSession(): Session {
   return useSyncExternalStore(subscribe, getSession, getSession);
 }
