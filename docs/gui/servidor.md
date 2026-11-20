@@ -17,7 +17,7 @@
 > pessoas. Não ofereça este servidor a desconhecidos.
 
 Esta página sai do código atual (`gui/server_mode.py`) e das decisões ADR-212
-a ADR-223. O que não foi testado está marcado como *não verificado*.
+a ADR-224. O que não foi testado está marcado como *não verificado*.
 
 ## O que muda em relação ao uso local
 
@@ -324,6 +324,16 @@ respondeu 404, ligar o MLflow 422 e criar um perfil 404. *Não verificado:* um
 envio real ao W&B ou ao Comet neste modo, que pede uma chave de verdade (nos
 testes o W&B é simulado e confere de quem é a chave usada no reenvio; o do
 Comet só confere quem alcança a rota).
+
+**Teste de navegador a cada mudança.** A suíte Playwright do projeto sobe um
+servidor de verdade neste modo e repete, com duas contas no mesmo servidor, o
+caminho principal: um pedido sem a conta é recusado; a primeira visita
+pergunta o nome e ele fica no perfil; o menu traz W&B e Comet e não traz
+MLflow nem outro perfil; uma pessoa treina uma época no dataset de exemplo da
+própria pasta e acha o run no Histórico; a outra conta vê o Histórico vazio e
+recebe 404 ao pedir esse run. Nesses testes o navegador faz o papel do proxy
+de login (ele mesmo manda o cabeçalho da conta), então eles **não** provam a
+configuração de um proxy real.
 
 ## Tirar um run do servidor
 
