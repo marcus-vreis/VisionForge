@@ -310,7 +310,7 @@ export const pt = {
     trainLockedData: "Escolha o dataset na etapa Dados para liberar o Treinar",
     history: "histórico",
     datasets: "datasets",
-    datasetsTitle: "Baixar um dataset para uma pasta local",
+    datasetsTitle: "Baixar um dataset para a sua pasta de datasets",
     queue: "fila",
     queueTitle:
       "Abrir o treino em execução e ver os que esperam a GPU — dá para parar um ou remover outro",
@@ -364,7 +364,7 @@ export const pt = {
     saveTarget: "Salvar destino",
     saveFailed: "Falha ao salvar a configuração do W&B.",
     token: "Chave de API do W&B",
-    tokenHint: "Crie a chave nas configurações da sua conta W&B. Ela fica salva neste computador, só para este perfil, e nunca volta para a tela.",
+    tokenHint: "Crie a chave nas configurações da sua conta W&B. Ela fica salva no servidor do VisionForge, só para este perfil, e nunca volta para a tela.",
     configured: "Chave salva neste perfil.",
     saveToken: "Salvar chave",
     removeToken: "Esquecer chave",
@@ -388,7 +388,7 @@ export const pt = {
     saveTarget: "Salvar destino",
     saveFailed: "Falha ao salvar a configuração do Comet.",
     token: "Chave de API do Comet",
-    tokenHint: "Crie a chave nas configurações da sua conta Comet. Ela fica salva neste computador, só para este perfil, e nunca volta para a tela.",
+    tokenHint: "Crie a chave nas configurações da sua conta Comet. Ela fica salva no servidor do VisionForge, só para este perfil, e nunca volta para a tela.",
     configured: "Chave salva neste perfil.",
     saveToken: "Salvar chave",
     removeToken: "Esquecer chave",
@@ -610,9 +610,9 @@ export const pt = {
   },
   datasetsOverlay: {
     kicker: "// datasets",
-    title: "Obter dados",
+    title: "Dados de treino",
     description:
-      "Baixe uma vez para uma pasta local; depois aponte o campo de dataset de qualquer task para ela.",
+      "Baixe um dataset uma vez e aponte para a pasta dele o campo de dataset de qualquer tarefa.",
     tabGet: "Baixar",
     tabExplore: "Explorar",
     tabMine: "Meus datasets",
@@ -2309,7 +2309,7 @@ export const pt = {
   // names, the Kaggle token format and the example dataset ids stay as they are
   // in both languages; the sentences that carry them are whole strings.
   datasetDownload: {
-    title: "Baixar dataset (online → pasta local)",
+    title: "Baixar dataset (online → sua pasta de datasets)",
     cancel: "cancelar",
     open: "+ baixar dataset",
     provider: "Provedor",
@@ -2391,7 +2391,7 @@ export const pt = {
   // The panels' "use the sample dataset" button (ADR-117).
   sampleDataset: {
     button: "usar dataset de exemplo",
-    title: "Cria datasets/exemplo-<tarefa>/ (ou reaproveita) e preenche a pasta base",
+    title: "Cria a pasta exemplo-<tarefa> na sua pasta de datasets (ou reaproveita) e preenche a pasta base",
     failed: (reason: string) => `Não foi possível criar o dataset de exemplo: ${reason}`,
   },
   // The pre-training overview of a classification dataset (components/DatasetStats.tsx).
@@ -3568,7 +3568,7 @@ export const pt = {
     },
     datasets: {
       title: "Seus datasets",
-      body: "Aqui você baixa um dataset (torchvision, Roboflow, Kaggle ou Hugging Face) para uma pasta local e aponta qualquer tarefa para ela. Com a pasta definida, o painel da tarefa mostra a distribuição das classes — vale conferir antes do primeiro treino: quase todo resultado estranho começa em um dataset desbalanceado.",
+      body: "Aqui você baixa um dataset (torchvision, Roboflow, Kaggle ou Hugging Face) para a sua pasta de datasets e aponta qualquer tarefa para ele. Com a pasta definida, o painel da tarefa mostra a distribuição das classes — vale conferir antes do primeiro treino: quase todo resultado estranho começa em um dataset desbalanceado.",
     },
   },
   // The guide menu and the guides' own texts (lib/guides/, ADR-115). The tour's
