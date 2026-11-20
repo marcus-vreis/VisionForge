@@ -291,7 +291,7 @@ export const en: Dict = {
     trainLockedData: "Choose the dataset in the Data step to enable Train",
     history: "history",
     datasets: "datasets",
-    datasetsTitle: "Download a dataset to a local folder",
+    datasetsTitle: "Download a dataset to your datasets folder",
     queue: "queue",
     queueTitle:
       "Open the run in progress and see the ones waiting for the GPU — you can stop one or remove another",
@@ -346,7 +346,7 @@ export const en: Dict = {
     saveTarget: "Save destination",
     saveFailed: "Failed to save the W&B setting.",
     token: "W&B API key",
-    tokenHint: "Create the key in your W&B account settings. It is saved on this computer, for this profile only, and never comes back to the page.",
+    tokenHint: "Create the key in your W&B account settings. It is saved on the VisionForge server, for this profile only, and never comes back to the page.",
     configured: "Key saved in this profile.",
     saveToken: "Save key",
     removeToken: "Forget key",
@@ -370,7 +370,7 @@ export const en: Dict = {
     saveTarget: "Save destination",
     saveFailed: "Failed to save the Comet setting.",
     token: "Comet API key",
-    tokenHint: "Create the key in your Comet account settings. It is saved on this computer, for this profile only, and never comes back to the page.",
+    tokenHint: "Create the key in your Comet account settings. It is saved on the VisionForge server, for this profile only, and never comes back to the page.",
     configured: "Key saved in this profile.",
     saveToken: "Save key",
     removeToken: "Forget key",
@@ -581,9 +581,9 @@ export const en: Dict = {
   },
   datasetsOverlay: {
     kicker: "// datasets",
-    title: "Get data",
+    title: "Training data",
     description:
-      "Download once to a local folder, then point any task's dataset field at it.",
+      "Download a dataset once, then point any task's dataset field at its folder.",
     tabGet: "Download",
     tabExplore: "Explore",
     tabMine: "My datasets",
@@ -2169,7 +2169,7 @@ export const en: Dict = {
     },
   },
   datasetDownload: {
-    title: "Download a dataset (online → local folder)",
+    title: "Download a dataset (online → your datasets folder)",
     cancel: "cancel",
     open: "+ download dataset",
     provider: "Provider",
@@ -2246,7 +2246,7 @@ export const en: Dict = {
   },
   sampleDataset: {
     button: "use the sample dataset",
-    title: "Creates datasets/exemplo-<task>/ (or reuses it) and fills the base folder",
+    title: "Creates the exemplo-<task> folder in your datasets folder (or reuses it) and fills the base folder",
     failed: (reason: string) => `Could not create the sample dataset: ${reason}`,
   },
 
@@ -3278,7 +3278,7 @@ export const en: Dict = {
     },
     datasets: {
       title: "Your datasets",
-      body: "Here you download a dataset (torchvision, Roboflow, Kaggle or Hugging Face) to a local folder and point any task at it. Once the folder is set, the task's panel shows the class distribution — worth a look before your first run: most odd results trace back to an imbalanced dataset.",
+      body: "Here you download a dataset (torchvision, Roboflow, Kaggle or Hugging Face) to your datasets folder and point any task at it. Once the folder is set, the task's panel shows the class distribution — worth a look before your first run: most odd results trace back to an imbalanced dataset.",
     },
   },
   // The guide menu and the guides' own texts (lib/guides/, ADR-115). The tour's
