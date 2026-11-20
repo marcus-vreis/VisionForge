@@ -11,8 +11,11 @@ const DatasetDownloadCard = lazy(() =>
 const DatasetExplorer = lazy(() =>
   import("./DatasetExplorer").then((m) => ({ default: m.DatasetExplorer })),
 );
+const OwnDatasets = lazy(() =>
+  import("./OwnDatasets").then((m) => ({ default: m.OwnDatasets })),
+);
 
-type Tab = "get" | "explore";
+type Tab = "get" | "explore" | "mine";
 
 interface DatasetsOverlayProps {
   open: boolean;
@@ -32,8 +35,12 @@ export function DatasetsOverlay({ open, onClose }: DatasetsOverlayProps) {
   const session = useSession();
   // A shared server may offer only one of the two (ADR-219): the tab of the
   // other is absent, and the sheet opens on what there is.
-  const tabs = (["get", "explore"] as const).filter((id) =>
-    routeOpen(session, id === "get" ? ROUTE.datasetDownload : ROUTE.datasetLab),
+  // "Mine" exists only there: the person's own folder, which counts against
+  // their disk quota (ADR-227).
+  const tabs = (["get", "explore", "mine"] as const).filter((id) =>
+    id === "mine"
+      ? session.server_mode && routeOpen(session, ROUTE.ownDatasets)
+      : routeOpen(session, id === "get" ? ROUTE.datasetDownload : ROUTE.datasetLab),
   );
   const [chosen, setTab] = useState<Tab>("get");
   const tab = tabs.includes(chosen) ? chosen : (tabs[0] ?? "get");
@@ -167,14 +174,24 @@ export function DatasetsOverlay({ open, onClose }: DatasetsOverlayProps) {
                 cursor: "pointer",
               }}
             >
-              {id === "get" ? t.datasetsOverlay.tabGet : t.datasetsOverlay.tabExplore}
+              {id === "get"
+                ? t.datasetsOverlay.tabGet
+                : id === "explore"
+                  ? t.datasetsOverlay.tabExplore
+                  : t.datasetsOverlay.tabMine}
             </button>
           ))}
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px 24px" }}>
           <LazySurface>
-            {tab === "get" ? <DatasetDownloadCard collapsible={false} /> : <DatasetExplorer />}
+            {tab === "get" ? (
+              <DatasetDownloadCard collapsible={false} />
+            ) : tab === "explore" ? (
+              <DatasetExplorer />
+            ) : (
+              <OwnDatasets />
+            )}
           </LazySurface>
         </div>
       </div>

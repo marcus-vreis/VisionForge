@@ -31,6 +31,7 @@ from visionforge.gui.api.http_responses import (
     UNPROCESSABLE_TEXT,
     VALIDATION_ERROR_CONTENT,
 )
+from visionforge.gui.api.own_datasets import router as own_datasets_router
 from visionforge.gui.api.sample_dataset import (
     SampleDatasetExistsError,
     SampleTaskError,
@@ -58,6 +59,8 @@ _SAMPLE_REUSED_TEXT = "The folder was already there and is reused; nothing is wr
 _KIND = "kind"
 
 router = APIRouter()
+# A person's own datasets on a server: listed and deleted (ADR-227).
+router.include_router(own_datasets_router)
 
 
 @router.post(

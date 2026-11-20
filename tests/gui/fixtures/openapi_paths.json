@@ -59,6 +59,28 @@
       "custom-tasks"
     ]
   },
+  "DELETE /api/datasets/own/{name}": {
+    "operationId": "delete_own_dataset_api_datasets_own__name__delete",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:name:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "OwnDatasetDeleted"
+      },
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "500": {}
+    },
+    "tags": [
+      "datasets"
+    ]
+  },
   "DELETE /api/github/token": {
     "operationId": "forget_api_github_token_delete",
     "parameters": [
@@ -430,6 +452,24 @@
       "400": {},
       "403": {},
       "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "datasets"
+    ]
+  },
+  "GET /api/datasets/own": {
+    "operationId": "list_own_datasets_api_datasets_own_get",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "OwnDatasetsResponse"
+      },
       "422": {
         "application/json": "HTTPValidationError"
       }

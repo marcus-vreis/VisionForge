@@ -1403,6 +1403,24 @@ export async function revealRunFolder(
 /** Permanently delete a run directory. The backend refuses to delete the
  *  currently running run (409) and rejects anything outside the profile's models
  *  folder (400); a run of another profile is a 404 (ADR-114). */
+/** One folder of the person's own dataset folder on a shared server (ADR-227). */
+export interface OwnDataset {
+  name: string;
+  path: string;
+  size_bytes: number;
+}
+
+/** The datasets of the signed-in person's own folder; empty on a local install. */
+export async function fetchOwnDatasets(): Promise<OwnDataset[]> {
+  const body = await request<{ datasets: OwnDataset[] }>("/datasets/own");
+  return body.datasets;
+}
+
+/** Delete one of them for good. 409 while a training of theirs runs or waits. */
+export async function deleteOwnDataset(name: string): Promise<{ name: string; status: string }> {
+  return request(`/datasets/own/${encodeURIComponent(name)}`, { method: "DELETE" });
+}
+
 export async function deleteRun(runId: string): Promise<{ run_id: string; status: string }> {
   return request(`/runs/${encodeURIComponent(runId)}`, { method: "DELETE" });
 }

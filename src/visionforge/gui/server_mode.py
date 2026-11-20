@@ -133,6 +133,8 @@ ROUTE_CLASSES: dict[str, RouteClass] = {
     "POST /api/dataset/download": "confined",
     "GET /api/dataset/file": "confined",
     "POST /api/dataset/pick": "off",
+    "GET /api/datasets/own": "owner",
+    "DELETE /api/datasets/own/{name}": "owner",
     "POST /api/dataset/preview_augment": "confined",
     "POST /api/dataset/preview_preprocess": "confined",
     "POST /api/dataset/samples": "confined",
@@ -338,6 +340,10 @@ READY: frozenset[str] = frozenset(
         "POST /api/explorer/summary",
         "POST /api/dataset/download",
         "POST /api/sample-dataset",
+        # What the person's own folder holds, and deleting one of them: how
+        # a full folder gets under the quota again (ADR-227).
+        "GET /api/datasets/own",
+        "DELETE /api/datasets/own/{name}",
         "GET /api/dataset/file",
         "POST /api/dataset/samples",
         "POST /api/dataset/stats",
