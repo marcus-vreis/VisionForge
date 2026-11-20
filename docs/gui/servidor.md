@@ -17,7 +17,7 @@
 > pessoas. Não ofereça este servidor a desconhecidos.
 
 Esta página sai do código atual (`gui/server_mode.py`) e das decisões ADR-212
-a ADR-224. O que não foi testado está marcado como *não verificado*.
+a ADR-225. O que não foi testado está marcado como *não verificado*.
 
 ## O que muda em relação ao uso local
 
@@ -99,6 +99,7 @@ visionforge gui --server --trusted-proxy 127.0.0.1 --allowed-host visionforge.me
 | `--trusted-proxy <endereço>` | IP (ou bloco CIDR, como `172.18.0.0/16`) do proxy de login. Obrigatória: sem ela o servidor não sobe. Pode repetir. |
 | `--user-header <nome>` | Cabeçalho em que o proxy informa a conta. O padrão é `X-Forwarded-User` (oauth2-proxy); no Authelia é `Remote-User`. |
 | `--datasets-dir <pasta>` | Pasta de datasets que todos podem **ler**. Pode repetir. A pasta precisa existir. |
+| `--quota-gb <número>` | O máximo que a pasta de **cada pessoa** pode ocupar, em GB (aceita decimais, como `0.5`). Sem ela não há limite. Veja "Cota de disco". |
 | `--allowed-host <nome>` | O nome público pelo qual as pessoas chegam (o do proxy). |
 
 Deixe o VisionForge escutando só em `127.0.0.1` (o padrão) quando o proxy roda
@@ -160,6 +161,32 @@ Cada pessoa vê os próprios jobs por inteiro. Dos outros aparece só um número
 quantos estão rodando ou esperando na frente do seu primeiro job (ou, se você
 não tem job, quantos há na fila). Um run de outra pessoa responde como um run
 que não existe: não dá para ler o progresso, o resultado nem parar.
+
+## Cota de disco
+
+Sem `--quota-gb`, cada pessoa pode encher o disco do servidor. Com
+`--quota-gb 20`, por exemplo, a pasta de cada conta pode ocupar até 20 GB.
+
+- **O que conta:** tudo que está na pasta da pessoa (`outputs/profiles/<conta>/`):
+  os runs com os modelos, os gráficos, os relatórios e os datasets que ela
+  baixou ou criou. As pastas compartilhadas não contam.
+- **Quando é conferido:** na hora em que a pessoa pede algo que grava dados
+  novos: um treino ou uma estratégia, retomar um run, baixar ou criar um
+  dataset, aplicar uma operação do Laboratório, e as ações de um run pronto
+  (testar em outro dataset, Grad-CAM, inferência em lote, exportar ONNX).
+- **O que acontece com a pasta cheia:** esses pedidos são recusados (erro 507)
+  com o tamanho usado e o limite. Ler, abrir, baixar, publicar e **apagar**
+  runs continuam funcionando.
+- **Como liberar espaço:** apagando runs no Histórico; o espaço vale logo em
+  seguida. Os datasets da pasta própria também contam, e hoje só quem opera o
+  servidor consegue apagá-los (não há botão para isso na tela).
+- **Onde a pessoa vê:** o menu do nome mostra "disco: 1,5 GB de 20,0 GB", e
+  um aviso quando a pasta está cheia.
+
+O limite é conferido **antes** de a ação começar, não enquanto ela grava: um
+treino que já está rodando termina mesmo que passe do limite, e o próximo
+pedido é que será recusado. A cota não reserva espaço: se o disco do servidor
+for menor que a soma das cotas, ele ainda pode encher.
 
 ## O que responde hoje
 
@@ -335,6 +362,14 @@ recebe 404 ao pedir esse run. Nesses testes o navegador faz o papel do proxy
 de login (ele mesmo manda o cabeçalho da conta), então eles **não** provam a
 configuração de um proxy real.
 
+Cota de disco, em 2026-11-20, com `--quota-gb 0.1` e uma pasta de 173 MB: o
+menu mostrou "disco: 0,2 GB de 0,1 GB" e o aviso de pasta cheia; pedir o
+dataset de exemplo mostrou na tela a recusa com os dois tamanhos; um treino
+foi recusado com 507; listar os runs e ler um dataset compartilhado
+continuaram respondendo. *Não verificado:* liberar espaço apagando um run
+pela tela (os testes automáticos cobrem pela rota) e uma pasta com dezenas de
+milhares de arquivos, onde medir demora mais.
+
 ## Tirar um run do servidor
 
 - **Baixar.** "Bundle do experimento" baixa um ZIP com o registro do run, os
@@ -410,7 +445,8 @@ imagens, mesclar, exportar ou importar COCO), nunca muda o original.
   gravar e responde 409 se ele já existir ali; troque o nome.
 
 Limite que o operador precisa conhecer: os trabalhos do Laboratório rodam na
-hora, fora da fila, um por pessoa e por tipo, e não há cota de disco.
+hora, fora da fila, um por pessoa e por tipo. O que elas gravam conta na cota
+de disco, quando o servidor tem uma (veja "Cota de disco").
 
 ## Perguntas comuns
 

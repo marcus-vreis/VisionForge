@@ -591,6 +591,9 @@ export const pt = {
   // Um servidor para várias pessoas (`visionforge gui --server`, ADR-216).
   server: {
     account: (user: string) => `conta: ${user}`,
+    quota: (used: string, limit: string) => `disco: ${used} de ${limit}`,
+    quotaFull:
+      "Sua pasta está cheia. Apague treinos no Histórico para treinar ou baixar datasets de novo.",
     menuNote:
       "Servidor compartilhado. O que ainda não funciona em um servidor fica escondido.",
     foldersTitle: "Neste servidor, o dataset precisa estar em uma destas pastas:",

@@ -31,6 +31,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - Modo servidor: um run pode sair do servidor. O dono baixa o ZIP e o Markdown e publica no Hugging Face Hub, no Zenodo e no GitHub com o token salvo no próprio perfil; para outra pessoa o run não existe. O DVC fica desligado num servidor (ADR-221).
 - Modo servidor: as prévias de aumento e de pré-processamento e a auditoria do dataset funcionam. Elas leem as pastas da pessoa e as compartilhadas, e as imagens de uma prévia ficam dentro do perfil de quem a pediu, não numa pasta de cache comum (ADR-222).
 - Modo servidor: cada pessoa vê e edita o próprio perfil (nome, saudação e integrações) e manda os próprios treinos ao Weights & Biases e ao Comet, com a própria chave, inclusive o reenvio de um run. A primeira visita pergunta o nome, que fica no servidor. O MLflow local fica desligado num servidor (ADR-223).
+- Modo servidor: `--quota-gb` limita o que a pasta de cada pessoa pode ocupar. Com a pasta cheia, novos treinos, datasets e ações que gravam são recusados com o tamanho usado e o limite, até a pessoa apagar runs; o menu do perfil mostra o uso (ADR-225).
 
 ### Changed
 

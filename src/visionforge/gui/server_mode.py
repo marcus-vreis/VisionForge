@@ -22,6 +22,7 @@ With the mode off (the default) the gate passes every request through.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import ipaddress
 import re
@@ -43,6 +44,7 @@ from visionforge.gui.api.profiles import (
     ensure_profile,
     slugify,
 )
+from visionforge.gui.disk_quota import GIB, DiskUsage, grows, size_text
 from visionforge.utils.messages import LANG_HEADER, message, resolve_lang
 
 # The header oauth2-proxy sets on the request it forwards (``--pass-user-headers``).
@@ -64,6 +66,9 @@ _SLUG_BASE_LEN = 29
 _DIGEST_LEN = 10
 
 Network = ipaddress.IPv4Network | ipaddress.IPv6Network
+
+# What each person's folder holds, for the quota (ADR-225).
+USAGE = DiskUsage()
 
 RouteClass = Literal["open", "owner", "confined", "off"]
 """What a route needs before it may answer in server mode.
@@ -397,6 +402,8 @@ class ServerMode:
     user_header: str = DEFAULT_USER_HEADER
     # Folders the operator shares with everyone, read-only (``--datasets-dir``).
     datasets: tuple[Path, ...] = ()
+    # The most each person's folder may hold (``--quota-gb``); None is no limit.
+    quota_bytes: int | None = None
 
     @classmethod
     def from_options(
@@ -406,6 +413,7 @@ class ServerMode:
         trusted_proxies: Iterable[str] = (),
         user_header: str = DEFAULT_USER_HEADER,
         datasets_dirs: Iterable[str | Path] = (),
+        quota_gb: float | None = None,
     ) -> ServerMode:
         """Validate what the command line gave.
 
@@ -413,17 +421,21 @@ class ServerMode:
             ServerModeError: ``--trusted-proxy`` or ``--user-header`` without
                 ``--server``; server mode with no trusted proxy; an address that
                 is not an IP or a CIDR block; an empty header name; a
-                ``--datasets-dir`` that is not a folder.
+                ``--datasets-dir`` that is not a folder; ``--quota-gb`` without
+                ``--server`` or not above zero.
         """
         proxies = [p.strip() for p in trusted_proxies if p.strip()]
         header = user_header.strip()
         shared = [Path(d) for d in datasets_dirs]
         if not enabled:
-            if proxies or shared or header != DEFAULT_USER_HEADER:
+            if proxies or shared or header != DEFAULT_USER_HEADER or quota_gb:
                 raise ServerModeError(
-                    "--trusted-proxy, --user-header and --datasets-dir need --server."
+                    "--trusted-proxy, --user-header, --datasets-dir and --quota-gb "
+                    "need --server."
                 )
             return cls()
+        if quota_gb is not None and not quota_gb > 0:
+            raise ServerModeError(f"--quota-gb {quota_gb!r} must be above zero.")
         if not proxies:
             raise ServerModeError(
                 "--server needs --trusted-proxy <address>: the address of the "
@@ -450,6 +462,7 @@ class ServerMode:
             trusted=tuple(networks),
             user_header=header,
             datasets=tuple(folder.resolve() for folder in shared),
+            quota_bytes=None if quota_gb is None else int(quota_gb * GIB),
         )
 
     def trusts(self, client_host: str | None) -> bool:
@@ -621,10 +634,39 @@ class ServerModeGate:
             response = JSONResponse({"detail": str(exc)}, status_code=500)
             await response(scope, receive, send)
             return
+        # Everything of this person sits beside their dataset folder.
+        signed["state"]["vf_root"] = own.parent
+        if await _over_quota(mode, key, own.parent, scope, receive, send):
+            return
         with dataset_scope(
             DatasetScope(readable=(own, *mode.datasets), owner=profile.slug, own=own)
         ):
             await self.app(signed, receive, send)
+        if scope["method"] == "DELETE":
+            # Something of theirs may be gone: measure again on the next ask.
+            USAGE.forget(own.parent)
+
+
+async def _over_quota(
+    mode: ServerMode, key: str, root: Path, scope: Scope, receive: Receive, send: Send
+) -> bool:
+    """Refuse (507) an action that writes when the person's folder is full."""
+    if mode.quota_bytes is None or not grows(key):
+        return False
+    used = await asyncio.to_thread(USAGE.of, root)
+    if used < mode.quota_bytes:
+        return False
+    lang = resolve_lang(Headers(scope=scope).get(LANG_HEADER))
+    await _refuse(
+        scope,
+        receive,
+        send,
+        507,
+        "server.quota_full",
+        used=size_text(used, lang),
+        limit=size_text(mode.quota_bytes, lang),
+    )
+    return True
 
 
 def own_datasets_dir(profile: Profile) -> Path:
@@ -665,6 +707,7 @@ __all__ = [
     "ServerMode",
     "ServerModeError",
     "ServerModeGate",
+    "USAGE",
     "answers",
     "mode_of",
     "normalize_user",
