@@ -17,7 +17,7 @@
 > pessoas. Não ofereça este servidor a desconhecidos.
 
 Esta página sai do código atual (`gui/server_mode.py`) e das decisões ADR-212
-a ADR-225. O que não foi testado está marcado como *não verificado*.
+a ADR-226. O que não foi testado está marcado como *não verificado*.
 
 ## O que muda em relação ao uso local
 
@@ -99,6 +99,7 @@ visionforge gui --server --trusted-proxy 127.0.0.1 --allowed-host visionforge.me
 | `--trusted-proxy <endereço>` | IP (ou bloco CIDR, como `172.18.0.0/16`) do proxy de login. Obrigatória: sem ela o servidor não sobe. Pode repetir. |
 | `--user-header <nome>` | Cabeçalho em que o proxy informa a conta. O padrão é `X-Forwarded-User` (oauth2-proxy); no Authelia é `Remote-User`. |
 | `--datasets-dir <pasta>` | Pasta de datasets que todos podem **ler**. Pode repetir. A pasta precisa existir. |
+| `--max-actions <número>` | Quantas ações pesadas rodam ao mesmo tempo fora da fila, somando todas as pessoas. O padrão é 2. Veja "Ações que rodam na hora". |
 | `--quota-gb <número>` | O máximo que a pasta de **cada pessoa** pode ocupar, em GB (aceita decimais, como `0.5`). Sem ela não há limite. Veja "Cota de disco". |
 | `--allowed-host <nome>` | O nome público pelo qual as pessoas chegam (o do proxy). |
 
@@ -161,6 +162,27 @@ Cada pessoa vê os próprios jobs por inteiro. Dos outros aparece só um número
 quantos estão rodando ou esperando na frente do seu primeiro job (ou, se você
 não tem job, quantos há na fila). Um run de outra pessoa responde como um run
 que não existe: não dá para ler o progresso, o resultado nem parar.
+
+## Ações que rodam na hora
+
+Um treino espera a vez na fila. Algumas ações não: elas fazem o trabalho
+dentro do próprio pedido e respondem quando terminam. Num servidor
+compartilhado, no máximo `--max-actions` delas (2, se você não disser) rodam
+ao mesmo tempo, somando todas as pessoas:
+
+- testar um run em outro dataset, Grad-CAM, inferência em lote e exportar ONNX;
+- baixar um dataset e auditar um dataset;
+- publicar no Hugging Face Hub, no Zenodo e no GitHub, e reenviar ao W&B ou
+  ao Comet.
+
+Quando o limite está tomado, a próxima recebe o aviso "O servidor está
+ocupado com ações de outras pessoas" (erro 429) e nada fica esperando: é só
+tentar de novo em instantes. Um treino nunca é recusado por isso.
+
+O que este limite **não** faz: ele não espera um treino terminar. Uma ação
+dessas ainda divide o processador ou a GPU com o treino que estiver rodando,
+de qualquer pessoa. As operações do Laboratório não entram na conta; elas já
+têm o próprio limite, uma por pessoa e por tipo.
 
 ## Cota de disco
 
@@ -369,6 +391,15 @@ foi recusado com 507; listar os runs e ler um dataset compartilhado
 continuaram respondendo. *Não verificado:* liberar espaço apagando um run
 pela tela (os testes automáticos cobrem pela rota) e uma pasta com dezenas de
 milhares de arquivos, onde medir demora mais.
+
+Limite de ações, em 2026-11-20: nos testes automáticos, com o app real e
+`--max-actions 1`, uma auditoria segurada no meio fez a auditoria e o Grad-CAM
+de outra conta responderem 429, enquanto listar runs e ler um dataset
+seguiram respondendo; ao terminar, a vaga voltou. Num servidor de verdade
+com `--max-actions 1`, 8 auditorias disparadas juntas tiveram 1 resposta 200 e
+7 respostas 429 com o aviso, e uma auditoria logo depois respondeu 200. *Não
+verificado:* o aviso visto na tela de uma ação, e quantas dessas ações uma
+máquina aguenta (2 é um chute para uma GPU).
 
 ## Tirar um run do servidor
 

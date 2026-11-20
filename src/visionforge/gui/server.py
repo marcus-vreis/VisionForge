@@ -275,6 +275,10 @@ def start_server(
             ", ".join(str(n) for n in app.state.server_mode.trusted),
             app.state.server_mode.user_header,
         )
+        logger.info(
+            "Server mode: at most {} heavy actions at once outside the queue",
+            app.state.server_mode.max_actions,
+        )
         if app.state.server_mode.quota_bytes is not None:
             logger.info(
                 "Server mode: each person's folder may hold {} bytes",

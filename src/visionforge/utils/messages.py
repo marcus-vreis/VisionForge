@@ -1937,6 +1937,16 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "The {block} block is not available yet when VisionForge runs as a server."
         ),
     },
+    "server.busy": {
+        "pt": (
+            "O servidor está ocupado com ações de outras pessoas. Espere um "
+            "pouco e tente de novo; nada foi perdido."
+        ),
+        "en": (
+            "The server is busy with other people's actions. Wait a moment and "
+            "try again; nothing was lost."
+        ),
+    },
     "server.quota_full": {
         "pt": (
             "Sua pasta neste servidor está cheia: {used} de {limit}. Apague "

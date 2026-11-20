@@ -36,6 +36,7 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 from starlette.websockets import WebSocketClose
 
+from visionforge.gui.action_limit import DEFAULT_MAX_ACTIONS, ActionSlots, heavy
 from visionforge.gui.api.dataset_scope import DatasetScope, dataset_scope
 from visionforge.gui.api.profiles import (
     PROFILE_HEADER,
@@ -69,6 +70,9 @@ Network = ipaddress.IPv4Network | ipaddress.IPv6Network
 
 # What each person's folder holds, for the quota (ADR-225).
 USAGE = DiskUsage()
+
+# The heavy actions running now, outside the queue (ADR-226).
+SLOTS = ActionSlots()
 
 RouteClass = Literal["open", "owner", "confined", "off"]
 """What a route needs before it may answer in server mode.
@@ -404,6 +408,8 @@ class ServerMode:
     datasets: tuple[Path, ...] = ()
     # The most each person's folder may hold (``--quota-gb``); None is no limit.
     quota_bytes: int | None = None
+    # How many heavy actions run at once outside the queue (``--max-actions``).
+    max_actions: int = DEFAULT_MAX_ACTIONS
 
     @classmethod
     def from_options(
@@ -414,6 +420,7 @@ class ServerMode:
         user_header: str = DEFAULT_USER_HEADER,
         datasets_dirs: Iterable[str | Path] = (),
         quota_gb: float | None = None,
+        max_actions: int | None = None,
     ) -> ServerMode:
         """Validate what the command line gave.
 
@@ -422,18 +429,22 @@ class ServerMode:
                 ``--server``; server mode with no trusted proxy; an address that
                 is not an IP or a CIDR block; an empty header name; a
                 ``--datasets-dir`` that is not a folder; ``--quota-gb`` without
-                ``--server`` or not above zero.
+                ``--server`` or not above zero; ``--max-actions`` without
+                ``--server`` or below one.
         """
         proxies = [p.strip() for p in trusted_proxies if p.strip()]
         header = user_header.strip()
         shared = [Path(d) for d in datasets_dirs]
         if not enabled:
-            if proxies or shared or header != DEFAULT_USER_HEADER or quota_gb:
+            given = proxies or shared or header != DEFAULT_USER_HEADER or quota_gb
+            if given or max_actions is not None:
                 raise ServerModeError(
-                    "--trusted-proxy, --user-header, --datasets-dir and --quota-gb "
-                    "need --server."
+                    "--trusted-proxy, --user-header, --datasets-dir, --quota-gb and "
+                    "--max-actions need --server."
                 )
             return cls()
+        if max_actions is not None and max_actions < 1:
+            raise ServerModeError(f"--max-actions {max_actions!r} must be 1 or more.")
         if quota_gb is not None and not quota_gb > 0:
             raise ServerModeError(f"--quota-gb {quota_gb!r} must be above zero.")
         if not proxies:
@@ -463,6 +474,7 @@ class ServerMode:
             user_header=header,
             datasets=tuple(folder.resolve() for folder in shared),
             quota_bytes=None if quota_gb is None else int(quota_gb * GIB),
+            max_actions=DEFAULT_MAX_ACTIONS if max_actions is None else max_actions,
         )
 
     def trusts(self, client_host: str | None) -> bool:
@@ -638,10 +650,20 @@ class ServerModeGate:
         signed["state"]["vf_root"] = own.parent
         if await _over_quota(mode, key, own.parent, scope, receive, send):
             return
-        with dataset_scope(
-            DatasetScope(readable=(own, *mode.datasets), owner=profile.slug, own=own)
-        ):
-            await self.app(signed, receive, send)
+        counted = heavy(key)
+        if counted and not SLOTS.take(mode.max_actions):
+            await _refuse(scope, receive, send, 429, "server.busy")
+            return
+        try:
+            with dataset_scope(
+                DatasetScope(
+                    readable=(own, *mode.datasets), owner=profile.slug, own=own
+                )
+            ):
+                await self.app(signed, receive, send)
+        finally:
+            if counted:
+                SLOTS.give()
         if scope["method"] == "DELETE":
             # Something of theirs may be gone: measure again on the next ask.
             USAGE.forget(own.parent)
@@ -706,6 +728,7 @@ __all__ = [
     "RouteClass",
     "ServerMode",
     "ServerModeError",
+    "SLOTS",
     "ServerModeGate",
     "USAGE",
     "answers",
