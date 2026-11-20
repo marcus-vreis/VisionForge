@@ -1937,6 +1937,19 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "The {block} block is not available yet when VisionForge runs as a server."
         ),
     },
+    "server.quota_full": {
+        "pt": (
+            "Sua pasta neste servidor está cheia: {used} de {limit}. Apague "
+            "treinos no Histórico para liberar espaço e tente de novo. Os "
+            "datasets da sua pasta também contam; quem os apaga é quem opera "
+            "o servidor."
+        ),
+        "en": (
+            "Your folder on this server is full: {used} of {limit}. Delete runs "
+            "in the History to free space and try again. The datasets in your "
+            "folder count too; the server's operator is who deletes them."
+        ),
+    },
     "server.route_off": {
         "pt": "Esta função não está disponível quando o VisionForge roda como servidor.",
         "en": "This feature is not available when VisionForge runs as a server.",

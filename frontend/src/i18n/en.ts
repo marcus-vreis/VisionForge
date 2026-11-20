@@ -562,6 +562,9 @@ export const en: Dict = {
   },
   server: {
     account: (user: string) => `account: ${user}`,
+    quota: (used: string, limit: string) => `disk: ${used} of ${limit}`,
+    quotaFull:
+      "Your folder is full. Delete runs in the History to train or download datasets again.",
     menuNote:
       "Shared server. What does not work on a server yet is hidden.",
     foldersTitle: "On this server, the dataset has to be in one of these folders:",

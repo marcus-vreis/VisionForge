@@ -17,8 +17,10 @@ import {
   bootSession,
   datasetsOffered,
   getSession,
+  gigabytes,
   openStrategies,
   parseSession,
+  quotaFull,
   routeOpen,
   setSession,
   strategyRoute,
@@ -43,6 +45,7 @@ const SERVER: Session = {
     "POST /api/classification/replicates",
   ],
   closed_blocks: ["cross_validation", "grid_search", "random_search"],
+  quota: null,
 };
 
 const lang = { lang: "pt" as const, t: pt, locale: "pt-BR", setLang: () => {} };
@@ -53,6 +56,32 @@ const noop = () => {};
 afterEach(() => {
   setSession(LOCAL_SESSION);
   vi.unstubAllGlobals();
+});
+
+describe("the disk quota (ADR-225)", () => {
+  const GIB = 1024 ** 3;
+
+  it("is read from the session, and anything else is no quota", () => {
+    const quota = { used_bytes: 10, limit_bytes: 20 };
+    expect(parseSession({ ...SERVER, quota }).quota).toEqual(quota);
+    for (const raw of [undefined, null, "x", {}, { used_bytes: 1 }, { used_bytes: 1, limit_bytes: 0 }]) {
+      expect(parseSession({ ...SERVER, quota: raw }).quota).toBeNull();
+    }
+    expect(LOCAL_SESSION.quota ?? null).toBeNull();
+  });
+
+  it("is full at the ceiling, not before", () => {
+    expect(quotaFull({ used_bytes: 19, limit_bytes: 20 })).toBe(false);
+    expect(quotaFull({ used_bytes: 20, limit_bytes: 20 })).toBe(true);
+    expect(quotaFull(null)).toBe(false);
+    expect(quotaFull(undefined)).toBe(false);
+  });
+
+  it("is written in gigabytes, in the locale's notation", () => {
+    expect(gigabytes(1.5 * GIB, "pt-BR")).toBe("1,5 GB");
+    expect(gigabytes(1.5 * GIB, "en-US")).toBe("1.5 GB");
+    expect(gigabytes(0, "pt-BR")).toBe("0,0 GB");
+  });
 });
 
 describe("parseSession", () => {
@@ -234,6 +263,22 @@ describe("the screen on a shared server", () => {
 
     setSession(LOCAL_SESSION);
     expect(menu()).toContain("data-mlflow-switch");
+  });
+
+  it("the profile menu says how full the person's folder is", () => {
+    const GIB = 1024 ** 3;
+    expect(menu()).not.toContain("data-quota");
+
+    setSession({ ...SERVER, quota: { used_bytes: 1.5 * GIB, limit_bytes: 5 * GIB } });
+    const roomy = menu();
+    expect(roomy).toContain(pt.server.quota("1,5 GB", "5,0 GB"));
+    expect(roomy).toContain('data-quota="ok"');
+    expect(roomy).not.toContain(pt.server.quotaFull);
+
+    setSession({ ...SERVER, quota: { used_bytes: 5.2 * GIB, limit_bytes: 5 * GIB } });
+    const full = menu();
+    expect(full).toContain('data-quota="full"');
+    expect(full).toContain(pt.server.quotaFull);
   });
 
   it("the sample dataset button is gone", () => {

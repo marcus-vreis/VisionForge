@@ -447,6 +447,17 @@ def main() -> None:
         ),
     )
     gui_parser.add_argument(
+        "--quota-gb",
+        type=float,
+        default=None,
+        metavar="GB",
+        help=(
+            "in --server mode, the most each person's folder may hold (runs and "
+            "datasets); past it no new training or dataset starts until they "
+            "delete runs. Default: no limit"
+        ),
+    )
+    gui_parser.add_argument(
         "--user-header",
         default="X-Forwarded-User",
         metavar="NAME",
@@ -629,6 +640,7 @@ def main() -> None:
                 trusted_proxies=args.trusted_proxy,
                 user_header=args.user_header,
                 datasets_dirs=args.datasets_dir,
+                quota_gb=args.quota_gb,
             )
         except ServerModeError as exc:
             parser.error(str(exc))

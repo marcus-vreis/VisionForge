@@ -181,6 +181,7 @@ def test_a_local_install_reports_no_session() -> None:
         "dataset_dirs": [],
         "closed": [],
         "closed_blocks": [],
+        "quota": None,
     }
 
 

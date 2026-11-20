@@ -13,6 +13,12 @@
  */
 import { useSyncExternalStore } from "react";
 
+/** What a person's folder holds against the server's ceiling (ADR-225). */
+export interface Quota {
+  used_bytes: number;
+  limit_bytes: number;
+}
+
 export interface Session {
   server_mode: boolean;
   /** The account the login proxy named; null on a local install. */
@@ -26,6 +32,9 @@ export interface Session {
   /** Classification sends its strategies inside the run, as `block`: the
    *  values this server refuses. */
   closed_blocks: string[];
+  /** The disk ceiling of this person's folder; absent or null when the server
+   *  sets none. */
+  quota?: Quota | null;
 }
 
 export const LOCAL_SESSION: Session = {
@@ -108,7 +117,31 @@ export function parseSession(raw: unknown): Session {
     dataset_dirs: strings(body.dataset_dirs),
     closed: strings(body.closed),
     closed_blocks: strings(body.closed_blocks),
+    quota: parseQuota(body.quota),
   };
+}
+
+function parseQuota(raw: unknown): Quota | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const { used_bytes: used, limit_bytes: limit } = raw as Record<string, unknown>;
+  if (typeof used !== "number" || typeof limit !== "number" || !(limit > 0)) return null;
+  return { used_bytes: Math.max(0, used), limit_bytes: limit };
+}
+
+const GIB = 1024 ** 3;
+
+/** Bytes as gigabytes with one decimal, in the locale's notation: "1,5 GB". */
+export function gigabytes(bytes: number, locale: string): string {
+  const value = (bytes / GIB).toLocaleString(locale, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+  return `${value} GB`;
+}
+
+/** True when nothing that writes will start until the person deletes runs. */
+export function quotaFull(quota: Quota | null | undefined): boolean {
+  return !!quota && quota.used_bytes >= quota.limit_bytes;
 }
 
 /** True when `route` answers for this session. */

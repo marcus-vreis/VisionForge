@@ -8818,3 +8818,30 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 
 - *A small proxy process in front, as in the manual checks.* Closer to the deployment, and a third process and port for what `extraHTTPHeaders` already does; it would still not be oauth2-proxy.
 - *oauth2-proxy with a mock identity provider in CI.* The only way to test the real hand-off; a container stack for the e2e job, left for the deployment test of phase 0.
+
+## ADR-225 — In server mode `--quota-gb` caps each person's folder, checked when an action that writes is asked for
+
+**Date:** 2026-11-20
+**Status:** Accepted
+**Extends:** ADR-213 (the account is the profile), ADR-214 (a person's own dataset folder)
+
+**Context:** on a shared server every person writes into their own profile folder: runs with their checkpoints, plots, reports, the datasets they download or derive (ADR-219, ADR-220). Nothing limited it, so one person could fill the disk and stop everybody's training. Every earlier server-mode decision listed "no disk quota" among its known limits.
+
+**Decision:**
+
+- `visionforge gui --server --quota-gb N` gives every person the same ceiling, in GiB (shown as GB), on the size of their profile folder, datasets included. Without the option nothing is measured. The option needs `--server` and a value above zero.
+- `gui/disk_quota.py` measures a folder (`folder_bytes`: regular files, links not followed) and remembers the figure for 15 s per folder (`DiskUsage`), since the walk is slow on a large dataset. `grows(route)` says which routes write new data, by their last path segment: a training or strategy start, `resume`, `download`, `sample-dataset`, a Laboratory `apply`, and `test`, `gradcam`, `batch_predict`, `export_onnx` of a run. A test pins how many answering routes that is (37), so a new one is a decision.
+- `ServerModeGate` checks it before the handler: for a route that grows, when the folder is at or over the ceiling, it answers 507 with the used size and the ceiling, and says to delete runs in the History. Everything else answers as before: reading, opening, downloading, publishing and deleting. After any `DELETE` request the person's figure is forgotten, so freed space counts on the next request.
+- `GET /api/session` gains `quota` (`used_bytes`, `limit_bytes`, or null). The profile menu shows it, with a notice when the folder is full.
+
+**Consequences:** an operator bounds what each account can take, and a person who hits the ceiling is told why and what to do, and can do it. The local tool is unchanged.
+
+**Known limits:** it is a check before an action, not a limit on writing: a job that already runs finishes past the ceiling, and several started while under it may pass it together. A figure up to 15 s old can let one more action start. The ceilings are not reserved: a disk smaller than their sum can still fill. A person cannot delete a dataset of their own from the page; only runs. The previews and the tracker stores are not gated (a few files each). One ceiling for everybody; there is none per account.
+
+**Not verified:** nothing ran behind a real login proxy. The walk was not timed on a folder with tens of thousands of files. The symlink test is skipped on a Windows account that cannot create links; it runs on the Linux CI.
+
+**Alternatives considered:**
+
+- *Check inside each handler.* The handler knows what it will write, and thirty-seven of them would each need the call; the gate has one table and one test.
+- *Filesystem quotas (XFS project quotas, ZFS datasets).* A hard limit enforced while writing, the only real one; it depends on the operator's filesystem and privileges, and a write that fails mid-training is a worse message than a refusal before it starts. The two can be used together.
+- *Refuse by free disk space instead of per person.* Protects the disk, and lets one person take all of it.

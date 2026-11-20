@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 from collections.abc import Sequence
@@ -34,6 +35,7 @@ from visionforge.gui.security import (
     is_wildcard,
 )
 from visionforge.gui.server_mode import (
+    USAGE,
     ServerMode,
     ServerModeGate,
     closed_routes,
@@ -142,6 +144,11 @@ async def session(request: Request) -> dict[str, Any]:
     user = getattr(request.state, "vf_user", None) if mode.enabled else None
     profile = request.headers.get(PROFILE_HEADER) if user is not None else None
     scope = current_scope() if user is not None else None
+    root = getattr(request.state, "vf_root", None) if user is not None else None
+    quota = None
+    if mode.quota_bytes is not None and root is not None:
+        used = await asyncio.to_thread(USAGE.of, root)
+        quota = {"used_bytes": used, "limit_bytes": mode.quota_bytes}
     return {
         "server_mode": mode.enabled,
         "user": user,
@@ -155,6 +162,9 @@ async def session(request: Request) -> dict[str, Any]:
         # Classification sends its strategies inside the run, as ``block``:
         # the values this server refuses (ADR-216).
         "closed_blocks": closed_blocks() if mode.enabled else [],
+        # What this person's folder holds against the server's ceiling
+        # (``--quota-gb``, ADR-225); null when the operator set none.
+        "quota": quota,
     }
 
 
@@ -265,6 +275,11 @@ def start_server(
             ", ".join(str(n) for n in app.state.server_mode.trusted),
             app.state.server_mode.user_header,
         )
+        if app.state.server_mode.quota_bytes is not None:
+            logger.info(
+                "Server mode: each person's folder may hold {} bytes",
+                app.state.server_mode.quota_bytes,
+            )
         open_browser = False
     logger.info(
         "Starting VisionForge GUI at http://{}:{}", host, port
