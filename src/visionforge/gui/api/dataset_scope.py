@@ -112,6 +112,18 @@ def preview_cache(local: Path) -> Path:
     return scope.own.parent / "preview_cache"
 
 
+def scan_store_dir(local: Path) -> Path:
+    """Where the Laboratory keeps finished scans: ``local`` on a local install.
+
+    On a server a person's scans stay inside their profile, next to their
+    dataset folder, as a preview's images do (ADR-222, ADR-231).
+    """
+    scope = current_scope()
+    if scope is None or scope.own is None:
+        return local
+    return scope.own.parent / "explorer_scans"
+
+
 DatasetDir = Annotated[str, AfterValidator(_confined_dir)]
 """A dataset folder. In server mode it must be absolute and sit in the scope."""
 

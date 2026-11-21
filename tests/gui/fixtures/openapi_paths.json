@@ -2672,6 +2672,26 @@
       "explorer"
     ]
   },
+  "POST /api/explorer/scan/saved": {
+    "operationId": "explorer_scan_saved_api_explorer_scan_saved_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "ExplorerRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
   "POST /api/explorer/scan/{job_id}/cancel": {
     "operationId": "explorer_scan_cancel_api_explorer_scan__job_id__cancel_post",
     "parameters": [

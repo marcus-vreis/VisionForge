@@ -8982,3 +8982,29 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 
 - *Let the browser name the folders for YOLO too.* It does not know which of the two layouts a root uses; the server already resolves it for training.
 - *Audit the whole split folder in segmentation and skip mask-named folders.* The mask folder name is configurable; naming the images folder is exact.
+
+## ADR-231 — The Laboratory scan looks for near-duplicates on request and keeps its last report
+
+**Date:** 2026-11-21
+**Status:** Accepted
+**Extends:** ADR-165 (explorer and its integrity scan), ADR-220 (the Laboratory on a server), ADR-222 (previews inside the profile), ADR-228 (near-duplicates)
+
+**Context:** the Laboratory's integrity scan runs in the background with progress and cancellation, and finds unreadable files, exact copies and cross-split leaks. The near-duplicate search of ADR-228 lives only in the data step's audit. And a finished scan lives only in the page: reopening the dataset, or reloading, meant opening every image again. Issue 351 asks that each analysis run in the background with progress and keep its result.
+
+**Decision:**
+
+- `scan_integrity(..., near_duplicates=True)` adds a second pass over the images the first could read: dHash each one and group the near ones across splits with `near_duplicate_groups` (same threshold and rules as ADR-228). Progress counts both passes (`total` doubles). An image that verifies but fails to decode is reported as corrupted. The report gains `near_checked`, `near_max_distance`, `near_group_count` and `near_groups` (capped at `MAX_REPORTED`); cancelling during the second pass keeps the first pass's findings and leaves `near_checked` false.
+- `core/scan_store.py` keeps the last finished report of each dataset as JSON, named by a hash of the dataset root, task and split folders (`scan_key`), next to a signature: a hash of every listed image's split, path, labels, size and modification time (`scan_signature`). A cancelled scan is not kept. A sampled scan is, and says so as before.
+- `POST /api/explorer/scan/saved` rebuilds the index, recomputes the signature and returns `{report, saved_at, stale}`; `report` is null when nothing was kept, or when the file is unreadable or of another format.
+- The store is `outputs/explorer_scans/` on a local install. On a server it is `explorer_scans/` inside the person's profile, next to their dataset folder, resolved in the request (the worker thread does not see the scope), so a shared dataset scanned by two people keeps two reports and neither sees the other's. The route is `confined`.
+- The Overview shows a toggle "Procurar quase-duplicatas entre splits" beside the limit. On opening, it asks for the kept scan and shows it under "Última varredura guardada: <data>", with a warning when stale. A scan started in the page replaces it.
+
+**Consequences:** reopening a scanned dataset shows its last findings at once, and says when they may be out of date. The near search costs a second decode of every image, about twice the scan time. Checking staleness reads the size and time of every listed image on each open of the Overview.
+
+**Known limits:** one report per dataset, the last one: a scan with the near search on is replaced by a later one without it. A change that keeps an image's size and modification time is not seen. The kept reports are never pruned. Detection and classification only, as the Laboratory itself.
+
+**Alternatives considered:**
+
+- *Keep the report inside the dataset folder.* The explorer is read-only by design (ADR-165), and a shared dataset is not the person's to write into.
+- *A content hash as the signature.* Exact, but it costs what the scan costs; size and time are what `dataset_fingerprint`'s manifest mode already trusts.
+- *Keep every scan.* A history nobody asked for; the last one answers "what did I find here".

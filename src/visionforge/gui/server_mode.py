@@ -187,6 +187,7 @@ ROUTE_CLASSES: dict[str, RouteClass] = {
     "POST /api/explorer/scan": "confined",
     "GET /api/explorer/scan/{job_id}": "confined",
     "POST /api/explorer/scan/{job_id}/cancel": "confined",
+    "POST /api/explorer/scan/saved": "confined",
     "POST /api/explorer/summary": "confined",
     "GET /api/explorer/thumb": "confined",
     "POST /api/github/export": "owner",
@@ -337,6 +338,8 @@ READY: frozenset[str] = frozenset(
         "POST /api/explorer/resplit/{job_id}/plan",
         "POST /api/explorer/scan",
         "POST /api/explorer/scan/{job_id}/cancel",
+        # The last finished scan, kept inside the person's profile (ADR-231).
+        "POST /api/explorer/scan/saved",
         "POST /api/explorer/summary",
         "POST /api/dataset/download",
         "POST /api/sample-dataset",

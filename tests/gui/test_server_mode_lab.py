@@ -224,6 +224,24 @@ def test_a_scan_is_its_owners(client: TestClient, world: dict[str, Path]) -> Non
     assert _finished(client, url, ANA)["state"] == "done"
 
 
+def test_a_kept_scan_stays_in_its_owners_profile(
+    client: TestClient, world: dict[str, Path]
+) -> None:
+    body = {"base_dir": str(world["beans"])}
+    started = client.post("/api/explorer/scan", json=body, headers=ANA).json()
+    _finished(client, f"/api/explorer/scan/{started['job_id']}", ANA)
+
+    mine = client.post("/api/explorer/scan/saved", json=body, headers=ANA).json()
+    theirs = client.post("/api/explorer/scan/saved", json=body, headers=BIA).json()
+
+    assert mine["report"]["scanned"] > 0
+    assert theirs["report"] is None
+    # Inside Ana's profile (ADR-231), not in the shared folder or the server's.
+    kept = list((world["own"].parent / "explorer_scans").glob("*.json"))
+    assert len(kept) == 1
+    assert not list(world["shared"].rglob("*.json"))
+
+
 def test_re_splitting_a_shared_dataset_writes_a_copy_into_the_own_folder(
     client: TestClient, world: dict[str, Path]
 ) -> None:
@@ -278,4 +296,4 @@ def test_re_splitting_an_own_dataset_writes_next_to_it(
 def test_every_laboratory_route_answers_on_a_server(client: TestClient) -> None:
     closed = client.get("/api/session", headers=ANA).json()["closed"]
     assert [key for key in closed if "/api/explorer/" in key] == []
-    assert len([key for key in READY if "/api/explorer/" in key]) == 31
+    assert len([key for key in READY if "/api/explorer/" in key]) == 32
