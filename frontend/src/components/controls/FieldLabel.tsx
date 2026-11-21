@@ -1,5 +1,14 @@
 import { InfoDot } from "./InfoDot";
 
+// The accent dot (6 px) and the info dot (14 px), each with the row's 8 px gap.
+const ACCENT_DOT_SPACE = 6 + 8;
+const INFO_DOT_SPACE = 14 + 8;
+
+/** The width the dots on the label's row take, in px. */
+function besideLabel(dot: boolean, help: string | undefined): number {
+  return (dot ? ACCENT_DOT_SPACE : 0) + (help ? INFO_DOT_SPACE : 0);
+}
+
 /** Monospaced label with an optional accent dot, info dot and trailing hint. */
 export function FieldLabel({
   children,
@@ -56,8 +65,15 @@ export function FieldLabel({
           phone width there is no tooltip to hover, so the hint takes a line of
           its own under the label (.vf-field-hint in index.css). A label longer
           than its whole field ("GRAD-CAM AO VIVO: IMAGENS POR CLASSE") is the one
-          case that wraps: on one line it ran past the field and the card. */}
-      <Label id={id} htmlFor={htmlFor} style={{ flexShrink: 0, maxWidth: "100%" }}>{children}</Label>
+          case that wraps: on one line it ran past the field and the card. Its
+          width leaves room for the dots on the same row, or they would. */}
+      <Label
+        id={id}
+        htmlFor={htmlFor}
+        style={{ flexShrink: 0, maxWidth: `calc(100% - ${besideLabel(dot, help)}px)` }}
+      >
+        {children}
+      </Label>
       {help && <InfoDot text={help} />}
       {help && helpId && <span id={helpId} className="sr-only">{help}</span>}
       {hint && (

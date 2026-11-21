@@ -18,9 +18,13 @@ test("a grade do Avançado cabe no cartão a 800 px", async ({ page }) => {
   const grid = page.locator(`[id="${gridId}"]`);
   await expect(grid).toBeVisible();
 
-  const { scroll, client } = await grid.evaluate((el) => ({
-    scroll: el.scrollWidth,
-    client: el.clientWidth,
-  }));
-  expect(scroll).toBeLessThanOrEqual(client);
+  // What runs past the grid's right edge, so a failure names the culprit: the
+  // fallback monospace font differs between systems, and so do the widths.
+  const past = await grid.evaluate((el) => {
+    const edge = el.getBoundingClientRect().right;
+    return [...el.querySelectorAll("*")]
+      .filter((child) => child.getBoundingClientRect().right > edge + 0.5)
+      .map((child) => `${child.tagName} "${(child.textContent ?? "").trim().slice(0, 40)}"`);
+  });
+  expect(past).toEqual([]);
 });
