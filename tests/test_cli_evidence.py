@@ -95,3 +95,32 @@ def test_audit_does_not_overwrite_an_existing_report(
         _invoke(monkeypatch, ["audit-data", str(dataset), "--json", str(target)]) == 2
     )
     assert target.read_text(encoding="utf-8") == "KEEP"
+
+
+def test_audit_command_looks_for_near_duplicates_on_request(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    field = Image.radial_gradient("L").resize((32, 32)).convert("RGB")
+    for split, image in (("train", field), ("val", field.point(lambda v: v // 2 + 40))):
+        (tmp_path / split).mkdir()
+        image.save(tmp_path / split / "x.png")
+
+    code = _invoke(
+        monkeypatch,
+        [
+            "audit-data",
+            str(tmp_path),
+            "--split",
+            "train=train",
+            "--split",
+            "val=val",
+            "--near-duplicates",
+        ],
+    )
+
+    report = json.loads(capsys.readouterr().out)
+    assert code == 1
+    assert report["visual_similarity_checked"] is True
+    assert report["near_duplicate_groups"][0]["splits"] == ["train", "val"]

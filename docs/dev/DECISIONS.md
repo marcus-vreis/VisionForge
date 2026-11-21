@@ -8900,6 +8900,35 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Refuse only when a job reads this dataset.* Kinder, and it needs the dataset path of every task's config, strategies included; the queue is short-lived and the message says what to do.
 - *A trash folder emptied later.* An undo, and the space is not freed, which is the reason the person is deleting.
 
+## ADR-228 — The image audit can look for visual near-duplicates across splits
+
+**Date:** 2026-11-21
+**Status:** Accepted
+**Extends:** ADR-136 (content audit), ADR-140 (the GUI exposes the audit), ADR-153 (dataset inspection)
+
+**Context:** the audit compares SHA-256, so it finds only the same bytes in two splits. The leak that matters more in practice is the same photo saved twice, once as PNG and once as JPEG, resized, or a little brighter: the bytes differ and the test set still sees the training images. The report has carried `visual_similarity_checked: false` since ADR-136, and the explorer, the incorporation, the merge and the re-split say "near-duplicates are not detected" for the same reason. Issue 351 asks for it as the first slice of a dataset analysis.
+
+**Decision:**
+
+- `core/near_duplicates.py` hashes each image with a 64-bit difference hash (dHash): grayscale at 9x8 pixels, one bit per pair of horizontal neighbours, set when the left one is brighter. Two images are near when the hashes differ in at most `MAX_DISTANCE = 6` bits.
+- Candidates are found without comparing every pair: the hash is cut into 8 bands of 8 bits, and only hashes that share a band are compared. With 7 or fewer differing bits some band is equal, so no pair within the distance is missed. Images with the same hash are joined directly; the near pairs are joined into groups (union-find), so A near B near C is one group.
+- A group is reported when it spans more than one split and holds more than one SHA-256: pairs within a split are not a leak, and byte copies are already in `duplicate_groups`.
+- A flat image (one colour) hashes to 0 and is left out: a red and a blue square would otherwise match.
+- `audit_dataset(..., near_duplicates=True)` decodes every readable image after the exact pass. An image that verifies but fails to decode (a truncated file) is counted unreadable. The report always carries `near_duplicate_groups` (empty when not looked for), `near_duplicate_max_distance` and `visual_similarity_checked`, which is now true when the search ran. Near groups make `ok` false.
+- The option is off by default everywhere: `--near-duplicates` on `visionforge audit-data`, `near_duplicates` on `POST /api/dataset/audit`, and a toggle "Procurar quase-duplicatas entre splits" in the audit panel of the data step. The screen states the distance before the first audit with a constant that a test holds equal to the server's.
+
+**Consequences:** the audit finds re-encoded, resized and re-exposed copies across splits. With the option on it decodes the whole dataset: on 12 000 PNGs of 32x32 pixels (CIFAR-sized, warm disk cache, Ryzen 7 9800X3D) the audit took 6.0 s against 2.9 s for the exact pass alone; large photographs take much longer. The request still runs in one call without progress, as the exact audit did.
+
+**Known limits:** a crop, a rotation, a mirror or another photo of the same object is not near under dHash. Very similar distinct images (frames of a video, a fixed camera) can be joined, so a group is something to look at, not a verdict. The threshold is fixed. The search lives in the data step's audit, not yet in the Laboratory, and has no progress or cache; issue 351 keeps those for the next slices.
+
+**Not verified:** the time on a dataset of full-size photographs and the false-positive rate on a real dataset were not measured; the timing above used synthetic random images, which form no groups.
+
+**Alternatives considered:**
+
+- *Perceptual hash (pHash, DCT) or CNN embeddings.* More robust to crops and colour changes; pHash needs a DCT per image and embeddings need a model and a GPU. dHash needs Pillow only and is enough for the re-encoded and resized copies that cause most leaks.
+- *Compare every pair of hashes.* Exact but quadratic: 60 000 images are 1.8 billion pairs in Python. The band index makes it near linear for real data.
+- *Turn it on by default.* Decoding every image slows down an audit that today only reads bytes; the researcher asks for it.
+
 ## ADR-229 — Live Grad-CAM can show N images of each class, up to 48
 
 **Date:** 2026-11-21
@@ -8928,4 +8957,3 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *A total instead of a per-class count.* The issue asks per class, and a total already exists in the default.
 - *Keep each epoch's gallery.* 48 images per written epoch is disk the run keeps forever, for a comparison the latest and the best already give.
 - *No cap.* 16 images of each of 100 classes would be 1 600 backward passes on every written epoch.
-

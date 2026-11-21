@@ -61,6 +61,12 @@ export const en: Dict = {
     groupPlaceholder: "groups.csv",
     strictGroups: "Require a group for every image",
     strictHint: "Use with a group CSV to detect images without a group.",
+    nearDuplicates: "Look for near-duplicates across splits",
+    nearHint:
+      "Opens every image and compares a 64-bit visual hash: finds the same photo re-encoded, resized or with its brightness changed in different splits, which leaks the test set into training. Slower than the exact-copy search. Single-colour images are left out.",
+    scopeNear: (bits: number) =>
+      `Exact duplicates by SHA-256 and visual near-duplicates across splits (dHash, up to ${bits} of 64 bits apart).`,
+    nearCount: (n: number) => `Near-duplicate groups across splits: ${n}`,
     duplicateCount: (n: number) => `Exact duplicate groups: ${n}`,
     missingCount: (n: number) => `Missing splits: ${n}`,
     emptyCount: (n: number) => `Empty splits: ${n}`,

@@ -165,6 +165,7 @@ def _run_audit_data_command(args: argparse.Namespace) -> None:
         splits,
         group_manifest=args.groups,
         strict_groups=args.strict_groups,
+        near_duplicates=args.near_duplicates,
     )
     payload = json.dumps(report, indent=2, ensure_ascii=False)
     if args.json is not None:
@@ -551,6 +552,11 @@ def main() -> None:
     )
     audit_parser.add_argument(
         "--strict-groups", action="store_true", help="report groups crossing splits"
+    )
+    audit_parser.add_argument(
+        "--near-duplicates",
+        action="store_true",
+        help="also decode every image and report visual near-copies across splits",
     )
     audit_parser.add_argument(
         "--json", type=Path, help="write a new JSON report (never overwrite)"

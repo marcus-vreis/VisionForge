@@ -4,6 +4,9 @@ import { useT } from "../i18n/useT";
 import { TextField, Toggle } from "./controls";
 import { ROUTE, useRouteOpen } from "../lib/session";
 
+/** The server's `near_duplicates.MAX_DISTANCE`, shown before the first audit. */
+export const NEAR_MAX_DISTANCE = 6;
+
 interface DatasetAuditProps {
   baseDir: string;
   trainDir: string;
@@ -18,12 +21,13 @@ export function DatasetAuditResult({ report }: { report: DatasetAuditReport }) {
   return (
     <div role="status" data-testid="audit-result">
       <p>{report.ok ? e.clean : e.findings}</p>
-      <p>{e.scope}</p>
+      <p>{report.visual_similarity_checked ? e.scopeNear(report.near_duplicate_max_distance) : e.scope}</p>
       {Object.entries(report.image_counts).map(([split, count]) => (
         <div key={split}>{e.imageCount(split, count)}</div>
       ))}
       <ul>
         <li>{e.duplicateCount(report.duplicate_groups.length)}</li>
+        {report.visual_similarity_checked && <li>{e.nearCount(report.near_duplicate_groups.length)}</li>}
         <li>{e.missingCount(report.missing_splits.length)}</li>
         <li>{e.emptyCount(report.empty_splits.length)}</li>
         <li>{e.unreadableCount(report.unreadable_count)}</li>
@@ -36,6 +40,12 @@ export function DatasetAuditResult({ report }: { report: DatasetAuditReport }) {
             {report.duplicate_groups.slice(0, 5).map((group) => (
               <li key={group.sha256}>
                 {group.sha256} · {group.splits.join(", ")}
+                <ul>{group.paths.slice(0, 5).map((path) => <li key={path}>{path}</li>)}</ul>
+              </li>
+            ))}
+            {report.near_duplicate_groups.slice(0, 5).map((group) => (
+              <li key={`near-${group.paths.join("|")}`}>
+                {e.nearCount(1)} · {group.splits.join(", ")}
                 <ul>{group.paths.slice(0, 5).map((path) => <li key={path}>{path}</li>)}</ul>
               </li>
             ))}
@@ -60,6 +70,7 @@ function DatasetAuditInner({ baseDir, trainDir, valDir, testDir }: DatasetAuditP
   const t = useT();
   const [manifest, setManifest] = useState("");
   const [strict, setStrict] = useState(false);
+  const [near, setNear] = useState(false);
   const [state, setState] = useState<{
     key: string;
     loading: boolean;
@@ -72,6 +83,7 @@ function DatasetAuditInner({ baseDir, trainDir, valDir, testDir }: DatasetAuditP
     splits: { train: trainDir, val: valDir, test: testDir },
     group_manifest: manifest.trim() || null,
     strict_groups: strict,
+    near_duplicates: near,
   };
   const key = JSON.stringify(body);
   const current = state?.key === key ? state : null;
@@ -92,9 +104,10 @@ function DatasetAuditInner({ baseDir, trainDir, valDir, testDir }: DatasetAuditP
   return (
     <section data-testid="dataset-audit" style={{ padding: 18, marginBottom: 18, border: "1px solid var(--vf-panel-stroke)", borderRadius: 12, display: "grid", gap: 12 }}>
       <strong>{t.evidence.title}</strong>
-      <span style={{ fontSize: 12, color: "var(--vf-text-dim)" }}>{t.evidence.scope}</span>
+      <span style={{ fontSize: 12, color: "var(--vf-text-dim)" }}>{near ? t.evidence.scopeNear(NEAR_MAX_DISTANCE) : t.evidence.scope}</span>
       <TextField label={t.evidence.groupManifest} value={manifest} onChange={setManifest} placeholder={t.evidence.groupPlaceholder} help={t.evidence.groupHint} mono />
       <Toggle label={t.evidence.strictGroups} value={strict} onChange={setStrict} help={t.evidence.strictHint} />
+      <Toggle label={t.evidence.nearDuplicates} value={near} onChange={setNear} help={t.evidence.nearHint} />
       <button type="button" disabled={!baseDir.trim() || current?.loading} onClick={() => void runAudit()} aria-busy={current?.loading ?? false}
         style={{ justifySelf: "start", padding: "8px 14px", borderRadius: 8, border: "1px solid var(--accent-vf)", background: "var(--accent-soft)", color: "var(--vf-text)", cursor: current?.loading ? "wait" : "pointer", opacity: !baseDir.trim() || current?.loading ? 0.6 : 1 }}>
         {current?.loading ? t.evidence.auditing : t.evidence.audit}

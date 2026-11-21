@@ -65,13 +65,18 @@ export interface DatasetAuditRequest {
   splits?: Record<string, string> | null;
   group_manifest?: string | null;
   strict_groups?: boolean;
+  /** Also decode every image and look for visual near-copies (ADR-228). */
+  near_duplicates?: boolean;
 }
 
 export interface DatasetAuditReport {
   ok: boolean;
   root: string;
   hash_algorithm: "sha256";
-  visual_similarity_checked: false;
+  visual_similarity_checked: boolean;
+  /** Empty when `visual_similarity_checked` is false. */
+  near_duplicate_groups: { splits: string[]; paths: string[] }[];
+  near_duplicate_max_distance: number;
   image_counts: Record<string, number>;
   duplicate_groups: { sha256: string; splits: string[]; paths: string[] }[];
   missing_splits: string[];

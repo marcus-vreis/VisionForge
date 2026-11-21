@@ -286,3 +286,29 @@ def test_continuation_cannot_start_while_archive_reads_source(
             finish.set()
         assert download.result(timeout=10).status_code == 200
     assert not routes._EVIDENCE_EXPORTS.is_exporting(run)
+
+
+def test_near_duplicates_reach_the_real_audit(
+    client: TestClient, tmp_path: Path
+) -> None:
+    # A smooth field and the same field 8 levels brighter: near, not identical.
+    field = Image.radial_gradient("L").resize((32, 32)).convert("RGB")
+    brighter = field.point(lambda v: min(255, v + 8))
+    for split, image in (("train", field), ("val", brighter)):
+        folder = tmp_path / "data" / split
+        folder.mkdir(parents=True)
+        image.save(folder / "image.png")
+    body = {
+        "base_dir": str(tmp_path / "data"),
+        "splits": {"train": "train", "val": "val"},
+    }
+
+    plain = client.post("/api/dataset/audit", json=body).json()
+    near = client.post("/api/dataset/audit", json={**body, "near_duplicates": True})
+
+    assert plain["visual_similarity_checked"] is False
+    assert plain["near_duplicate_groups"] == []
+    assert near.status_code == 200
+    assert near.json()["near_duplicate_groups"] == [
+        {"splits": ["train", "val"], "paths": ["train/image.png", "val/image.png"]}
+    ]
