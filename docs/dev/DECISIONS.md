@@ -9008,3 +9008,30 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Keep the report inside the dataset folder.* The explorer is read-only by design (ADR-165), and a shared dataset is not the person's to write into.
 - *A content hash as the signature.* Exact, but it costs what the scan costs; size and time are what `dataset_fingerprint`'s manifest mode already trusts.
 - *Keep every scan.* A history nobody asked for; the last one answers "what did I find here".
+
+## ADR-232 — The Laboratory says whether the splits share the class mix
+
+**Date:** 2026-11-21
+**Status:** Accepted
+**Extends:** ADR-165 (explorer summary), ADR-168 (stratified re-split)
+
+**Context:** the Overview draws images per class, split by split, but leaves the reading to the eye: with twenty classes nobody sees that one is 3% of training and 12% of test, or absent from validation. A validation or test split with another class mix measures the model on another problem. Issue 351 lists "class distribution per split and whether the division is stratified" as the first classification analysis.
+
+**Decision:**
+
+- `core/split_balance.py` reads the per-class counts the summary already has; no image is opened. Splits with no labeled image are left out.
+- Per class: its share of each split's labels (percent), the gap between its largest and smallest share in percentage points, and the splits where it is missing. Classes are listed largest gap first.
+- Per split: the imbalance ratio, largest class count over smallest among the classes it holds (None with one class).
+- Cramér's V of the split-by-class table, computed by hand (no scipy at import): 0 for the same mix everywhere, 1 when the split decides the class. It is reported as an effect size; no p-value, because with thousands of images every difference is significant.
+- A verdict for the headline: `one_split` (nothing to compare), `missing_class` (some class absent from some split), `stratified` (largest gap ≤ 2 points), `close` (≤ 5 points), `uneven`. The thresholds travel in the report (`thresholds_pp`) so the screen states them.
+- Shares are over a split's labels, so in detection (an image per class it contains) they sum to 100 as in classification.
+- `POST /api/explorer/summary` gains `balance`. The Overview shows a card "As divisões têm a mesma mistura de classes?" under the per-class bars, with the verdict, the missing classes, the five largest gaps, V, the imbalance per split and the full table behind a toggle; an uneven division points at Re-split, which stratifies by class (ADR-168).
+
+**Consequences:** a non-stratified division, a class missing from validation and a heavily imbalanced split are stated in words on opening the dataset, at the cost of a few arithmetic operations per class.
+
+**Known limits:** the thresholds are fixed rules of thumb, not derived from the dataset's size: a class of 10 images moves several points by chance. Classes absent from every split are not listed. Classification and detection only, like the Laboratory.
+
+**Alternatives considered:**
+
+- *A chi-square test with its p-value.* It answers "is there any difference", which on a real dataset is always yes; the gap in points and V say how large it is.
+- *Compute it in the browser.* The numbers belong with the other dataset analyses, tested by hand-computed cases on the server.

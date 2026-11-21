@@ -22,6 +22,23 @@ imagens. **Voltar** ou Esc devolve à janela.
 
 ![Laboratório de datasets na Visão geral](../images/vf-datasets-explorer.png)
 
+Abaixo das barras, **As divisões têm a mesma mistura de classes?** compara a
+proporção de cada classe entre treino, validação e teste, a partir das
+contagens, sem abrir imagens:
+
+- **Sim** quando nenhuma classe muda mais de 2 pontos percentuais entre as
+  divisões; **Quase** até 5; **Não** acima disso ou quando uma classe falta
+  numa divisão (o desempenho nela nunca é medido ali).
+- A tabela mostra a proporção de cada classe por divisão e a diferença, das
+  maiores para as menores.
+- O V de Cramér resume tudo num número: 0 quando todas as divisões têm a mesma
+  mistura, 1 quando a divisão determina a classe.
+- A razão entre a maior e a menor classe de cada divisão mostra o
+  desbalanceamento.
+
+Se a resposta for **Não**, **Refazer divisão** redistribui estratificando por
+classe.
+
 A **Varredura de integridade** da Visão geral abre cada imagem e acha arquivos
 que não abrem, cópias exatas e a mesma imagem em divisões diferentes. Ligue
 **Procurar quase-duplicatas entre splits** para uma segunda passada que acha a

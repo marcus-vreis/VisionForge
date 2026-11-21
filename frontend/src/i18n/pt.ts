@@ -687,6 +687,28 @@ export const pt = {
     boxesPerClassTitle: "Caixas por classe",
     perClassHelp: "Cada barra soma as divisões; o número no fim é o total da classe.",
     tableToggle: "Ver a tabela por classe e divisão",
+    balanceTitle: "As divisões têm a mesma mistura de classes?",
+    balanceVerdict: {
+      stratified: (gap: number, limit: number) =>
+        `Sim: cada classe tem quase a mesma proporção em todas as divisões (diferença máxima de ${gap.toFixed(1)} pontos; até ${limit} conta como estratificada).`,
+      close: (gap: number, _limit: number, close: number) =>
+        `Quase: a proporção de uma classe muda até ${gap.toFixed(1)} pontos entre as divisões (até ${close} conta como próxima).`,
+      uneven: (gap: number) =>
+        `Não: a proporção de uma classe muda até ${gap.toFixed(1)} pontos entre as divisões. A validação mede uma mistura diferente da do treino; Refazer divisão redistribui estratificando por classe.`,
+      missing_class: () =>
+        "Não: há classe ausente em alguma divisão, e o desempenho nela nunca é medido ali. Refazer divisão redistribui estratificando por classe.",
+      one_split: () => "",
+    },
+    balanceMissing: (name: string, splits: string) => `${name} não aparece em: ${splits}.`,
+    balanceCramer: (v: number) =>
+      `V de Cramér entre divisão e classe: ${v.toFixed(3)} (0 = mesma mistura em todas, 1 = a divisão determina a classe).`,
+    balanceImbalance: (split: string, ratio: number | null) =>
+      ratio === null ? `${split}: uma classe só` : `${split}: maior classe / menor = ${ratio.toFixed(1)}×`,
+    balanceTable: "Ver a proporção de cada classe por divisão",
+    balanceGap: "Diferença (pontos)",
+    balanceTop: (list: string) => `Maiores diferenças, em pontos: ${list}.`,
+    balanceHelp:
+      "Conta só os rótulos que o resumo já tem, sem abrir imagens. Na detecção, uma imagem conta uma vez para cada classe que contém.",
     segmentTitle: (split: string, n: number) => `${split}: ${n}`,
     learnMore: "Saiba mais",
     leadResplit:
