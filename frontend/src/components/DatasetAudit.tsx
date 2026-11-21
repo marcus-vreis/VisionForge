@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { auditDataset, type DatasetAuditReport } from "../api/client";
+import { auditRequest, type DatasetAuditProps } from "../lib/dataset-audit";
 import { useT } from "../i18n/useT";
 import { TextField, Toggle } from "./controls";
 import { ROUTE, useRouteOpen } from "../lib/session";
@@ -7,12 +8,6 @@ import { ROUTE, useRouteOpen } from "../lib/session";
 /** The server's `near_duplicates.MAX_DISTANCE`, shown before the first audit. */
 export const NEAR_MAX_DISTANCE = 6;
 
-interface DatasetAuditProps {
-  baseDir: string;
-  trainDir: string;
-  valDir: string;
-  testDir: string;
-}
 
 /** Show measured audit counts and bounded, escaped file details. */
 export function DatasetAuditResult({ report }: { report: DatasetAuditReport }) {
@@ -24,6 +19,9 @@ export function DatasetAuditResult({ report }: { report: DatasetAuditReport }) {
       <p>{report.visual_similarity_checked ? e.scopeNear(report.near_duplicate_max_distance) : e.scope}</p>
       {Object.entries(report.image_counts).map(([split, count]) => (
         <div key={split}>{e.imageCount(split, count)}</div>
+      ))}
+      {(report.absent_optional_splits ?? []).map((split) => (
+        <div key={`optional-${split}`}>{e.optionalAbsent(split)}</div>
       ))}
       <ul>
         <li>{e.duplicateCount(report.duplicate_groups.length)}</li>
@@ -66,7 +64,7 @@ export function DatasetAuditResult({ report }: { report: DatasetAuditReport }) {
 }
 
 /** Run an image audit only on request, against the current configured splits. */
-function DatasetAuditInner({ baseDir, trainDir, valDir, testDir }: DatasetAuditProps) {
+function DatasetAuditInner({ baseDir, splits, layout = "folders", imagesDir, imageColumn, optionalSplits, note }: DatasetAuditProps) {
   const t = useT();
   const [manifest, setManifest] = useState("");
   const [strict, setStrict] = useState(false);
@@ -78,13 +76,10 @@ function DatasetAuditInner({ baseDir, trainDir, valDir, testDir }: DatasetAuditP
     error?: string;
   } | null>(null);
   const sequence = useRef(0);
-  const body = {
-    base_dir: baseDir,
-    splits: { train: trainDir, val: valDir, test: testDir },
-    group_manifest: manifest.trim() || null,
-    strict_groups: strict,
-    near_duplicates: near,
-  };
+  const body = auditRequest(
+    { baseDir, splits, layout, imagesDir, imageColumn, optionalSplits },
+    { group_manifest: manifest.trim() || null, strict_groups: strict, near_duplicates: near },
+  );
   const key = JSON.stringify(body);
   const current = state?.key === key ? state : null;
 
@@ -105,6 +100,7 @@ function DatasetAuditInner({ baseDir, trainDir, valDir, testDir }: DatasetAuditP
     <section data-testid="dataset-audit" style={{ padding: 18, marginBottom: 18, border: "1px solid var(--vf-panel-stroke)", borderRadius: 12, display: "grid", gap: 12 }}>
       <strong>{t.evidence.title}</strong>
       <span style={{ fontSize: 12, color: "var(--vf-text-dim)" }}>{near ? t.evidence.scopeNear(NEAR_MAX_DISTANCE) : t.evidence.scope}</span>
+      {note && <span style={{ fontSize: 12, color: "var(--vf-text-dim)" }}>{note}</span>}
       <TextField label={t.evidence.groupManifest} value={manifest} onChange={setManifest} placeholder={t.evidence.groupPlaceholder} help={t.evidence.groupHint} mono />
       <Toggle label={t.evidence.strictGroups} value={strict} onChange={setStrict} help={t.evidence.strictHint} />
       <Toggle label={t.evidence.nearDuplicates} value={near} onChange={setNear} help={t.evidence.nearHint} />

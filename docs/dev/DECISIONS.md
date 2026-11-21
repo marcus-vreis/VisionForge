@@ -8957,3 +8957,28 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *A total instead of a per-class count.* The issue asks per class, and a total already exists in the default.
 - *Keep each epoch's gallery.* 48 images per written epoch is disk the run keeps forever, for a comparison the latest and the best already give.
 - *No cap.* 16 images of each of 100 classes would be 1 600 backward passes on every written epoch.
+
+## ADR-230 — The image audit reads the layout of every task
+
+**Date:** 2026-11-21
+**Status:** Accepted
+**Extends:** ADR-136 (content audit), ADR-140 (the GUI exposes the audit), ADR-228 (near-duplicates)
+
+**Context:** the audit walks one folder per split and was offered only in the classification panel. The other tasks keep their images elsewhere: a YOLO root in `images/<split>` or `<split>/images` beside the labels, segmentation in `<split>/<images_subdir>` beside the masks, anomaly in `train/<normal_dir>` and `test/<defect>`, and regression in one `images_dir` that CSVs split. Walking a segmentation split whole would report every all-background mask as a leak; a regression dataset has no split folder at all. Issue 351 asks for the same checks in every task as its second slice.
+
+**Decision:**
+
+- `audit_dataset` takes `split_images`: for each split a list of image paths, or None when the list is missing. A path listed twice in one split is one image. A listed path is resolved like a walked one: outside the root it is reported as escaping, absent it counts as unreadable (`FileNotFoundError`).
+- `core/dataset_audit_layouts.py` turns a task's layout into the audit's input: `"folders"` passes the folders through, `"yolo"` resolves each split with `resolve_yolo_split` (the trainer's own resolver; a split neither layout has is reported missing), `"csv"` reads each CSV's `image_column` under `images_dir` (a CSV outside the root or without the column is a 400; an absent CSV is a missing split).
+- `optional_splits` names splits training runs without. One that does not exist is listed in `absent_optional_splits`, leaves `image_counts` and is no finding; one that exists is audited like any other. The panels pass `test` for detection, segmentation and regression, whose trainers run without a test set. Classification and anomaly pass none, as before.
+- `POST /api/dataset/audit` gains `layout`, `images_dir`, `image_column` and `optional_splits`. The defaults keep every earlier request unchanged.
+- Each task panel shows the audit beside its dataset stats, with one line on what it reads: detection the YOLO image folders (not with a `data.yaml` source, whose paths the server does not resolve), segmentation `<split>/<images_subdir>` only, regression the CSVs (a blank optional CSV is left out), anomaly `train_dir` and the whole `test_dir`.
+
+**Consequences:** every task can find byte copies, near copies, unreadable images and missing or empty splits before training. In regression an image listed in two CSVs is reported as a cross-split duplicate whose two paths are the same file.
+
+**Known limits:** a detection dataset given as a `data.yaml` is not audited. The CLI `audit-data` still walks folders only. As in ADR-228, the request runs in one call, without progress or cache; moving the analysis into the Laboratory stays in issue 351.
+
+**Alternatives considered:**
+
+- *Let the browser name the folders for YOLO too.* It does not know which of the two layouts a root uses; the server already resolves it for training.
+- *Audit the whole split folder in segmentation and skip mask-named folders.* The mask folder name is configurable; naming the images folder is exact.

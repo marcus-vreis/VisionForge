@@ -76,6 +76,7 @@ export const pt = {
     nearCount: (n: number) => `Grupos de quase-duplicatas entre splits: ${n}`,
     duplicateCount: (n: number) => `Grupos de duplicatas exatas: ${n}`,
     missingCount: (n: number) => `Splits ausentes: ${n}`,
+    optionalAbsent: (split: string) => `${split}: ausente (opcional, o treino roda sem ele)`,
     emptyCount: (n: number) => `Splits vazios: ${n}`,
     unreadableCount: (n: number) => `Imagens ilegíveis: ${n}`,
     groupCount: (n: number) => `Grupos entre splits: ${n}`,
@@ -84,6 +85,13 @@ export const pt = {
     bundle: "Baixar bundle do experimento",
     bundling: "Preparando bundle…",
     bundleFailed: "Não foi possível baixar o bundle.",
+    // What each task's audit reads (ADR-230).
+    notes: {
+      yolo: "Lê images/<split> ou <split>/images; os rótulos não entram.",
+      masks: "Lê só a pasta de imagens de cada split; as máscaras não entram.",
+      csv: "Lê as imagens que cada CSV lista: a mesma imagem em dois CSVs é uma duplicata entre splits.",
+      anomaly: "Compara o treino com o teste inteiro, normais e defeitos: uma imagem do teste copiada no treino aparece aqui.",
+    },
   },
   common: {
     back: "Voltar",

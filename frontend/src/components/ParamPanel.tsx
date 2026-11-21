@@ -2394,9 +2394,11 @@ export function ParamPanel({
 
             <DatasetAudit
               baseDir={(dataData["base_dir"] as string) ?? ""}
-              trainDir={(dataData["train_dir"] as string) ?? "train"}
-              valDir={(dataData["val_dir"] as string) ?? "val"}
-              testDir={(dataData["test_dir"] as string) ?? "test"}
+              splits={{
+                train: (dataData["train_dir"] as string) ?? "train",
+                val: (dataData["val_dir"] as string) ?? "val",
+                test: (dataData["test_dir"] as string) ?? "test",
+              }}
             />
           </div>
 

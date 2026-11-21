@@ -86,7 +86,7 @@ importadas: polígonos de segmentação são ignorados.
 
 ## Auditar antes de treinar
 
-Na etapa **Dados** da classificação, **Auditar imagens** procura problemas nas
+Na etapa **Dados** de cada tarefa, **Auditar imagens** procura problemas nas
 divisões que vão ser usadas:
 
 - duplicatas exatas (mesmo SHA-256);
@@ -94,8 +94,23 @@ divisões que vão ser usadas:
 - imagens ilegíveis;
 - com um CSV de grupos, grupos que aparecem em mais de uma divisão.
 
-A auditoria compara arquivos byte a byte. Ela não detecta imagens parecidas,
-como a mesma foto recortada ou recomprimida.
+A busca por duplicatas compara arquivos byte a byte. Ligue **Procurar
+quase-duplicatas entre splits** para achar também a mesma foto reencodada,
+redimensionada ou com o brilho mudado; uma foto recortada, girada ou espelhada
+continua passando.
+
+O que cada tarefa audita:
+
+| Tarefa | Imagens lidas |
+|---|---|
+| Classificação | as pastas de treino, validação e teste |
+| Detecção | `images/<divisão>` ou `<divisão>/images`; os rótulos ficam de fora. Com um `data.yaml` a auditoria não aparece |
+| Segmentação | só a pasta de imagens de cada divisão; as máscaras ficam de fora |
+| Regressão | as imagens que cada CSV lista. A mesma imagem em dois CSVs é uma duplicata entre divisões; uma linha que aponta para um arquivo que não existe conta como ilegível |
+| Anomalia | a pasta de treino e a de teste inteira, normais e defeitos |
+
+Na detecção, na segmentação e na regressão o teste é opcional: se ele não
+existe, a auditoria diz "ausente (opcional)" e não conta isso como problema.
 
 O mesmo CSV de grupos serve ao K-fold: grupos inteiros ficam no mesmo fold
 ([Estratégias](estrategias.md#k-fold-cv)).

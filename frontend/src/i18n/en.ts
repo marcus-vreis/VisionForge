@@ -69,6 +69,7 @@ export const en: Dict = {
     nearCount: (n: number) => `Near-duplicate groups across splits: ${n}`,
     duplicateCount: (n: number) => `Exact duplicate groups: ${n}`,
     missingCount: (n: number) => `Missing splits: ${n}`,
+    optionalAbsent: (split: string) => `${split}: absent (optional, training runs without it)`,
     emptyCount: (n: number) => `Empty splits: ${n}`,
     unreadableCount: (n: number) => `Unreadable images: ${n}`,
     groupCount: (n: number) => `Groups crossing splits: ${n}`,
@@ -77,6 +78,12 @@ export const en: Dict = {
     bundle: "Download experiment bundle",
     bundling: "Preparing bundle…",
     bundleFailed: "Failed to download the bundle.",
+    notes: {
+      yolo: "Reads images/<split> or <split>/images; labels are left out.",
+      masks: "Reads only each split's image folder; masks are left out.",
+      csv: "Reads the images each CSV lists: the same image in two CSVs is a duplicate across splits.",
+      anomaly: "Compares training with the whole test set, normal and defective: a test image copied into training shows up here.",
+    },
   },
   common: {
     back: "Back",
