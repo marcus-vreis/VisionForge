@@ -68,6 +68,12 @@ export const pt = {
     groupPlaceholder: "groups.csv",
     strictGroups: "Exigir grupo para todas as imagens",
     strictHint: "Use com um CSV de grupos para detectar imagens sem grupo.",
+    nearDuplicates: "Procurar quase-duplicatas entre splits",
+    nearHint:
+      "Abre cada imagem e compara um hash visual de 64 bits: acha a mesma foto reencodada, redimensionada ou com o brilho mudado em splits diferentes, o que vaza o teste para o treino. Demora mais que a busca por cópias exatas. Imagens de uma cor só ficam de fora.",
+    scopeNear: (bits: number) =>
+      `Duplicatas exatas por SHA-256 e quase-duplicatas visuais entre splits (dHash, até ${bits} de 64 bits diferentes).`,
+    nearCount: (n: number) => `Grupos de quase-duplicatas entre splits: ${n}`,
     duplicateCount: (n: number) => `Grupos de duplicatas exatas: ${n}`,
     missingCount: (n: number) => `Splits ausentes: ${n}`,
     emptyCount: (n: number) => `Splits vazios: ${n}`,

@@ -30,6 +30,7 @@ class DatasetAuditRequest(BaseModel):
     splits: dict[str, str] | None = None
     group_manifest: Path | None = None
     strict_groups: bool = Field(default=False)
+    near_duplicates: bool = Field(default=False)
 
     @field_validator("base_dir", "group_manifest", mode="before")
     @classmethod
@@ -135,6 +136,7 @@ def build_evidence_router(
                 req.splits,
                 group_manifest=req.group_manifest,
                 strict_groups=req.strict_groups,
+                near_duplicates=req.near_duplicates,
             )
         except (OSError, ValueError) as exc:
             raise HTTPException(400, tr("evidence.audit_failed", error=exc)) from exc
