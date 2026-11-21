@@ -19,6 +19,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - Enviar um segundo treino nos primeiros segundos do primeiro, com o servidor recém-aberto, respondia 500: a checagem da GPU lia o `torch` enquanto a thread do primeiro job ainda o importava. Agora um `torch` pela metade conta como "sem contexto de GPU para quebrar" e o segundo treino entra na fila.
 - Textos que num servidor diziam o lugar errado: a dica da chave do W&B e do Comet dizia "fica salva neste computador", o botão de dataset de exemplo citava `datasets/exemplo-<tarefa>/` e o download falava em "pasta local". Agora dizem o servidor do VisionForge e a sua pasta de datasets, o que vale nos dois usos. A folha de Datasets passa a se chamar "Dados de treino", já que traz também "Explorar" e "Meus datasets".
 - Num servidor a aba do navegador dizia "Treino local de IA" e o cabeçalho "local ai studio". Agora dizem "Treino de IA num servidor compartilhado" e "shared ai studio"; num uso local nada muda.
+- `visionforge reproduce` de um grupo de tarefa própria parado antes de qualquer semente gravar o `run.json` caía na classificação, porque o registro do grupo ficava sem `task` e o config de uma tarefa própria não diz a tarefa. Agora sai com código 2 e diz que o bundle não informa a tarefa (issue 343).
 
 ### Added
 
