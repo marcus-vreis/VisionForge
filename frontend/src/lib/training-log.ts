@@ -6,6 +6,7 @@
 
 import type { Dict } from "../i18n/pt";
 import type { TrainingEvent } from "../types/run";
+import { remoteLogLine } from "./colab-stages";
 import { trialBanner } from "./run-control";
 import { phaseName } from "./training-phase";
 
@@ -72,6 +73,9 @@ export function logLinesFor(
       lines.push(trialBanner(event.trial_index, event.total_trials, event.overrides));
     } else if (event.event === "epoch_end") {
       lines.push(epochLogLine(event));
+    } else if (event.event === "remote") {
+      const line = remoteLogLine(event);
+      if (line !== null) lines.push(line);
     } else if (event.event === "phase" && event.label !== phase) {
       const label = event.label;
       phase = label;

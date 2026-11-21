@@ -70,7 +70,9 @@ def test_the_bundle_is_downloaded_before_the_vm_stops(tmp_path: Path) -> None:
     assert commands.index("download") < commands.index("stop")
     download = cli.calls[commands.index("download")]
     assert download[:4] == ["download", "-s", download[2], REMOTE]
-    assert {"event": "remote", "stage": "download", "session": download[2]} in events
+    # elapsed_s varies with the machine; the stage and the session do not.
+    unstamped = [{k: v for k, v in e.items() if k != "elapsed_s"} for e in events]
+    assert {"event": "remote", "stage": "download", "session": download[2]} in unstamped
 
 
 def test_the_downloaded_result_keeps_the_report_and_the_remote_bundle(
