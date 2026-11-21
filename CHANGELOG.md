@@ -42,6 +42,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 - Aba **Resultados** do painel de treino: a folha alarga (como em "Código ao vivo") e os gráficos ficam lado a lado, empilhando numa janela estreita. Na classificação, a matriz de confusão da validação aparece para a última época e também para a melhor (a do checkpoint salvo), e há dois gráficos novos tirados das matrizes de cada época: F1 macro e recall por classe (com mais de 8 classes, as 8 de menor recall). Nada muda no treino nem no `run.json` (ADR-161).
 - Treino no Colab: o Colab passa a ser escolhido no seletor de dispositivo da barra de baixo, onde se escolhe a GPU (`T4`, `L4`, `A100`, `H100`, `G4`), e o **Treinar** de sempre manda a classificação para lá. Com ele escolhido, o botão mostra a GPU, o saldo em compute units e os runtimes ativos. A origem do dataset (pasta do "Meu Drive" ou link) é pedida num cartão da etapa **Dados**, que avisa que uma pasta espelhada só como backup não fica no "Meu Drive". O painel do cabeçalho fica com a instalação, o login, a conta e os runtimes; o botão de treino próprio dele saiu (ADR-211). Escolher uma pasta do Drive também preenche a pasta base do formulário, que lê as divisões e as classes dela; a Revisão mostra de onde a VM tira o dataset.
+- Dependências de desenvolvimento: `wcmatch` 10.1 → 11.2 e `bracex` 2.6 → 3.2.1 no `uv.lock` (alerta 261 do Dependabot: ReDoS com padrões de várias estrelas). Só o `bump-my-version` usa o `wcmatch`; o pacote instalado não muda.
 
 ## [0.22.3] — 2026-11-18
 
