@@ -27,6 +27,13 @@ ou que nunca rodou com uma conta real está em *O que não foi verificado*.
    dataset local. O dataset de um link não é lido aqui, então confira o tipo
    de tarefa e o número de classes.
 4. Abra a etapa **Revisão** e clique em **Treinar no Colab**.
+5. Acompanhe no log do painel de treino. Antes da primeira época a máquina
+   passa por várias etapas, cada uma numa linha com o tempo desde o clique:
+   alocar a VM, deixá-la pronta, montar o Drive (se for o caso), instalar o
+   VisionForge, preparar o dataset, treinar, empacotar o run, baixar o pacote
+   e liberar a VM. No primeiro treino real (CIFAR-10, uma época, T4) foram
+   cerca de 30 minutos do clique ao run importado; uma linha parada numa
+   etapa diz onde o tempo está indo.
 
 Uma pasta do PC que o Drive para desktop só espelha como **backup** fica em
 "Computadores", não em "Meu Drive", e a máquina do Colab não a alcança: copie
