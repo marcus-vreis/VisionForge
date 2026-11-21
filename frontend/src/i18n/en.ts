@@ -653,6 +653,28 @@ export const en: Dict = {
     cardMissing: "folder not found",
     cardUnlabeled: (n: number) => `${n} without boxes`,
     perClassTitle: "Images per class",
+    balanceTitle: "Do the splits share the class mix?",
+    balanceVerdict: {
+      stratified: (gap: number, limit: number) =>
+        `Yes: every class has nearly the same share in every split (largest gap ${gap.toFixed(1)} points; up to ${limit} counts as stratified).`,
+      close: (gap: number, _limit: number, close: number) =>
+        `Nearly: a class's share moves up to ${gap.toFixed(1)} points between splits (up to ${close} counts as close).`,
+      uneven: (gap: number) =>
+        `No: a class's share moves up to ${gap.toFixed(1)} points between splits. Validation measures a different mix than training; Re-split redistributes stratified by class.`,
+      missing_class: () =>
+        "No: a class is missing from some split, so performance on it is never measured there. Re-split redistributes stratified by class.",
+      one_split: () => "",
+    },
+    balanceMissing: (name: string, splits: string) => `${name} is missing from: ${splits}.`,
+    balanceCramer: (v: number) =>
+      `Cramér's V between split and class: ${v.toFixed(3)} (0 = same mix everywhere, 1 = the split decides the class).`,
+    balanceImbalance: (split: string, ratio: number | null) =>
+      ratio === null ? `${split}: a single class` : `${split}: largest class / smallest = ${ratio.toFixed(1)}×`,
+    balanceTable: "See each class's share per split",
+    balanceGap: "Gap (points)",
+    balanceTop: (list: string) => `Largest gaps, in points: ${list}.`,
+    balanceHelp:
+      "Uses only the labels the summary already counts, without opening images. In detection an image counts once for each class it holds.",
     boxesPerClassTitle: "Boxes per class",
     perClassHelp: "Each bar adds up the splits; the number at its end is the class total.",
     tableToggle: "Show the class by split table",

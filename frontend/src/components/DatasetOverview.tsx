@@ -35,6 +35,7 @@ import { useT } from "../i18n/useT";
 import { SelectField, TextField, Toggle } from "./controls";
 import { ActionButton } from "./ui/ActionButton";
 import { DataTable, LearnMore } from "./DatasetLabParts";
+import { SplitBalanceCard } from "./SplitBalanceCard";
 import {
   card,
   danger,
@@ -629,6 +630,7 @@ export function DatasetOverview({ form, summary }: { form: ExplorerForm; summary
         <>
           <TotalCards summary={summary} />
           <Distribution summary={summary} />
+          {summary.balance && <SplitBalanceCard balance={summary.balance} />}
           <Gallery form={form} summary={summary} />
           <ScanPanel form={form} />
         </>

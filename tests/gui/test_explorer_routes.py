@@ -241,3 +241,17 @@ def test_the_scan_finds_near_duplicates_across_splits_on_request(
     ]
     # Two passes over two images.
     assert near["done"] == near["total"] == 4
+
+
+def test_the_summary_says_whether_the_splits_share_the_class_mix(
+    client: TestClient, dataset: Path
+) -> None:
+    # train: cat 2 (a, bad) and dog 1; val: cat 1. dog is missing from val.
+    body = client.post("/api/explorer/summary", json={"base_dir": str(dataset)}).json()
+
+    balance = body["balance"]
+    assert balance["splits"] == ["train", "val"]
+    assert balance["verdict"] == "missing_class"
+    dog = next(r for r in balance["classes"] if r["name"] == "dog")
+    assert dog["missing_in"] == ["val"]
+    assert dog["gap_pp"] == pytest.approx(100 / 3)

@@ -85,6 +85,31 @@ export interface ExplorerSummary {
   class_names: string[];
   total_images: number;
   splits: Record<SplitName, SplitSummary>;
+  /** Whether the splits share the class mix (ADR-232); absent from older servers. */
+  balance?: SplitBalance;
+}
+
+export type BalanceVerdict = "stratified" | "close" | "uneven" | "missing_class" | "one_split";
+
+export interface ClassBalance {
+  name: string;
+  counts: Partial<Record<SplitName, number>>;
+  /** Percent of the split's labels, 0-100. */
+  shares: Partial<Record<SplitName, number>>;
+  /** Largest minus smallest share, in percentage points. */
+  gap_pp: number;
+  missing_in: SplitName[];
+}
+
+export interface SplitBalance {
+  splits: SplitName[];
+  /** Largest gap first. */
+  classes: ClassBalance[];
+  max_gap_pp: number;
+  cramers_v: number | null;
+  imbalance: Partial<Record<SplitName, number | null>>;
+  verdict: BalanceVerdict;
+  thresholds_pp: [number, number];
 }
 
 export interface Bar {

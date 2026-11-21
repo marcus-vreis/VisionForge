@@ -30,6 +30,7 @@ from visionforge.core.dataset_explorer import (
     summarize,
 )
 from visionforge.core.scan_store import load_scan, save_scan, scan_key, scan_signature
+from visionforge.core.split_balance import split_balance
 from visionforge.gui.api.dataset_scope import DatasetDir, DatasetPart, scan_store_dir
 from visionforge.gui.api.datasets_routes import (
     _IMAGE_EXTS,
@@ -118,7 +119,14 @@ async def explorer_summary(req: ExplorerRequest) -> dict[str, Any]:
     Always re-lists the disk, so it doubles as the refresh button.
     """
     index = await asyncio.to_thread(_load_index, req, refresh=True)
-    return {"base_dir": str(index.root.resolve()), **summarize(index)}
+    summary = summarize(index)
+    per_class = {s: v["per_class"] for s, v in summary["splits"].items()}
+    return {
+        "base_dir": str(index.root.resolve()),
+        **summary,
+        # Whether the splits share the class mix (ADR-232): counts only, cheap.
+        "balance": split_balance(per_class, SPLIT_NAMES),
+    }
 
 
 @router.post("/images", responses={400: {"description": BAD_REQUEST_TEXT}})
