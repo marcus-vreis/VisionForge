@@ -171,6 +171,22 @@ export function overridesSummary(overrides: Record<string, unknown> | null): str
 
 /** Four decimals hide a loss that trained down to 2e-4 as "0.0000", so the
  *  tiny ones are written in scientific notation. */
+/** The gallery's images grouped by their true class, the classes in name order
+ *  and the images of each in the order the server sent them (issue 349). */
+export function galleryByClass<I extends { true_class: string }>(
+  images: readonly I[],
+): { className: string; images: I[] }[] {
+  const groups = new Map<string, I[]>();
+  for (const image of images) {
+    const group = groups.get(image.true_class);
+    if (group) group.push(image);
+    else groups.set(image.true_class, [image]);
+  }
+  return [...groups.keys()]
+    .sort((a, b) => a.localeCompare(b))
+    .map((className) => ({ className, images: groups.get(className)! }));
+}
+
 export function formatValue(value: number): string {
   const size = Math.abs(value);
   if (size === 0) return "0";

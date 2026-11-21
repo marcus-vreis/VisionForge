@@ -1203,6 +1203,8 @@ export const pt = {
       "Precisão mista: usa 16 bits onde dá. Treina mais rápido e ocupa menos VRAM, com risco baixo de instabilidade.",
     mixed_precision:
       "Faz parte das contas em 16 bits. Acelera o treino e ocupa menos VRAM em GPUs recentes; em modelos sensíveis pode custar precisão numérica.",
+    live_gradcam_per_class:
+      "Quantas imagens de cada classe entram no Grad-CAM ao vivo, até 48 no total (com muitas classes, cada uma aparece ao menos uma vez antes de alguma repetir). 0 mostra 6 imagens, revezando as classes. Cada imagem custa uma passada para a frente e uma para trás nas épocas em que a galeria é gerada; o treino não muda.",
     live_gradcam_every:
       "A cada quantas épocas mostrar, na aba Resultados, onde o modelo olha em algumas imagens fixas da validação (Grad-CAM). Também mostra na última época e em cada nova melhor. 0 desliga. Não muda o treino: com a mesma seed, os números saem iguais.",
     deterministic:
@@ -1276,6 +1278,7 @@ export const pt = {
       deterministic: "Determinístico",
       mixed_precision: "Precisão mista (AMP)",
       live_gradcam_every: "Grad-CAM ao vivo (a cada N épocas)",
+      live_gradcam_per_class: "Grad-CAM ao vivo: imagens por classe",
       kind: "Tipo",
       step_size: "Step size",
       gamma: "Gamma",
@@ -3144,6 +3147,7 @@ export const pt = {
     gradcamTitle: (epoch: number, best: boolean) =>
       `Grad-CAM da validação · época ${epoch}${best ? " · melhor até aqui" : ""}`,
     gradcamNote: "onde o modelo olhou para decidir; as mesmas imagens a cada vez",
+    gradcamClass: (name: string, n: number) => `${name} · ${n} ${n === 1 ? "imagem" : "imagens"}`,
     gradcamCaption: (actual: string, predicted: string) =>
       actual === predicted ? `${actual} ✓` : `${actual} → lida como ${predicted}`,
     lrChart: "Learning rate",

@@ -162,8 +162,8 @@ untouched.
 
 While a job runs, the **Results** tab plots loss and task metric curves epoch by
 epoch, shows the learning rate and the best epoch so far, renders the validation
-confusion matrix and optional live Grad-CAM (`training.live_gradcam_every`) for
-classification, and lists completed runs during sweeps, comparisons,
+confusion matrix and optional live Grad-CAM (`training.live_gradcam_every`, with
+`training.live_gradcam_per_class` images of each class) for classification, and lists completed runs during sweeps, comparisons,
 cross-validation and replicates. Beside it, the **Code** tab (**next release**,
 on `development`) reads the real training, validation and evaluation functions
 from the installed package via `inspect` — for classification, regression,
@@ -559,7 +559,8 @@ entre YOLO e COCO — sempre gravando uma pasta irmã nova com
 Enquanto o treino roda, a aba **Resultados** desenha as curvas de loss e da
 métrica da tarefa época a época, mostra o learning rate e a melhor época até ali,
 exibe a matriz de confusão da validação e o Grad-CAM ao vivo opcional
-(`training.live_gradcam_every`) na classificação, e lista as execuções já
+(`training.live_gradcam_every`, com `training.live_gradcam_per_class` imagens de
+cada classe) na classificação, e lista as execuções já
 concluídas em buscas, comparações, validação cruzada e réplicas. Ao lado dela, a
 aba **Código** (**próxima release**, em `development`) lê do pacote instalado,
 com `inspect`, as funções reais de treino, validação e avaliação — em

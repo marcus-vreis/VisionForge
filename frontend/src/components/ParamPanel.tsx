@@ -111,6 +111,7 @@ const TRAINING_FIELD_ORDER = [
   "deterministic",
   "mixed_precision",
   "live_gradcam_every",
+  "live_gradcam_per_class",
 ];
 
 function resolveSchema(

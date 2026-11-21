@@ -19,6 +19,7 @@ from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
 from visionforge.core.live_insights import (
+    LIVE_GRADCAM_MAX,
     LIVE_GRADCAM_SAMPLES,
     LiveGradCam,
     choose_samples,
@@ -76,7 +77,9 @@ class _DataModule:
         return DataLoader(self._val, batch_size=8)
 
 
-def _config(tmp_path: Path, every: int, name: str) -> ExperimentConfig:
+def _config(
+    tmp_path: Path, every: int, name: str, per_class: int = 0
+) -> ExperimentConfig:
     return ExperimentConfig.model_validate(
         {
             "name": name,
@@ -89,6 +92,7 @@ def _config(tmp_path: Path, every: int, name: str) -> ExperimentConfig:
                 "seed": 7,
                 "deterministic": True,
                 "live_gradcam_every": every,
+                "live_gradcam_per_class": per_class,
             },
             "data": {"base_dir": str(tmp_path)},
             "output": {"models_dir": str(tmp_path / "models")},
@@ -98,12 +102,12 @@ def _config(tmp_path: Path, every: int, name: str) -> ExperimentConfig:
 
 
 def _fit(
-    tmp_path: Path, every: int, name: str
+    tmp_path: Path, every: int, name: str, per_class: int = 0
 ) -> tuple[list[dict[str, Any]], dict, list]:
     events: list[dict[str, Any]] = []
     torch.manual_seed(0)
     model = _TinyCnn()
-    result = Trainer(_config(tmp_path, every, name)).fit(
+    result = Trainer(_config(tmp_path, every, name, per_class)).fit(
         model, _DataModule(), progress_callback=events.append
     )
     run_json = json.loads((result.model_path.parent / "run.json").read_text("utf-8"))
@@ -122,6 +126,20 @@ def test_the_training_does_not_notice_the_insights(tmp_path: Path) -> None:
     assert any(e["event"] == "insight" for e in events_on)
     assert history_on == history_off
     assert weights_on.keys() == weights_off.keys()
+    for key, value in weights_off.items():
+        assert torch.equal(weights_on[key], value), key
+
+
+def test_more_images_per_class_still_leave_the_training_alone(
+    tmp_path: Path,
+) -> None:
+    # Issue 349: the fourth rule of ADR-162 holds whatever the gallery's size.
+    _, weights_off, history_off = _fit(tmp_path, 0, "off")
+    events_on, weights_on, history_on = _fit(tmp_path, 1, "per_class", per_class=3)
+
+    gallery = next(e for e in events_on if e["event"] == "insight")
+    assert len(gallery["images"]) == 9  # 3 classes x 3
+    assert history_on == history_off
     for key, value in weights_off.items():
         assert torch.equal(weights_on[key], value), key
 
@@ -162,6 +180,61 @@ def test_choose_samples_takes_the_classes_in_turn() -> None:
 
 def test_choose_samples_with_fewer_images_than_asked() -> None:
     assert sorted(choose_samples([0, 1, 1], 6, seed=0)) == [0, 1, 2]
+
+
+def test_choose_samples_per_class_takes_that_many_of_each() -> None:
+    labels = [0] * 10 + [1] * 10 + [2] * 10
+    chosen = choose_samples(labels, LIVE_GRADCAM_MAX, seed=3, per_class=4)
+    assert len(chosen) == len(set(chosen)) == 12
+    assert sorted(labels[i] for i in chosen) == [0] * 4 + [1] * 4 + [2] * 4
+    assert choose_samples(labels, LIVE_GRADCAM_MAX, seed=3, per_class=4) == chosen
+
+
+def test_choose_samples_per_class_with_a_small_class_takes_all_of_it() -> None:
+    labels = [0] * 10 + [1] * 2
+    chosen = choose_samples(labels, LIVE_GRADCAM_MAX, seed=0, per_class=5)
+    assert sorted(labels[i] for i in chosen) == [0] * 5 + [1] * 2
+
+
+def test_choose_samples_per_class_stops_at_the_ceiling_still_in_turns() -> None:
+    labels = [c for c in range(30) for _ in range(5)]  # 30 classes of 5
+    chosen = choose_samples(labels, LIVE_GRADCAM_MAX, seed=1, per_class=4)
+    assert len(chosen) == LIVE_GRADCAM_MAX
+    counts = [sum(labels[i] == c for i in chosen) for c in range(30)]
+    # In turns: every class shows once before any shows twice.
+    assert min(counts) >= 1
+    assert max(counts) - min(counts) <= 1
+
+
+def test_create_uses_per_class_up_to_the_ceiling(tmp_path: Path) -> None:
+    cfg = _config(tmp_path, 1, "per_class_unit", per_class=2)
+    loader = DataLoader(_Images(12, 3, seed=4), batch_size=4)
+    insights = LiveGradCam.create(
+        cfg, loader, ["a", "b", "c"], tmp_path, torch.device("cpu")
+    )
+    assert insights is not None
+    images = insights._write(_TinyCnn(), 1, False)
+    assert sorted(i["true_class"] for i in images) == ["a", "a", "b", "b", "c", "c"]
+
+
+def test_the_explanation_runs_in_chunks_that_add_up(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A large gallery is explained a few images at a time: same maps as one batch.
+    import visionforge.core.live_insights as live
+
+    cfg = _config(tmp_path, 1, "chunks", per_class=4)
+    loader = DataLoader(_Images(12, 3, seed=4), batch_size=4)
+    model = _TinyCnn().eval()
+    one = LiveGradCam.create(
+        cfg, loader, ["a", "b", "c"], tmp_path / "one", torch.device("cpu")
+    )
+    assert one is not None
+    whole = one._explain(model)
+    monkeypatch.setattr(live, "LIVE_GRADCAM_BATCH", 5)
+    chunked = one._explain(model)
+    assert torch.allclose(whole[0], chunked[0], atol=1e-6)
+    assert whole[1].tolist() == chunked[1].tolist()
 
 
 def test_preserved_rng_leaves_every_generator_as_found() -> None:
