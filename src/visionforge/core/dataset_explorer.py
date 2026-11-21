@@ -30,6 +30,14 @@ from PIL import Image, ImageDraw
 from visionforge.core.cancellation import CancellationToken, is_cancelled
 from visionforge.core.dataset_audit import _verified_image_digest
 from visionforge.core.detection_data import resolve_yolo_split
+from visionforge.core.near_duplicates import (
+    MAX_DISTANCE as NEAR_MAX_DISTANCE,
+)
+from visionforge.core.near_duplicates import (
+    NearImage,
+    difference_hash,
+    near_duplicate_groups,
+)
 
 ExplorerTask = Literal["classification", "detection"]
 
@@ -393,8 +401,14 @@ def scan_integrity(
     max_images: int = DEFAULT_SCAN_LIMIT,
     token: CancellationToken | None = None,
     on_progress: Callable[[int, int], None] | None = None,
+    near_duplicates: bool = False,
 ) -> dict[str, Any]:
     """Open and hash images: corrupted files, exact duplicates, leakage, sizes.
+
+    ``near_duplicates`` adds a second pass that decodes every readable image of
+    the first and groups visual near-copies across splits (ADR-228, ADR-231).
+    Progress then counts both passes; an image that verifies but fails to decode
+    is reported as corrupted.
 
     At most ``max_images`` are read. Past that limit the scan takes an evenly
     spaced subset (``sampled`` is true), so every split is still represented. A
@@ -407,8 +421,9 @@ def scan_integrity(
     total = len(index.images)
     step = max(1, math.ceil(total / max_images)) if total else 1
     chosen = index.images[::step]
+    passes = 2 if near_duplicates else 1
     if on_progress:
-        on_progress(0, len(chosen))
+        on_progress(0, passes * len(chosen))
 
     corrupted: list[dict[str, str]] = []
     corrupted_count = 0
@@ -431,6 +446,7 @@ def scan_integrity(
             )
 
     root = index.root.resolve()
+    readable: list[tuple[ExplorerImage, str]] = []
     for item in chosen:
         if is_cancelled(token):
             cancelled = True
@@ -440,10 +456,22 @@ def scan_integrity(
         scanned += 1
         if digest is not None:
             by_hash[digest].append(item)
+            readable.append((item, digest))
             tally.add(root / item.rel)
         if on_progress:
-            on_progress(scanned, len(chosen))
+            on_progress(scanned, passes * len(chosen))
 
+    near: list[dict[str, Any]] | None = None
+    if near_duplicates and not cancelled:
+
+        def advance(done: int) -> None:
+            if on_progress:
+                on_progress(len(chosen) + done, passes * len(chosen))
+
+        hashed, cancelled = _near_hashes(
+            root, readable, token, current, record, advance
+        )
+        near = None if cancelled else near_duplicate_groups(hashed)
     duplicate_groups, leakage_groups = _group_report(by_hash)
     sampled = step > 1
     return {
@@ -463,6 +491,11 @@ def scan_integrity(
         "duplicate_groups": duplicate_groups[:MAX_REPORTED],
         "leakage_group_count": len(leakage_groups),
         "leakage_groups": leakage_groups[:MAX_REPORTED],
+        # None when not looked for, or when cancelled before the search ended.
+        "near_checked": near is not None,
+        "near_max_distance": NEAR_MAX_DISTANCE,
+        "near_group_count": len(near or []),
+        "near_groups": (near or [])[:MAX_REPORTED],
         "sizes": _size_report(
             tally.widths,
             tally.heights,
@@ -471,6 +504,35 @@ def scan_integrity(
             tally.aspect_hist,
         ),
     }
+
+
+def _near_hashes(
+    root: Path,
+    readable: list[tuple[ExplorerImage, str]],
+    token: CancellationToken | None,
+    current: list[ExplorerImage],
+    record: Callable[[Path, str], None],
+    advance: Callable[[int], None],
+) -> tuple[list[NearImage], bool]:
+    """Decode and dHash the images the first pass could read; True if cancelled."""
+    hashed: list[NearImage] = []
+    for done, (item, digest) in enumerate(readable, start=1):
+        if is_cancelled(token):
+            return hashed, True
+        current[:] = [item]
+        try:
+            value = difference_hash(root / item.rel)
+        except (
+            OSError,
+            ValueError,
+            SyntaxError,
+            Image.DecompressionBombError,
+        ) as error:
+            record(root / item.rel, type(error).__name__)
+        else:
+            hashed.append(NearImage(item.split, item.rel, value, digest))
+        advance(done)
+    return hashed, False
 
 
 def _group_report(

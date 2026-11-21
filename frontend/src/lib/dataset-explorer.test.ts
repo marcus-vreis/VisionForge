@@ -130,7 +130,7 @@ describe("scan progress and problems", () => {
     expect(hasProblems(report())).toBe(false);
     const dirty = report({ corrupted_count: 2, leakage_group_count: 1 });
     expect(hasProblems(dirty)).toBe(true);
-    expect(problemCounts(dirty)).toEqual({ corrupted: 2, duplicates: 0, leakage: 1 });
+    expect(problemCounts(dirty)).toEqual({ corrupted: 2, duplicates: 0, leakage: 1, near: 0 });
   });
 });
 

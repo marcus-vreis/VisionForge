@@ -740,6 +740,16 @@ export const en: Dict = {
     groupFiles: (n: number) => `files: ${n}`,
     labelConflict: "same image, different classes",
     moreNotShown: (n: number) => `${n} more not shown`,
+    scanNear: "Look for near-duplicates across splits",
+    scanNearHint:
+      "A second pass opens each image and compares a 64-bit visual hash: it finds the same photo re-encoded, resized or brightened in different splits. The scan takes about twice as long.",
+    nearTitle: "Near-duplicates across splits",
+    nearHelp: (bits: number) =>
+      `Similar images (up to ${bits} of 64 bits apart in the visual hash) in different splits. Check each group: video frames or photos from a fixed camera also look alike.`,
+    nearNotChecked: "Near-duplicates were not looked for.",
+    savedAt: (when: string) => `Last kept scan: ${when}.`,
+    savedStale:
+      "The dataset changed since (images added, removed, renamed, edited or relabeled): scan again for a current result.",
     sizesTitle: "Image sizes",
     longestSide: "Longest side (px)",
     aspectRatio: "Aspect ratio (width / height)",

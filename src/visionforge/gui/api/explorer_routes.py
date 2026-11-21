@@ -29,7 +29,8 @@ from visionforge.core.dataset_explorer import (
     select_images,
     summarize,
 )
-from visionforge.gui.api.dataset_scope import DatasetDir, DatasetPart
+from visionforge.core.scan_store import load_scan, save_scan, scan_key, scan_signature
+from visionforge.gui.api.dataset_scope import DatasetDir, DatasetPart, scan_store_dir
 from visionforge.gui.api.datasets_routes import (
     _IMAGE_EXTS,
     SCAN_BASE_MISSING_KEY,
@@ -73,6 +74,12 @@ class ExplorerImagesRequest(ExplorerRequest):
 
 class ExplorerScanRequest(ExplorerRequest):
     max_images: int = Field(default=DEFAULT_SCAN_LIMIT, ge=1, le=MAX_SCAN_LIMIT)
+    # A second pass for visual near-copies across splits (ADR-231).
+    near_duplicates: bool = False
+
+
+# Finished scans, one per dataset; on a server inside each person's profile.
+_SCAN_STORE = Path("outputs/explorer_scans")
 
 
 def _key(req: ExplorerRequest) -> tuple[Any, ...]:
@@ -196,11 +203,32 @@ def explorer_thumb(
 async def explorer_scan_start(req: ExplorerScanRequest) -> dict[str, Any]:
     """Start the integrity scan in the background; poll ``/scan/{job_id}``."""
     index = await asyncio.to_thread(_load_index, req, refresh=False)
+    # Resolved here: the worker thread does not see the request's scope.
+    store, key = scan_store_dir(_SCAN_STORE), scan_key(index, _split_dirs(req))
+
+    def keep(report: dict[str, Any]) -> None:
+        save_scan(store, key, scan_signature(index), report)
+
     try:
-        job = _SCANS.start(index, req.max_images)
+        job = _SCANS.start(
+            index, req.max_images, near_duplicates=req.near_duplicates, on_done=keep
+        )
     except ScanBusyError as exc:
         raise HTTPException(409, tr("explorer.scan_busy")) from exc
     return job.snapshot()
+
+
+@router.post("/scan/saved")
+async def explorer_scan_saved(req: ExplorerRequest) -> dict[str, Any]:
+    """The last finished scan of this dataset, and whether it changed since.
+
+    ``report`` is None when the dataset was never scanned here.
+    """
+    index = await asyncio.to_thread(_load_index, req, refresh=True)
+    store, key = scan_store_dir(_SCAN_STORE), scan_key(index, _split_dirs(req))
+    signature = await asyncio.to_thread(scan_signature, index)
+    saved = load_scan(store, key, signature)
+    return saved or {"report": None, "saved_at": None, "stale": False}
 
 
 @router.get("/scan/{job_id}", responses={404: {"description": NOT_FOUND_TEXT}})

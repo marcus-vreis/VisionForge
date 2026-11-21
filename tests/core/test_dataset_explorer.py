@@ -294,3 +294,43 @@ class TestScan:
         )
         assert seen[0] == (0, 5)
         assert seen[-1] == (5, 5)
+
+
+class TestScanNearDuplicates:
+    """The optional second pass of the scan (ADR-231)."""
+
+    def test_cancelling_in_the_second_pass_reports_no_near_search(
+        self, tmp_path: Path
+    ) -> None:
+        index = build_index(_folder_dataset(tmp_path), "classification")
+        token = CancellationToken()
+        seen: list[tuple[int, int]] = []
+
+        def progress(done: int, total: int) -> None:
+            seen.append((done, total))
+            if done > len(index.images):  # one image into the second pass
+                token.cancel()
+
+        report = scan_integrity(
+            index, token=token, on_progress=progress, near_duplicates=True
+        )
+
+        assert report["cancelled"] is True
+        assert report["near_checked"] is False
+        assert report["near_groups"] == []
+        assert seen[0] == (0, 2 * len(index.images))
+        # The first pass finished: its findings stay.
+        assert report["leakage_group_count"] == 1
+
+    def test_a_truncated_image_is_corrupted_once(self, tmp_path: Path) -> None:
+        root = _folder_dataset(tmp_path)
+        data = (root / "train/cat/b.png").read_bytes()
+        (root / "train/cat/b.png").write_bytes(data[: len(data) // 2])
+
+        report = scan_integrity(
+            build_index(root, "classification"), near_duplicates=True
+        )
+
+        assert [c["path"] for c in report["corrupted"]] == ["train/cat/b.png"]
+        assert report["corrupted_count"] == 1
+        assert report["near_checked"] is True

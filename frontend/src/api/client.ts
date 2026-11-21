@@ -11,6 +11,7 @@ import {
   explorerBody,
   type ExplorerForm,
   type ExplorerSummary,
+  type SavedScan,
   type ScanJob,
 } from "../lib/dataset-explorer";
 import type {
@@ -1779,11 +1780,25 @@ export async function explorerImages(
 export async function explorerScanStart(
   form: ExplorerForm,
   maxImages: number,
+  nearDuplicates = false,
 ): Promise<ScanJob> {
   return request<ScanJob>("/explorer/scan", {
     method: "POST",
     headers: JSON_HEADERS,
-    body: JSON.stringify({ ...explorerBody(form), max_images: maxImages }),
+    body: JSON.stringify({
+      ...explorerBody(form),
+      max_images: maxImages,
+      near_duplicates: nearDuplicates,
+    }),
+  });
+}
+
+/** The last finished scan of the dataset, if the server kept one (ADR-231). */
+export async function explorerScanSaved(form: ExplorerForm): Promise<SavedScan> {
+  return request<SavedScan>("/explorer/scan/saved", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(explorerBody(form)),
   });
 }
 

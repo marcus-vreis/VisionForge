@@ -11,6 +11,7 @@ from __future__ import annotations
 import threading
 import uuid
 from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -56,8 +57,15 @@ class ScanJobs:
         self._jobs: OrderedDict[str, ScanJob] = OrderedDict()
         self._lock = threading.Lock()
 
-    def start(self, index: DatasetIndex, max_images: int) -> ScanJob:
-        """Launch a scan.
+    def start(
+        self,
+        index: DatasetIndex,
+        max_images: int,
+        *,
+        near_duplicates: bool = False,
+        on_done: Callable[[dict[str, Any]], None] | None = None,
+    ) -> ScanJob:
+        """Launch a scan; ``on_done`` gets the report of a scan that finished.
 
         Raises:
             ScanBusyError: if another scan is still running.
@@ -72,17 +80,30 @@ class ScanJobs:
             for old in mine[: max(0, len(mine) + 1 - _KEEP)]:
                 del self._jobs[old.job_id]
         threading.Thread(
-            target=self._run, args=(job, index, max_images), daemon=True
+            target=self._run,
+            args=(job, index, max_images, near_duplicates, on_done),
+            daemon=True,
         ).start()
         return job
 
-    def _run(self, job: ScanJob, index: DatasetIndex, max_images: int) -> None:
+    def _run(
+        self,
+        job: ScanJob,
+        index: DatasetIndex,
+        max_images: int,
+        near_duplicates: bool,
+        on_done: Callable[[dict[str, Any]], None] | None,
+    ) -> None:
         def progress(done: int, total: int) -> None:
             job.done, job.total = done, total
 
         try:
             result = scan_integrity(
-                index, max_images=max_images, token=job.token, on_progress=progress
+                index,
+                max_images=max_images,
+                token=job.token,
+                on_progress=progress,
+                near_duplicates=near_duplicates,
             )
         # Reported to the client, not raised.
         except Exception as exc:  # noqa: BLE001
@@ -90,6 +111,13 @@ class ScanJobs:
             job.error = f"{type(exc).__name__}: {exc}"
             job.state = "failed"
             return
+        if not result["cancelled"] and on_done is not None:
+            # Before the state turns done, so a page that sees "done" and asks
+            # for the kept scan gets this one. A failed save costs the cache only.
+            try:
+                on_done(result)
+            except OSError as exc:
+                logger.warning("Explorer scan not kept: {}", exc)
         job.result = result
         job.state = "cancelled" if result["cancelled"] else "done"
 

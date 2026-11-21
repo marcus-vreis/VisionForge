@@ -163,7 +163,26 @@ export interface ScanReport {
   duplicate_groups: DuplicateGroup[];
   leakage_group_count: number;
   leakage_groups: DuplicateGroup[];
+  /** The optional second pass (ADR-231); absent from scans kept before it. */
+  near_checked?: boolean;
+  near_max_distance?: number;
+  near_group_count?: number;
+  near_groups?: NearGroup[];
   sizes: SizeReport;
+}
+
+/** Visually near images in more than one split, not byte copies (ADR-228). */
+export interface NearGroup {
+  splits: string[];
+  paths: string[];
+}
+
+/** The last finished scan of a dataset, kept by the server (ADR-231). */
+export interface SavedScan {
+  report: ScanReport | null;
+  saved_at: string | null;
+  /** The dataset changed since: what the report found may be gone. */
+  stale: boolean;
 }
 
 export type ScanState = "running" | "done" | "cancelled" | "failed";
@@ -187,7 +206,7 @@ export function scanPercent(done: number, total: number): number {
   return Math.min(100, Math.floor((done / total) * 100));
 }
 
-export type ProblemKind = "corrupted" | "duplicates" | "leakage";
+export type ProblemKind = "corrupted" | "duplicates" | "leakage" | "near";
 
 /** How many findings of each kind, in the order the list shows them. */
 export function problemCounts(report: ScanReport): Record<ProblemKind, number> {
@@ -195,12 +214,13 @@ export function problemCounts(report: ScanReport): Record<ProblemKind, number> {
     corrupted: report.corrupted_count,
     duplicates: report.duplicate_group_count,
     leakage: report.leakage_group_count,
+    near: report.near_group_count ?? 0,
   };
 }
 
 export function hasProblems(report: ScanReport): boolean {
   const c = problemCounts(report);
-  return c.corrupted + c.duplicates + c.leakage > 0;
+  return c.corrupted + c.duplicates + c.leakage + c.near > 0;
 }
 
 /** "64-128", "2048+" for a half-open bin. */

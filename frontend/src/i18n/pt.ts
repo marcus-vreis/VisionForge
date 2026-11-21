@@ -771,6 +771,16 @@ export const pt = {
     groupFiles: (n: number) => `arquivos: ${n}`,
     labelConflict: "mesma imagem, classes diferentes",
     moreNotShown: (n: number) => `mais ${n} não mostrados`,
+    scanNear: "Procurar quase-duplicatas entre splits",
+    scanNearHint:
+      "Uma segunda passada abre cada imagem e compara um hash visual de 64 bits: acha a mesma foto reencodada, redimensionada ou com o brilho mudado em splits diferentes. A varredura leva mais ou menos o dobro do tempo.",
+    nearTitle: "Quase-duplicatas entre splits",
+    nearHelp: (bits: number) =>
+      `Imagens parecidas (até ${bits} de 64 bits diferentes no hash visual) em splits diferentes. Confira cada grupo: quadros de um vídeo ou fotos de uma câmera fixa também se parecem.`,
+    nearNotChecked: "Quase-duplicatas não foram procuradas.",
+    savedAt: (when: string) => `Última varredura guardada: ${when}.`,
+    savedStale:
+      "O dataset mudou desde então (imagens adicionadas, removidas, renomeadas, editadas ou com outra classe): varra de novo para um resultado atual.",
     sizesTitle: "Tamanhos das imagens",
     longestSide: "Maior lado (px)",
     aspectRatio: "Proporção (largura / altura)",

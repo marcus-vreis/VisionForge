@@ -22,8 +22,20 @@ imagens. **Voltar** ou Esc devolve à janela.
 
 ![Laboratório de datasets na Visão geral](../images/vf-datasets-explorer.png)
 
+A **Varredura de integridade** da Visão geral abre cada imagem e acha arquivos
+que não abrem, cópias exatas e a mesma imagem em divisões diferentes. Ligue
+**Procurar quase-duplicatas entre splits** para uma segunda passada que acha a
+mesma foto reencodada, redimensionada ou com o brilho mudado; ela leva mais ou
+menos o dobro do tempo, e cada grupo é para conferir, não um veredito.
+
 Em pastas grandes a varredura pode ler uma amostra espaçada em vez de todas as
 imagens; a tela diz quando foi o caso.
+
+A última varredura que termina fica guardada (fora do dataset, em
+`outputs/explorer_scans/`) e aparece ao reabrir o dataset, com a data. Se
+depois disso alguma imagem foi adicionada, removida, renomeada, editada ou
+mudou de classe, a tela avisa que o resultado pode estar desatualizado. Uma
+varredura cancelada não é guardada.
 
 As outras entradas do menu são as ferramentas abaixo. Na detecção, a janela
 tem ainda o atalho **Converter uma pasta COCO**, que abre o laboratório direto
