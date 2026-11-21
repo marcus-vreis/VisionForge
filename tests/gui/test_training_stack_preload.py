@@ -25,6 +25,7 @@ import pytest
 
 import visionforge.gui.api.execution as execution_mod
 import visionforge.gui.api.submission as submission_mod
+from tests.helpers import wait_until_async
 from visionforge.gui.api.run_queue import colab_lane
 
 from .conftest import release_queue
@@ -102,11 +103,13 @@ def _use_stack(monkeypatch: pytest.MonkeyPatch, *names: str) -> None:
 
 
 async def _wait_until_idle(routes: Any) -> None:
-    for _ in range(1000):
-        if not execution_mod._LANES.is_busy():
-            return
-        await asyncio.sleep(0.01)
-    raise AssertionError("the queue never drained")
+    # A deadline in seconds: a count of short sleeps ran out in 8 ms on
+    # py3.12 under Windows while the SSE ticker kept the loop busy (#383).
+    await wait_until_async(
+        lambda: not execution_mod._LANES.is_busy(),
+        timeout=_GATE_TIMEOUT,
+        message="the queue to drain",
+    )
 
 
 def test_the_first_run_imports_the_stack_while_the_loop_keeps_running(
