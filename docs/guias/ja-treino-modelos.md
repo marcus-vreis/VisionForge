@@ -116,7 +116,7 @@ download: [`../DATASETS.md`](../DATASETS.md).
 | `visionforge run config.yaml` | roda um YAML exportado; com `strategy:` + `config:`, roda réplicas, comparação, sweep ou K-fold |
 | `visionforge doctor` | confere o ambiente e indica o torch certo; `--fix` instala depois de confirmar |
 | `visionforge selftest` | treina cada tarefa com dados gerados; `--quick` só o treino simples |
-| `visionforge audit-data PASTA` | procura duplicatas exatas entre splits, imagens ilegíveis e, com `--groups`, grupos que cruzam splits |
+| `visionforge audit-data PASTA` | procura duplicatas exatas entre splits, imagens ilegíveis, com `--groups` grupos que cruzam splits e, com `--near-duplicates`, quase-duplicatas visuais entre splits |
 | `visionforge bundle RUN destino.zip` | exporta a execução com manifesto de hashes |
 | `visionforge verify-bundle destino.zip` | confere o manifesto sem extrair o ZIP |
 | `visionforge reproduce destino.zip` | retreina uma semente do bundle e confere se ela cai no intervalo de predição de 95% das réplicas (`--data`, `--seed`, `--output`) |

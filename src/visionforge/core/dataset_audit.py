@@ -12,6 +12,14 @@ from typing import Any
 
 from PIL import Image
 
+from visionforge.core.near_duplicates import (
+    MAX_DISTANCE as NEAR_MAX_DISTANCE,
+)
+from visionforge.core.near_duplicates import (
+    NearImage,
+    difference_hash,
+    near_duplicate_groups,
+)
 from visionforge.utils.messages import tr
 
 _IMAGE_SUFFIXES = {
@@ -118,8 +126,12 @@ def audit_dataset(
     group_manifest: Path | None = None,
     strict_groups: bool = False,
     max_issues: int = 100,
+    near_duplicates: bool = False,
 ) -> dict[str, Any]:
     """Return a deterministic JSON report without changing the dataset.
+
+    ``near_duplicates`` also decodes every image to find visual near-copies
+    across splits (ADR-228); an image that fails to decode counts as unreadable.
 
     Raises:
         ValueError: if root, split paths, or a supplied group manifest are invalid.
@@ -141,6 +153,7 @@ def audit_dataset(
     hashes: dict[str, list[tuple[str, str]]] = defaultdict(list)
     images: list[Path] = []
     memberships: list[str] = []
+    digests: list[str] = []
 
     def record_issue(path: Path, reason: str) -> None:
         """Count every unreadable image while bounding the reported details."""
@@ -165,7 +178,13 @@ def audit_dataset(
             hashes[digest].append((split, relative))
             images.append(path)
             memberships.append(split)
+            digests.append(digest)
     duplicates = _cross_split_groups(hashes, "sha256")
+    near = (
+        _near_groups(root, images, memberships, digests, record_issue)
+        if near_duplicates
+        else []
+    )
     overlaps: list[dict[str, Any]] = []
     if group_manifest is not None:
         overlaps = _group_overlaps(root, Path(group_manifest), images, memberships)
@@ -173,6 +192,7 @@ def audit_dataset(
     return {
         "ok": not (
             duplicates
+            or near
             or unreadable_count
             or missing
             or empty
@@ -180,7 +200,9 @@ def audit_dataset(
         ),
         "root": str(root),
         "hash_algorithm": "sha256",
-        "visual_similarity_checked": False,
+        "visual_similarity_checked": near_duplicates,
+        "near_duplicate_groups": near,
+        "near_duplicate_max_distance": NEAR_MAX_DISTANCE,
         "image_counts": counts,
         "duplicate_groups": duplicates,
         "missing_splits": missing,
@@ -191,6 +213,32 @@ def audit_dataset(
         "strict_groups": strict_groups,
         "group_overlaps": overlaps,
     }
+
+
+def _near_groups(
+    root: Path,
+    images: list[Path],
+    memberships: list[str],
+    digests: list[str],
+    record_issue: Callable[[Path, str], None],
+) -> list[dict[str, Any]]:
+    """Decode and hash every image, then group the near ones across splits."""
+    hashed: list[NearImage] = []
+    for path, split, digest in zip(images, memberships, digests, strict=True):
+        try:
+            value = difference_hash(path)
+        except (
+            OSError,
+            ValueError,
+            SyntaxError,
+            Image.DecompressionBombError,
+        ) as error:
+            record_issue(path, type(error).__name__)
+            continue
+        hashed.append(
+            NearImage(split, path.relative_to(root).as_posix(), value, digest)
+        )
+    return near_duplicate_groups(hashed)
 
 
 def _validate_audit_options(

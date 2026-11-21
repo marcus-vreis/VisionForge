@@ -11,7 +11,7 @@ const clean: DatasetAuditReport = {
   ok: true, root: "/data", hash_algorithm: "sha256", visual_similarity_checked: false,
   image_counts: { train: 2, val: 1, test: 1 }, duplicate_groups: [], missing_splits: [],
   empty_splits: [], unreadable_count: 0, unreadable: [], group_manifest: null,
-  strict_groups: false, group_overlaps: [],
+  strict_groups: false, group_overlaps: [], near_duplicate_groups: [], near_duplicate_max_distance: 6,
 };
 
 function render(lang: "pt" | "en", node: React.ReactNode) {
@@ -48,11 +48,30 @@ describe("dataset audit evidence", () => {
     expect(html).not.toContain("path-4.png");
   });
 
+  it.each(["pt", "en"] as const)("shows the near-duplicates found across splits in %s", (lang) => {
+    const t = lang === "pt" ? pt : en;
+    const report = { ...clean, ok: false, visual_similarity_checked: true,
+      near_duplicate_groups: [{ splits: ["test", "train"], paths: ["test/cat/a.jpg", "train/cat/a.png"] }],
+    };
+    const html = render(lang, <DatasetAuditResult report={report} />);
+    expect(html).toContain(t.evidence.scopeNear(6));
+    expect(html).not.toContain(t.evidence.scope);
+    expect(html).toContain(t.evidence.nearCount(1));
+    expect(html).toContain("test/cat/a.jpg");
+    expect(html).toContain("train/cat/a.png");
+  });
+
+  it("says nothing about near-duplicates when they were not looked for", () => {
+    const html = render("pt", <DatasetAuditResult report={clean} />);
+    expect(html).not.toContain(pt.evidence.nearCount(0));
+  });
+
   it("starts idle, requires a dataset and exposes optional group controls", () => {
     const html = render("pt", <DatasetAudit baseDir="" trainDir="fit" valDir="valid" testDir="final" />);
     expect(html).toContain(pt.evidence.audit);
     expect(html).toContain(pt.evidence.groupManifest);
     expect(html).toContain(pt.evidence.strictGroups);
+    expect(html).toContain(pt.evidence.nearDuplicates);
     expect(html).toContain('disabled=""');
     expect(html).not.toContain('data-testid="audit-result"');
     expect(html).not.toContain('role="alert"');
