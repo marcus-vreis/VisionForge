@@ -2979,6 +2979,26 @@ export const pt = {
       buildingBank: "montando o banco",
       scoring: "pontuando",
     },
+    remoteStages: {
+      allocated: (gpu: string) => `VM do Colab alocada (${gpu})`,
+      kernelReady: "VM pronta para receber o job",
+      driveMount: "montando o Google Drive na VM",
+      driveConsentSent: "permissão do Drive enviada",
+      driveMounted: "Google Drive montado",
+      driveCopy: (files: string, seconds: string) =>
+        `dataset copiado do Drive: ${files} arquivos em ${seconds} s`,
+      retry: "o job não começou na VM; tentando de novo",
+      install: (version: string) => `instalando o VisionForge ${version} na VM`,
+      dataset: "preparando o dataset na VM",
+      numClasses: (old: string, next: string) =>
+        `num_classes ajustado de ${old} para ${next} pelas pastas do dataset`,
+      train: (device: string) => `treinando (${device})`,
+      pack: "empacotando o run",
+      driveExport: "run salvo no Drive",
+      driveExportFailed: (error: string) => `não foi possível salvar o run no Drive: ${error}`,
+      download: "baixando o pacote do run",
+      released: "VM do Colab liberada",
+    },
     // The first two lines of the log.
     initializing: (runId: string) => `> inicializando runtime · ${runId}`,
     loadingDataset: "> carregando dataset…",

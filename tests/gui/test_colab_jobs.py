@@ -211,9 +211,49 @@ def test_a_job_forwards_events_and_ends_with_the_report() -> None:
     )
     result, events = run(cli)
     assert result == cj.RemoteResult("completed", report={"accuracy": 0.9})
-    assert [e["event"] for e in events] == ["remote", "remote", "start", "epoch_end"]
+    assert [e["event"] for e in events] == [
+        "remote",
+        "remote",
+        "start",
+        "epoch_end",
+        "remote",
+    ]
     assert [e["stage"] for e in events[:2]] == ["allocated", "kernel_ready"]
     assert cli.commands() == ["new", "exec", "exec", "stop"]
+
+
+def test_every_stage_says_how_long_after_the_click_it_came() -> None:
+    # Issue 355: a Colab job sat for 30 min on "loading dataset" with no line.
+    cli = FakeCli(
+        [
+            event_line({"event": "remote", "stage": "install"}),
+            event_line({"event": "epoch_end", "epoch": 1}),
+            event_line({"event": "job_end", "status": "ok"}),
+        ]
+    )
+    _, events = run(cli)
+    remote = [e for e in events if e["event"] == "remote"]
+    assert [e["stage"] for e in remote] == [
+        "allocated",
+        "kernel_ready",
+        "install",
+        "released",
+    ]
+    elapsed = [e["elapsed_s"] for e in remote]
+    assert all(isinstance(s, float) and s >= 0 for s in elapsed)
+    assert elapsed == sorted(elapsed)
+    assert all("elapsed_s" not in e for e in events if e["event"] != "remote")
+
+
+def test_released_comes_after_the_vm_is_stopped_and_only_if_one_was_given() -> None:
+    stopped = FakeCli([event_line({"event": "job_end", "status": "ok"})])
+    _, events = run(stopped)
+    assert events[-1]["stage"] == "released"
+    assert stopped.commands()[-1] == "stop"
+
+    refused = FakeCli([], new_ok=False)
+    _, events = run(refused)
+    assert "released" not in [e.get("stage") for e in events]
 
 
 def test_exec_runs_with_a_deadline_longer_than_any_session() -> None:
