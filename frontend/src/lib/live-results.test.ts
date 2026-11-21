@@ -8,6 +8,7 @@ import {
   confusionAt,
   curveOf,
   formatValue,
+  galleryByClass,
   latestConfusion,
   liveUnits,
   macroF1,
@@ -288,5 +289,22 @@ describe("macroF1Curve and recallCurves", () => {
     const top = { classes: ["a", "b"], top: [[0, 1, 2]] as [number, number, number][] };
     expect(recallCurves([epoch(1, { confusion: top })], 8).series).toEqual([]);
     expect(macroF1Curve([epoch(1, { confusion: top })])).toEqual([]);
+  });
+});
+
+describe("galleryByClass", () => {
+  it("groups by true class, classes by name, images in the order sent", () => {
+    const img = (path: string, true_class: string) => ({ path, true_class });
+    expect(
+      galleryByClass([img("0", "b"), img("1", "a"), img("2", "b"), img("3", "c")]),
+    ).toEqual([
+      { className: "a", images: [img("1", "a")] },
+      { className: "b", images: [img("0", "b"), img("2", "b")] },
+      { className: "c", images: [img("3", "c")] },
+    ]);
+  });
+
+  it("is empty for an empty gallery", () => {
+    expect(galleryByClass([])).toEqual([]);
   });
 });

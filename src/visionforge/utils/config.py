@@ -192,6 +192,15 @@ class TrainingConfig(BaseModel):
             "época e em cada nova melhor. 0 (padrão) desliga."
         ),
     )
+    live_gradcam_per_class: int = Field(
+        default=0,
+        ge=0,
+        le=16,
+        description=(
+            "Quantas imagens de cada classe entram no Grad-CAM ao vivo, até 48 no "
+            "total. 0 (padrão) mostra 6 imagens, revezando as classes."
+        ),
+    )
 
     @field_validator("batch_size")
     @classmethod

@@ -8928,3 +8928,32 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Perceptual hash (pHash, DCT) or CNN embeddings.* More robust to crops and colour changes; pHash needs a DCT per image and embeddings need a model and a GPU. dHash needs Pillow only and is enough for the re-encoded and resized copies that cause most leaks.
 - *Compare every pair of hashes.* Exact but quadratic: 60 000 images are 1.8 billion pairs in Python. The band index makes it near linear for real data.
 - *Turn it on by default.* Decoding every image slows down an audit that today only reads bytes; the researcher asks for it.
+
+## ADR-229 — Live Grad-CAM can show N images of each class, up to 48
+
+**Date:** 2026-11-21
+**Status:** Accepted
+**Extends:** ADR-162 (live Grad-CAM of fixed validation images)
+
+**Context:** the live gallery explains 6 validation images in all (`LIVE_GRADCAM_SAMPLES`), taking the classes in turn. With more than 6 classes some never show; with two or three, each has two or three images and one look says little about what the model attends to in a class. Issue 349 asks for a number of images per class.
+
+**Decision:**
+
+- `training.live_gradcam_per_class` (0 to 16, default 0). 0 keeps the 6 images of ADR-162, so a saved config and a default run are unchanged. A positive value takes that many images of each class (all of a smaller class), still drawn once with the run's seed and a generator of its own.
+- The gallery is capped at `LIVE_GRADCAM_MAX = 48` images: an epoch that writes it costs at most 48 forward and backward passes up to the target layer. The classes are still taken in turn, so past the cap every class shows once before any shows twice.
+- The images go through the model in chunks of `LIVE_GRADCAM_BATCH = 16`, so a large gallery of a large model needs no more memory than a small training batch. In eval mode each image's map depends on that image alone, and a test holds the chunked maps equal to one batch.
+- As before, only the latest gallery and the best epoch's are kept on disk (`insights/latest`, `insights/best`); no gallery per epoch.
+- The Results tab groups the gallery by true class, the classes in name order, each under its name and count.
+- The four rules of ADR-162 hold; the test that compares history and weights with and without the gallery runs with 3 images per class too.
+
+**Consequences:** with many classes the researcher sees each one; with few, several images of each. The cost of an epoch that writes the gallery grows with it, up to 8 times the default's.
+
+**Known limits:** the cap and the per-class bound are fixed. The images are chosen once, at random within each class; there is no choosing which ones. Keeping every epoch's gallery is still not offered.
+
+**Not verified:** the gallery of a real training with 48 images, on screen and on a GPU.
+
+**Alternatives considered:**
+
+- *A total instead of a per-class count.* The issue asks per class, and a total already exists in the default.
+- *Keep each epoch's gallery.* 48 images per written epoch is disk the run keeps forever, for a comparison the latest and the best already give.
+- *No cap.* 16 images of each of 100 classes would be 1 600 backward passes on every written epoch.

@@ -199,6 +199,30 @@ describe("LiveResults", () => {
     expect(html).toContain(pt.liveResults.gradcamCaption("ok", "defeito"));
   });
 
+  it("groups the gallery by the images' true class", () => {
+    const image = (n: number, cls: string) => ({
+      path: `outputs/models/r/insights/latest/${n}.png`,
+      true_class: cls,
+      predicted_class: cls,
+    });
+    const html = render([
+      epoch(1, 0.9),
+      {
+        event: "insight",
+        kind: "gradcam",
+        epoch: 1,
+        best: false,
+        images: [image(0, "gato"), image(1, "cachorro"), image(2, "gato")],
+      },
+    ]);
+    expect(html).toContain(pt.liveResults.gradcamClass("gato", 2));
+    expect(html).toContain(pt.liveResults.gradcamClass("cachorro", 1));
+    // Classes in name order: cachorro before gato.
+    expect(html.indexOf('data-gradcam-class="cachorro"')).toBeLessThan(
+      html.indexOf('data-gradcam-class="gato"'),
+    );
+  });
+
   it("shows no gallery for a run that did not ask for one", () => {
     expect(render([epoch(1, 0.9)])).not.toContain("data-insight");
   });

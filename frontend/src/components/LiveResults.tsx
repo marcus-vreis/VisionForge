@@ -15,6 +15,7 @@ import {
   liveUnits,
   metricKey,
   formatValue,
+  galleryByClass,
   latestConfusion,
   macroF1Curve,
   overridesSummary,
@@ -357,41 +358,48 @@ function GradCamGallery({ insight, accent }: { insight: InsightEvent; accent: st
           {r.gradcamNote}
         </div>
       </figcaption>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
-          gap: 8,
-        }}
-      >
-        {insight.images.map((image) => {
-          const label = r.gradcamCaption(image.true_class, image.predicted_class);
-          const wrong = image.true_class !== image.predicted_class;
-          return (
-            <div key={image.path} style={{ display: "grid", gap: 4 }}>
-              {/* The file is rewritten in place each time: the epoch keeps the
-                  browser from showing the previous one from its cache. */}
-              <img
-                src={`${artifactUrl(image.path)}?epoch=${insight.epoch}`}
-                alt={label}
-                style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6 }}
-              />
-              <span
-                style={{
-                  fontSize: 11,
-                  color: wrong ? "oklch(0.74 0.18 22)" : "var(--vf-text-dim)",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-                title={label}
-              >
-                {label}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+      {galleryByClass(insight.images).map((group) => (
+        <section key={group.className} data-gradcam-class={group.className} style={{ marginTop: 10 }}>
+          <div style={{ ...caption, textTransform: "none", marginBottom: 6 }}>
+            {r.gradcamClass(group.className, group.images.length)}
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
+              gap: 8,
+            }}
+          >
+            {group.images.map((image) => {
+              const label = r.gradcamCaption(image.true_class, image.predicted_class);
+              const wrong = image.true_class !== image.predicted_class;
+              return (
+                <div key={image.path} style={{ display: "grid", gap: 4 }}>
+                  {/* The file is rewritten in place each time: the epoch keeps the
+                      browser from showing the previous one from its cache. */}
+                  <img
+                    src={`${artifactUrl(image.path)}?epoch=${insight.epoch}`}
+                    alt={label}
+                    style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6 }}
+                  />
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: wrong ? "oklch(0.74 0.18 22)" : "var(--vf-text-dim)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                    title={label}
+                  >
+                    {label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ))}
     </figure>
   );
 }
