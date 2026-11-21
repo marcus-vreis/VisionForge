@@ -254,6 +254,32 @@ def test_custom_tasks_are_not_supported_yet() -> None:
         task_of({"task": "custom:mine"}, {"task": "custom:mine"})
 
 
+def test_a_custom_task_group_stopped_before_any_run_json_is_refused(
+    tmp_path: Path,
+) -> None:
+    # Issue 343: no child wrote run.json, so the group inherits no
+    # ``task: custom:<key>``, and a custom task's config names no task or block.
+    # It must not fall back to classification.
+    config = {
+        "name": "mine",
+        "data": {"base_dir": str(tmp_path)},
+        "training": {"epochs": 1, "seed": 3},
+    }
+    run_dir = write_run_group(
+        kind="replicates",
+        group_id="g-custom",
+        name="mine",
+        config=config,
+        report=replicates_report([ReplicateTrial(seed=3, error="stopped")], [3], R2),
+        report_json=None,
+        models_dir=tmp_path / "models",
+    )
+    record = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    assert "task" not in record
+    with pytest.raises(ReproduceError, match="does not say which task"):
+        task_of(record, record["config"])
+
+
 def test_a_classification_search_block_is_not_supported_yet() -> None:
     with pytest.raises(ReproduceError, match="cross_validation"):
         task_of({}, {"task": "binary", "block": "cross_validation"})
