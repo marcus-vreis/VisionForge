@@ -60,9 +60,16 @@ import type {
 
 const BASE = "/api";
 
+/** Where a task keeps its split images (ADR-230): folders, a YOLO root, or one CSV per split. */
+export type DatasetAuditLayout = "folders" | "yolo" | "csv";
+
 export interface DatasetAuditRequest {
   base_dir: string;
   splits?: Record<string, string> | null;
+  layout?: DatasetAuditLayout;
+  images_dir?: string;
+  image_column?: string;
+  optional_splits?: string[];
   group_manifest?: string | null;
   strict_groups?: boolean;
   /** Also decode every image and look for visual near-copies (ADR-228). */
@@ -80,6 +87,8 @@ export interface DatasetAuditReport {
   image_counts: Record<string, number>;
   duplicate_groups: { sha256: string; splits: string[]; paths: string[] }[];
   missing_splits: string[];
+  /** Optional splits (a test set) that do not exist: no finding (ADR-230). */
+  absent_optional_splits?: string[];
   empty_splits: string[];
   unreadable_count: number;
   unreadable: { path: string; reason: string }[];

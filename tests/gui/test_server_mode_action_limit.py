@@ -121,14 +121,14 @@ def test_a_second_heavy_action_is_told_the_server_is_busy(
 ) -> None:
     started = threading.Event()
     release = threading.Event()
-    real_audit = evidence_routes.audit_dataset
+    real_audit = evidence_routes.audit_task_dataset
 
     def slow_audit(*args: Any, **kwargs: Any) -> Any:
         started.set()
         assert release.wait(timeout=30)
         return real_audit(*args, **kwargs)
 
-    monkeypatch.setattr(evidence_routes, "audit_dataset", slow_audit)
+    monkeypatch.setattr(evidence_routes, "audit_task_dataset", slow_audit)
     body = {"base_dir": str(world["beans"])}
     first: dict[str, Any] = {}
 

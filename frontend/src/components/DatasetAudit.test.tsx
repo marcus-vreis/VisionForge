@@ -4,6 +4,7 @@ import type { DatasetAuditReport } from "../api/client";
 import { LanguageContext } from "../i18n/context";
 import { en } from "../i18n/en";
 import { pt } from "../i18n/pt";
+import { auditRequest } from "../lib/dataset-audit";
 import { DatasetAudit, DatasetAuditResult } from "./DatasetAudit";
 import { DownloadBundleButton } from "./DownloadBundleButton";
 
@@ -66,8 +67,42 @@ describe("dataset audit evidence", () => {
     expect(html).not.toContain(pt.evidence.nearCount(0));
   });
 
+  it("sends a regression CSV layout with its columns and drops a blank split", () => {
+    const body = auditRequest(
+      { baseDir: "/d", splits: { train: "fit.csv", val: "check.csv", test: " " }, layout: "csv", imagesDir: "pics", imageColumn: "", optionalSplits: ["test"] },
+      { near_duplicates: true },
+    );
+    expect(body).toEqual({
+      base_dir: "/d",
+      splits: { train: "fit.csv", val: "check.csv" },
+      layout: "csv",
+      images_dir: "pics",
+      image_column: "image",
+      optional_splits: ["test"],
+      near_duplicates: true,
+    });
+  });
+
+  it("sends no CSV fields with a folder or YOLO layout", () => {
+    const body = auditRequest({ baseDir: "/d", splits: { train: "train/images" }, imagesDir: "pics" }, {});
+    expect(body).toEqual({ base_dir: "/d", splits: { train: "train/images" }, layout: "folders" });
+    expect(auditRequest({ baseDir: "/d", splits: { train: "train" }, layout: "yolo" }, {}).layout).toBe("yolo");
+  });
+
+  it("shows an absent optional split as no finding", () => {
+    const report = { ...clean, image_counts: { train: 2, val: 1 }, absent_optional_splits: ["test"] };
+    const html = render("pt", <DatasetAuditResult report={report} />);
+    expect(html).toContain(pt.evidence.optionalAbsent("test"));
+    expect(html).toContain(pt.evidence.clean);
+  });
+
+  it("states what the task's audit reads", () => {
+    const html = render("pt", <DatasetAudit baseDir="/d" splits={{ train: "train" }} note={pt.evidence.notes.masks} />);
+    expect(html).toContain(pt.evidence.notes.masks);
+  });
+
   it("starts idle, requires a dataset and exposes optional group controls", () => {
-    const html = render("pt", <DatasetAudit baseDir="" trainDir="fit" valDir="valid" testDir="final" />);
+    const html = render("pt", <DatasetAudit baseDir="" splits={{ train: "fit", val: "valid", test: "final" }} />);
     expect(html).toContain(pt.evidence.audit);
     expect(html).toContain(pt.evidence.groupManifest);
     expect(html).toContain(pt.evidence.strictGroups);

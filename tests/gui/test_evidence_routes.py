@@ -312,3 +312,30 @@ def test_near_duplicates_reach_the_real_audit(
     assert near.json()["near_duplicate_groups"] == [
         {"splits": ["train", "val"], "paths": ["train/image.png", "val/image.png"]}
     ]
+
+
+def test_a_regression_csv_layout_reaches_the_real_audit(
+    client: TestClient, tmp_path: Path
+) -> None:
+    data = tmp_path / "data"
+    (data / "pics").mkdir(parents=True)
+    Image.new("RGB", (8, 8), "red").save(data / "pics/a.png")
+    (data / "fit.csv").write_text("file,y\na.png,1\n", encoding="utf-8")
+    (data / "check.csv").write_text("file,y\na.png,2\n", encoding="utf-8")
+    body = {
+        "base_dir": str(data),
+        "splits": {"train": "fit.csv", "val": "check.csv", "test": "none.csv"},
+        "optional_splits": ["test"],
+        "layout": "csv",
+        "images_dir": "pics",
+        "image_column": "file",
+    }
+
+    report = client.post("/api/dataset/audit", json=body).json()
+    wrong = client.post("/api/dataset/audit", json={**body, "image_column": "img"})
+
+    assert report["image_counts"] == {"train": 1, "val": 1}
+    assert report["duplicate_groups"][0]["splits"] == ["train", "val"]
+    assert report["absent_optional_splits"] == ["test"]
+    assert wrong.status_code == 400
+    assert "img" in wrong.json()["detail"]

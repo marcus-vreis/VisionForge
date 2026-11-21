@@ -14,9 +14,9 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from starlette.background import BackgroundTask
 
-from visionforge.core.dataset_audit import audit_dataset
+from visionforge.core.dataset_audit_layouts import AuditLayout, audit_task_dataset
 from visionforge.core.experiment_bundle import export_experiment_bundle
-from visionforge.gui.api.dataset_scope import DatasetDir
+from visionforge.gui.api.dataset_scope import DatasetDir, DatasetPart
 from visionforge.gui.api.http_responses import TAG_DATASETS, TAG_RUNS
 from visionforge.gui.api.profiles import PROFILE_HEADER, Profile
 from visionforge.utils.messages import tr
@@ -31,6 +31,13 @@ class DatasetAuditRequest(BaseModel):
     group_manifest: Path | None = None
     strict_groups: bool = Field(default=False)
     near_duplicates: bool = Field(default=False)
+    # How the task keeps its splits (ADR-230): folders the browser names, a YOLO
+    # root, or one CSV per split listing images under images_dir.
+    layout: AuditLayout = "folders"
+    images_dir: DatasetPart = "images"
+    image_column: str = "image"
+    # Splits training runs without (a test set): absent, they are no finding.
+    optional_splits: list[str] = Field(default_factory=list)
 
     @field_validator("base_dir", "group_manifest", mode="before")
     @classmethod
@@ -131,9 +138,13 @@ def build_evidence_router(
         """Read image splits without blocking status polling or changing data."""
         try:
             return await asyncio.to_thread(
-                audit_dataset,
+                audit_task_dataset,
                 Path(req.base_dir),
                 req.splits,
+                req.layout,
+                images_dir=req.images_dir,
+                image_column=req.image_column,
+                optional_splits=req.optional_splits,
                 group_manifest=req.group_manifest,
                 strict_groups=req.strict_groups,
                 near_duplicates=req.near_duplicates,

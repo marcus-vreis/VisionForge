@@ -43,6 +43,7 @@ import {
 } from "./controls";
 import { AdvancedFields } from "./AdvancedFields";
 import { DetectionDatasetStats } from "./DetectionDatasetStats";
+import { DatasetAudit } from "./DatasetAudit";
 import { PreprocessingPanel } from "./PreprocessingPanel";
 import { StrategyCard, type PanelStrategy } from "./ExperimentHeader";
 import { Rich } from "./Rich";
@@ -369,6 +370,13 @@ export function DetectionPanel({
                 <DetectionDatasetStats
                   baseDir={formData.data.base_dir}
                   onApplyClasses={(n) => setModel({ num_classes: n })}
+                />
+                <DatasetAudit
+                  baseDir={formData.data.base_dir}
+                  splits={{ train: "train", val: "val", test: "test" }}
+                  layout="yolo"
+                  optionalSplits={["test"]}
+                  note={t.evidence.notes.yolo}
                 />
               </div>
             ) : (

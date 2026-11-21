@@ -30,6 +30,7 @@ import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-f
 import { ReviewStep } from "./ReviewStep";
 import { StepShell } from "./StepShell";
 import { RegressionDatasetStats } from "./TaskDatasetStats";
+import { DatasetAudit } from "./DatasetAudit";
 import { SweepCard, type SweepPayload } from "./SweepCard";
 import { TransformsSection } from "./TransformsSection";
 import { datasetLabel, suggestExperimentName } from "../lib/experiment-name";
@@ -299,6 +300,15 @@ export function RegressionPanel({
             testCsv={formData.data.test_csv}
             imageColumn={formData.data.image_column}
             targetColumns={formData.data.target_columns}
+          />
+          <DatasetAudit
+            baseDir={formData.data.base_dir}
+            splits={{ train: formData.data.train_csv, val: formData.data.val_csv, test: formData.data.test_csv }}
+            layout="csv"
+            optionalSplits={["test"]}
+            imagesDir={formData.data.images_dir}
+            imageColumn={formData.data.image_column}
+            note={t.evidence.notes.csv}
           />
         </div>
       </div>

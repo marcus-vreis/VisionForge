@@ -33,10 +33,16 @@ import { ReplicatesCard } from "./ReplicatesCard";
 import { ReplicatedComparisonCard } from "./ReplicatedComparisonCard";
 import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-form";
 import { SegmentationDatasetStats } from "./TaskDatasetStats";
+import { DatasetAudit } from "./DatasetAudit";
 import { SweepCard, type SweepPayload } from "./SweepCard";
 import { TransformsSection } from "./TransformsSection";
 import type { ReplicatesPayload } from "../lib/replicates-form";
 import { ROUTE, useOpenStrategies, useRouteOpen } from "../lib/session";
+
+/** A split's image folder for the audit; blank when the split is (it is then left out). */
+function imagesOf(dir: string, subdir: string): string {
+  return dir.trim() ? `${dir}/${subdir}` : "";
+}
 
 const SWEEP_PATH_HINTS = [
   "training.learning_rate",
@@ -351,6 +357,16 @@ export function SegmentationPanel({
                 valDir={formData.data.val_dir}
                 testDir={formData.data.test_dir}
                 onApplyClasses={(n) => setModel({ num_classes: n })}
+              />
+              <DatasetAudit
+                baseDir={formData.data.base_dir}
+                splits={{
+                  train: imagesOf(formData.data.train_dir, formData.data.images_subdir),
+                  val: imagesOf(formData.data.val_dir, formData.data.images_subdir),
+                  test: imagesOf(formData.data.test_dir, formData.data.images_subdir),
+                }}
+                optionalSplits={["test"]}
+                note={t.evidence.notes.masks}
               />
             </div>
           </div>
