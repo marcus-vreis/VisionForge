@@ -44,6 +44,7 @@ from visionforge.core.mask_stats import (
 )
 from visionforge.core.scan_store import load_scan, save_scan, scan_key, scan_signature
 from visionforge.core.split_balance import split_balance
+from visionforge.core.target_stats import analyze_targets, csv_signature
 from visionforge.gui.api.dataset_scope import DatasetDir, DatasetPart, scan_store_dir
 from visionforge.gui.api.datasets_routes import (
     _IMAGE_EXTS,
@@ -104,6 +105,20 @@ class MaskAnalysisRequest(BaseModel):
     num_classes: int = Field(default=2, ge=1, le=65_536)
     ignore_index: int = 255
     max_images: int = Field(default=MASK_DEFAULT_LIMIT, ge=1, le=MASK_MAX_LIMIT)
+
+
+class TargetAnalysisRequest(BaseModel):
+    """A regression dataset as its config names it (ADR-235)."""
+
+    base_dir: DatasetDir
+    images_dir: DatasetPart = "images"
+    train_csv: DatasetPart = "train.csv"
+    val_csv: DatasetPart = "val.csv"
+    test_csv: DatasetPart = "test.csv"
+    image_column: str = Field(default="image", min_length=1, max_length=200)
+    target_columns: list[str] = Field(
+        default_factory=lambda: ["target"], min_length=1, max_length=64
+    )
 
 
 # Finished scans, one per dataset; on a server inside each person's profile.
@@ -350,6 +365,71 @@ async def explorer_masks_saved(req: MaskAnalysisRequest) -> dict[str, Any]:
     store, key = scan_store_dir(_SCAN_STORE), _mask_key(root, req)
     signature = await asyncio.to_thread(_mask_signature, root, req)
     saved = load_scan(store, key, signature)
+    return saved or {"report": None, "saved_at": None, "stale": False}
+
+
+def _target_csvs(req: TargetAnalysisRequest) -> dict[str, str]:
+    return {"train": req.train_csv, "val": req.val_csv, "test": req.test_csv}
+
+
+def _target_root(req: TargetAnalysisRequest) -> Path:
+    base = Path(req.base_dir)
+    if not base.is_dir():
+        raise HTTPException(400, tr(SCAN_BASE_MISSING_KEY, path=req.base_dir))
+    root = base.resolve()
+    # Refused here, not in the job: a CSV outside the dataset is a bad request.
+    for name in (*_target_csvs(req).values(), req.images_dir):
+        if not (root / name).resolve().is_relative_to(root):
+            raise HTTPException(400, tr("explorer.outside_dataset", path=name))
+    _remember_dataset_root(base)
+    return root
+
+
+def _target_key(root: Path, req: TargetAnalysisRequest) -> str:
+    """Which analysis a report belongs to: the CSVs, columns and image folder."""
+    parts = [str(root), "regression-targets", req.images_dir, req.image_column]
+    parts += [f"{s}={f}" for s, f in sorted(_target_csvs(req).items())]
+    parts += [f"target={t}" for t in req.target_columns]
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+
+
+@router.post("/targets", responses={409: {"description": CONFLICT_TEXT}})
+async def explorer_targets_start(req: TargetAnalysisRequest) -> dict[str, Any]:
+    """Start the target analysis of a regression dataset (ADR-235).
+
+    Progress, result and cancelling go through ``/scan/{job_id}``.
+    """
+    root = await asyncio.to_thread(_target_root, req)
+    store, key = scan_store_dir(_SCAN_STORE), _target_key(root, req)
+    signature = csv_signature(root, _target_csvs(req))
+
+    def work(token: CancellationToken, progress: Progress) -> dict[str, Any]:
+        return analyze_targets(
+            root,
+            _target_csvs(req),
+            images_dir=req.images_dir,
+            image_column=req.image_column,
+            targets=req.target_columns,
+            token=token,
+            on_progress=progress,
+        )
+
+    def keep(report: dict[str, Any]) -> None:
+        save_scan(store, key, signature, report)
+
+    try:
+        job = _SCANS.start_work(work, on_done=keep)
+    except ScanBusyError as exc:
+        raise HTTPException(409, tr("explorer.scan_busy")) from exc
+    return job.snapshot()
+
+
+@router.post("/targets/saved")
+async def explorer_targets_saved(req: TargetAnalysisRequest) -> dict[str, Any]:
+    """The last finished target analysis of this dataset, and whether it changed."""
+    root = await asyncio.to_thread(_target_root, req)
+    store, key = scan_store_dir(_SCAN_STORE), _target_key(root, req)
+    saved = load_scan(store, key, csv_signature(root, _target_csvs(req)))
     return saved or {"report": None, "saved_at": None, "stale": False}
 
 

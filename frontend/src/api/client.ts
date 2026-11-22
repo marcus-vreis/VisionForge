@@ -8,6 +8,7 @@ import {
 import { pt, type Dict } from "../i18n/pt";
 import type { TaskDescriptor } from "../lib/custom-tasks";
 import type { MaskAnalysisJob, MaskRequest, SavedMaskAnalysis } from "../lib/mask-analysis";
+import type { SavedTargetAnalysis, TargetAnalysisJob, TargetRequest } from "../lib/target-analysis";
 import {
   explorerBody,
   type ExplorerForm,
@@ -1830,6 +1831,29 @@ export async function maskAnalysisStatus(jobId: string): Promise<MaskAnalysisJob
 
 export async function maskAnalysisSaved(req: MaskRequest): Promise<SavedMaskAnalysis> {
   return request<SavedMaskAnalysis>("/explorer/masks/saved", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(req),
+  });
+}
+
+// ── the targets of a regression dataset (ADR-235) ────────────────────────────
+
+/** Start the analysis; progress and result come through the scan status route. */
+export async function targetAnalysisStart(req: TargetRequest): Promise<TargetAnalysisJob> {
+  return request<TargetAnalysisJob>("/explorer/targets", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(req),
+  });
+}
+
+export async function targetAnalysisStatus(jobId: string): Promise<TargetAnalysisJob> {
+  return request<TargetAnalysisJob>(`/explorer/scan/${encodeURIComponent(jobId)}`);
+}
+
+export async function targetAnalysisSaved(req: TargetRequest): Promise<SavedTargetAnalysis> {
+  return request<SavedTargetAnalysis>("/explorer/targets/saved", {
     method: "POST",
     headers: JSON_HEADERS,
     body: JSON.stringify(req),

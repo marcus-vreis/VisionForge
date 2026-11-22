@@ -9089,3 +9089,30 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 
 - *Extend the image audit.* It is synchronous and its report is shared by every task; mask statistics would grow it for one task.
 - *Open segmentation in the Laboratory.* The Laboratory's index, gallery and tools are built around classes per image; a mask analysis fits the Data step, where the class count and `ignore_index` are known.
+
+## ADR-235 — The targets of a regression dataset are analyzed before training
+
+**Date:** 2026-11-22
+**Status:** Accepted
+**Extends:** ADR-036 (regression), ADR-234 (analysis jobs)
+
+**Context:** issue 351 lists for regression a histogram of each target per split, outliers, missing targets and the correlation between targets. The Data step reported count, mean, min and max of the first 50 000 rows and checked the images of the first 500. A validation split whose targets sit in another range than training, a column with a few "n/a" cells, or two targets that are the same quantity in two units went unnoticed until training failed or reported a misleading score.
+
+**Decision:**
+
+- `core/target_stats.py` reads every split's CSV in full and, per target and split, reports the numeric count, blank or non-numeric cells, mean, sample standard deviation, inclusive quartiles, minimum and maximum, and a 20-bin histogram over the target's range across all splits, so the splits share bins and can be drawn on one axis.
+- Outliers by Tukey's rule with k = 1.5, on fences from the training split (the split the model learns from), with the CSV line and the image of each.
+- The shift of a split: (split mean − train mean) / train standard deviation. The screen warns from 0.5 standard deviations; it is a size, not a test.
+- Pearson's r for every pair of targets, over the rows where both are numbers, all splits pooled; None with fewer than three pairs or a constant side.
+- Every listed image is checked for existence; the first 50 missing images and the first 50 bad cells are listed with their line.
+- It runs as an explorer job through `ScanJobs.start_work` (ADR-234): `POST /api/explorer/targets` and `POST /api/explorer/targets/saved`, `confined` on a shared server. The kept result's signature is the CSVs' size and modification time; a CSV path or `images_dir` outside the dataset is refused with 400 before the job starts.
+- The frontend's job handling (start, poll, cancel, kept result) moved into `useAnalysisJob` and `AnalysisJobCard`, shared by the mask analysis and this one.
+
+**Consequences:** a CSV of a million rows is held in memory as floats per target; at the sizes of image datasets that is small. Checking every image is one stat per row.
+
+**Known limits:** the kept result does not notice an image added or removed without a CSV change. Fences come from training only; with no training CSV there are no outliers. The 0.5 sd threshold is a rule of thumb.
+
+**Alternatives considered:**
+
+- *Extend the existing `/regression/dataset/stats`.* It answers synchronously with row and image caps that keep the Data step fast; the full read belongs in a job.
+- *A Kolmogorov–Smirnov test per split.* With thousands of rows every difference is significant; the shift in standard deviations says how large it is.

@@ -2195,6 +2195,10 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Varredura não encontrada.",
         "en": "Scan not found.",
     },
+    "explorer.outside_dataset": {
+        "pt": "{path} fica fora da pasta do dataset.",
+        "en": "{path} is outside the dataset folder.",
+    },
     "explorer.unreadable_image": {
         "pt": "Não foi possível abrir esta imagem.",
         "en": "This image could not be opened.",

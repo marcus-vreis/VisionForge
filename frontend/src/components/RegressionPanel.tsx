@@ -31,6 +31,7 @@ import { ReviewStep } from "./ReviewStep";
 import { StepShell } from "./StepShell";
 import { RegressionDatasetStats } from "./TaskDatasetStats";
 import { DatasetAudit } from "./DatasetAudit";
+import { TargetAnalysis } from "./TargetAnalysis";
 import { SweepCard, type SweepPayload } from "./SweepCard";
 import { TransformsSection } from "./TransformsSection";
 import { datasetLabel, suggestExperimentName } from "../lib/experiment-name";
@@ -309,6 +310,17 @@ export function RegressionPanel({
             imagesDir={formData.data.images_dir}
             imageColumn={formData.data.image_column}
             note={t.evidence.notes.csv}
+          />
+          <TargetAnalysis
+            request={{
+              base_dir: formData.data.base_dir,
+              images_dir: formData.data.images_dir,
+              train_csv: formData.data.train_csv,
+              val_csv: formData.data.val_csv,
+              test_csv: formData.data.test_csv,
+              image_column: formData.data.image_column,
+              target_columns: parseTargetColumns(formData.data.target_columns),
+            }}
           />
         </div>
       </div>

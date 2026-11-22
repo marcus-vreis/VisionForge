@@ -1,13 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
 import { explorerScanCancel, maskAnalysisSaved, maskAnalysisStart, maskAnalysisStatus } from "../api/client";
-import { isScanFinished, scanPercent } from "../lib/dataset-explorer";
-import type { MaskAnalysisJob, MaskReport, MaskRequest, SavedMaskAnalysis } from "../lib/mask-analysis";
+import { useAnalysisJob } from "../lib/analysis-job";
+import type { MaskReport, MaskRequest } from "../lib/mask-analysis";
 import { coverageLabel, sharePct as pct } from "../lib/mask-analysis";
 import { useT } from "../i18n/useT";
 import { ROUTE, useRouteOpen } from "../lib/session";
-import { ActionButton } from "./ui/ActionButton";
+import { AnalysisJobCard } from "./AnalysisJobCard";
 import { BarList, DataTable, LearnMore } from "./DatasetLabParts";
-import { card, danger, ghostButton, mono, sectionLabel, stepTitle, text, warn } from "./datasetExplorerStyles";
+import { card, mono, sectionLabel, text, warn } from "./datasetExplorerStyles";
 
 const SPLITS = ["train", "val", "test"] as const;
 
@@ -117,112 +116,21 @@ export function MaskReportView({ report }: { report: MaskReport }) {
   );
 }
 
+const MASK_API = {
+  start: maskAnalysisStart,
+  status: maskAnalysisStatus,
+  saved: maskAnalysisSaved,
+  cancel: explorerScanCancel,
+};
+
 function MaskAnalysisInner({ request }: { request: MaskRequest }) {
   const t = useT().maskAnalysis;
-  const [job, setJob] = useState<MaskAnalysisJob | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [cancelling, setCancelling] = useState(false);
-  const [kept, setKept] = useState<{ key: string; saved: SavedMaskAnalysis } | null>(null);
-  const key = JSON.stringify(request);
-  const saved = kept?.key === key ? kept.saved : null;
   const ready = request.base_dir.trim() !== "";
-  const jobId = job?.job_id ?? null;
-  const running = job !== null && !isScanFinished(job.state);
-
-  useEffect(() => {
-    if (!ready) return;
-    let live = true;
-    maskAnalysisSaved(request)
-      .then((s) => {
-        if (live) setKept({ key, saved: s });
-      })
-      // No kept analysis is not an error worth a message.
-      .catch(() => undefined);
-    return () => {
-      live = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the request
-  }, [key, ready]);
-
-  useEffect(() => {
-    if (!jobId || !running) return;
-    const timer = setInterval(() => {
-      maskAnalysisStatus(jobId)
-        .then((next) => {
-          setJob(next);
-          if (isScanFinished(next.state)) setCancelling(false);
-        })
-        .catch((e: unknown) => {
-          setError(e instanceof Error ? e.message : String(e));
-          setCancelling(false);
-        });
-    }, 600);
-    return () => clearInterval(timer);
-  }, [jobId, running]);
-
-  const start = useCallback(async () => {
-    setError(null);
-    setJob(null);
-    try {
-      setJob(await maskAnalysisStart(request));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }, [request]);
-
-  const cancel = async () => {
-    if (!jobId) return;
-    setCancelling(true);
-    try {
-      await explorerScanCancel(jobId);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setCancelling(false);
-    }
-  };
-
-  const done = job ? scanPercent(job.done, job.total) : 0;
-  const shown = job?.result ?? (!running ? saved?.report : null);
+  const state = useAnalysisJob(MASK_API, request, ready);
   return (
     <section data-testid="mask-analysis" style={{ display: "grid", gap: 12, marginBottom: 18 }}>
-      <div style={card}>
-        <h3 style={{ ...stepTitle, margin: 0 }}>{t.title}</h3>
-        <div style={text}>{t.help}</div>
-        <div>
-          {running ? (
-            <button type="button" style={ghostButton} onClick={() => void cancel()} disabled={cancelling}>
-              {cancelling ? t.cancelling : t.cancel}
-            </button>
-          ) : (
-            <ActionButton onClick={() => void start()} disabled={!ready}>
-              {t.start}
-            </ActionButton>
-          )}
-        </div>
-        {running && job && (
-          <div>
-            <div style={mono}>{t.progress(job.done, job.total)}</div>
-            <div
-              role="progressbar"
-              aria-valuenow={done}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              style={{ height: 6, borderRadius: 3, background: "rgb(var(--lt-ink, 255 255 255) / 0.08)" }}
-            >
-              <div style={{ height: "100%", width: `${done}%`, borderRadius: 3, background: "var(--accent-vf)" }} />
-            </div>
-          </div>
-        )}
-        {error && <div style={danger}>{t.failed(error)}</div>}
-        {job?.state === "failed" && job.error && <div style={danger}>{t.failed(job.error)}</div>}
-        {!job && saved?.report && (
-          <div style={saved.stale ? warn : text} role="status">
-            {t.savedAt(saved.saved_at ? new Date(saved.saved_at).toLocaleString() : "")}
-            {saved.stale && ` ${t.savedStale}`}
-          </div>
-        )}
-      </div>
-      {shown && <MaskReportView report={shown} />}
+      <AnalysisJobCard words={t} state={state} ready={ready} />
+      {state.shown && <MaskReportView report={state.shown} />}
     </section>
   );
 }

@@ -299,3 +299,41 @@ def test_mask_analysis_of_a_missing_folder_is_400(
 ) -> None:
     res = client.post("/api/explorer/masks", json={"base_dir": str(tmp_path / "no")})
     assert res.status_code == 400
+
+
+def test_target_analysis_runs_as_a_job_and_is_kept(
+    client: TestClient, tmp_path: Path
+) -> None:
+    root = tmp_path / "reg"
+    (root / "images").mkdir(parents=True)
+    Image.new("RGB", (4, 4)).save(root / "images" / "a.png")
+    (root / "train.csv").write_text(
+        "image,y\na.png,1\na.png,2\na.png,3\n", encoding="utf-8"
+    )
+    body = {"base_dir": str(root), "target_columns": ["y"]}
+    assert (
+        client.post("/api/explorer/targets/saved", json=body).json()["report"] is None
+    )
+
+    started = client.post("/api/explorer/targets", json=body).json()
+    report = _wait(client, started["job_id"])["result"]
+    assert report["task"] == "regression"
+    assert report["targets"][0]["splits"]["train"]["mean"] == 2.0
+    assert report["splits"]["val"]["present"] is False
+
+    kept = client.post("/api/explorer/targets/saved", json=body).json()
+    assert (kept["report"], kept["stale"]) == (report, False)
+    (root / "train.csv").write_text("image,y\na.png,9\n", encoding="utf-8")
+    assert client.post("/api/explorer/targets/saved", json=body).json()["stale"] is True
+
+
+def test_target_analysis_refuses_a_csv_outside_the_dataset(
+    client: TestClient, tmp_path: Path
+) -> None:
+    (tmp_path / "reg").mkdir()
+    res = client.post(
+        "/api/explorer/targets",
+        json={"base_dir": str(tmp_path / "reg"), "train_csv": "../x.csv"},
+    )
+    assert res.status_code == 400
+    assert "../x.csv" in res.json()["detail"]
