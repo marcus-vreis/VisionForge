@@ -9035,3 +9035,31 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 
 - *A chi-square test with its p-value.* It answers "is there any difference", which on a real dataset is always yes; the gap in points and V say how large it is.
 - *Compute it in the browser.* The numbers belong with the other dataset analyses, tested by hand-computed cases on the server.
+
+## ADR-233 — The integrity scan describes the boxes of a detection dataset
+
+**Date:** 2026-11-21
+**Status:** Accepted
+**Extends:** ADR-165 (explorer and integrity scan), ADR-231 (kept scan)
+
+**Context:** issue 351 lists the detection analyses done before training: boxes per image, box size (small, medium, large), aspect ratio, a heatmap of positions, classes seen together, invalid boxes and images with no box. The Overview counted boxes per class and nothing else; a dataset of tiny objects, or one whose objects always sit in the middle, or one with rows the trainer silently drops, looked the same as any other.
+
+**Decision:**
+
+- `core/box_stats.py` tallies one image at a time (`BoxTally.add(split, rel, label, size)`) and reports JSON. It reads the label file; it never writes.
+- It runs inside the integrity scan, for detection only: the scan already opens every image to learn its size, and COCO's size buckets need the area in pixels, which a normalized YOLO row cannot give alone. The report gains `boxes` (None for classification). The scan's sampling, cancellation, progress and kept result (ADR-231) apply unchanged.
+- Box size by COCO's rule on the pixel area: small below 32², medium below 96², large above; also per class. These are the buckets of `mAP_small/medium/large`, so the counts say which of those numbers rests on enough boxes.
+- Boxes per image in bins 0, 1, 2–3, 4–7, 8–15, 16–31, 32+; mean and maximum. Images with no box are split into no label file and an empty label (or one with only invalid rows).
+- Aspect ratio of the box in pixels; a 10×10 grid of box centers; the ten most frequent pairs of classes in the same image.
+- A row is a box when it is five finite numbers with an integer class (the trainer's five-field rule), the class is below the count `data.yaml`/`classes.txt` declares (none declared: no range check), width and height are positive, and the box stays inside the image with a 1% tolerance for the rounding of labeling tools. Otherwise it is counted by reason (`malformed`, `class_out_of_range`, `zero_area`, `outside_image`) and the first 200 are listed with file and line.
+- A box of an image that does not open is counted and placed on the heatmap but has no pixel size (`unsized`).
+- The screen shows a card "Caixas" under the scan's results, with bars for size, boxes per image and aspect, the heatmap, the pairs, a per-class size table and the invalid rows behind toggles.
+
+**Consequences:** the scan of a detection dataset reads one more small text file per image. Box statistics appear only after a scan; the summary stays free of image I/O.
+
+**Known limits:** in a sampled scan the statistics describe the sample. The edge tolerance and the bins are fixed. Pairs count images, not boxes, and only the top ten are kept. Classification and detection only, like the Laboratory.
+
+**Alternatives considered:**
+
+- *Compute from the labels alone in the summary.* Fast, but sizes would be in fractions of the image, not COCO's pixel buckets, and the aspect ratio would be wrong on non-square images.
+- *A separate job.* It would open every image a second time for the size the scan already reads.

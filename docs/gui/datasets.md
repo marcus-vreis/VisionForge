@@ -45,6 +45,22 @@ que não abrem, cópias exatas e a mesma imagem em divisões diferentes. Ligue
 mesma foto reencodada, redimensionada ou com o brilho mudado; ela leva mais ou
 menos o dobro do tempo, e cada grupo é para conferir, não um veredito.
 
+Na detecção, a varredura também lê os rótulos e mostra o cartão **Caixas**:
+
+- quantas caixas há por imagem, e quantas imagens não têm nenhuma (sem arquivo
+  de rótulo ou com ele vazio). Para o treino, uma imagem sem caixa diz que ali
+  não há objeto;
+- o tamanho das caixas pelo critério do COCO, sobre a área em pixels: pequena
+  abaixo de 32², média até 96², grande acima. São os grupos do mAP pequeno,
+  médio e grande; com poucas caixas num grupo, a métrica dele oscila muito. A
+  tabela por classe fica atrás de um botão;
+- a proporção das caixas (largura / altura, em pixels);
+- um mapa de calor 10 × 10 de onde caem os centros das caixas;
+- as classes que aparecem juntas na mesma imagem;
+- as linhas de rótulo que o treino não lê como caixa: não são cinco números,
+  classe fora do `data.yaml`, largura ou altura zero, ou caixa que passa da
+  borda da imagem (com 1% de folga). A lista mostra o arquivo e a linha.
+
 Em pastas grandes a varredura pode ler uma amostra espaçada em vez de todas as
 imagens; a tela diz quando foi o caso.
 

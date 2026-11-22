@@ -194,6 +194,35 @@ export interface ScanReport {
   near_group_count?: number;
   near_groups?: NearGroup[];
   sizes: SizeReport;
+  /** Detection only (ADR-233); null for classification, absent from older scans. */
+  boxes?: BoxReport | null;
+}
+
+export type BoxSize = "small" | "medium" | "large";
+export type BoxProblem = "malformed" | "class_out_of_range" | "zero_area" | "outside_image";
+
+/** What the boxes of the scanned images look like (ADR-233). */
+export interface BoxReport {
+  images: number;
+  boxes: number;
+  mean_per_image: number;
+  max_per_image: number;
+  per_image_bins: Bin[];
+  no_label_file: number;
+  empty_label: number;
+  /** COCO's area limits in px², small below the first, large above the second. */
+  size_thresholds: [number, number];
+  sizes: Record<BoxSize, number>;
+  class_sizes: ({ name: string } & Record<BoxSize, number>)[];
+  /** Boxes of images that did not open: counted, but with no pixel size. */
+  unsized: number;
+  aspect_bins: Bin[];
+  /** Box centers on a 10x10 grid, row by row from the top. */
+  heatmap: number[][];
+  pairs: { a: string; b: string; images: number }[];
+  invalid_count: number;
+  invalid: Partial<Record<BoxProblem, number>>;
+  invalid_examples: { split: string; path: string; line: number; reason: BoxProblem }[];
 }
 
 /** Visually near images in more than one split, not byte copies (ADR-228). */

@@ -806,6 +806,36 @@ export const pt = {
     sizesTitle: "Tamanhos das imagens",
     longestSide: "Maior lado (px)",
     aspectRatio: "Proporção (largura / altura)",
+    boxesTitle: "Caixas",
+    boxTotals: (boxes: number, images: number, mean: number, max: number) =>
+      `${boxes} caixas em ${images} imagens: ${mean.toFixed(2)} por imagem, no máximo ${max} numa só.`,
+    boxEmpty: (n: number, noFile: number, emptyFile: number) =>
+      `${n} imagens sem caixa (${noFile} sem arquivo de rótulo, ${emptyFile} com o rótulo vazio ou só com linhas inválidas). Para o treino, uma imagem sem caixa diz que ali não há objeto: confira se é intencional.`,
+    boxInvalid: (n: number, list: string) =>
+      `${n} linhas de rótulo que o treino não lê como caixa: ${list}. A lista com arquivo e linha está abaixo.`,
+    boxProblems: {
+      malformed: "não são cinco números",
+      class_out_of_range: "classe fora do data.yaml",
+      zero_area: "largura ou altura zero",
+      outside_image: "passa da borda da imagem",
+    },
+    boxSizesTitle: "Tamanho das caixas (área em pixels)",
+    boxSmall: (side: number) => `pequena (< ${side}²)`,
+    boxMedium: (lo: number, hi: number) => `média (${lo}²–${hi}²)`,
+    boxLarge: (side: number) => `grande (≥ ${side}²)`,
+    boxSizesHelp:
+      "Critério do COCO, o mesmo do mAP pequeno, médio e grande: com poucas caixas num grupo, a métrica dele oscila muito.",
+    boxUnsized: (n: number) => `${n} caixas de imagens que não abriram ficaram fora dos tamanhos.`,
+    boxPerImage: "Caixas por imagem",
+    boxAspect: "Proporção das caixas (largura / altura, em pixels)",
+    boxHeatmapTitle: "Onde ficam os centros das caixas",
+    boxHeatmapHelp:
+      "A imagem dividida em 10 × 10; quanto mais forte a célula, mais centros de caixa caem nela. Objetos sempre no centro ensinam o modelo a procurar só ali.",
+    boxPairsTitle: "Classes que aparecem juntas",
+    boxPair: (a: string, b: string, n: number) => `${a} + ${b}: ${n} ${n === 1 ? "imagem" : "imagens"}`,
+    boxClassTable: "Ver os tamanhos por classe",
+    boxInvalidList: "Ver as linhas inválidas",
+    boxLine: (n: number) => `linha ${n} do rótulo`,
     widthStats: (min: number, median: number, max: number) =>
       `largura mín ${min} · mediana ${median} · máx ${max}`,
     heightStats: (min: number, median: number, max: number) =>
