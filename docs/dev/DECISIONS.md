@@ -9142,3 +9142,28 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 
 - *Score the training images with a trained model.* That needs a run; it belongs with the suspicious-label analysis that depends on one.
 - *Reuse the image audit's near-duplicate pass.* It groups across splits without knowing which side is a defect; here the direction (train against defects) is the finding.
+
+## ADR-237 — Suspicious labels after a classification run
+
+**Date:** 2026-11-22
+**Status:** Accepted
+**Extends:** ADR-041 (batch prediction), ADR-218 (run actions on a server)
+
+**Context:** issue 351 asks, after training, for the images whose label the model disputes with high confidence, and for the classes the model takes for each other. A mislabeled image costs twice: it teaches the wrong class and it counts as a model error in evaluation. Finding it by hand means looking through every misclassification.
+
+**Decision:**
+
+- `core/label_suspects.py` implements confident learning (Northcutt, Jiang and Chuang, "Confident Learning: Estimating Uncertainty in Dataset Labels", JAIR 70, 2021) in its simplest form: the threshold of class j is the mean probability the model gives j on the images labeled j; an image counts toward the most probable class among those over their threshold; it is a suspect when that class is not its label. Suspects are ranked by the probability left to the given label. The confident joint (given × confident counts) gives the pairs of classes the model confuses.
+- Deviation from the paper: each threshold is capped at 0.95. A network trained to saturation gives its classes a mean self-confidence near 0.999; found on the first real run, an image labeled `class_b` that the model called `class_a` with 0.9988 never passed `class_a`'s 0.9994 threshold. Below the cap, calibrated models behave as in the paper.
+- The probabilities come from the run's checkpoint through `BatchPredictionBlock`, the inference `/runs/{id}/batch_predict` already uses (binary runs: the single sigmoid becomes two columns). The label of an image is its class folder; images outside a known class folder are skipped. The class order is `run.json`'s `class_names`.
+- `POST /api/runs/{id}/label_suspects` (body: which splits, validation and test by default) predicts each split, writes `<run_dir>/label_suspects/<split>.csv` and `report.json`, and returns the report; `GET` returns the kept one. Both are `owner` on a shared server: they read the run's own dataset from its `run.json`. Refused with 400 for any other task, an unknown split, or a run without class names or checkpoint.
+- The run detail shows a "Rótulos suspeitos" tool for classification runs: split toggles (training marked in-sample), the suspects with both probabilities, and the confused pairs.
+
+**Consequences:** the action runs inference over every image of the chosen splits in the request, like batch prediction; on a large dataset it takes minutes on CPU. Probabilities on the training split are in-sample and the screen says so; out-of-fold probabilities (the paper's setting) would need a K-fold run, which this does not require.
+
+**Known limits:** single-label classification only. The cap is a fixed rule of thumb. The request is synchronous (no progress bar), as `batch_predict`.
+
+**Alternatives considered:**
+
+- *Depend on cleanlab.* A new dependency for twenty lines of arithmetic that are tested here by hand.
+- *List every misclassification.* That is the confusion matrix already in the run; the thresholds keep only the images the model is confidently sure about.

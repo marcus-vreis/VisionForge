@@ -75,6 +75,7 @@ export const ROUTE = {
   runTest: "POST /api/runs/{run_id}/test",
   runGradcam: "POST /api/runs/{run_id}/gradcam",
   runBatchPredict: "POST /api/runs/{run_id}/batch_predict",
+  runLabelSuspects: "POST /api/runs/{run_id}/label_suspects",
   runExportOnnx: "POST /api/runs/{run_id}/export_onnx",
   runBundle: "GET /api/runs/{run_id}/bundle",
   runMarkdown: "GET /api/runs/{run_id}/export_md",

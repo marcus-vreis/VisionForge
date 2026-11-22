@@ -48,6 +48,35 @@ const ordinal = (n: number): string => {
 
 /** English. Typed as the Portuguese dictionary, so the two cannot drift. */
 export const en: Dict = {
+  labelSuspects: {
+    open: "Suspicious labels",
+    short: "Images whose label the model confidently disputes",
+    hint: "Runs this run's model over the dataset's splits and points at the images where it is sure of another class (confident learning).",
+    help:
+      "Each class's threshold is the model's mean confidence on the images of that class, at most 95%. An image is suspect when another class passes its own threshold and beats the labeled class. Check each one: it may be a wrong label, an ambiguous image or a model error. The full CSVs stay in the run's folder, under label_suspects/.",
+    start: "Find suspicious labels",
+    running: "Running the model…",
+    runningHint: "The model is going through every image of the chosen splits; on large datasets it takes a few minutes.",
+    error: (e: string) => `Failed: ${e}`,
+    computedAt: (when: string) => `Computed on ${when}.`,
+    missing: (splits: string) => `No folder in the dataset: ${splits}.`,
+    found: (n: number, images: number) =>
+      n === 0
+        ? `No suspect in ${images} images.`
+        : `${n} ${n === 1 ? "suspect" : "suspects"} in ${images} images.`,
+    failed: (n: number) => `${n} images did not open.`,
+    inSample:
+      "The model trained on these images and tends to agree with the labels it memorized; validation and test say more.",
+    image: "Image",
+    given: "Label",
+    suspected: "Model says",
+    pGiven: "p(label)",
+    pSuspected: "p(model)",
+    more: (n: number, split: string) => `${n} more in the CSV label_suspects/${split}.csv`,
+    pairsTitle: "See the classes the model confuses",
+    pair: (given: string, taken: string, n: number) => `${given} taken for ${taken}: ${n} ${n === 1 ? "image" : "images"}`,
+    splitNames: { train: "Train", val: "Validation", test: "Test" },
+  },
   anomalyAnalysis: {
     title: "What the anomaly dataset holds",
     help:

@@ -8,6 +8,7 @@ import {
   FolderOpen,
   Images,
   Layers,
+  SearchCheck,
   X,
 } from "lucide-react";
 import {
@@ -68,6 +69,7 @@ import { ActionButton } from "./ui/ActionButton";
 import { MLflowExportStatus } from "./MLflowExportStatus";
 import { CometExportStatus } from "./CometExportStatus";
 import { WandbExportStatus } from "./WandbExportStatus";
+import { LabelSuspectsTool } from "./LabelSuspectsTool";
 import { LazySurface } from "./ErrorBoundary";
 import { activeProfileSlug } from "../lib/profile";
 
@@ -198,6 +200,7 @@ export function RunDetailPanel({
 
   // Grad-CAM state — independent single-shot explainability action.
   const [showGradcamForm, setShowGradcamForm] = useState(false);
+  const [showSuspects, setShowSuspects] = useState(false);
   const [gradcamForm, setGradcamForm] = useState({ input_dir: "", num_samples: 8 });
   const [gradcamRunning, setGradcamRunning] = useState(false);
   const [gradcamResult, setGradcamResult] = useState<GradCamResponse | null>(null);
@@ -246,6 +249,9 @@ export function RunDetailPanel({
   // Detection (Ultralytics) and anomaly (no class/conv target) are excluded.
   const canGradcam =
     routeOpen(session, ROUTE.runGradcam) && !isDetection && !isCustom && task !== "anomaly";
+  // Suspicious labels: single-label classification, the one task whose label
+  // is a class folder the model can dispute (ADR-237).
+  const canLabelSuspects = routeOpen(session, ROUTE.runLabelSuspects) && task === "classification";
 
   // Another run starts a fresh load (the effect below); `loading` starts true
   // for the first one and is raised again while rendering for each new runId.
@@ -518,7 +524,8 @@ export function RunDetailPanel({
     : {};
   const statusDot = detail ? statusColor(detail.status) : "var(--vf-text-muted)";
   const hasModelTools =
-    Boolean(detail?.artifacts.model) && (canExportOnnx || canBatchPredict || canGradcam);
+    Boolean(detail?.artifacts.model) &&
+    (canExportOnnx || canBatchPredict || canGradcam || canLabelSuspects);
 
   const renderSection = (section: DetailSection): ReactNode => {
     if (!detail) return null;
@@ -786,6 +793,18 @@ export function RunDetailPanel({
                         }}
                       >
                         {gradcamFormView}
+                      </ModelTool>
+                    )}
+                    {canLabelSuspects && (
+                      <ModelTool
+                        icon={<SearchCheck />}
+                        label={t.labelSuspects.open}
+                        short={t.labelSuspects.short}
+                        hint={t.labelSuspects.hint}
+                        open={showSuspects}
+                        onToggle={() => setShowSuspects((s) => !s)}
+                      >
+                        <LabelSuspectsTool runId={runId} />
                       </ModelTool>
                     )}
                   </dd>

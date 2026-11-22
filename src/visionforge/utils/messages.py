@@ -2195,6 +2195,19 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Varredura não encontrada.",
         "en": "Scan not found.",
     },
+    # ── suspicious labels of a run (gui/api/label_suspects_run.py, ADR-237) ──
+    "suspects.classification_only": {
+        "pt": "Rótulos suspeitos só existem para runs de classificação.",
+        "en": "Suspicious labels exist for classification runs only.",
+    },
+    "suspects.unknown_split": {
+        "pt": "Divisão desconhecida: {splits}. Use train, val ou test.",
+        "en": "Unknown split: {splits}. Use train, val or test.",
+    },
+    "suspects.no_classes": {
+        "pt": "Este run não guardou os nomes das classes ou o checkpoint; treine de novo para usar os rótulos suspeitos.",
+        "en": "This run did not keep its class names or checkpoint; train again to use suspicious labels.",
+    },
     "explorer.outside_dataset": {
         "pt": "{path} fica fora da pasta do dataset.",
         "en": "{path} is outside the dataset folder.",
