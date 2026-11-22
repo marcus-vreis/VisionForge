@@ -4,6 +4,7 @@ import { num, SHIFT_WARN_SD, type TargetReport, type TargetReportItem, type Targ
 import { useT } from "../i18n/useT";
 import { ROUTE, useRouteOpen } from "../lib/session";
 import { AnalysisJobCard } from "./AnalysisJobCard";
+import { ImageQualityCard } from "./ImageQualityCard";
 import { DataTable, LearnMore } from "./DatasetLabParts";
 import { card, mono, sectionLabel, stepTitle, text, warn } from "./datasetExplorerStyles";
 
@@ -195,6 +196,9 @@ function TargetAnalysisInner({ request }: { request: TargetRequest }) {
     <section data-testid="target-analysis" style={{ display: "grid", gap: 12, marginTop: 18 }}>
       <AnalysisJobCard words={t} state={state} ready={ready} />
       {state.shown && <TargetReportView report={state.shown} />}
+      {state.shown?.quality && state.shown.quality.count > 0 && (
+        <ImageQualityCard quality={state.shown.quality} root={request.base_dir} />
+      )}
     </section>
   );
 }

@@ -9219,3 +9219,23 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Color and size statistics per class.* Cheap, but two classes photographed under the same light would always look alike.
 - *A short training run.* Closer to the real task, but minutes of GPU before the user has decided to train; ADR-237 covers the after-training case.
 - *CLIP or DINOv2 features.* Better general descriptions, but a new dependency or a larger download; resnet18's ImageNet weights are already the default backbone here.
+
+## ADR-240 — Segmentation, regression and anomaly datasets are measured for brightness, contrast and sharpness
+
+**Date:** 2026-11-22
+**Status:** Accepted
+**Extends:** ADR-238 (the measure in the integrity scan), ADR-234 (masks), ADR-235 (targets), ADR-236 (anomaly)
+
+**Context:** ADR-238 measures brightness, contrast and sharpness in the Laboratory's integrity scan, which only opens classification and detection datasets. Its known limits named the other three tasks; issue 396 asks for the same measure there.
+
+**Decision:**
+
+- The same `QualityTally` (ADR-238) runs inside each task's own analysis, so no image is opened by a second job. `QualityTally.measure` measures one file and says whether it decoded.
+- Segmentation: the mask analysis measures each pair's image (not its mask), per split. An image that does not decode counts as unreadable, as a mask that does not open already did.
+- Anomaly: the analysis measures each image it already hashes, per group (training normals, test normals, each defect kind). The fences are taken over all groups together, so a defect kind photographed darker than the normals shows as dark: that is a difference between the groups, which the screen's medians per group make visible.
+- Regression: the target analysis read only the CSVs. It now also measures the listed images that exist, once per split even when several rows name the same one, on an evenly spaced sample past 20 000. Progress counts the CSVs, then the CSVs plus the images. The report gains `images_listed`, `images_sampled` and `images_unreadable`.
+- Each task's data step shows the same "Brilho, contraste e nitidez" card next to its analysis, with the thumbnails. On anomaly the groups are named as the rest of that screen names them, training first and defect kinds last.
+
+**Consequences:** the mask and anomaly analyses decode each image once more at a reduced size (about 3 ms per image, ADR-238). The target analysis, which read only text, now opens every listed image and takes longer by that cost. Results kept before this have no `quality` and show no card until run again.
+
+**Known limits:** Tukey's fences come from the quartiles, so when a quarter or more of the images share a defect the normal range widens around them and they stop being flagged; found while writing the tests, where three planted images out of eleven left the flat one unflagged. The regression result is marked stale by its CSVs only (ADR-235): replacing an image file without touching the CSVs does not mark it stale.

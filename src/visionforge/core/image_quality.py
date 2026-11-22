@@ -35,6 +35,8 @@ TUKEY_K = 1.5
 # (gray levels, gray levels, log1p of the Laplacian variance).
 MIN_SPREAD: Mapping[str, float] = {"brightness": 8.0, "contrast": 4.0, "sharpness": 0.5}
 MAX_REPORTED = 50
+# What PIL raises for a file that is not a readable image.
+DECODE_ERRORS = (OSError, ValueError, SyntaxError, Image.DecompressionBombError)
 
 Metric = Literal["brightness", "contrast", "sharpness"]
 METRICS: tuple[Metric, ...] = ("brightness", "contrast", "sharpness")
@@ -117,6 +119,15 @@ class QualityTally:
 
     def add(self, split: str, rel: str, quality: ImageQuality) -> None:
         self.rows.append((split, rel, quality))
+
+    def measure(self, split: str, rel: str, path: Path) -> bool:
+        """Measure ``path`` and keep it; False (nothing kept) if it does not decode."""
+        try:
+            quality = measure_quality(path)
+        except DECODE_ERRORS:
+            return False
+        self.add(split, rel, quality)
+        return True
 
     def report(self) -> dict[str, Any]:
         """Per-metric spread, per-split medians and the outliers, most extreme first."""

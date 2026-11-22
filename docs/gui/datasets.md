@@ -249,6 +249,18 @@ mostra:
 Ela roda em segundo plano, lê uma amostra espaçada acima de 20 000 imagens e
 guarda o último resultado, marcado como desatualizado se alguma imagem mudar.
 
+### Brilho, contraste e nitidez na segmentação, na regressão e na anomalia
+
+As três análises acima também medem as imagens e mostram, ao lado do
+resultado, o mesmo cartão **Brilho, contraste e nitidez** da varredura do
+Laboratório. Na segmentação são medidas as imagens, não as máscaras. Na
+regressão, as imagens listadas nos CSVs que existem, uma vez cada. Na anomalia,
+cada grupo (normais do treino, normais do teste e cada tipo de defeito) tem a
+sua mediana: um tipo de defeito fotografado mais escuro que as normais aparece
+ali. A faixa normal sai dos quartis do dataset inteiro; quando um quarto ou
+mais das imagens têm o mesmo problema, a faixa se alarga e elas deixam de ser
+apontadas.
+
 ### Rótulos suspeitos, depois de um treino
 
 No detalhe de um run de classificação, **Rótulos suspeitos** roda o modelo do

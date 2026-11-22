@@ -34,6 +34,7 @@ from PIL import Image
 from scipy import ndimage
 
 from visionforge.core.cancellation import CancellationToken, is_cancelled
+from visionforge.core.image_quality import QualityTally
 
 # Same lists as the trainer's reader (core/segmentation_data.py), kept here so
 # the analysis does not import torch.
@@ -121,6 +122,8 @@ class MaskTally:
     tiny_regions: dict[int, int] = field(default_factory=dict)
     tiny_images: int = 0
     examples: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    # Brightness, contrast and sharpness of the images, not the masks (ADR-240).
+    quality: QualityTally = field(default_factory=lambda: QualityTally())
 
     def _example(self, kind: str, pair: MaskPair, **extra: Any) -> None:
         items = self.examples.setdefault(kind, [])
@@ -138,6 +141,11 @@ class MaskTally:
                 mode, mask_size = mk.mode, mk.size
                 values = None if mode in ("RGB", "RGBA") else np.asarray(mk)
         except (OSError, ValueError, Image.DecompressionBombError):
+            self.unreadable += 1
+            self._example("unreadable", pair)
+            return
+        rel_image = pair.image.relative_to(self.root).as_posix()
+        if not self.quality.measure(pair.split, rel_image, pair.image):
             self.unreadable += 1
             self._example("unreadable", pair)
             return
@@ -251,6 +259,7 @@ class MaskTally:
             ],
             "tiny_images": self.tiny_images,
             "examples": self.examples,
+            "quality": self.quality.report(),
         }
 
 
