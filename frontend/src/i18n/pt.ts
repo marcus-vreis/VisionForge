@@ -55,6 +55,35 @@ export interface LrPlanEvidence {
 }
 
 export const pt = {
+  labelSuspects: {
+    open: "Rótulos suspeitos",
+    short: "Imagens cujo rótulo o modelo contesta com confiança",
+    hint: "Roda o modelo deste run sobre as divisões do dataset e aponta as imagens em que ele tem certeza de outra classe (confident learning).",
+    help:
+      "Para cada classe, o limite é a confiança média do modelo nas imagens daquela classe, no máximo 95%. Uma imagem é suspeita quando outra classe passa do próprio limite e ganha da classe do rótulo. Confira cada uma: pode ser rótulo errado, imagem ambígua ou erro do modelo. Os CSVs completos ficam na pasta do run, em label_suspects/.",
+    start: "Procurar rótulos suspeitos",
+    running: "Rodando o modelo…",
+    runningHint: "O modelo está passando por todas as imagens das divisões escolhidas; em datasets grandes leva alguns minutos.",
+    error: (e: string) => `Falhou: ${e}`,
+    computedAt: (when: string) => `Calculado em ${when}.`,
+    missing: (splits: string) => `Sem pasta no dataset: ${splits}.`,
+    found: (n: number, images: number) =>
+      n === 0
+        ? `Nenhuma suspeita em ${images} imagens.`
+        : `${n} ${n === 1 ? "suspeita" : "suspeitas"} em ${images} imagens.`,
+    failed: (n: number) => `${n} imagens não abriram.`,
+    inSample:
+      "O modelo treinou nestas imagens e tende a concordar com os rótulos que decorou; validação e teste dizem mais.",
+    image: "Imagem",
+    given: "Rótulo",
+    suspected: "O modelo diz",
+    pGiven: "p(rótulo)",
+    pSuspected: "p(modelo)",
+    more: (n: number, split: string) => `mais ${n} no CSV label_suspects/${split}.csv`,
+    pairsTitle: "Ver as classes que o modelo confunde",
+    pair: (given: string, taken: string, n: number) => `${given} tomada por ${taken}: ${n} ${n === 1 ? "imagem" : "imagens"}`,
+    splitNames: { train: "Treino", val: "Validação", test: "Teste" },
+  },
   anomalyAnalysis: {
     title: "O que o dataset de anomalia contém",
     help:

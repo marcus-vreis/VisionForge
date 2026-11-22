@@ -8,6 +8,7 @@ import {
 import { pt, type Dict } from "../i18n/pt";
 import type { TaskDescriptor } from "../lib/custom-tasks";
 import type { AnomalyAnalysisJob, AnomalyRequest, SavedAnomalyAnalysis } from "../lib/anomaly-analysis";
+import type { LabelSuspectsReport, SuspectSplit } from "../lib/label-suspects";
 import type { MaskAnalysisJob, MaskRequest, SavedMaskAnalysis } from "../lib/mask-analysis";
 import type { SavedTargetAnalysis, TargetAnalysisJob, TargetRequest } from "../lib/target-analysis";
 import {
@@ -735,6 +736,23 @@ export interface BatchPredictResponse {
   total_processed: number;
   failed_count: number;
   failed_files: string[];
+}
+
+/** Predict the run's dataset and find the images whose label it disputes (ADR-237). */
+export async function labelSuspectsRun(runId: string, splits: SuspectSplit[]): Promise<LabelSuspectsReport> {
+  return request<LabelSuspectsReport>(`/runs/${encodeURIComponent(runId)}/label_suspects`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ splits }),
+  });
+}
+
+/** The last report of the run, `null` when it was never computed. */
+export async function labelSuspectsSaved(runId: string): Promise<LabelSuspectsReport | null> {
+  const body = await request<{ report: LabelSuspectsReport | null }>(
+    `/runs/${encodeURIComponent(runId)}/label_suspects`,
+  );
+  return body.report;
 }
 
 export async function batchPredictRun(

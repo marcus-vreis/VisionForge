@@ -980,6 +980,27 @@
       "runs"
     ]
   },
+  "GET /api/runs/{run_id}/label_suspects": {
+    "operationId": "label_suspects_saved_api_runs__run_id__label_suspects_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "runs"
+    ]
+  },
   "GET /api/schema": {
     "operationId": "get_schema_api_schema_get",
     "parameters": [
@@ -3194,6 +3215,32 @@
     "responses": {
       "200": {
         "application/json": "GradCamResponse"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "500": {}
+    },
+    "tags": [
+      "runs"
+    ]
+  },
+  "POST /api/runs/{run_id}/label_suspects": {
+    "operationId": "label_suspects_run_api_runs__run_id__label_suspects_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:run_id:required"
+    ],
+    "requestBody": {
+      "application/json": "LabelSuspectsRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
       },
       "400": {},
       "404": {},

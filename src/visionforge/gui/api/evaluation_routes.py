@@ -34,6 +34,11 @@ from visionforge.gui.api.http_responses import (
     SERVER_ERROR_TEXT,
     TAG_RUNS,
 )
+from visionforge.gui.api.label_suspects_run import (
+    LabelSuspectsRequest,
+    execute_label_suspects,
+    saved_report,
+)
 from visionforge.gui.api.profiles import PROFILE_HEADER, Profile
 from visionforge.gui.api.run_history import (
     CUSTOM_TASK_PREFIX,
@@ -147,6 +152,43 @@ def build_evaluation_router(
             run_id,
             "Batch prediction on run {} failed",
         )
+
+    @router.post(
+        "/runs/{run_id}/label_suspects",
+        responses={
+            400: {"description": BAD_REQUEST_TEXT},
+            404: {"description": NOT_FOUND_TEXT},
+            409: {"description": _FOREIGN_CHECKPOINT_TEXT},
+            500: {"description": SERVER_ERROR_TEXT},
+        },
+    )
+    async def label_suspects_run(
+        run_id: str, req: LabelSuspectsRequest, profile: ProfileDep
+    ) -> dict[str, Any]:
+        """Images whose label this run's model disputes (ADR-237).
+
+        Predicts each requested split with the checkpoint and keeps the report
+        in ``<run_dir>/label_suspects/``.
+        """
+        run_dir = _checkpoint_run_dir(find_run_dir, run_id, profile, "label_suspects")
+        return await _run_off_loop(
+            execute_label_suspects,
+            run_dir,
+            req,
+            run_id,
+            "Suspicious labels on run {} failed",
+        )
+
+    @router.get(
+        "/runs/{run_id}/label_suspects",
+        responses={404: {"description": NOT_FOUND_TEXT}},
+    )
+    async def label_suspects_saved(run_id: str, profile: ProfileDep) -> dict[str, Any]:
+        """The last suspicious-label report of this run; ``report`` None if none."""
+        run_dir = find_run_dir(run_id, profile)
+        if run_dir is None:
+            raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
+        return {"report": await asyncio.to_thread(saved_report, run_dir)}
 
     @router.post(
         "/runs/{run_id}/export_onnx",

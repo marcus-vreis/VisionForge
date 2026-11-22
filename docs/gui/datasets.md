@@ -224,5 +224,27 @@ mostra:
 Ela roda em segundo plano, lê uma amostra espaçada acima de 20 000 imagens e
 guarda o último resultado, marcado como desatualizado se alguma imagem mudar.
 
+### Rótulos suspeitos, depois de um treino
+
+No detalhe de um run de classificação, **Rótulos suspeitos** roda o modelo do
+run sobre a validação e o teste (o treino é opcional) e aponta as imagens cujo
+rótulo ele contesta com confiança, pelo método de *confident learning*
+(Northcutt, Jiang e Chuang, JAIR 2021):
+
+- o limite de cada classe é a confiança média do modelo nas imagens daquela
+  classe, no máximo 95% (um modelo treinado até saturar daria 99,9%, e nenhuma
+  imagem passaria);
+- uma imagem é suspeita quando outra classe passa do próprio limite e ganha da
+  classe do rótulo. A lista vem das que menos confiança deixam ao rótulo para as
+  que mais deixam, com as duas probabilidades;
+- **Ver as classes que o modelo confunde** mostra os pares (classe do rótulo,
+  classe que o modelo vê) com mais imagens.
+
+Cada suspeita é para conferir: pode ser rótulo errado, imagem ambígua ou erro
+do modelo. No treino, o modelo tende a concordar com o que decorou; a validação
+e o teste dizem mais. Os CSVs com as probabilidades de cada imagem e o relatório
+ficam na pasta do run, em `label_suspects/`, e o último relatório aparece ao
+reabrir o run.
+
 O mesmo CSV de grupos serve ao K-fold: grupos inteiros ficam no mesmo fold
 ([Estratégias](estrategias.md#k-fold-cv)).

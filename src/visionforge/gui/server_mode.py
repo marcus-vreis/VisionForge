@@ -226,6 +226,9 @@ ROUTE_CLASSES: dict[str, RouteClass] = {
     "DELETE /api/runs/{run_id}": "owner",
     "GET /api/runs/{run_id}": "owner",
     "POST /api/runs/{run_id}/batch_predict": "confined",
+    # The run's own dataset, read from its run.json (ADR-237).
+    "POST /api/runs/{run_id}/label_suspects": "owner",
+    "GET /api/runs/{run_id}/label_suspects": "owner",
     "GET /api/runs/{run_id}/bundle": "owner",
     "GET /api/runs/{run_id}/export_md": "owner",
     "POST /api/runs/{run_id}/export_onnx": "owner",
@@ -402,6 +405,8 @@ READY: frozenset[str] = frozenset(
         "POST /api/runs/{run_id}/batch_predict",
         "POST /api/runs/{run_id}/export_onnx",
         "POST /api/runs/{run_id}/gradcam",
+        "GET /api/runs/{run_id}/label_suspects",
+        "POST /api/runs/{run_id}/label_suspects",
         "POST /api/runs/{run_id}/resume",
         "POST /api/runs/{run_id}/test",
         "DELETE /api/wandb/token",
