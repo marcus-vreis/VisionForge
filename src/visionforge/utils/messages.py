@@ -2208,6 +2208,10 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Este run não guardou os nomes das classes ou o checkpoint; treine de novo para usar os rótulos suspeitos.",
         "en": "This run did not keep its class names or checkpoint; train again to use suspicious labels.",
     },
+    "explorer.classes_classification_only": {
+        "pt": "A comparação de classes é só para datasets de classificação.",
+        "en": "Comparing classes is for classification datasets only.",
+    },
     "explorer.outside_dataset": {
         "pt": "{path} fica fora da pasta do dataset.",
         "en": "{path} is outside the dataset folder.",

@@ -10,6 +10,11 @@ import type { TaskDescriptor } from "../lib/custom-tasks";
 import type { AnomalyAnalysisJob, AnomalyRequest, SavedAnomalyAnalysis } from "../lib/anomaly-analysis";
 import type { LabelSuspectsReport, SuspectSplit } from "../lib/label-suspects";
 import type { MaskAnalysisJob, MaskRequest, SavedMaskAnalysis } from "../lib/mask-analysis";
+import type {
+  ClassSimilarityJob,
+  ClassSimilarityRequest,
+  SavedClassSimilarity,
+} from "../lib/class-similarity";
 import type { SavedTargetAnalysis, TargetAnalysisJob, TargetRequest } from "../lib/target-analysis";
 import {
   explorerBody,
@@ -1850,6 +1855,29 @@ export async function maskAnalysisStatus(jobId: string): Promise<MaskAnalysisJob
 
 export async function maskAnalysisSaved(req: MaskRequest): Promise<SavedMaskAnalysis> {
   return request<SavedMaskAnalysis>("/explorer/masks/saved", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(req),
+  });
+}
+
+// ── which classes look alike before training (ADR-239) ──────────────────────
+
+/** Start the comparison; progress and result come through the scan status route. */
+export async function classSimilarityStart(req: ClassSimilarityRequest): Promise<ClassSimilarityJob> {
+  return request<ClassSimilarityJob>("/explorer/classes", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(req),
+  });
+}
+
+export async function classSimilarityStatus(jobId: string): Promise<ClassSimilarityJob> {
+  return request<ClassSimilarityJob>(`/explorer/scan/${encodeURIComponent(jobId)}`);
+}
+
+export async function classSimilaritySaved(req: ClassSimilarityRequest): Promise<SavedClassSimilarity> {
+  return request<SavedClassSimilarity>("/explorer/classes/saved", {
     method: "POST",
     headers: JSON_HEADERS,
     body: JSON.stringify(req),

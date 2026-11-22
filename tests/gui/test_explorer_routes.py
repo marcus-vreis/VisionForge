@@ -360,3 +360,57 @@ def test_anomaly_analysis_runs_as_a_job_and_is_kept(
     assert (kept["report"], kept["stale"]) == (report, False)
     _png(root / "test/crack/d.png", (1, 2, 3))
     assert client.post("/api/explorer/anomaly/saved", json=body).json()["stale"] is True
+
+
+def _mean_colour_embedder() -> Any:
+    """Mean RGB as the features, in place of the ImageNet network (ADR-239)."""
+    import numpy as np
+
+    def embed(images: list[Image.Image]) -> Any:
+        return np.array(
+            [np.asarray(im, dtype=np.float32).mean(axis=(0, 1)) for im in images]
+        )
+
+    return embed
+
+
+def test_class_comparison_runs_as_a_job_and_is_kept(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from visionforge.core import class_similarity
+
+    monkeypatch.setattr(class_similarity, "pretrained_embedder", _mean_colour_embedder)
+    root = tmp_path / "cls"
+    # cat and dog are both red, sky is blue: cat and dog look alike.
+    for i in range(3):
+        _png(root / f"train/cat/c{i}.png", (200, i, 0))
+        _png(root / f"train/dog/d{i}.png", (200, i + 3, 0))
+        _png(root / f"train/sky/s{i}.png", (0, i, 200))
+    body = {"base_dir": str(root)}
+    assert (
+        client.post("/api/explorer/classes/saved", json=body).json()["report"] is None
+    )
+
+    started = client.post("/api/explorer/classes", json=body).json()
+    report = _wait(client, started["job_id"])["result"]
+    assert report["described"] == 9
+    assert [(p["a"], p["b"]) for p in report["pairs"] if p["flagged"]] == [
+        ("cat", "dog")
+    ]
+
+    kept = client.post("/api/explorer/classes/saved", json=body).json()
+    assert kept["report"] == report
+    # Another sample size is another comparison.
+    other = {**body, "per_class": 2}
+    assert (
+        client.post("/api/explorer/classes/saved", json=other).json()["report"] is None
+    )
+
+
+def test_class_comparison_is_for_classification_only(
+    client: TestClient, dataset: Path
+) -> None:
+    body = {"base_dir": str(dataset), "task": "detection"}
+    res = client.post("/api/explorer/classes", json=body)
+    assert res.status_code == 400
+    assert "classifica" in res.json()["detail"].lower()

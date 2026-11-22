@@ -48,6 +48,32 @@ const ordinal = (n: number): string => {
 
 /** English. Typed as the Portuguese dictionary, so the two cannot drift. */
 export const en: Dict = {
+  classSimilarity: {
+    title: "Similar classes",
+    help: "Before training, describes each image with a model already trained on ImageNet and compares the classes: which ones have images that look more like another class than like their own. These are the pairs training will find hardest to tell apart, and sometimes an image filed in the wrong folder. Runs on the CPU and reads up to 200 images per class.",
+    start: "Compare the classes",
+    progress: (done: number, total: number) => `${done} of ${total} images described`,
+    described: (n: number, perClass: number, model: string) =>
+      `${n} images described, up to ${perClass} per class, with ${model}.`,
+    sampled: "The larger classes were evenly sampled.",
+    unreadable: (n: number) => `${n} did not open.`,
+    found: (n: number, share: string) =>
+      `${n} ${n === 1 ? "pair of similar classes" : "pairs of similar classes"}: in ${n === 1 ? "it" : "each"}, at least ${share} of one class's images look most like an image of the other.`,
+    none: (share: string) => `No pair reaches ${share}: the classes separate well in this description.`,
+    pairColumn: "Pair",
+    aLooksLikeB: "1st looks like 2nd",
+    bLooksLikeA: "2nd looks like 1st",
+    centroid: "Centroid similarity",
+    morePairs: (n: number) => `${n} more pairs with little mixing not shown.`,
+    examplesTitle: (a: string, b: string) => `See where ${a} and ${b} meet`,
+    examplesHelp:
+      "On the left, the image; on the right, the image most like it, which belongs to the other class. Check whether the left one's label is right: even in a pair with little mixing, a single image may be in the wrong folder.",
+    nearest: (cls: string, sim: number) => `most similar: ${cls} (${sim.toFixed(3)})`,
+    purityTitle: "See how well each class separates",
+    purityHelp: "Share of images whose most similar image is of the same class (in parentheses, how many were described).",
+    howTitle: "How it is measured",
+    how: "Each image goes through a resnet18 trained on ImageNet, without its last layer: 512 numbers that put images of the same kind of thing close together. For each image the most similar one is found (cosine similarity, in any split). A pair is flagged when 10% or more of one class's images have their most similar image in the other. Centroid similarity compares each class's mean (1 is identical). The description comes from ImageNet, not from your dataset: classes that differ by a detail ImageNet ignores can look alike here and still be told apart by training.",
+  },
   imageQuality: {
     title: "Brightness, contrast and sharpness",
     intro: (n: number) =>

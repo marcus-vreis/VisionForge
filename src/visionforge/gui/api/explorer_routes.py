@@ -29,6 +29,11 @@ from visionforge.core.anomaly_stats import (
     list_images,
 )
 from visionforge.core.cancellation import CancellationToken
+from visionforge.core.class_similarity import (
+    DEFAULT_PER_CLASS,
+    MAX_PER_CLASS,
+    analyze_class_similarity,
+)
 from visionforge.core.dataset_explorer import (
     DEFAULT_SCAN_LIMIT,
     MAX_SCAN_LIMIT,
@@ -507,3 +512,62 @@ async def explorer_anomaly_saved(req: AnomalyAnalysisRequest) -> dict[str, Any]:
 
 
 __all__ = ["SPLIT_NAMES", "router"]
+
+
+class ClassSimilarityRequest(ExplorerRequest):
+    """Which classification dataset, and how many images per class to describe."""
+
+    per_class: int = Field(DEFAULT_PER_CLASS, ge=1, le=MAX_PER_CLASS)
+
+
+def _classes_index(req: ClassSimilarityRequest) -> DatasetIndex:
+    if req.task != "classification":
+        raise HTTPException(400, tr("explorer.classes_classification_only"))
+    return _load_index(req, refresh=True)
+
+
+def _classes_key(index: DatasetIndex, req: ClassSimilarityRequest) -> str:
+    """Which comparison a report belongs to: the dataset's folders and the sample."""
+    parts = [scan_key(index, _split_dirs(req)), "class-similarity", str(req.per_class)]
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+
+
+@router.post(
+    "/classes",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        409: {"description": CONFLICT_TEXT},
+    },
+)
+async def explorer_classes_start(req: ClassSimilarityRequest) -> dict[str, Any]:
+    """Start comparing the classes of a classification dataset (ADR-239).
+
+    Progress, result and cancelling go through ``/scan/{job_id}``.
+    """
+    index = await asyncio.to_thread(_classes_index, req)
+    store, key = scan_store_dir(_SCAN_STORE), _classes_key(index, req)
+    signature = await asyncio.to_thread(scan_signature, index)
+
+    def work(token: CancellationToken, progress: Progress) -> dict[str, Any]:
+        return analyze_class_similarity(
+            index, per_class=req.per_class, token=token, on_progress=progress
+        )
+
+    def keep(report: dict[str, Any]) -> None:
+        save_scan(store, key, signature, report)
+
+    try:
+        job = _SCANS.start_work(work, on_done=keep)
+    except ScanBusyError as exc:
+        raise HTTPException(409, tr(SCAN_BUSY_KEY)) from exc
+    return job.snapshot()
+
+
+@router.post("/classes/saved", responses={400: {"description": BAD_REQUEST_TEXT}})
+async def explorer_classes_saved(req: ClassSimilarityRequest) -> dict[str, Any]:
+    """The last finished class comparison of this dataset, and whether it changed."""
+    index = await asyncio.to_thread(_classes_index, req)
+    store, key = scan_store_dir(_SCAN_STORE), _classes_key(index, req)
+    signature = await asyncio.to_thread(scan_signature, index)
+    saved = load_scan(store, key, signature)
+    return saved or {"report": None, "saved_at": None, "stale": False}

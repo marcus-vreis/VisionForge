@@ -2238,6 +2238,49 @@
       "explorer"
     ]
   },
+  "POST /api/explorer/classes": {
+    "operationId": "explorer_classes_start_api_explorer_classes_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "ClassSimilarityRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/classes/saved": {
+    "operationId": "explorer_classes_saved_api_explorer_classes_saved_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "ClassSimilarityRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
   "POST /api/explorer/coco/export/preview": {
     "operationId": "coco_export_preview_api_explorer_coco_export_preview_post",
     "parameters": [
