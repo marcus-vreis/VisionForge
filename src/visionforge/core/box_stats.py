@@ -62,6 +62,15 @@ def _bins(edges: tuple[float, ...], counts: list[int]) -> list[dict[str, Any]]:
     ]
 
 
+def coco_size(area: float) -> str:
+    """COCO's size bucket of a box from its area in squared pixels."""
+    if area < SMALL_AREA:
+        return "small"
+    if area < MEDIUM_AREA:
+        return "medium"
+    return "large"
+
+
 def parse_row(line: str) -> tuple[int, float, float, float, float] | None:
     """A YOLO row as (class, x, y, w, h), or None if it is not five numbers."""
     parts = line.split()
@@ -178,14 +187,7 @@ class BoxTally:
             self.unsized += 1
             return name
         width, height = w * size[0], h * size[1]
-        area = width * height
-        bucket = (
-            "small"
-            if area < SMALL_AREA
-            else "medium"
-            if area < MEDIUM_AREA
-            else "large"
-        )
+        bucket = coco_size(width * height)
         self.sizes[bucket] += 1
         self.class_sizes.setdefault(name, Counter())[bucket] += 1
         self.aspect[_bucket(width / height, _ASPECT_EDGES)] += 1

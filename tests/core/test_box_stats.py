@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from visionforge.core.box_stats import BoxTally, box_problem, parse_row
+from visionforge.core.box_stats import BoxTally, box_problem, coco_size, parse_row
 from visionforge.core.dataset_explorer import build_index, scan_integrity
 
 # A 640x480 image. Pixel sizes of the three valid boxes below:
@@ -61,6 +61,15 @@ class TestRows:
         row = parse_row(line)
         assert row is not None
         assert box_problem(row, n_classes=2) == reason
+
+
+@pytest.mark.parametrize(
+    ("area", "bucket"),
+    [(1023.9, "small"), (1024, "medium"), (9215.9, "medium"), (9216, "large")],
+)
+def test_coco_size_limits_are_half_open(area: float, bucket: str) -> None:
+    # COCO: small is area < 32², medium 32² <= area < 96², large the rest.
+    assert coco_size(area) == bucket
 
 
 class TestTally:
