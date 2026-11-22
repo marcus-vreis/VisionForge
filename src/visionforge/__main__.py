@@ -483,6 +483,14 @@ def main() -> None:
         action="store_true",
         help="do not open a browser tab (used when an update restarts the GUI)",
     )
+    gui_parser.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            "check that the GUI can start (server imports, SPA build, /api/health, "
+            "--host/--port free) and exit 0 or 1, without starting it"
+        ),
+    )
     _add_offline_flag(gui_parser)
 
     doctor_parser = subparsers.add_parser(
@@ -656,6 +664,13 @@ def main() -> None:
         _sys.exit(
             run_doctor(fix=args.fix, confirm_fn=_default_confirm, json_output=args.json)
         )
+
+    if args.command == "gui" and args.check:
+        import sys as _sys
+
+        from visionforge.gui.preflight import run_gui_check
+
+        _sys.exit(run_gui_check(args.host, args.port))
 
     if args.command == "gui":
         from visionforge.gui.server import start_server
