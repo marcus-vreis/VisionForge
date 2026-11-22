@@ -58,6 +58,7 @@ export const ROUTE = {
   ownDatasets: "GET /api/datasets/own",
   datasetAudit: "POST /api/dataset/audit",
   maskAnalysis: "POST /api/explorer/masks",
+  targetAnalysis: "POST /api/explorer/targets",
   previewAugment: "POST /api/dataset/preview_augment",
   previewPreprocess: "POST /api/dataset/preview_preprocess",
   colab: "GET /api/colab/status",

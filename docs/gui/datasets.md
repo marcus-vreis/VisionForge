@@ -180,5 +180,28 @@ A análise roda em segundo plano, com progresso e botão de cancelar. Com mais d
 guardado (em `outputs/explorer_scans/`, fora do dataset) e aparece ao voltar à
 etapa, marcado como desatualizado se alguma imagem ou máscara mudou.
 
+### Os alvos da regressão
+
+Na regressão, abaixo da auditoria, **Analisar alvos** lê os CSVs inteiros e
+mostra, para cada coluna de alvo:
+
+- por divisão: quantos valores são número, quantas células estão vazias ou não
+  são número (o treino para nelas), média, desvio-padrão, mínimo, mediana e
+  máximo;
+- um histograma com as mesmas faixas para todas as divisões (treino em linha
+  cheia, validação tracejada, teste pontilhada), cada uma como fração dos seus
+  próprios valores;
+- outliers pela regra de Tukey sobre o treino (abaixo de Q1 − 1,5×IQR ou acima
+  de Q3 + 1,5×IQR), com a linha do CSV e a imagem;
+- o deslocamento da validação e do teste: quanto a média de cada uma se afasta
+  da do treino, em desvios-padrão do treino. A partir de 0,5 a tela avisa,
+  porque a divisão passa a medir o modelo numa faixa diferente da que ele
+  aprendeu;
+
+e também a correlação (r de Pearson) entre cada par de alvos e as linhas que
+apontam para uma imagem que não existe. Como a análise das máscaras, ela roda
+em segundo plano e o último resultado fica guardado; um CSV alterado depois
+marca o resultado como desatualizado.
+
 O mesmo CSV de grupos serve ao K-fold: grupos inteiros ficam no mesmo fold
 ([Estratégias](estrategias.md#k-fold-cv)).

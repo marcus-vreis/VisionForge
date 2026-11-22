@@ -48,17 +48,60 @@ const ordinal = (n: number): string => {
 
 /** English. Typed as the Portuguese dictionary, so the two cannot drift. */
 export const en: Dict = {
+  targetAnalysis: {
+    title: "What the targets look like",
+    help:
+      "Reads the CSVs in full and shows, per target and split, the distribution, the outliers and how far validation and test sit from training; the correlation between targets; and the rows with a missing image or a cell that is not a number. Runs in the background and the last result is kept.",
+    tukeyHelp: (k: number) =>
+      `Outlier: a value below Q1 − ${k}×IQR or above Q3 + ${k}×IQR of training (Tukey's rule). Shift: how far the split's mean sits from training's, in training standard deviations.`,
+    start: "Analyze targets",
+    progress: (done: number, total: number) => `${done} of ${total} CSVs`,
+    complete: (rows: string) => `Rows read: ${rows}.`,
+    cancelled: "Canceled; the result covers the CSVs read up to then.",
+    noProblems: "Every column exists, every listed image exists and every target cell is a number.",
+    missingColumns: (split: string, cols: string) => `${split}: the CSV lacks the columns ${cols}.`,
+    missingImages: (split: string, n: number, rows: number) =>
+      `${split}: ${n} of ${rows} rows point at an image that does not exist. Training stops on them.`,
+    badCells: (n: number) =>
+      `${n} target cells are blank or not a number. Training stops on them; the list with the line is below.`,
+    splitColumn: "Split",
+    n: "n",
+    bad: "invalid",
+    mean: "mean",
+    std: "std",
+    min: "min",
+    median: "median",
+    max: "max",
+    outliers: "outliers",
+    shift: "shift (sd)",
+    histogramLabel: (name: string) => `Histogram of ${name} per split`,
+    range: (lo: string, hi: string) => `from ${lo} to ${hi}`,
+    strokes: { train: "solid line", val: "dashed", test: "dotted" } as Record<string, string>,
+    shifted: (split: string, sd: string) =>
+      `${split}: its mean sits ${sd} standard deviations from training. The split measures the model on another range than the one it learned.`,
+    outliersList: (n: number, lo: string, hi: string) => `See the ${n} outliers (outside ${lo} to ${hi})`,
+    line: (n: number) => `line ${n}`,
+    noImage: (image: string) => (image ? `${image} does not exist` : "no image"),
+    correlationTitle: "Correlation between targets",
+    correlation: (a: string, b: string, r: string) => `${a} × ${b}: r = ${r}`,
+    correlationHelp:
+      "Pearson's r over the rows where both are numbers, all splits together. Near ±1, one target nearly decides the other.",
+    rowsTitle: "See the rows with a problem",
+  },
+  analysisJob: {
+    splitNames: { train: "Train", val: "Validation", test: "Test" } as Record<string, string>,
+    cancel: "Cancel",
+    cancelling: "Canceling…",
+    failed: (error: string) => `The analysis failed: ${error}`,
+    savedAt: (when: string) => `Last analysis kept: ${when}.`,
+    savedStale: "The files changed since: the result may be out of date.",
+  },
   maskAnalysis: {
     title: "What the masks hold",
     help:
       "Opens every image/mask pair and measures the share of pixels of each class, per split; the coverage of each mask; ids outside the classes; masks of another size than their image or in color; and tiny regions, which the resize for training can erase. Runs in the background and the last result is kept.",
     start: "Analyze masks",
-    cancel: "Cancel",
-    cancelling: "Canceling…",
     progress: (done: number, total: number) => `${done} of ${total} pairs`,
-    failed: (error: string) => `The analysis failed: ${error}`,
-    savedAt: (when: string) => `Last analysis kept: ${when}.`,
-    savedStale: "Images or masks changed since: the result may be out of date.",
     complete: (n: number) => `${n} pairs analyzed.`,
     sampled: (n: number, total: number) =>
       `A sample of ${n} of the ${total} pairs, spaced to cover every split.`,

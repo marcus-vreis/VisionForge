@@ -2773,6 +2773,47 @@
       "explorer"
     ]
   },
+  "POST /api/explorer/targets": {
+    "operationId": "explorer_targets_start_api_explorer_targets_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "TargetAnalysisRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/targets/saved": {
+    "operationId": "explorer_targets_saved_api_explorer_targets_saved_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "TargetAnalysisRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
   "POST /api/github/export": {
     "operationId": "send_api_github_export_post",
     "parameters": [

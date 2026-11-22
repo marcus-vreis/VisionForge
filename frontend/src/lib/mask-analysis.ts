@@ -1,5 +1,5 @@
 /** The mask analysis of a segmentation dataset (ADR-234). */
-import type { ScanState } from "./dataset-explorer";
+import type { AnalysisJob, SavedAnalysis } from "./analysis-job";
 
 export interface MaskRequest {
   base_dir: string;
@@ -71,20 +71,8 @@ export interface MaskReport {
   examples: Record<string, MaskExample[]>;
 }
 
-export interface MaskAnalysisJob {
-  job_id: string;
-  state: ScanState;
-  done: number;
-  total: number;
-  result: MaskReport | null;
-  error: string | null;
-}
-
-export interface SavedMaskAnalysis {
-  report: MaskReport | null;
-  saved_at: string | null;
-  stale: boolean;
-}
+export type MaskAnalysisJob = AnalysisJob<MaskReport>;
+export type SavedMaskAnalysis = SavedAnalysis<MaskReport>;
 
 /** "0" for the empty bin, "1-5%" for the others, "75-100%" for the last. */
 export function coverageLabel(bin: CoverageBin, empty: string): string {

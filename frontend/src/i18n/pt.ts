@@ -55,17 +55,60 @@ export interface LrPlanEvidence {
 }
 
 export const pt = {
+  targetAnalysis: {
+    title: "Como estão os alvos",
+    help:
+      "Lê os CSVs inteiros e mostra, por alvo e divisão, a distribuição, os outliers e o quanto validação e teste se afastam do treino; a correlação entre alvos; e as linhas com imagem faltando ou célula que não é número. Roda em segundo plano e o último resultado fica guardado.",
+    tukeyHelp: (k: number) =>
+      `Outlier: valor abaixo de Q1 − ${k}×IQR ou acima de Q3 + ${k}×IQR do treino (regra de Tukey). Deslocamento: quanto a média da divisão se afasta da do treino, em desvios-padrão do treino.`,
+    start: "Analisar alvos",
+    progress: (done: number, total: number) => `${done} de ${total} CSVs`,
+    complete: (rows: string) => `Linhas lidas: ${rows}.`,
+    cancelled: "Cancelada; o resultado cobre só os CSVs lidos até ali.",
+    noProblems: "Todas as colunas existem, todas as imagens listadas existem e todas as células dos alvos são números.",
+    missingColumns: (split: string, cols: string) => `${split}: faltam as colunas ${cols} no CSV.`,
+    missingImages: (split: string, n: number, rows: number) =>
+      `${split}: ${n} de ${rows} linhas apontam para uma imagem que não existe. O treino para nelas.`,
+    badCells: (n: number) =>
+      `${n} células de alvo vazias ou que não são número. O treino para nelas; a lista com a linha está abaixo.`,
+    splitColumn: "Divisão",
+    n: "n",
+    bad: "inválidas",
+    mean: "média",
+    std: "desvio",
+    min: "mín",
+    median: "mediana",
+    max: "máx",
+    outliers: "outliers",
+    shift: "desloc. (dp)",
+    histogramLabel: (name: string) => `Histograma de ${name} por divisão`,
+    range: (lo: string, hi: string) => `de ${lo} a ${hi}`,
+    strokes: { train: "linha cheia", val: "tracejada", test: "pontilhada" } as Record<string, string>,
+    shifted: (split: string, sd: string) =>
+      `${split}: a média fica ${sd} desvios-padrão do treino. A divisão mede o modelo numa faixa diferente da que ele aprendeu.`,
+    outliersList: (n: number, lo: string, hi: string) => `Ver os ${n} outliers (fora de ${lo} a ${hi})`,
+    line: (n: number) => `linha ${n}`,
+    noImage: (image: string) => (image ? `${image} não existe` : "sem imagem"),
+    correlationTitle: "Correlação entre alvos",
+    correlation: (a: string, b: string, r: string) => `${a} × ${b}: r = ${r}`,
+    correlationHelp:
+      "r de Pearson sobre as linhas em que os dois são número, todas as divisões juntas. Perto de ±1, um alvo quase determina o outro.",
+    rowsTitle: "Ver as linhas com problema",
+  },
+  analysisJob: {
+    splitNames: { train: "Treino", val: "Validação", test: "Teste" } as Record<string, string>,
+    cancel: "Cancelar",
+    cancelling: "Cancelando…",
+    failed: (error: string) => `A análise falhou: ${error}`,
+    savedAt: (when: string) => `Última análise guardada: ${when}.`,
+    savedStale: "Os arquivos mudaram desde então: o resultado pode estar desatualizado.",
+  },
   maskAnalysis: {
     title: "O que as máscaras contêm",
     help:
       "Abre cada par imagem/máscara e mede a fração de pixels de cada classe, por divisão; a cobertura de cada máscara; ids fora das classes; máscaras de tamanho diferente da imagem ou coloridas; e regiões minúsculas, que o redimensionamento do treino pode apagar. Roda em segundo plano e o último resultado fica guardado.",
     start: "Analisar máscaras",
-    cancel: "Cancelar",
-    cancelling: "Cancelando…",
     progress: (done: number, total: number) => `${done} de ${total} pares`,
-    failed: (error: string) => `A análise falhou: ${error}`,
-    savedAt: (when: string) => `Última análise guardada: ${when}.`,
-    savedStale: "Imagens ou máscaras mudaram desde então: o resultado pode estar desatualizado.",
     complete: (n: number) => `${n} pares analisados.`,
     sampled: (n: number, total: number) =>
       `Amostra de ${n} dos ${total} pares, espaçada para cobrir todas as divisões.`,
