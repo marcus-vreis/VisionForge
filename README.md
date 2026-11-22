@@ -51,6 +51,10 @@ visionforge gui
 It opens on <http://127.0.0.1:8000>. The first screen asks your name and offers
 a short guided tour of the interface.
 
+To check the install without starting the server, run `visionforge gui --check`:
+it prints one `[OK]`/`[FAIL]` line each for the server import, the interface
+build, `/api/health` and the port, and exits 0 only if all pass.
+
 <details>
 <summary>Why PyTorch is installed separately</summary>
 
@@ -444,6 +448,10 @@ visionforge gui
 
 Ela abre em <http://127.0.0.1:8000>. A primeira tela pergunta o seu nome e
 oferece um guia rápido da interface.
+
+Para conferir a instalação sem subir o servidor, rode `visionforge gui --check`:
+ele imprime uma linha `[OK]`/`[FAIL]` para o import do servidor, o build da
+interface, o `/api/health` e a porta, e sai com 0 só se tudo passar.
 
 <details>
 <summary>Por que o PyTorch é instalado à parte</summary>

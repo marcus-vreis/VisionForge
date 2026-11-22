@@ -196,6 +196,7 @@ Imports `blocks/`, `tasks/`, `core/`, `models/` and `utils/`. React + shadcn/ui 
 | Module | Responsibility |
 |---|---|
 | `server.py` | FastAPI application. Mounts `api/routes.py` and serves the pre-built SPA from `static/`, confined to the resolved SPA root (ADR-127). Also serves `GET /api/health` and applies `security.py`. Entry point behind `visionforge gui`. |
+| `preflight.py` | `visionforge gui --check`: server import, SPA build, `/api/health` called in-process and port free, one `[OK]`/`[FAIL]` line each; never binds or serves. |
 | `api/routes.py` | REST router, prefix `/api`, which includes the routers split out of it in the order the routes were defined (ADR-132). Owns the profile lookup (`current_profile`, `_MODELS_DIR`, `_PROFILES_DIR`) and the run lookup (`_find_run_dir`) the routers receive. Still defines: `GET /api/schema`; per-run actions (`/api/runs/{id}/{reveal,mlflow/retry,resume,export_md}`); `GET /api/artifacts/{file_path}`. |
 | `api/schemas.py` | Pydantic request/response models for the routes above. |
 | `api/label_suspects_run.py` | Suspicious labels of a classification run (ADR-237): predicts each requested split with the run's checkpoint through the batch prediction block, finds the suspects and keeps the CSVs and the report in `<run_dir>/label_suspects/`. |
