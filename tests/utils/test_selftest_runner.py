@@ -340,11 +340,14 @@ def test_format_report_table_and_verdict() -> None:
         SelfTestOutcome("anomaly", "cv", "weird", 0.0, ""),
     ]
     lines = format_report(outcomes).splitlines()
-    assert lines[0].startswith("case") and "detail" in lines[0]
-    assert "PASS" in lines[2] and "classification/simple" in lines[2]
+    assert lines[0].startswith("case")
+    assert "detail" in lines[0]
+    assert "PASS" in lines[2]
+    assert "classification/simple" in lines[2]
     assert "1.5s" in lines[2]
     assert "FAIL" in lines[3]
-    assert lines[3].endswith("x" * 60) and "x" * 61 not in lines[3]
+    assert lines[3].endswith("x" * 60)
+    assert "x" * 61 not in lines[3]
     assert "SKIP" in lines[4]
     assert lines[5].split()[1] == "?"
     assert lines[-1] == "1/4 cases passed — failed: detection/cv"
