@@ -77,6 +77,9 @@ from visionforge.utils.messages import tr
 
 router = APIRouter(prefix="/explorer", tags=[TAG_EXPLORER])
 
+# One explorer job per person at a time: the scan or any per-task analysis.
+SCAN_BUSY_KEY = "explorer.scan_busy"
+
 _INDEXES = IndexCache()
 _SCANS = ScanJobs()
 
@@ -285,7 +288,7 @@ async def explorer_scan_start(req: ExplorerScanRequest) -> dict[str, Any]:
             index, req.max_images, near_duplicates=req.near_duplicates, on_done=keep
         )
     except ScanBusyError as exc:
-        raise HTTPException(409, tr("explorer.scan_busy")) from exc
+        raise HTTPException(409, tr(SCAN_BUSY_KEY)) from exc
     return job.snapshot()
 
 
@@ -376,7 +379,7 @@ async def explorer_masks_start(req: MaskAnalysisRequest) -> dict[str, Any]:
     try:
         job = _SCANS.start_work(work, on_done=keep)
     except ScanBusyError as exc:
-        raise HTTPException(409, tr("explorer.scan_busy")) from exc
+        raise HTTPException(409, tr(SCAN_BUSY_KEY)) from exc
     return job.snapshot()
 
 
@@ -438,7 +441,7 @@ async def explorer_targets_start(req: TargetAnalysisRequest) -> dict[str, Any]:
     try:
         job = _SCANS.start_work(work, on_done=keep)
     except ScanBusyError as exc:
-        raise HTTPException(409, tr("explorer.scan_busy")) from exc
+        raise HTTPException(409, tr(SCAN_BUSY_KEY)) from exc
     return job.snapshot()
 
 
@@ -489,7 +492,7 @@ async def explorer_anomaly_start(req: AnomalyAnalysisRequest) -> dict[str, Any]:
     try:
         job = _SCANS.start_work(work, on_done=keep)
     except ScanBusyError as exc:
-        raise HTTPException(409, tr("explorer.scan_busy")) from exc
+        raise HTTPException(409, tr(SCAN_BUSY_KEY)) from exc
     return job.snapshot()
 
 
