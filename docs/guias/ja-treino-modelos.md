@@ -114,7 +114,7 @@ download: [`../DATASETS.md`](../DATASETS.md).
 | --- | --- |
 | `visionforge gui` | abre a interface (`--host`, `--port`, `--no-browser`) |
 | `visionforge run config.yaml` | roda um YAML exportado; com `strategy:` + `config:`, roda réplicas, comparação, sweep ou K-fold |
-| `visionforge doctor` | confere o ambiente e indica o torch certo; `--fix` instala depois de confirmar |
+| `visionforge doctor` | confere o ambiente e indica o torch certo; `--fix` instala depois de confirmar; `--json` imprime o mesmo diagnóstico em JSON (não combina com `--fix`) |
 | `visionforge selftest` | treina cada tarefa com dados gerados; `--quick` só o treino simples |
 | `visionforge audit-data PASTA` | procura duplicatas exatas entre splits, imagens ilegíveis, com `--groups` grupos que cruzam splits e, com `--near-duplicates`, quase-duplicatas visuais entre splits |
 | `visionforge bundle RUN destino.zip` | exporta a execução com manifesto de hashes |

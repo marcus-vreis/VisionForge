@@ -835,3 +835,101 @@ class TestAppleGpu:
         assert "No CUDA-capable GPU detected" in out
         assert "Recommended wheel: cpu" in out
         assert "mps_available" not in out
+
+
+class TestDoctorJson:
+    """`doctor --json`: one JSON object on stdout, same verdict as the report."""
+
+    _KEYS = {
+        "schema_version",
+        "visionforge_version",
+        "platform",
+        "python",
+        "torch",
+        "gpu",
+        "recommendation",
+        "workspace",
+        "checks",
+        "issues",
+        "ok",
+    }
+
+    @staticmethod
+    def _run(
+        argv: list[str], torch_importable: bool
+    ) -> tuple[int | str | None, str, str]:
+        import io
+        from contextlib import redirect_stderr, redirect_stdout
+
+        from visionforge.__main__ import main
+
+        smi = MagicMock(stdout="", returncode=1)
+        spec = MagicMock() if torch_importable else None
+        out, err = io.StringIO(), io.StringIO()
+        with (
+            patch("sys.argv", ["visionforge", *argv]),
+            patch("subprocess.run", return_value=smi),
+            patch("importlib.util.find_spec", return_value=spec),
+            patch("visionforge.utils.doctor.mps_available", return_value=False),
+            redirect_stdout(out),
+            redirect_stderr(err),
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            main()
+        return exc_info.value.code, out.getvalue(), err.getvalue()
+
+    def test_stdout_is_only_valid_json_with_expected_keys(self) -> None:
+        import json
+
+        code, out, _ = self._run(["doctor", "--json"], torch_importable=False)
+
+        data = json.loads(out)  # raises if anything else was printed
+        assert set(data) == self._KEYS
+        assert data["torch"]["importable"] is False
+        assert data["torch"]["version"] is None
+        assert data["issues"] == ["torch-missing"]
+        assert data["ok"] is False
+        assert {c["name"] for c in data["checks"]} == {"python", "torch"}
+        assert data["recommendation"]["wheel"] == "cpu"
+        assert data["recommendation"]["install_commands"]
+        assert code == 1
+
+    @pytest.mark.parametrize("torch_importable", [False, True])
+    def test_exit_code_matches_human_mode(self, torch_importable: bool) -> None:
+        human, _, _ = self._run(["doctor"], torch_importable)
+        as_json, _, _ = self._run(["doctor", "--json"], torch_importable)
+        assert human == as_json
+
+    def test_json_with_fix_is_an_argparse_error(self) -> None:
+        code, out, err = self._run(["doctor", "--json", "--fix"], False)
+        assert code == 2
+        assert out == ""
+        assert "--json cannot be combined with --fix" in err
+
+    def test_cuda_mismatch_flags_issue_and_keeps_install_commands(self) -> None:
+        from visionforge.utils.doctor import collect_report
+
+        cpu_torch = {
+            "importable": True,
+            "version": "2.9.0+cpu",
+            "cuda_available": False,
+            "cuda_build": None,
+        }
+        with (
+            patch("visionforge.utils.doctor.probe_torch", return_value=cpu_torch),
+            patch("visionforge.utils.doctor.detect_driver_cuda", return_value="12.8"),
+            patch("visionforge.utils.doctor.mps_available", return_value=False),
+        ):
+            data = collect_report()
+
+        assert data["issues"] == ["torch-cuda-mismatch"]
+        assert data["ok"] is False
+        recommendation, gpu = data["recommendation"], data["gpu"]
+        assert isinstance(recommendation, dict)
+        assert isinstance(gpu, dict)
+        assert recommendation["wheel"] == "cu128"
+        assert gpu["driver_cuda"] == "12.8"
+
+    def test_run_doctor_refuses_json_with_fix(self) -> None:
+        with pytest.raises(ValueError, match="json_output"):
+            run_doctor(fix=True, json_output=True)
