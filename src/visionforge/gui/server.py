@@ -95,7 +95,7 @@ _DOCS_PATHS = frozenset({_DOCS_URL, f"{_DOCS_URL}/oauth2-redirect", _REDOC_URL})
 DOCS_ENABLED = _docs_enabled()
 
 
-async def _sweep_filtered_datasets() -> None:
+def _sweep_filtered_datasets() -> None:
     """Remove filtered dataset copies a killed process left behind (ADR-084, ADR-130).
 
     The context manager cleans up after itself, including on exception, but
@@ -114,7 +114,7 @@ async def _sweep_filtered_datasets() -> None:
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Startup work before the first request; nothing to undo at shutdown."""
-    await _sweep_filtered_datasets()
+    _sweep_filtered_datasets()
     yield
 
 
