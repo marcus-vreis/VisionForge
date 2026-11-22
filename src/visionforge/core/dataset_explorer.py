@@ -27,6 +27,7 @@ from typing import Any, Literal
 
 from PIL import Image, ImageDraw
 
+from visionforge.core.box_stats import BoxTally
 from visionforge.core.cancellation import CancellationToken, is_cancelled
 from visionforge.core.dataset_audit import _verified_image_digest
 from visionforge.core.detection_data import resolve_yolo_split
@@ -380,8 +381,8 @@ class _SizeTally:
         default_factory=lambda: [0] * (len(_ASPECT_EDGES) - 1)
     )
 
-    def add(self, path: Path) -> None:
-        """Count the size of ``path``; an image that cannot be opened is skipped."""
+    def add(self, path: Path) -> tuple[int, int] | None:
+        """Count the size of ``path``; None (and not counted) if it cannot be opened."""
         try:
             with Image.open(path) as im:
                 w, h = im.size
@@ -393,6 +394,8 @@ class _SizeTally:
             self.sizes[(w, h)] += 1
             self.side_hist[_bucket(max(w, h), _SIDE_EDGES)] += 1
             self.aspect_hist[_bucket(w / h, _ASPECT_EDGES)] += 1
+            return w, h
+        return None
 
 
 def scan_integrity(
@@ -427,6 +430,9 @@ def scan_integrity(
 
     root = index.root.resolve()
     found = _Findings()
+    if index.task == "detection":
+        declared = len(read_yolo_class_names(index.root))
+        found.boxes = BoxTally(list(index.class_names), declared)
     scanned, cancelled = _hash_pass(root, chosen, found, token, report)
     near: list[dict[str, Any]] | None = None
     if near_duplicates and not cancelled:
@@ -470,6 +476,8 @@ def scan_integrity(
             found.tally.side_hist,
             found.tally.aspect_hist,
         ),
+        # Detection only (ADR-233): what the boxes of the scanned images look like.
+        "boxes": found.boxes.report() if found.boxes is not None else None,
     }
 
 
@@ -485,6 +493,7 @@ class _Findings:
     tally: _SizeTally = field(default_factory=lambda: _SizeTally())
     readable: list[tuple[ExplorerImage, str]] = field(default_factory=list)
     current: list[ExplorerImage] = field(default_factory=list)
+    boxes: BoxTally | None = None
 
     def record(self, path: Path, reason: str) -> None:
         """Count a file that does not open; keep the first ``MAX_REPORTED``."""
@@ -523,7 +532,10 @@ def _hash_pass(
         if digest is not None:
             found.by_hash[digest].append(item)
             found.readable.append((item, digest))
-            found.tally.add(root / item.rel)
+            size = found.tally.add(root / item.rel)
+            if found.boxes is not None:
+                label = root / item.label_rel if item.label_rel else None
+                found.boxes.add(item.split, item.rel, label, size)
         report(scanned)
     return scanned, False
 

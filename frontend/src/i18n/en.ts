@@ -775,6 +775,36 @@ export const en: Dict = {
     sizesTitle: "Image sizes",
     longestSide: "Longest side (px)",
     aspectRatio: "Aspect ratio (width / height)",
+    boxesTitle: "Boxes",
+    boxTotals: (boxes: number, images: number, mean: number, max: number) =>
+      `${boxes} boxes in ${images} images: ${mean.toFixed(2)} per image, at most ${max} in one.`,
+    boxEmpty: (n: number, noFile: number, emptyFile: number) =>
+      `${n} images without a box (${noFile} with no label file, ${emptyFile} with an empty label or only invalid rows). To training, an image without a box says there is no object there: check that this is intended.`,
+    boxInvalid: (n: number, list: string) =>
+      `${n} label rows that training does not read as a box: ${list}. The list with file and line is below.`,
+    boxProblems: {
+      malformed: "not five numbers",
+      class_out_of_range: "class outside data.yaml",
+      zero_area: "zero width or height",
+      outside_image: "runs past the image edge",
+    },
+    boxSizesTitle: "Box size (area in pixels)",
+    boxSmall: (side: number) => `small (< ${side}²)`,
+    boxMedium: (lo: number, hi: number) => `medium (${lo}²–${hi}²)`,
+    boxLarge: (side: number) => `large (≥ ${side}²)`,
+    boxSizesHelp:
+      "COCO's rule, the same as small, medium and large mAP: with few boxes in a group, its metric swings a lot.",
+    boxUnsized: (n: number) => `${n} boxes of images that did not open are left out of the sizes.`,
+    boxPerImage: "Boxes per image",
+    boxAspect: "Box aspect ratio (width / height, in pixels)",
+    boxHeatmapTitle: "Where the box centers sit",
+    boxHeatmapHelp:
+      "The image split 10 × 10; the stronger the cell, the more box centers fall in it. Objects always in the middle teach the model to look only there.",
+    boxPairsTitle: "Classes seen together",
+    boxPair: (a: string, b: string, n: number) => `${a} + ${b}: ${n} ${n === 1 ? "image" : "images"}`,
+    boxClassTable: "See the sizes per class",
+    boxInvalidList: "See the invalid rows",
+    boxLine: (n: number) => `label line ${n}`,
     widthStats: (min: number, median: number, max: number) =>
       `width min ${min} · median ${median} · max ${max}`,
     heightStats: (min: number, median: number, max: number) =>

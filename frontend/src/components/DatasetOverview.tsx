@@ -20,7 +20,6 @@ import {
   scanPercent,
   stepOffset,
   thumbUrl,
-  type Bar,
   type DuplicateGroup,
   type ExplorerForm,
   type ExplorerSummary,
@@ -34,7 +33,8 @@ import { classStacks, totalBoxes } from "../lib/dataset-lab";
 import { useT } from "../i18n/useT";
 import { SelectField, TextField, Toggle } from "./controls";
 import { ActionButton } from "./ui/ActionButton";
-import { DataTable, LearnMore } from "./DatasetLabParts";
+import { BarList, DataTable, LearnMore, track } from "./DatasetLabParts";
+import { BoxStatsCard } from "./BoxStatsCard";
 import { SplitBalanceCard } from "./SplitBalanceCard";
 import {
   card,
@@ -54,29 +54,9 @@ const SPLIT_FILL: Record<SplitName, string> = {
   test: "color-mix(in oklch, var(--accent-vf) 28%, transparent)",
 };
 
-const track = "rgb(var(--lt-ink, 255 255 255) / 0.06)";
 
 function CardTitle({ children }: { children: string }) {
   return <h3 style={{ ...stepTitle, margin: 0 }}>{children}</h3>;
-}
-
-/** Horizontal bars, the exact count at the end of each. */
-export function BarList({ bars }: { bars: Bar[] }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      {bars.map((b) => (
-        <div key={b.label} className="vf-lab-bar">
-          <span className="vf-lab-bar__label" title={b.label}>
-            {b.label}
-          </span>
-          <span className="vf-lab-bar__track" style={{ background: track }}>
-            <span style={{ display: "block", height: "100%", width: `${b.pct}%`, background: "var(--accent-vf)" }} />
-          </span>
-          <span className="vf-lab-bar__value">{b.value}</span>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 /** The dataset's totals as cards: all images, classes, then one card per split. */
@@ -480,6 +460,7 @@ export function Report({ report }: { report: ScanReport }) {
           </div>
         )}
       </div>
+      {report.boxes && <BoxStatsCard boxes={report.boxes} />}
     </>
   );
 }
