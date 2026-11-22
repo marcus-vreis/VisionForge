@@ -245,9 +245,11 @@ class TestScan:
         # 8x8 -> aspect 1.0, 16x8 -> aspect 2.0
         assert sum(b["count"] for b in sizes["aspect_bins"]) == 5
 
-    def test_image_that_cannot_be_reopened_is_left_out_of_sizes(
+    def test_image_that_verifies_but_does_not_decode_is_corrupted(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        # The quality measure decodes every image (ADR-238), so a file the
+        # header check lets through is reported once, and left out of the rest.
         _folder_dataset(tmp_path)  # five images that open
         (tmp_path / "train/cat/broken.png").write_bytes(b"not an image")
 
@@ -257,8 +259,10 @@ class TestScan:
         monkeypatch.setattr(dataset_explorer, "_verified_image_digest", trusting_digest)
         report = scan_integrity(build_index(tmp_path, "classification"))
         assert report["scanned"] == 6
-        assert report["corrupted_count"] == 0
+        assert report["corrupted_count"] == 1
+        assert report["corrupted"][0]["path"] == "train/cat/broken.png"
         assert report["sizes"]["count"] == 5
+        assert report["quality"]["count"] == 5
 
     def test_limit_samples_evenly_and_says_so(self, tmp_path: Path) -> None:
         for i in range(10):

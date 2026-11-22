@@ -61,6 +61,17 @@ Na detecção, a varredura também lê os rótulos e mostra o cartão **Caixas**
   classe fora do `data.yaml`, largura ou altura zero, ou caixa que passa da
   borda da imagem (com 1% de folga). A lista mostra o arquivo e a linha.
 
+Em toda tarefa, o cartão **Brilho, contraste e nitidez** mede cada imagem em
+tons de cinza, reduzida a no máximo 256 px: o brilho é a média dos tons (0 a
+255), o contraste é o desvio e a nitidez é a variância do Laplaciano. A tabela
+mostra a mediana, a metade central e a faixa normal de cada medida, e a mediana
+por divisão (uma divisão bem mais escura que as outras veio de outra fonte). A
+faixa normal sai dos quartis do próprio dataset (regra de Tukey), então um
+dataset escuro por natureza não tem todas as imagens apontadas. Abaixo vêm as
+miniaturas das imagens escuras demais, claras demais, sem contraste ou
+borradas. Uma imagem escura ou estourada costuma aparecer também como sem
+contraste e borrada, porque perde os tons.
+
 Em pastas grandes a varredura pode ler uma amostra espaçada em vez de todas as
 imagens; a tela diz quando foi o caso.
 

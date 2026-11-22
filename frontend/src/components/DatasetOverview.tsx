@@ -35,6 +35,7 @@ import { SelectField, TextField, Toggle } from "./controls";
 import { ActionButton } from "./ui/ActionButton";
 import { BarList, DataTable, LearnMore, track } from "./DatasetLabParts";
 import { BoxStatsCard } from "./BoxStatsCard";
+import { ImageQualityCard } from "./ImageQualityCard";
 import { SplitBalanceCard } from "./SplitBalanceCard";
 import {
   card,
@@ -385,7 +386,7 @@ export function SavedNote({ saved }: { saved: SavedScan }) {
 
 /** What a finished scan found. The sampled notice stays first: a clean sample
  *  proves nothing about the images it skipped. */
-export function Report({ report }: { report: ScanReport }) {
+export function Report({ report, root }: { report: ScanReport; root: string }) {
   const t = useT().datasetExplorer;
   const { sizes } = report;
   return (
@@ -460,6 +461,7 @@ export function Report({ report }: { report: ScanReport }) {
           </div>
         )}
       </div>
+      {report.quality && report.quality.count > 0 && <ImageQualityCard quality={report.quality} root={root} />}
       {report.boxes && <BoxStatsCard boxes={report.boxes} />}
     </>
   );
@@ -579,13 +581,13 @@ function ScanPanel({ form }: { form: ExplorerForm }) {
         {job?.state === "failed" && job.error && <div style={danger}>{t.scanFailed(job.error)}</div>}
       </div>
       {job?.result ? (
-        <Report report={job.result} />
+        <Report report={job.result} root={form.base_dir} />
       ) : (
         !running &&
         saved?.report && (
           <>
             <SavedNote saved={saved} />
-            <Report report={saved.report} />
+            <Report report={saved.report} root={form.base_dir} />
           </>
         )
       )}

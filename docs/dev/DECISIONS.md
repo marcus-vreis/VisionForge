@@ -9167,3 +9167,28 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 
 - *Depend on cleanlab.* A new dependency for twenty lines of arithmetic that are tested here by hand.
 - *List every misclassification.* That is the confusion matrix already in the run; the thresholds keep only the images the model is confidently sure about.
+
+## ADR-238 — The integrity scan measures brightness, contrast and sharpness
+
+**Date:** 2026-11-22
+**Status:** Accepted
+**Extends:** ADR-165 (explorer and integrity scan), ADR-231 (kept scan), ADR-233 (box statistics in the scan)
+
+**Context:** issue 351 asks for images out of pattern in brightness, contrast or sharpness: an underexposed or blown-out frame, a blank image, a photo out of focus or upscaled from a thumbnail. They rarely break training, but they are usually capture errors or images from another source, and one in a test split moves the metric.
+
+**Decision:**
+
+- `core/image_quality.py` decodes each image as 8-bit grayscale (PIL's `L`), shrunk to at most 256 px on its longest side so sizes compare and a large dataset stays cheap (JPEG decodes at a reduced scale through `draft`). Brightness is the mean gray level (0 to 255); contrast, the standard deviation; sharpness, the variance of the 4-neighbour Laplacian, the usual focus measure (Pech-Pacheco et al., "Diatom autofocusing in brightfield microscopy: a comparative study", ICPR 2000).
+- An outlier is outside Tukey's fences (1.5 × IQR) over all scanned images, so a dataset that is dark by nature is not flagged as a whole. Four kinds: too dark and too bright (brightness), flat (low contrast), blurry (low sharpness). High contrast and sharpness are not defects and are not flagged. Sharpness spans orders of magnitude, so its fences are taken on `log1p`. The IQR is floored per metric (8 gray levels, 4 gray levels, 0.5 in `log1p`), so a dataset of near-identical images does not flag every small difference.
+- It runs inside the integrity scan, for classification and detection, on the first pass, which already opens every image for its size (ADR-233). The report gains `quality`: per metric the quartiles, the fences and the median per split; per kind the count and up to 50 images, most extreme first.
+- An image that passes PIL's `verify()` but fails to decode is now reported as corrupted in the first pass, and left out of duplicates, sizes and boxes. Before, it was counted as readable there and only the optional near-duplicate pass (ADR-231) reported it.
+- The Overview shows a card with the table and, for each kind found, thumbnails of the images with their value.
+
+**Consequences:** the first pass now decodes every image instead of reading its header. Measured on 1000 random-noise 640×480 JPEGs (the worst case for decoding), warm disk cache, CPU: 0.54 s without the measure, 3.47 s with it, about 3 ms more per image, so roughly a minute more at the default limit of 20 000 images. The scan runs in the background with progress, as before. The scan's sampling, cancellation, progress and kept result apply unchanged; a scan kept before this has no `quality` and shows no card until scanned again. A dark or blown-out image often also shows as flat and blurry, since it loses its tones; the screen says so.
+
+**Known limits:** grayscale only, so a color cast is not seen. The fences are relative to the dataset: a dataset where most images are blurry flags the sharp ones as normal and nothing as blurry. Segmentation, regression and anomaly datasets have their own analyses (ADR-234 to ADR-236), which do not measure this yet.
+
+**Alternatives considered:**
+
+- *Absolute thresholds (e.g. brightness below 30).* What is dark depends on the domain; X-rays and night footage would be flagged whole.
+- *A separate analysis job.* It would open every image a second time; the scan already does.
