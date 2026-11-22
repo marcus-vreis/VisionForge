@@ -227,3 +227,57 @@ class TestEvaluatorMulticlass:
         result = Evaluator(multiclass_config).evaluate(MultiModel(), loader)
         assert isinstance(result.report, str)
         assert len(result.report) > 0
+
+
+class _FollowLabelsModel(nn.Module):
+    """Predicts, for each sample, the class written in its first pixel."""
+
+    def __init__(self, n_classes: int) -> None:
+        super().__init__()
+        self._n_classes = n_classes
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out = torch.zeros(x.size(0), self._n_classes)
+        targets = x[:, 0, 0, 0].long()
+        out[torch.arange(x.size(0)), targets] = 10.0
+        return out
+
+
+def _inputs_for(labels: torch.Tensor) -> torch.Tensor:
+    inputs = torch.zeros(labels.size(0), 3, 32, 32)
+    inputs[:, 0, 0, 0] = labels.float()
+    return inputs
+
+
+class TestConfusionMatrixCoversAllClasses:
+    """The matrix is N x N over the model's classes, in index order, even when
+    the evaluated set lacks some of them: the plots pair its rows with the
+    model's class names, so a shrunk matrix labels counts with the wrong class."""
+
+    def test_one_class_multiclass_set(
+        self, multiclass_config: ExperimentConfig
+    ) -> None:
+        labels = torch.zeros(6, dtype=torch.long)
+        loader = make_binary_loader(_inputs_for(labels), labels)
+
+        result = Evaluator(multiclass_config).evaluate(_FollowLabelsModel(3), loader)
+
+        assert result.confusion_matrix == [[6, 0, 0], [0, 0, 0], [0, 0, 0]]
+
+    def test_missing_middle_class_keeps_index_order(
+        self, multiclass_config: ExperimentConfig
+    ) -> None:
+        labels = torch.tensor([0, 0, 2, 2, 2], dtype=torch.long)
+        loader = make_binary_loader(_inputs_for(labels), labels)
+
+        result = Evaluator(multiclass_config).evaluate(_FollowLabelsModel(3), loader)
+
+        assert result.confusion_matrix == [[2, 0, 0], [0, 0, 0], [0, 0, 3]]
+
+    def test_one_class_binary_set(self, binary_config: ExperimentConfig) -> None:
+        labels = torch.ones(8, dtype=torch.long)
+        loader = make_binary_loader(torch.zeros(8, 3, 32, 32), labels)
+
+        result = Evaluator(binary_config).evaluate(AlwaysOneModel(), loader)
+
+        assert result.confusion_matrix == [[0, 0], [0, 8]]

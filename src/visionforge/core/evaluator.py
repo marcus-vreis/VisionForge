@@ -108,13 +108,27 @@ class Evaluator:
             ),
             recall=float(recall_score(y_true, y_pred, average=avg, zero_division=0)),
             auc_roc=auc_roc,
-            confusion_matrix=confusion_matrix(y_true, y_pred).tolist(),
+            confusion_matrix=confusion_matrix(
+                y_true, y_pred, labels=_class_indices(self._config)
+            ).tolist(),
             report=classification_report(y_true, y_pred, zero_division=0),  # type: ignore[call-arg]
             y_true=all_labels,
             y_score=all_probs,
             y_proba_full=all_proba_full,
             y_pred=all_preds,
         )
+
+
+def _class_indices(config: ExperimentConfig) -> list[int]:
+    """Every class index the model can output, in index order.
+
+    The confusion matrix is built over these rather than over the labels the
+    split happens to hold: the plots pair its rows with the model's class names,
+    so a split missing a class would otherwise shift every name past it. A
+    binary model has one output unit but two classes.
+    """
+    n_classes = 2 if config.task == "binary" else config.model.num_classes
+    return list(range(n_classes))
 
 
 def _classification_auc(
