@@ -337,3 +337,26 @@ def test_target_analysis_refuses_a_csv_outside_the_dataset(
     )
     assert res.status_code == 400
     assert "../x.csv" in res.json()["detail"]
+
+
+def test_anomaly_analysis_runs_as_a_job_and_is_kept(
+    client: TestClient, tmp_path: Path
+) -> None:
+    root = tmp_path / "mvtec"
+    _png(root / "train/good/a.png", (10, 20, 30))
+    _png(root / "test/good/b.png", (40, 50, 60))
+    _png(root / "test/crack/c.png", (70, 80, 90))
+    body = {"base_dir": str(root)}
+    assert (
+        client.post("/api/explorer/anomaly/saved", json=body).json()["report"] is None
+    )
+
+    started = client.post("/api/explorer/anomaly", json=body).json()
+    report = _wait(client, started["job_id"])["result"]
+    assert report["counts"] == {"defect:crack": 1, "test_normal": 1, "train": 1}
+    assert report["defect_kinds"] == ["crack"]
+
+    kept = client.post("/api/explorer/anomaly/saved", json=body).json()
+    assert (kept["report"], kept["stale"]) == (report, False)
+    _png(root / "test/crack/d.png", (1, 2, 3))
+    assert client.post("/api/explorer/anomaly/saved", json=body).json()["stale"] is True

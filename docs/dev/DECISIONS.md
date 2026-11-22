@@ -9116,3 +9116,29 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 
 - *Extend the existing `/regression/dataset/stats`.* It answers synchronously with row and image caps that keep the Data step fast; the full read belongs in a job.
 - *A Kolmogorov–Smirnov test per split.* With thousands of rows every difference is significant; the shift in standard deviations says how large it is.
+
+## ADR-236 — An anomaly dataset is analyzed before training
+
+**Date:** 2026-11-22
+**Status:** Accepted
+**Extends:** ADR-038 (anomaly), ADR-234 (analysis jobs), ADR-228 (near-duplicates)
+
+**Context:** issue 351 lists for anomaly detection the count of normal and anomalous images, an anomalous image in the training folder and the consistency of resolution. The Data step counted images per folder. A defect photo filed under `train/good` teaches the model that the defect is normal, and nothing pointed at it; a test split in grayscale against an RGB training split, or a defect kind with three images, went unnoticed.
+
+**Decision:**
+
+- `core/anomaly_stats.py` lists the MVTec layout (`train/<normal>`, `test/<normal>`, `test/<defect>`, optional `ground_truth/<defect>`), opens every image (an evenly spaced sample past 20 000) and reports images per group, extra folders under train (training reads only the normal one), the most common sizes and color modes per group and the groups whose most common size or mode differs from training's.
+- An anomalous training image cannot be detected without labels; the closest observable sign is a training image that looks like a test defect image. Each image gets the 64-bit dHash of the near-duplicate search (ADR-228) and every training image is compared with every defect image (vectorized XOR and popcount); a distance within `near_duplicates.MAX_DISTANCE` is reported with the pair. The same comparison finds normal test images that look like a training image, where the test measures memory. Flat images (hash 0) never match.
+- A defect kind with fewer than 10 test images is pointed at: one image moves its AUROC by several points.
+- With `ground_truth/`, defect images without `<stem>_mask.*` (or `<stem>.*`) are counted.
+- It runs as an explorer job (ADR-234): `POST /api/explorer/anomaly` and `POST /api/explorer/anomaly/saved`, `confined` on a shared server; the kept result's signature covers every image's path, size and modification time.
+- The three per-task analyses now share one route helper for the dataset folder.
+
+**Consequences:** each image is decoded twice (size and dHash) — at MVTec sizes, seconds. The all-pairs comparison is train × defects; at tens of thousands each it is the slow part.
+
+**Known limits:** a defect that does not resemble any test defect photo is not found; this looks for the same photo, not the same kind of defect. The 10-image threshold is a rule of thumb.
+
+**Alternatives considered:**
+
+- *Score the training images with a trained model.* That needs a run; it belongs with the suspicious-label analysis that depends on one.
+- *Reuse the image audit's near-duplicate pass.* It groups across splits without knowing which side is a defect; here the direction (train against defects) is the finding.

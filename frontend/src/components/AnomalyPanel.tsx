@@ -28,6 +28,7 @@ import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-f
 import { ReviewStep } from "./ReviewStep";
 import { StepShell } from "./StepShell";
 import { AnomalyDatasetStats } from "./TaskDatasetStats";
+import { AnomalyAnalysis } from "./AnomalyAnalysis";
 import { DatasetAudit } from "./DatasetAudit";
 import { CompareModelsCard } from "./CompareModelsCard";
 import { TransformsSection } from "./TransformsSection";
@@ -282,6 +283,14 @@ export function AnomalyPanel({
             baseDir={formData.data.base_dir}
             splits={{ train: formData.data.train_dir, test: formData.data.test_dir }}
             note={t.evidence.notes.anomaly}
+          />
+          <AnomalyAnalysis
+            request={{
+              base_dir: formData.data.base_dir,
+              train_dir: formData.data.train_dir,
+              test_dir: formData.data.test_dir,
+              normal_dir: formData.data.normal_dir,
+            }}
           />
         </div>
       </div>
