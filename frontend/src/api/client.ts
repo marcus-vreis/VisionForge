@@ -7,6 +7,7 @@ import {
 } from "../i18n/lang";
 import { pt, type Dict } from "../i18n/pt";
 import type { TaskDescriptor } from "../lib/custom-tasks";
+import type { MaskAnalysisJob, MaskRequest, SavedMaskAnalysis } from "../lib/mask-analysis";
 import {
   explorerBody,
   type ExplorerForm,
@@ -1809,6 +1810,29 @@ export async function explorerScanStatus(jobId: string): Promise<ScanJob> {
 export async function explorerScanCancel(jobId: string): Promise<void> {
   await request<unknown>(`/explorer/scan/${encodeURIComponent(jobId)}/cancel`, {
     method: "POST",
+  });
+}
+
+// ── the masks of a segmentation dataset (ADR-234) ────────────────────────────
+
+/** Start the analysis; progress and result come through the scan status route. */
+export async function maskAnalysisStart(req: MaskRequest): Promise<MaskAnalysisJob> {
+  return request<MaskAnalysisJob>("/explorer/masks", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(req),
+  });
+}
+
+export async function maskAnalysisStatus(jobId: string): Promise<MaskAnalysisJob> {
+  return request<MaskAnalysisJob>(`/explorer/scan/${encodeURIComponent(jobId)}`);
+}
+
+export async function maskAnalysisSaved(req: MaskRequest): Promise<SavedMaskAnalysis> {
+  return request<SavedMaskAnalysis>("/explorer/masks/saved", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(req),
   });
 }
 

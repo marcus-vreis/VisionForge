@@ -4,6 +4,10 @@ A scan opens and hashes every image, which on a big dataset takes minutes, so it
 runs in a worker thread with a progress counter and a cancellation token instead
 of inside the request. One scan runs at a time: they are disk-bound and a second
 one would only slow the first.
+
+The same registry runs the per-task analyses (the masks of a segmentation
+dataset, ADR-234): any work that takes a token and a progress callback and
+returns a report with a ``cancelled`` flag.
 """
 
 from __future__ import annotations
@@ -22,6 +26,10 @@ from visionforge.core.dataset_explorer import DatasetIndex, scan_integrity
 from visionforge.gui.api.derived_jobs import job_owner
 
 _KEEP = 8
+
+
+Progress = Callable[[int, int], None]
+Work = Callable[[CancellationToken, Progress], dict[str, Any]]
 
 
 class ScanBusyError(RuntimeError):
@@ -70,6 +78,29 @@ class ScanJobs:
         Raises:
             ScanBusyError: if another scan is still running.
         """
+
+        def work(token: CancellationToken, progress: Progress) -> dict[str, Any]:
+            return scan_integrity(
+                index,
+                max_images=max_images,
+                token=token,
+                on_progress=progress,
+                near_duplicates=near_duplicates,
+            )
+
+        return self.start_work(work, on_done=on_done)
+
+    def start_work(
+        self,
+        work: Work,
+        *,
+        on_done: Callable[[dict[str, Any]], None] | None = None,
+    ) -> ScanJob:
+        """Launch any analysis in the background, one per owner at a time.
+
+        Raises:
+            ScanBusyError: if another job of this owner is still running.
+        """
         owner = job_owner()
         with self._lock:
             mine = [j for j in self._jobs.values() if j.owner == owner]
@@ -81,7 +112,7 @@ class ScanJobs:
                 del self._jobs[old.job_id]
         threading.Thread(
             target=self._run,
-            args=(job, index, max_images, near_duplicates, on_done),
+            args=(job, work, on_done),
             daemon=True,
         ).start()
         return job
@@ -89,25 +120,17 @@ class ScanJobs:
     def _run(
         self,
         job: ScanJob,
-        index: DatasetIndex,
-        max_images: int,
-        near_duplicates: bool,
+        work: Work,
         on_done: Callable[[dict[str, Any]], None] | None,
     ) -> None:
         def progress(done: int, total: int) -> None:
             job.done, job.total = done, total
 
         try:
-            result = scan_integrity(
-                index,
-                max_images=max_images,
-                token=job.token,
-                on_progress=progress,
-                near_duplicates=near_duplicates,
-            )
+            result = work(job.token, progress)
         # Reported to the client, not raised.
         except Exception as exc:  # noqa: BLE001
-            logger.error("Explorer scan failed: {}", type(exc).__name__)
+            logger.error("Explorer job failed: {}", type(exc).__name__)
             job.error = f"{type(exc).__name__}: {exc}"
             job.state = "failed"
             return
@@ -117,7 +140,7 @@ class ScanJobs:
             try:
                 on_done(result)
             except OSError as exc:
-                logger.warning("Explorer scan not kept: {}", exc)
+                logger.warning("Explorer job not kept: {}", exc)
         job.result = result
         job.state = "cancelled" if result["cancelled"] else "done"
 

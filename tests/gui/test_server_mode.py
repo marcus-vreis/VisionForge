@@ -356,7 +356,7 @@ def test_every_path_of_an_open_dataset_route_is_typed() -> None:
             if field.annotation is str and name not in not_paths:
                 assert field.metadata, f"{model.__name__}.{name} is a plain str"
         checked += 1
-    assert checked == 35
+    assert checked == 37
 
 
 def test_the_session_says_where_the_datasets_may_live(

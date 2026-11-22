@@ -55,6 +55,58 @@ export interface LrPlanEvidence {
 }
 
 export const pt = {
+  maskAnalysis: {
+    title: "O que as máscaras contêm",
+    help:
+      "Abre cada par imagem/máscara e mede a fração de pixels de cada classe, por divisão; a cobertura de cada máscara; ids fora das classes; máscaras de tamanho diferente da imagem ou coloridas; e regiões minúsculas, que o redimensionamento do treino pode apagar. Roda em segundo plano e o último resultado fica guardado.",
+    start: "Analisar máscaras",
+    cancel: "Cancelar",
+    cancelling: "Cancelando…",
+    progress: (done: number, total: number) => `${done} de ${total} pares`,
+    failed: (error: string) => `A análise falhou: ${error}`,
+    savedAt: (when: string) => `Última análise guardada: ${when}.`,
+    savedStale: "Imagens ou máscaras mudaram desde então: o resultado pode estar desatualizado.",
+    complete: (n: number) => `${n} pares analisados.`,
+    sampled: (n: number, total: number) =>
+      `Amostra de ${n} dos ${total} pares, espaçada para cobrir todas as divisões.`,
+    cancelled: (n: number) => `Cancelada depois de ${n} pares; o resultado cobre só esses.`,
+    unpaired: (split: string, noMask: number, noImage: number) =>
+      `${split}: ${noMask} imagens sem máscara e ${noImage} máscaras sem imagem (o par é pelo nome do arquivo, sem extensão). O treino recusa imagem sem máscara.`,
+    noProblems: "Nenhum id fora das classes, máscara colorida, tamanho diferente ou arquivo ilegível.",
+    outOfRange: (ids: string, pixels: number, last: number) =>
+      `Ids fora das classes: ${ids} (${pixels} pixels). As classes vão de 0 a ${last}; confira o número de classes ou o ignore_index.`,
+    color: (n: number) =>
+      `${n} máscaras coloridas (RGB). O treino espera uma máscara de um canal, com o id da classe em cada pixel.`,
+    sizeMismatch: (n: number) =>
+      `${n} máscaras de tamanho diferente da imagem. O treino redimensiona as duas, e a máscara deixa de cair sobre o objeto.`,
+    unreadable: (n: number) => `${n} pares não abriram.`,
+    absent: (ids: string) => `Classes sem nenhum pixel: ${ids}. O modelo não tem como aprendê-las.`,
+    classesTitle: "Fração de pixels por classe",
+    classColumn: "Classe (id)",
+    allColumn: "Todas",
+    ignoreId: (id: number) => `${id} (ignorado)`,
+    badId: (id: number) => `${id} (fora das classes)`,
+    classesHelp:
+      "Em porcentagem dos pixels de cada divisão. Uma classe com fração muito pequena pesa pouco na perda: pesos por classe ou outra perda podem ajudar.",
+    coverageTitle: "Cobertura de cada máscara",
+    coverageEmpty: "vazia",
+    coverageHelp:
+      "Fração de cada máscara que não é fundo (classe 0) nem ignorada. Muitas máscaras vazias ensinam o modelo a prever só fundo.",
+    tinyTitle: "Regiões minúsculas",
+    tiny: (images: number, list: string, share: number) =>
+      `${images} máscaras têm regiões menores que ${share}% da imagem: ${list}. Ao reduzir a imagem para o tamanho do treino, elas podem sumir.`,
+    tinyClass: (id: number, n: number) => `classe ${id}: ${n}`,
+    noTiny: (share: number) => `Nenhuma região menor que ${share}% da imagem.`,
+    examplesTitle: "Ver os arquivos achados",
+    kinds: {
+      out_of_range: "id fora das classes",
+      color: "máscara colorida",
+      size_mismatch: "tamanho diferente da imagem",
+      unreadable: "não abriu",
+      tiny: "região minúscula",
+    },
+    splitNames: { train: "Treino", val: "Validação", test: "Teste" },
+  },
   evidence: {
     audit: "Auditar imagens",
     auditing: "Auditando imagens…",

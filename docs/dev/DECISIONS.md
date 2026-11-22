@@ -9063,3 +9063,29 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 
 - *Compute from the labels alone in the summary.* Fast, but sizes would be in fractions of the image, not COCO's pixel buckets, and the aspect ratio would be wrong on non-square images.
 - *A separate job.* It would open every image a second time for the size the scan already reads.
+
+## ADR-234 — The masks of a segmentation dataset are analyzed before training
+
+**Date:** 2026-11-22
+**Status:** Accepted
+**Extends:** ADR-037 (segmentation), ADR-165 (explorer jobs), ADR-231 (kept results)
+
+**Context:** issue 351 lists for segmentation the share of pixels per class, the coverage of each mask, tiny regions, masks whose size differs from the image and class ids outside the expected range. The Data step paired images and masks by stem and sampled class ids from 20 train masks; nothing measured the masks themselves. A dataset whose masks hold an id past `num_classes`, or that is 99% background, trained without a word.
+
+**Decision:**
+
+- `core/mask_stats.py` pairs images and masks by stem per split (the trainer's rule and extension lists, copied so it does not import torch), opens each pair and tallies: images without a mask and masks without an image; color (RGB/RGBA) masks, which the trainer refuses; masks whose size differs from the image; the pixel count of each id per split; ids that are neither `0..num_classes-1` nor `ignore_index`; the coverage of each mask (share of pixels that are neither class 0 nor void; class 0 as background is the usual convention and the screen says so); and connected regions of one class (`scipy.ndimage.label`, 4-connectivity) below 0.01% of their image.
+- Past 5 000 pairs it reads an evenly spaced sample and says so, like the integrity scan. Cancelling keeps what was read.
+- It runs as a background job in the explorer's registry: `ScanJobs.start_work` takes any work with a token and a progress callback, the integrity scan becomes one such work, and status and cancel go through the existing `/explorer/scan/{job_id}` routes. One job per person at a time, as before.
+- `POST /api/explorer/masks` starts it; `POST /api/explorer/masks/saved` returns the last finished result. Results go to the scan store (ADR-231) under a key of the folders, the class count and `ignore_index` (another class count is another analysis), with a signature of every pair's paths, sizes and modification times; a change marks the result stale.
+- On a shared server both routes are `confined`, like the scan.
+- The Segmentation panel shows "O que as máscaras contêm" under the image audit, with the per-class pixel table per split, coverage bars, the tiny-region count and the files found behind a toggle.
+
+**Consequences:** each pair's mask is decoded once and labelled once per class it holds; on large masks with many classes that is the slow part. Results survive a restart of the GUI.
+
+**Known limits:** the tiny threshold is a fixed share of the original image, not of the training size. Class 0 is taken as background for coverage. A color mask is reported, not converted. Regression and anomaly have their own analyses still to come.
+
+**Alternatives considered:**
+
+- *Extend the image audit.* It is synchronous and its report is shared by every task; mask statistics would grow it for one task.
+- *Open segmentation in the Laboratory.* The Laboratory's index, gallery and tools are built around classes per image; a mask analysis fits the Data step, where the class count and `ignore_index` are known.
