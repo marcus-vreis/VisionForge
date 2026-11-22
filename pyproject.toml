@@ -225,6 +225,22 @@ addopts   = "-v --cov=src --cov-report=term-missing -m 'not slow'"
 markers = [
     "slow: end-to-end cases that start a server and train real models",
 ]
+# Later entries win. Deprecations raised from our own code (src, tests, research)
+# and schema warnings on our models fail the suite (AUDIT achado 18); the ignores
+# below are third-party warnings we cannot fix, each matched by message and module.
+filterwarnings = [
+    "error::DeprecationWarning:visionforge",
+    "error::PendingDeprecationWarning:visionforge",
+    "error::FutureWarning:visionforge",
+    "error::DeprecationWarning:tests",
+    "error::DeprecationWarning:research",
+    "error::pydantic.json_schema.PydanticJsonSchemaWarning",
+    # onnx_export.py keeps the TorchScript exporter on purpose (dynamo=False).
+    "ignore:You are using the legacy TorchScript-based ONNX export:DeprecationWarning:visionforge.core.onnx_export",
+    "ignore:The feature will be removed. Please remove usage of this function:DeprecationWarning:torch.onnx",
+    # CPU-only runs keep the default pin_memory=True; torch falls back to pageable memory.
+    "ignore:'pin_memory' argument is set as true but no accelerator is found:UserWarning:torch.utils.data.dataloader",
+]
 
 
 [tool.coverage.run]
