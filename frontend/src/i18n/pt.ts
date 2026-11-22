@@ -55,6 +55,33 @@ export interface LrPlanEvidence {
 }
 
 export const pt = {
+  imageQuality: {
+    title: "Brilho, contraste e nitidez",
+    intro: (n: number) =>
+      `Medidos em ${n} imagens. Uma imagem fora da faixa normal do próprio dataset costuma ser um erro de captura (subexposta, estourada, fora de foco) ou vir de outra fonte; confira antes de treinar.`,
+    metric: "Medida",
+    median: "Mediana",
+    middleHalf: "Metade central",
+    normalRange: "Faixa normal",
+    medianIn: (split: string) => `Mediana em ${split}`,
+    metrics: { brightness: "Brilho (0–255)", contrast: "Contraste", sharpness: "Nitidez" },
+    range: (metric: "brightness" | "contrast" | "sharpness", lo: number, hi: number) =>
+      metric === "brightness" ? `${lo.toFixed(0)}–${hi.toFixed(0)}` : `≥ ${lo >= 100 ? lo.toFixed(0) : lo.toFixed(1)}`,
+    none: "Nenhuma imagem fora da faixa normal.",
+    found: (kinds: string) =>
+      `Fora da faixa normal: ${kinds}. Uma imagem escura ou estourada costuma sair também sem contraste e borrada, porque perde os tons.`,
+    kinds: { dark: "Escuras demais", bright: "Claras demais", flat: "Sem contraste", blurry: "Borradas" },
+    kindHelp: {
+      dark: "Brilho abaixo da faixa normal. O número é o brilho médio, de 0 (preto) a 255 (branco).",
+      bright: "Brilho acima da faixa normal: imagens estouradas ou quase brancas.",
+      flat: "Desvio dos tons de cinza abaixo da faixa normal: imagens quase de uma cor só, às vezes vazias.",
+      blurry: "Bordas mais fracas que as do resto do dataset: fora de foco, tremidas ou ampliadas de uma imagem pequena.",
+    },
+    more: (n: number) => `Mais ${n} não mostradas.`,
+    howTitle: "Como é medido",
+    how: (side: number, k: number) =>
+      `Cada imagem é lida em tons de cinza e reduzida a no máximo ${side} px no lado maior. Brilho é a média dos tons; contraste, o desvio padrão; nitidez, a variância do Laplaciano, a medida usual de foco. A faixa normal vem dos quartis do próprio dataset (Tukey, ${k} vezes a distância entre o primeiro e o terceiro quartil), então um dataset escuro por natureza não tem todas as imagens apontadas. Contraste e nitidez altos não são defeito e não são apontados.`,
+  },
   labelSuspects: {
     open: "Rótulos suspeitos",
     short: "Imagens cujo rótulo o modelo contesta com confiança",

@@ -196,6 +196,38 @@ export interface ScanReport {
   sizes: SizeReport;
   /** Detection only (ADR-233); null for classification, absent from older scans. */
   boxes?: BoxReport | null;
+  /** Brightness, contrast and sharpness (ADR-238); absent from older scans. */
+  quality?: QualityReport;
+}
+
+export type QualityMetric = "brightness" | "contrast" | "sharpness";
+export type QualityKind = "dark" | "bright" | "flat" | "blurry";
+
+export interface QualityMetricReport {
+  min: number;
+  q1: number;
+  median: number;
+  q3: number;
+  max: number;
+  /** Tukey's fences, in the metric's own units. */
+  fences: [number, number];
+  median_by_split: Record<string, number>;
+}
+
+export interface QualityOutlier {
+  split: string;
+  path: string;
+  value: number;
+}
+
+/** Brightness, contrast and sharpness of the scanned images (ADR-238). */
+export interface QualityReport {
+  count: number;
+  tukey_k?: number;
+  measure_side?: number;
+  metrics?: Record<QualityMetric, QualityMetricReport>;
+  outlier_count?: Record<QualityKind, number>;
+  outliers?: Record<QualityKind, QualityOutlier[]>;
 }
 
 export type BoxSize = "small" | "medium" | "large";

@@ -31,6 +31,7 @@ from visionforge.core.box_stats import BoxTally
 from visionforge.core.cancellation import CancellationToken, is_cancelled
 from visionforge.core.dataset_audit import _verified_image_digest
 from visionforge.core.detection_data import resolve_yolo_split
+from visionforge.core.image_quality import ImageQuality, QualityTally, measure_quality
 from visionforge.core.near_duplicates import (
     MAX_DISTANCE as NEAR_MAX_DISTANCE,
 )
@@ -406,7 +407,7 @@ def scan_integrity(
     on_progress: Callable[[int, int], None] | None = None,
     near_duplicates: bool = False,
 ) -> dict[str, Any]:
-    """Open and hash images: corrupted files, exact duplicates, leakage, sizes.
+    """Open and hash images: corrupted files, duplicates, leakage, sizes, quality.
 
     ``near_duplicates`` adds a second pass that decodes every readable image of
     the first and groups visual near-copies across splits (ADR-228, ADR-231).
@@ -478,6 +479,8 @@ def scan_integrity(
         ),
         # Detection only (ADR-233): what the boxes of the scanned images look like.
         "boxes": found.boxes.report() if found.boxes is not None else None,
+        # Brightness, contrast and sharpness outliers (ADR-238).
+        "quality": found.quality.report(),
     }
 
 
@@ -494,6 +497,7 @@ class _Findings:
     readable: list[tuple[ExplorerImage, str]] = field(default_factory=list)
     current: list[ExplorerImage] = field(default_factory=list)
     boxes: BoxTally | None = None
+    quality: QualityTally = field(default_factory=lambda: QualityTally())
 
     def record(self, path: Path, reason: str) -> None:
         """Count a file that does not open; keep the first ``MAX_REPORTED``."""
@@ -529,7 +533,9 @@ def _hash_pass(
         found.current[:] = [item]
         digest = _verified_image_digest(root, root / item.rel, found.record)
         scanned += 1
-        if digest is not None:
+        quality = None if digest is None else _quality(root / item.rel, found.record)
+        if digest is not None and quality is not None:
+            found.quality.add(item.split, item.rel, quality)
             found.by_hash[digest].append(item)
             found.readable.append((item, digest))
             size = found.tally.add(root / item.rel)
@@ -538,6 +544,15 @@ def _hash_pass(
                 found.boxes.add(item.split, item.rel, label, size)
         report(scanned)
     return scanned, False
+
+
+def _quality(path: Path, record: Callable[[Path, str], None]) -> ImageQuality | None:
+    """Measure an image that verified; one that still fails to decode is corrupted."""
+    try:
+        return measure_quality(path)
+    except (OSError, ValueError, SyntaxError, Image.DecompressionBombError) as error:
+        record(path, type(error).__name__)
+        return None
 
 
 def _near_hashes(

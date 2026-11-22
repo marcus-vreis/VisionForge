@@ -28,7 +28,7 @@ describe("the Laboratory scan report (ADR-231)", () => {
       ...clean, near_checked: true, near_max_distance: 6, near_group_count: 1,
       near_groups: [{ splits: ["train", "val"], paths: ["train/cat/a.png", "val/cat/a.png"] }],
     };
-    const html = render(lang, <Report report={report} />);
+    const html = render(lang, <Report report={report} root="/data" />);
     expect(html).toContain(`${t.nearTitle} (1)`);
     expect(html).toContain("val/cat/a.png");
     expect(html).not.toContain(t.noProblems);
@@ -36,7 +36,7 @@ describe("the Laboratory scan report (ADR-231)", () => {
   });
 
   it("says near-duplicates were not looked for, also in a scan kept before the option", () => {
-    const html = render("pt", <Report report={clean} />);
+    const html = render("pt", <Report report={clean} root="/data" />);
     expect(html).toContain(pt.datasetExplorer.nearNotChecked);
     expect(html).toContain(pt.datasetExplorer.noProblems);
   });

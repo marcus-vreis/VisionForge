@@ -48,6 +48,33 @@ const ordinal = (n: number): string => {
 
 /** English. Typed as the Portuguese dictionary, so the two cannot drift. */
 export const en: Dict = {
+  imageQuality: {
+    title: "Brightness, contrast and sharpness",
+    intro: (n: number) =>
+      `Measured on ${n} images. An image outside the dataset's own normal range is often a capture error (underexposed, blown out, out of focus) or comes from another source; check it before training.`,
+    metric: "Measure",
+    median: "Median",
+    middleHalf: "Middle half",
+    normalRange: "Normal range",
+    medianIn: (split: string) => `Median in ${split}`,
+    metrics: { brightness: "Brightness (0–255)", contrast: "Contrast", sharpness: "Sharpness" },
+    range: (metric: "brightness" | "contrast" | "sharpness", lo: number, hi: number) =>
+      metric === "brightness" ? `${lo.toFixed(0)}–${hi.toFixed(0)}` : `≥ ${lo >= 100 ? lo.toFixed(0) : lo.toFixed(1)}`,
+    none: "No image outside the normal range.",
+    found: (kinds: string) =>
+      `Outside the normal range: ${kinds}. A dark or blown-out image often also shows as flat and blurry, since it loses its tones.`,
+    kinds: { dark: "Too dark", bright: "Too bright", flat: "No contrast", blurry: "Blurry" },
+    kindHelp: {
+      dark: "Brightness below the normal range. The number is the mean brightness, from 0 (black) to 255 (white).",
+      bright: "Brightness above the normal range: blown-out or nearly white images.",
+      flat: "Spread of gray levels below the normal range: nearly single-color images, sometimes blank.",
+      blurry: "Edges weaker than in the rest of the dataset: out of focus, shaken, or upscaled from a small image.",
+    },
+    more: (n: number) => `${n} more not shown.`,
+    howTitle: "How it is measured",
+    how: (side: number, k: number) =>
+      `Each image is read in grayscale and shrunk to at most ${side} px on its longest side. Brightness is the mean gray level; contrast, the standard deviation; sharpness, the variance of the Laplacian, the usual focus measure. The normal range comes from the dataset's own quartiles (Tukey, ${k} times the distance between the first and third quartiles), so a dataset that is dark by nature does not get every image flagged. High contrast and sharpness are not defects and are not flagged.`,
+  },
   labelSuspects: {
     open: "Suspicious labels",
     short: "Images whose label the model confidently disputes",
