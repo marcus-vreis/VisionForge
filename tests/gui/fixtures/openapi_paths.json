@@ -2176,6 +2176,47 @@
       "experiments"
     ]
   },
+  "POST /api/explorer/anomaly": {
+    "operationId": "explorer_anomaly_start_api_explorer_anomaly_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "AnomalyAnalysisRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/anomaly/saved": {
+    "operationId": "explorer_anomaly_saved_api_explorer_anomaly_saved_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "AnomalyAnalysisRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
   "POST /api/explorer/coco/export/preview": {
     "operationId": "coco_export_preview_api_explorer_coco_export_preview_post",
     "parameters": [

@@ -48,6 +48,48 @@ const ordinal = (n: number): string => {
 
 /** English. Typed as the Portuguese dictionary, so the two cannot drift. */
 export const en: Dict = {
+  anomalyAnalysis: {
+    title: "What the anomaly dataset holds",
+    help:
+      "Opens every image and shows how many each group holds, the sizes and color modes per group, training images that look like a defect image and normal test images already seen in training, and defects without a reference mask. Runs in the background and the last result is kept.",
+    start: "Analyze the dataset",
+    progress: (done: number, total: number) => `${done} of ${total} images`,
+    complete: (n: number) => `${n} images analyzed.`,
+    sampled: (n: number, total: number) => `A sample of ${n} of the ${total} images, spaced to cover every group.`,
+    cancelled: (n: number) => `Canceled after ${n} images; the result covers those only.`,
+    totals: (train: number, normal: number, anomalous: number, kinds: number) =>
+      `Train: ${train} normal. Test: ${normal} normal and ${anomalous} defective, in ${kinds} ${kinds === 1 ? "kind" : "kinds"}.`,
+    noProblems: "No ignored folder, suspicious image, size or mode unlike training, or missing mask.",
+    noTrain: "The training folder of normal images is missing: the model has nothing to learn from.",
+    noDefects: "The test has no defect folder: without anomalies the metrics have nothing to measure.",
+    extraTrain: (folders: string) =>
+      `Training has folders besides the normal one (${folders}). Training reads only the normal one; those images are left out.`,
+    few: (list: string, min: number) =>
+      `Defect kinds with fewer than ${min} images: ${list}. With so few, one image moves that kind's metric by several points.`,
+    trainLikeDefect: (n: number) =>
+      `${n} training images look like a defect image. If they are defects, the model learns they are normal.`,
+    testLikeTrain: (n: number) =>
+      `${n} normal test images look like a training image. On them the test measures memory, not generalization.`,
+    sizeMismatch: (groups: string) =>
+      `Most common size unlike training in: ${groups}. The model is measured on images in a format it never saw.`,
+    modeMismatch: (groups: string) => `Color mode unlike training in: ${groups} (gray against RGB, for example).`,
+    missingMasks: (n: number) =>
+      `${n} defect images have no mask in ground_truth. Pixel-level metrics cannot use them.`,
+    unreadable: (n: number) => `${n} images did not open.`,
+    lookHelp: (d: number) =>
+      `"Looks like" is an image whose dHash differs in at most ${d} of 64 bits: the same photo re-encoded, resized or in gray. Check each pair; it is not a verdict.`,
+    groupsTitle: "Groups",
+    groupColumn: "Group",
+    imagesColumn: "Images",
+    sizeColumn: "Most common sizes",
+    modeColumn: "Color mode",
+    train: "Train (normal)",
+    testNormal: "Test (normal)",
+    defect: (kind: string) => `Defect: ${kind}`,
+    trainLikeDefectList: "See the training images that look like defects",
+    testLikeTrainList: "See the test images that look like training",
+    missingMasksList: "See the defects without a mask",
+  },
   targetAnalysis: {
     title: "What the targets look like",
     help:

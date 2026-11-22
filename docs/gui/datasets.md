@@ -203,5 +203,26 @@ apontam para uma imagem que não existe. Como a análise das máscaras, ela roda
 em segundo plano e o último resultado fica guardado; um CSV alterado depois
 marca o resultado como desatualizado.
 
+### O dataset de anomalia
+
+Na anomalia, abaixo da auditoria, **Analisar o dataset** abre cada imagem e
+mostra:
+
+- quantas imagens há em cada grupo: normais do treino, normais do teste e cada
+  tipo de defeito. Um tipo com menos de 10 imagens é apontado, porque uma imagem
+  muda a métrica dele em vários pontos;
+- pastas no treino além da de normais, que o treino ignora;
+- o tamanho e o modo de cor mais comuns de cada grupo, e os grupos em que eles
+  diferem do treino;
+- imagens do treino parecidas com uma imagem de defeito, o sinal mais provável
+  de um defeito na pasta de normais, e imagens normais do teste parecidas com
+  uma do treino. "Parecida" é a mesma comparação por dHash das quase-duplicatas;
+  cada par é para conferir;
+- com uma pasta `ground_truth/<defeito>/`, as imagens de defeito sem máscara
+  (`<nome>_mask.png`, como no MVTec AD).
+
+Ela roda em segundo plano, lê uma amostra espaçada acima de 20 000 imagens e
+guarda o último resultado, marcado como desatualizado se alguma imagem mudar.
+
 O mesmo CSV de grupos serve ao K-fold: grupos inteiros ficam no mesmo fold
 ([Estratégias](estrategias.md#k-fold-cv)).

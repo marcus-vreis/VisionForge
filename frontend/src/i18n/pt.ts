@@ -55,6 +55,48 @@ export interface LrPlanEvidence {
 }
 
 export const pt = {
+  anomalyAnalysis: {
+    title: "O que o dataset de anomalia contém",
+    help:
+      "Abre cada imagem e mostra quantas há em cada grupo, os tamanhos e modos de cor por grupo, as imagens do treino parecidas com uma imagem de defeito e as normais do teste já vistas no treino, e os defeitos sem máscara de referência. Roda em segundo plano e o último resultado fica guardado.",
+    start: "Analisar o dataset",
+    progress: (done: number, total: number) => `${done} de ${total} imagens`,
+    complete: (n: number) => `${n} imagens analisadas.`,
+    sampled: (n: number, total: number) => `Amostra de ${n} das ${total} imagens, espaçada para cobrir todos os grupos.`,
+    cancelled: (n: number) => `Cancelada depois de ${n} imagens; o resultado cobre só essas.`,
+    totals: (train: number, normal: number, anomalous: number, kinds: number) =>
+      `Treino: ${train} normais. Teste: ${normal} normais e ${anomalous} com defeito, em ${kinds} ${kinds === 1 ? "tipo" : "tipos"}.`,
+    noProblems: "Nenhuma pasta ignorada, imagem suspeita, tamanho ou modo diferente do treino, ou máscara faltando.",
+    noTrain: "Falta a pasta de normais do treino: o modelo não tem do que aprender.",
+    noDefects: "O teste não tem nenhuma pasta de defeito: sem anomalias, as métricas não têm o que medir.",
+    extraTrain: (folders: string) =>
+      `O treino tem outras pastas além da de normais (${folders}). O treino só lê a de normais; essas imagens ficam de fora.`,
+    few: (list: string, min: number) =>
+      `Tipos de defeito com menos de ${min} imagens: ${list}. Com tão poucas, uma imagem muda a métrica desse tipo em vários pontos.`,
+    trainLikeDefect: (n: number) =>
+      `${n} imagens do treino parecem uma imagem de defeito. Se forem defeitos, o modelo aprende que eles são normais.`,
+    testLikeTrain: (n: number) =>
+      `${n} imagens normais do teste parecem uma imagem do treino. O teste mede memória nelas, não generalização.`,
+    sizeMismatch: (groups: string) =>
+      `Tamanho mais comum diferente do treino em: ${groups}. O modelo é medido em imagens num formato que não viu.`,
+    modeMismatch: (groups: string) => `Modo de cor diferente do treino em: ${groups} (por exemplo, cinza contra RGB).`,
+    missingMasks: (n: number) =>
+      `${n} imagens de defeito sem máscara em ground_truth. As métricas por pixel não podem usá-las.`,
+    unreadable: (n: number) => `${n} imagens não abriram.`,
+    lookHelp: (d: number) =>
+      `"Parecida" é uma imagem cujo dHash difere em até ${d} de 64 bits: a mesma foto reencodada, redimensionada ou em cinza. Confira cada par; não é um veredito.`,
+    groupsTitle: "Grupos",
+    groupColumn: "Grupo",
+    imagesColumn: "Imagens",
+    sizeColumn: "Tamanhos mais comuns",
+    modeColumn: "Modo de cor",
+    train: "Treino (normais)",
+    testNormal: "Teste (normais)",
+    defect: (kind: string) => `Defeito: ${kind}`,
+    trainLikeDefectList: "Ver as imagens do treino parecidas com defeitos",
+    testLikeTrainList: "Ver as imagens do teste parecidas com o treino",
+    missingMasksList: "Ver os defeitos sem máscara",
+  },
   targetAnalysis: {
     title: "Como estão os alvos",
     help:

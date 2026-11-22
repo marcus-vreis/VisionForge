@@ -7,6 +7,7 @@ import {
 } from "../i18n/lang";
 import { pt, type Dict } from "../i18n/pt";
 import type { TaskDescriptor } from "../lib/custom-tasks";
+import type { AnomalyAnalysisJob, AnomalyRequest, SavedAnomalyAnalysis } from "../lib/anomaly-analysis";
 import type { MaskAnalysisJob, MaskRequest, SavedMaskAnalysis } from "../lib/mask-analysis";
 import type { SavedTargetAnalysis, TargetAnalysisJob, TargetRequest } from "../lib/target-analysis";
 import {
@@ -1854,6 +1855,29 @@ export async function targetAnalysisStatus(jobId: string): Promise<TargetAnalysi
 
 export async function targetAnalysisSaved(req: TargetRequest): Promise<SavedTargetAnalysis> {
   return request<SavedTargetAnalysis>("/explorer/targets/saved", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(req),
+  });
+}
+
+// ── an anomaly-detection dataset (ADR-236) ───────────────────────────────────
+
+/** Start the analysis; progress and result come through the scan status route. */
+export async function anomalyAnalysisStart(req: AnomalyRequest): Promise<AnomalyAnalysisJob> {
+  return request<AnomalyAnalysisJob>("/explorer/anomaly", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(req),
+  });
+}
+
+export async function anomalyAnalysisStatus(jobId: string): Promise<AnomalyAnalysisJob> {
+  return request<AnomalyAnalysisJob>(`/explorer/scan/${encodeURIComponent(jobId)}`);
+}
+
+export async function anomalyAnalysisSaved(req: AnomalyRequest): Promise<SavedAnomalyAnalysis> {
+  return request<SavedAnomalyAnalysis>("/explorer/anomaly/saved", {
     method: "POST",
     headers: JSON_HEADERS,
     body: JSON.stringify(req),

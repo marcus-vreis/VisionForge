@@ -17,6 +17,17 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from visionforge.core.anomaly_stats import (
+    DEFAULT_LIMIT as ANOMALY_DEFAULT_LIMIT,
+)
+from visionforge.core.anomaly_stats import (
+    MAX_LIMIT as ANOMALY_MAX_LIMIT,
+)
+from visionforge.core.anomaly_stats import (
+    analyze_anomaly,
+    images_signature,
+    list_images,
+)
 from visionforge.core.cancellation import CancellationToken
 from visionforge.core.dataset_explorer import (
     DEFAULT_SCAN_LIMIT,
@@ -119,6 +130,16 @@ class TargetAnalysisRequest(BaseModel):
     target_columns: list[str] = Field(
         default_factory=lambda: ["target"], min_length=1, max_length=64
     )
+
+
+class AnomalyAnalysisRequest(BaseModel):
+    """An anomaly dataset as its config names it (ADR-236)."""
+
+    base_dir: DatasetDir
+    train_dir: DatasetPart = "train"
+    test_dir: DatasetPart = "test"
+    normal_dir: DatasetPart = "good"
+    max_images: int = Field(default=ANOMALY_DEFAULT_LIMIT, ge=1, le=ANOMALY_MAX_LIMIT)
 
 
 # Finished scans, one per dataset; on a server inside each person's profile.
@@ -302,10 +323,11 @@ def _mask_split_dirs(req: MaskAnalysisRequest) -> dict[str, str]:
     return {"train": req.train_dir, "val": req.val_dir, "test": req.test_dir}
 
 
-def _mask_root(req: MaskAnalysisRequest) -> Path:
-    base = Path(req.base_dir)
+def _analysis_root(base_dir: str) -> Path:
+    """The dataset folder of a per-task analysis, resolved; 400 if it is missing."""
+    base = Path(base_dir)
     if not base.is_dir():
-        raise HTTPException(400, tr(SCAN_BASE_MISSING_KEY, path=req.base_dir))
+        raise HTTPException(400, tr(SCAN_BASE_MISSING_KEY, path=base_dir))
     _remember_dataset_root(base)
     return base.resolve()
 
@@ -331,7 +353,7 @@ async def explorer_masks_start(req: MaskAnalysisRequest) -> dict[str, Any]:
 
     Progress, result and cancelling go through ``/scan/{job_id}``.
     """
-    root = await asyncio.to_thread(_mask_root, req)
+    root = await asyncio.to_thread(_analysis_root, req.base_dir)
     store, key = scan_store_dir(_SCAN_STORE), _mask_key(root, req)
     signature = await asyncio.to_thread(_mask_signature, root, req)
 
@@ -361,7 +383,7 @@ async def explorer_masks_start(req: MaskAnalysisRequest) -> dict[str, Any]:
 @router.post("/masks/saved")
 async def explorer_masks_saved(req: MaskAnalysisRequest) -> dict[str, Any]:
     """The last finished mask analysis of this dataset, and whether it changed."""
-    root = await asyncio.to_thread(_mask_root, req)
+    root = await asyncio.to_thread(_analysis_root, req.base_dir)
     store, key = scan_store_dir(_SCAN_STORE), _mask_key(root, req)
     signature = await asyncio.to_thread(_mask_signature, root, req)
     saved = load_scan(store, key, signature)
@@ -373,15 +395,11 @@ def _target_csvs(req: TargetAnalysisRequest) -> dict[str, str]:
 
 
 def _target_root(req: TargetAnalysisRequest) -> Path:
-    base = Path(req.base_dir)
-    if not base.is_dir():
-        raise HTTPException(400, tr(SCAN_BASE_MISSING_KEY, path=req.base_dir))
-    root = base.resolve()
+    root = _analysis_root(req.base_dir)
     # Refused here, not in the job: a CSV outside the dataset is a bad request.
     for name in (*_target_csvs(req).values(), req.images_dir):
         if not (root / name).resolve().is_relative_to(root):
             raise HTTPException(400, tr("explorer.outside_dataset", path=name))
-    _remember_dataset_root(base)
     return root
 
 
@@ -430,6 +448,58 @@ async def explorer_targets_saved(req: TargetAnalysisRequest) -> dict[str, Any]:
     root = await asyncio.to_thread(_target_root, req)
     store, key = scan_store_dir(_SCAN_STORE), _target_key(root, req)
     saved = load_scan(store, key, csv_signature(root, _target_csvs(req)))
+    return saved or {"report": None, "saved_at": None, "stale": False}
+
+
+def _anomaly_key(root: Path, req: AnomalyAnalysisRequest) -> str:
+    """Which analysis a report belongs to: the dataset and its three folders."""
+    parts = [str(root), "anomaly", req.train_dir, req.test_dir, req.normal_dir]
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+
+
+def _anomaly_signature(root: Path, req: AnomalyAnalysisRequest) -> str:
+    items, _ = list_images(root, req.train_dir, req.test_dir, req.normal_dir)
+    return images_signature(items)
+
+
+@router.post("/anomaly", responses={409: {"description": CONFLICT_TEXT}})
+async def explorer_anomaly_start(req: AnomalyAnalysisRequest) -> dict[str, Any]:
+    """Start the analysis of an anomaly dataset (ADR-236).
+
+    Progress, result and cancelling go through ``/scan/{job_id}``.
+    """
+    root = await asyncio.to_thread(_analysis_root, req.base_dir)
+    store, key = scan_store_dir(_SCAN_STORE), _anomaly_key(root, req)
+    signature = await asyncio.to_thread(_anomaly_signature, root, req)
+
+    def work(token: CancellationToken, progress: Progress) -> dict[str, Any]:
+        return analyze_anomaly(
+            root,
+            train_dir=req.train_dir,
+            test_dir=req.test_dir,
+            normal_dir=req.normal_dir,
+            max_images=req.max_images,
+            token=token,
+            on_progress=progress,
+        )
+
+    def keep(report: dict[str, Any]) -> None:
+        save_scan(store, key, signature, report)
+
+    try:
+        job = _SCANS.start_work(work, on_done=keep)
+    except ScanBusyError as exc:
+        raise HTTPException(409, tr("explorer.scan_busy")) from exc
+    return job.snapshot()
+
+
+@router.post("/anomaly/saved")
+async def explorer_anomaly_saved(req: AnomalyAnalysisRequest) -> dict[str, Any]:
+    """The last finished anomaly analysis of this dataset, and whether it changed."""
+    root = await asyncio.to_thread(_analysis_root, req.base_dir)
+    store, key = scan_store_dir(_SCAN_STORE), _anomaly_key(root, req)
+    signature = await asyncio.to_thread(_anomaly_signature, root, req)
+    saved = load_scan(store, key, signature)
     return saved or {"report": None, "saved_at": None, "stale": False}
 
 
