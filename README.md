@@ -298,6 +298,7 @@ downloads and the update check included.
 
 ```bash
 visionforge doctor               # environment: driver, torch, workspace
+visionforge doctor --json        # same facts as one JSON object (for bug reports)
 visionforge selftest --quick     # trains every task on synthetic data, ~15s
 ```
 

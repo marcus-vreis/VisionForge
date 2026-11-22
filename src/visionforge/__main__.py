@@ -493,6 +493,12 @@ def main() -> None:
         action="store_true",
         help="Run the recommended install after prompting for confirmation.",
     )
+    doctor_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the report as one JSON object (for scripts and bug reports). "
+        "Cannot be combined with --fix.",
+    )
 
     selftest_parser = subparsers.add_parser(
         "selftest",
@@ -645,7 +651,11 @@ def main() -> None:
 
         from visionforge.utils.doctor import _default_confirm, run_doctor
 
-        _sys.exit(run_doctor(fix=args.fix, confirm_fn=_default_confirm))
+        if args.json and args.fix:
+            parser.error("doctor: --json cannot be combined with --fix")
+        _sys.exit(
+            run_doctor(fix=args.fix, confirm_fn=_default_confirm, json_output=args.json)
+        )
 
     if args.command == "gui":
         from visionforge.gui.server import start_server
