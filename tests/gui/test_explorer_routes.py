@@ -255,3 +255,47 @@ def test_the_summary_says_whether_the_splits_share_the_class_mix(
     dog = next(r for r in balance["classes"] if r["name"] == "dog")
     assert dog["missing_in"] == ["val"]
     assert dog["gap_pp"] == pytest.approx(100 / 3)
+
+
+def _seg_dataset(root: Path) -> Path:
+    """train: one 4x4 mask, half class 1. val: one mask with an id past 2 classes."""
+    for split, value in (("train", 1), ("val", 9)):
+        (root / split / "images").mkdir(parents=True)
+        (root / split / "masks").mkdir(parents=True)
+        Image.new("RGB", (4, 4)).save(root / split / "images" / "a.jpg")
+        mask = Image.new("L", (4, 4), 0)
+        for x in range(4):
+            for y in range(2):
+                mask.putpixel((x, y), value)
+        mask.save(root / split / "masks" / "a.png")
+    return root
+
+
+def test_mask_analysis_runs_as_a_job_and_is_kept(
+    client: TestClient, tmp_path: Path
+) -> None:
+    root = _seg_dataset(tmp_path / "seg")
+    body = {"base_dir": str(root), "num_classes": 2}
+    assert client.post("/api/explorer/masks/saved", json=body).json()["report"] is None
+
+    started = client.post("/api/explorer/masks", json=body).json()
+    report = _wait(client, started["job_id"])["result"]
+    assert report["task"] == "segmentation"
+    assert report["scanned"] == 2
+    assert report["out_of_range_ids"] == [9]
+    by_id = {c["id"]: c["shares"] for c in report["classes"]}
+    assert by_id[1] == {"train": 50.0, "val": 0}
+
+    kept = client.post("/api/explorer/masks/saved", json=body).json()
+    assert kept["report"] == report
+    assert kept["stale"] is False
+    # Another class count is another analysis: what is out of range changes.
+    other = {**body, "num_classes": 10}
+    assert client.post("/api/explorer/masks/saved", json=other).json()["report"] is None
+
+
+def test_mask_analysis_of_a_missing_folder_is_400(
+    client: TestClient, tmp_path: Path
+) -> None:
+    res = client.post("/api/explorer/masks", json={"base_dir": str(tmp_path / "no")})
+    assert res.status_code == 400

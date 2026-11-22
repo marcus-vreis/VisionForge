@@ -34,6 +34,7 @@ import { ReplicatedComparisonCard } from "./ReplicatedComparisonCard";
 import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-form";
 import { SegmentationDatasetStats } from "./TaskDatasetStats";
 import { DatasetAudit } from "./DatasetAudit";
+import { MaskAnalysis } from "./MaskAnalysis";
 import { SweepCard, type SweepPayload } from "./SweepCard";
 import { TransformsSection } from "./TransformsSection";
 import type { ReplicatesPayload } from "../lib/replicates-form";
@@ -367,6 +368,18 @@ export function SegmentationPanel({
                 }}
                 optionalSplits={["test"]}
                 note={t.evidence.notes.masks}
+              />
+              <MaskAnalysis
+                request={{
+                  base_dir: formData.data.base_dir,
+                  train_dir: formData.data.train_dir,
+                  val_dir: formData.data.val_dir,
+                  test_dir: formData.data.test_dir,
+                  images_subdir: formData.data.images_subdir,
+                  masks_subdir: formData.data.masks_subdir,
+                  num_classes: formData.model.num_classes,
+                  ignore_index: formData.data.ignore_index,
+                }}
               />
             </div>
           </div>

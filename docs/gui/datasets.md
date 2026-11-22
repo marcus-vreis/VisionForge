@@ -157,5 +157,28 @@ O que cada tarefa audita:
 Na detecção, na segmentação e na regressão o teste é opcional: se ele não
 existe, a auditoria diz "ausente (opcional)" e não conta isso como problema.
 
+### As máscaras da segmentação
+
+Na segmentação, abaixo da auditoria, **Analisar máscaras** abre cada par
+imagem/máscara (pareados pelo nome do arquivo, sem extensão) e mostra:
+
+- imagens sem máscara e máscaras sem imagem, por divisão;
+- máscaras coloridas (RGB), que o treino recusa, e máscaras de tamanho
+  diferente da imagem;
+- ids fora das classes: valores que não estão entre 0 e o número de classes
+  menos 1 e não são o `ignore_index`. Costumam indicar o número de classes
+  errado ou uma máscara salva com outra paleta;
+- a fração de pixels de cada classe, no total e por divisão, e as classes sem
+  nenhum pixel;
+- a cobertura de cada máscara: a fração que não é fundo (classe 0) nem
+  ignorada. Muitas máscaras vazias ensinam o modelo a prever só fundo;
+- regiões minúsculas: áreas contínuas de uma classe menores que 0,01% da
+  imagem, que o redimensionamento para o tamanho do treino pode apagar.
+
+A análise roda em segundo plano, com progresso e botão de cancelar. Com mais de
+5 000 pares ela lê uma amostra espaçada, e a tela avisa. O último resultado fica
+guardado (em `outputs/explorer_scans/`, fora do dataset) e aparece ao voltar à
+etapa, marcado como desatualizado se alguma imagem ou máscara mudou.
+
 O mesmo CSV de grupos serve ao K-fold: grupos inteiros ficam no mesmo fold
 ([Estratégias](estrategias.md#k-fold-cv)).

@@ -2469,6 +2469,47 @@
       "explorer"
     ]
   },
+  "POST /api/explorer/masks": {
+    "operationId": "explorer_masks_start_api_explorer_masks_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "MaskAnalysisRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/masks/saved": {
+    "operationId": "explorer_masks_saved_api_explorer_masks_saved_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "MaskAnalysisRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
   "POST /api/explorer/merge/preview": {
     "operationId": "merge_preview_api_explorer_merge_preview_post",
     "parameters": [

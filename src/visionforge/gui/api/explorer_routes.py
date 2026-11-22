@@ -9,6 +9,7 @@ with progress and cancellation.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from visionforge.core.cancellation import CancellationToken
 from visionforge.core.dataset_explorer import (
     DEFAULT_SCAN_LIMIT,
     MAX_SCAN_LIMIT,
@@ -29,6 +31,17 @@ from visionforge.core.dataset_explorer import (
     select_images,
     summarize,
 )
+from visionforge.core.mask_stats import (
+    DEFAULT_LIMIT as MASK_DEFAULT_LIMIT,
+)
+from visionforge.core.mask_stats import (
+    MAX_LIMIT as MASK_MAX_LIMIT,
+)
+from visionforge.core.mask_stats import (
+    analyze_masks,
+    list_pairs,
+    pairs_signature,
+)
 from visionforge.core.scan_store import load_scan, save_scan, scan_key, scan_signature
 from visionforge.core.split_balance import split_balance
 from visionforge.gui.api.dataset_scope import DatasetDir, DatasetPart, scan_store_dir
@@ -38,7 +51,7 @@ from visionforge.gui.api.datasets_routes import (
     _is_inside_allowed_root,
     _remember_dataset_root,
 )
-from visionforge.gui.api.explorer_jobs import ScanBusyError, ScanJobs
+from visionforge.gui.api.explorer_jobs import Progress, ScanBusyError, ScanJobs
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST_TEXT,
     CONFLICT_TEXT,
@@ -77,6 +90,20 @@ class ExplorerScanRequest(ExplorerRequest):
     max_images: int = Field(default=DEFAULT_SCAN_LIMIT, ge=1, le=MAX_SCAN_LIMIT)
     # A second pass for visual near-copies across splits (ADR-231).
     near_duplicates: bool = False
+
+
+class MaskAnalysisRequest(BaseModel):
+    """A segmentation dataset as its config names it (ADR-234)."""
+
+    base_dir: DatasetDir
+    train_dir: DatasetPart = "train"
+    val_dir: DatasetPart = "val"
+    test_dir: DatasetPart = "test"
+    images_subdir: DatasetPart = "images"
+    masks_subdir: DatasetPart = "masks"
+    num_classes: int = Field(default=2, ge=1, le=65_536)
+    ignore_index: int = 255
+    max_images: int = Field(default=MASK_DEFAULT_LIMIT, ge=1, le=MASK_MAX_LIMIT)
 
 
 # Finished scans, one per dataset; on a server inside each person's profile.
@@ -254,6 +281,76 @@ async def explorer_scan_cancel(job_id: str) -> dict[str, bool]:
     if not _SCANS.cancel(job_id):
         raise HTTPException(404, tr("explorer.scan_missing"))
     return {"cancelling": True}
+
+
+def _mask_split_dirs(req: MaskAnalysisRequest) -> dict[str, str]:
+    return {"train": req.train_dir, "val": req.val_dir, "test": req.test_dir}
+
+
+def _mask_root(req: MaskAnalysisRequest) -> Path:
+    base = Path(req.base_dir)
+    if not base.is_dir():
+        raise HTTPException(400, tr(SCAN_BASE_MISSING_KEY, path=req.base_dir))
+    _remember_dataset_root(base)
+    return base.resolve()
+
+
+def _mask_key(root: Path, req: MaskAnalysisRequest) -> str:
+    """Which analysis a report belongs to: the folders and the class settings."""
+    parts = [str(root), "segmentation-masks", req.images_subdir, req.masks_subdir]
+    parts += [f"{s}={d}" for s, d in sorted(_mask_split_dirs(req).items())]
+    parts += [f"classes={req.num_classes}", f"ignore={req.ignore_index}"]
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+
+
+def _mask_signature(root: Path, req: MaskAnalysisRequest) -> str:
+    pairs, _ = list_pairs(
+        root, _mask_split_dirs(req), req.images_subdir, req.masks_subdir
+    )
+    return pairs_signature(pairs)
+
+
+@router.post("/masks", responses={409: {"description": CONFLICT_TEXT}})
+async def explorer_masks_start(req: MaskAnalysisRequest) -> dict[str, Any]:
+    """Start the mask analysis of a segmentation dataset (ADR-234).
+
+    Progress, result and cancelling go through ``/scan/{job_id}``.
+    """
+    root = await asyncio.to_thread(_mask_root, req)
+    store, key = scan_store_dir(_SCAN_STORE), _mask_key(root, req)
+    signature = await asyncio.to_thread(_mask_signature, root, req)
+
+    def work(token: CancellationToken, progress: Progress) -> dict[str, Any]:
+        return analyze_masks(
+            root,
+            _mask_split_dirs(req),
+            images_subdir=req.images_subdir,
+            masks_subdir=req.masks_subdir,
+            num_classes=req.num_classes,
+            ignore_index=req.ignore_index,
+            max_images=req.max_images,
+            token=token,
+            on_progress=progress,
+        )
+
+    def keep(report: dict[str, Any]) -> None:
+        save_scan(store, key, signature, report)
+
+    try:
+        job = _SCANS.start_work(work, on_done=keep)
+    except ScanBusyError as exc:
+        raise HTTPException(409, tr("explorer.scan_busy")) from exc
+    return job.snapshot()
+
+
+@router.post("/masks/saved")
+async def explorer_masks_saved(req: MaskAnalysisRequest) -> dict[str, Any]:
+    """The last finished mask analysis of this dataset, and whether it changed."""
+    root = await asyncio.to_thread(_mask_root, req)
+    store, key = scan_store_dir(_SCAN_STORE), _mask_key(root, req)
+    signature = await asyncio.to_thread(_mask_signature, root, req)
+    saved = load_scan(store, key, signature)
+    return saved or {"report": None, "saved_at": None, "stale": False}
 
 
 __all__ = ["SPLIT_NAMES", "router"]

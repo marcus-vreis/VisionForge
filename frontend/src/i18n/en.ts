@@ -48,6 +48,58 @@ const ordinal = (n: number): string => {
 
 /** English. Typed as the Portuguese dictionary, so the two cannot drift. */
 export const en: Dict = {
+  maskAnalysis: {
+    title: "What the masks hold",
+    help:
+      "Opens every image/mask pair and measures the share of pixels of each class, per split; the coverage of each mask; ids outside the classes; masks of another size than their image or in color; and tiny regions, which the resize for training can erase. Runs in the background and the last result is kept.",
+    start: "Analyze masks",
+    cancel: "Cancel",
+    cancelling: "Canceling…",
+    progress: (done: number, total: number) => `${done} of ${total} pairs`,
+    failed: (error: string) => `The analysis failed: ${error}`,
+    savedAt: (when: string) => `Last analysis kept: ${when}.`,
+    savedStale: "Images or masks changed since: the result may be out of date.",
+    complete: (n: number) => `${n} pairs analyzed.`,
+    sampled: (n: number, total: number) =>
+      `A sample of ${n} of the ${total} pairs, spaced to cover every split.`,
+    cancelled: (n: number) => `Canceled after ${n} pairs; the result covers those only.`,
+    unpaired: (split: string, noMask: number, noImage: number) =>
+      `${split}: ${noMask} images without a mask and ${noImage} masks without an image (pairs match by file name, without extension). Training refuses an image without a mask.`,
+    noProblems: "No id outside the classes, color mask, size mismatch or unreadable file.",
+    outOfRange: (ids: string, pixels: number, last: number) =>
+      `Ids outside the classes: ${ids} (${pixels} pixels). Classes run from 0 to ${last}; check the class count or the ignore_index.`,
+    color: (n: number) =>
+      `${n} color (RGB) masks. Training expects a single-channel mask with the class id in each pixel.`,
+    sizeMismatch: (n: number) =>
+      `${n} masks of another size than their image. Training resizes both, and the mask no longer lies on the object.`,
+    unreadable: (n: number) => `${n} pairs did not open.`,
+    absent: (ids: string) => `Classes with no pixel at all: ${ids}. The model has no way to learn them.`,
+    classesTitle: "Share of pixels per class",
+    classColumn: "Class (id)",
+    allColumn: "All",
+    ignoreId: (id: number) => `${id} (ignored)`,
+    badId: (id: number) => `${id} (outside the classes)`,
+    classesHelp:
+      "As a percent of each split's pixels. A class with a very small share weighs little in the loss: class weights or another loss can help.",
+    coverageTitle: "Coverage of each mask",
+    coverageEmpty: "empty",
+    coverageHelp:
+      "The share of each mask that is neither background (class 0) nor ignored. Many empty masks teach the model to predict background only.",
+    tinyTitle: "Tiny regions",
+    tiny: (images: number, list: string, share: number) =>
+      `${images} masks have regions smaller than ${share}% of the image: ${list}. Shrinking the image to the training size can erase them.`,
+    tinyClass: (id: number, n: number) => `class ${id}: ${n}`,
+    noTiny: (share: number) => `No region smaller than ${share}% of the image.`,
+    examplesTitle: "See the files found",
+    kinds: {
+      out_of_range: "id outside the classes",
+      color: "color mask",
+      size_mismatch: "size differs from the image",
+      unreadable: "did not open",
+      tiny: "tiny region",
+    },
+    splitNames: { train: "Train", val: "Validation", test: "Test" },
+  },
   evidence: {
     audit: "Audit images",
     auditing: "Auditing images…",

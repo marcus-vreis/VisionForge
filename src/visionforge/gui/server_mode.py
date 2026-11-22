@@ -188,6 +188,8 @@ ROUTE_CLASSES: dict[str, RouteClass] = {
     "GET /api/explorer/scan/{job_id}": "confined",
     "POST /api/explorer/scan/{job_id}/cancel": "confined",
     "POST /api/explorer/scan/saved": "confined",
+    "POST /api/explorer/masks": "confined",
+    "POST /api/explorer/masks/saved": "confined",
     "POST /api/explorer/summary": "confined",
     "GET /api/explorer/thumb": "confined",
     "POST /api/github/export": "owner",
@@ -340,6 +342,9 @@ READY: frozenset[str] = frozenset(
         "POST /api/explorer/scan/{job_id}/cancel",
         # The last finished scan, kept inside the person's profile (ADR-231).
         "POST /api/explorer/scan/saved",
+        # The masks of a segmentation dataset, a job like the scan (ADR-234).
+        "POST /api/explorer/masks",
+        "POST /api/explorer/masks/saved",
         "POST /api/explorer/summary",
         "POST /api/dataset/download",
         "POST /api/sample-dataset",
