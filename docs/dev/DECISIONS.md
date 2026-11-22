@@ -9192,3 +9192,30 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 
 - *Absolute thresholds (e.g. brightness below 30).* What is dark depends on the domain; X-rays and night footage would be flagged whole.
 - *A separate analysis job.* It would open every image a second time; the scan already does.
+
+## ADR-239 — Similar classes are compared before training
+
+**Date:** 2026-11-22
+**Status:** Accepted
+**Extends:** ADR-165 (explorer), ADR-231 (kept scan), ADR-234 (analyses as explorer jobs)
+**Related:** ADR-237 (suspicious labels after a run)
+
+**Context:** issue 351 asks which classes look alike before any training. ADR-237 answers it after a run, from the run's own model; before training there is no model of the dataset, and pixel statistics (color, size) say nothing about what an image shows.
+
+**Decision:**
+
+- `core/class_similarity.py` describes each image with torchvision's resnet18 pretrained on ImageNet, last layer removed (512 features, the weights' own preprocessing: resize 256, center crop 224, ImageNet normalization), on the CPU so a training running on the GPU is not disturbed. At most `per_class` images per class (200 by default, 2000 at most), evenly spaced from the first to the last over all splits.
+- For each described image, its nearest other image by cosine similarity, in any split. Per class, the share whose nearest image is of the same class. Per pair of classes A, B: the share of A's images whose nearest image is a B and the reverse (what a 1-nearest-neighbour classifier on these features would confuse), and the cosine between the classes' mean features. A pair is flagged when either share reaches 10%. The images where two classes meet are listed with their nearest image of the other class, most similar first, for every listed pair and not only the flagged ones: a single misfiled image is a small share (1 of 17 on the first check) and would otherwise stay hidden.
+- The similarity matrix is computed in blocks of 1024 rows, so memory stays at 1024 × N.
+- It runs as an explorer job (`POST /api/explorer/classes`, status and cancel through `/scan/{job_id}`) and the last finished result is kept under the integrity scan's signature (`POST /api/explorer/classes/saved`). Classification only; `confined` on a shared server like the other analyses.
+- The Laboratory's Overview shows a "Classes parecidas" card for classification datasets.
+
+**Consequences:** the first run loads the ImageNet weights from torchvision's cache, downloading them (about 45 MB) when they are not there; offline without them the job fails with torchvision's error. Tests use random weights in place of the download (ADR-010). Measured on a Ryzen 7 9800X3D CPU: 800 JPEGs of 640×480 (4 classes, 200 each) in 10.4 s, about 13 ms per image, so a 10-class dataset at the default 200 per class takes under half a minute.
+
+**Known limits:** the features come from ImageNet, not from the dataset: classes that differ by a detail ImageNet ignores (two defect types on the same part, two similar species) can look alike here and still be learned apart, and the screen says so. The 10% threshold is a fixed rule of thumb. Exact copies across classes are the integrity scan's label conflict (ADR-165), not repeated here.
+
+**Alternatives considered:**
+
+- *Color and size statistics per class.* Cheap, but two classes photographed under the same light would always look alike.
+- *A short training run.* Closer to the real task, but minutes of GPU before the user has decided to train; ADR-237 covers the after-training case.
+- *CLIP or DINOv2 features.* Better general descriptions, but a new dependency or a larger download; resnet18's ImageNet weights are already the default backbone here.

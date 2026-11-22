@@ -194,6 +194,8 @@ ROUTE_CLASSES: dict[str, RouteClass] = {
     "POST /api/explorer/targets/saved": "confined",
     "POST /api/explorer/anomaly": "confined",
     "POST /api/explorer/anomaly/saved": "confined",
+    "POST /api/explorer/classes": "confined",
+    "POST /api/explorer/classes/saved": "confined",
     "POST /api/explorer/summary": "confined",
     "GET /api/explorer/thumb": "confined",
     "POST /api/github/export": "owner",
@@ -358,6 +360,9 @@ READY: frozenset[str] = frozenset(
         # An anomaly dataset's groups, sizes and look-alikes (ADR-236).
         "POST /api/explorer/anomaly",
         "POST /api/explorer/anomaly/saved",
+        # Which classes look alike before training (ADR-239).
+        "POST /api/explorer/classes",
+        "POST /api/explorer/classes/saved",
         "POST /api/explorer/summary",
         "POST /api/dataset/download",
         "POST /api/sample-dataset",

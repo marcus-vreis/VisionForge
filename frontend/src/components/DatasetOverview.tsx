@@ -35,6 +35,7 @@ import { SelectField, TextField, Toggle } from "./controls";
 import { ActionButton } from "./ui/ActionButton";
 import { BarList, DataTable, LearnMore, track } from "./DatasetLabParts";
 import { BoxStatsCard } from "./BoxStatsCard";
+import { ClassSimilarity } from "./ClassSimilarity";
 import { ImageQualityCard } from "./ImageQualityCard";
 import { SplitBalanceCard } from "./SplitBalanceCard";
 import {
@@ -616,6 +617,7 @@ export function DatasetOverview({ form, summary }: { form: ExplorerForm; summary
           {summary.balance && <SplitBalanceCard balance={summary.balance} />}
           <Gallery form={form} summary={summary} />
           <ScanPanel form={form} />
+          <ClassSimilarity form={form} />
         </>
       )}
     </section>

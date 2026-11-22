@@ -75,6 +75,20 @@ contraste e borrada, porque perde os tons.
 Em pastas grandes a varredura pode ler uma amostra espaçada em vez de todas as
 imagens; a tela diz quando foi o caso.
 
+Na classificação, **Classes parecidas** compara as classes antes de treinar.
+Cada imagem (até 200 por classe) passa por um resnet18 treinado no ImageNet,
+no processador, e para cada uma acha-se a imagem mais parecida. Para cada par
+de classes, a tabela mostra quanto das imagens de uma tem a mais parecida na
+outra, e a semelhança entre as médias das duas. Um par com 10% ou mais é
+apontado: é onde o treino vai ter mais trabalho para separar. Em cada par, as
+imagens onde as classes se encontram aparecem ao lado da mais parecida delas;
+uma imagem sozinha nesse lugar costuma estar na pasta errada. A descrição vem
+do ImageNet, não do seu dataset: classes que diferem num detalhe que o
+ImageNet ignora podem parecer iguais aqui e ainda assim ser separadas pelo
+treino. Na primeira vez, se os pesos do ImageNet não estiverem no cache do
+torchvision, eles são baixados (cerca de 45 MB). O último resultado fica
+guardado como o da varredura.
+
 A última varredura que termina fica guardada (fora do dataset, em
 `outputs/explorer_scans/`) e aparece ao reabrir o dataset, com a data. Se
 depois disso alguma imagem foi adicionada, removida, renomeada, editada ou

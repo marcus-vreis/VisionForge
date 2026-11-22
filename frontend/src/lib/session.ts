@@ -60,6 +60,7 @@ export const ROUTE = {
   maskAnalysis: "POST /api/explorer/masks",
   targetAnalysis: "POST /api/explorer/targets",
   anomalyAnalysis: "POST /api/explorer/anomaly",
+  classSimilarity: "POST /api/explorer/classes",
   previewAugment: "POST /api/dataset/preview_augment",
   previewPreprocess: "POST /api/dataset/preview_preprocess",
   colab: "GET /api/colab/status",

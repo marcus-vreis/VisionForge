@@ -55,6 +55,32 @@ export interface LrPlanEvidence {
 }
 
 export const pt = {
+  classSimilarity: {
+    title: "Classes parecidas",
+    help: "Antes de treinar, descreve cada imagem com um modelo já treinado no ImageNet e compara as classes: quais têm imagens que se parecem mais com outra classe do que com a própria. São os pares que o treino vai ter mais dificuldade de separar, e às vezes uma imagem guardada na pasta errada. Roda no processador e lê até 200 imagens por classe.",
+    start: "Comparar as classes",
+    progress: (done: number, total: number) => `${done} de ${total} imagens descritas`,
+    described: (n: number, perClass: number, model: string) =>
+      `${n} imagens descritas, até ${perClass} por classe, com ${model}.`,
+    sampled: "Nas classes maiores entrou uma amostra espaçada.",
+    unreadable: (n: number) => `${n} não abriram.`,
+    found: (n: number, share: string) =>
+      `${n} ${n === 1 ? "par de classes parecidas" : "pares de classes parecidas"}: ${n === 1 ? "nele" : "em cada um"}, pelo menos ${share} das imagens de uma classe se parecem mais com uma imagem da outra.`,
+    none: (share: string) => `Nenhum par passa de ${share}: as classes se separam bem nessa descrição.`,
+    pairColumn: "Par",
+    aLooksLikeB: "1ª parece a 2ª",
+    bLooksLikeA: "2ª parece a 1ª",
+    centroid: "Semelhança dos centros",
+    morePairs: (n: number) => `Mais ${n} pares com pouca mistura não mostrados.`,
+    examplesTitle: (a: string, b: string) => `Ver onde ${a} e ${b} se encontram`,
+    examplesHelp:
+      "À esquerda, a imagem; à direita, a imagem mais parecida com ela, que é da outra classe. Confira se o rótulo da esquerda está certo: mesmo num par com pouca mistura, uma imagem só pode estar na pasta errada.",
+    nearest: (cls: string, sim: number) => `mais parecida: ${cls} (${sim.toFixed(3)})`,
+    purityTitle: "Ver a separação de cada classe",
+    purityHelp: "Parte das imagens cuja imagem mais parecida é da mesma classe (entre parênteses, quantas foram descritas).",
+    howTitle: "Como é medido",
+    how: "Cada imagem passa por um resnet18 treinado no ImageNet, sem a última camada: 512 números que deixam perto imagens do mesmo tipo de coisa. Para cada imagem acha-se a mais parecida (similaridade de cosseno, em qualquer divisão). Um par é apontado quando 10% ou mais das imagens de uma das classes têm a mais parecida na outra. A semelhança dos centros compara a média de cada classe (1 é igual). A descrição vem do ImageNet, não do seu dataset: classes que diferem num detalhe que o ImageNet ignora podem parecer iguais aqui e ainda assim ser separadas pelo treino.",
+  },
   imageQuality: {
     title: "Brilho, contraste e nitidez",
     intro: (n: number) =>
