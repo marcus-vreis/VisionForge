@@ -296,18 +296,22 @@ def _default_figure_formats() -> list[FigureFormat]:
 class OutputConfig(BaseModel):
     """Output directory paths for models, logs, graphics, and reports."""
 
+    # A factory, not default=Path(...): pydantic cannot JSON-encode a WindowsPath
+    # default and warns on every schema build; json_schema_extra publishes it.
     models_dir: Path = Field(
-        default=Path("outputs/models"), json_schema_extra={"default": "outputs/models"}
+        default_factory=lambda: Path("outputs/models"),
+        json_schema_extra={"default": "outputs/models"},
     )
     graphics_dir: Path = Field(
-        default=Path("outputs/graphics"),
+        default_factory=lambda: Path("outputs/graphics"),
         json_schema_extra={"default": "outputs/graphics"},
     )
     logs_dir: Path = Field(
-        default=Path("outputs/logs"), json_schema_extra={"default": "outputs/logs"}
+        default_factory=lambda: Path("outputs/logs"),
+        json_schema_extra={"default": "outputs/logs"},
     )
     reports_dir: Path = Field(
-        default=Path("outputs/reports"),
+        default_factory=lambda: Path("outputs/reports"),
         json_schema_extra={"default": "outputs/reports"},
     )
     figure_formats: list[FigureFormat] = Field(

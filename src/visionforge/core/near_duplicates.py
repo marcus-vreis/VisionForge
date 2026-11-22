@@ -47,7 +47,7 @@ def difference_hash(path: Path) -> int:
     """
     with Image.open(path) as image:
         small = image.convert("L").resize((9, 8), Image.Resampling.LANCZOS)
-        pixels = list(small.getdata())
+        pixels = list(small.tobytes())  # mode "L": one byte per pixel, row-major
     value = 0
     for row in range(8):
         for col in range(8):

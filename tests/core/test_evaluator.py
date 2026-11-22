@@ -28,6 +28,13 @@ def make_binary_loader(
     return [(inputs, labels)]
 
 
+# These cases feed a single class on purpose; sklearn warns that the confusion
+# matrix then has one row. Scoped to them so the warning still surfaces elsewhere.
+_ONE_CLASS = pytest.mark.filterwarnings(
+    "ignore:A single label was found in 'y_true' and 'y_pred':UserWarning"
+)
+
+
 @pytest.fixture
 def binary_config(tmp_path: Path) -> ExperimentConfig:
     return ExperimentConfig.model_validate(
@@ -65,6 +72,7 @@ def multiclass_config(tmp_path: Path) -> ExperimentConfig:
 
 
 class TestEvaluatorBinary:
+    @_ONE_CLASS
     def test_perfect_predictions_accuracy_is_one(
         self, binary_config: ExperimentConfig
     ) -> None:
@@ -94,6 +102,7 @@ class TestEvaluatorBinary:
         result = Evaluator(binary_config).evaluate(AlwaysOneModel(), loader)
         assert result.auc_roc is not None
 
+    @_ONE_CLASS
     def test_return_type_is_eval_result(self, binary_config: ExperimentConfig) -> None:
         """evaluate() must return an EvalResult instance."""
         inputs = torch.zeros(4, 3, 32, 32)
@@ -115,6 +124,7 @@ class TestEvaluatorBinary:
 
 
 class TestEvaluatorMulticlass:
+    @_ONE_CLASS
     def test_auc_roc_is_none_for_multiclass(
         self, multiclass_config: ExperimentConfig
     ) -> None:
@@ -211,6 +221,7 @@ class TestEvaluatorMulticlass:
         assert len(result.y_proba_full) == 6
         assert all(len(row) == 3 for row in result.y_proba_full)
 
+    @_ONE_CLASS
     def test_report_is_string(self, multiclass_config: ExperimentConfig) -> None:
         """report field must be a non-empty string."""
 

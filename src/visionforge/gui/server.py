@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 import os
 import re
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -93,20 +94,8 @@ _REDOC_URL = "/redoc"
 _DOCS_PATHS = frozenset({_DOCS_URL, f"{_DOCS_URL}/oauth2-redirect", _REDOC_URL})
 DOCS_ENABLED = _docs_enabled()
 
-app = FastAPI(
-    title="VisionForge",
-    openapi_tags=OPENAPI_TAGS,
-    version=__version__,
-    docs_url=_DOCS_URL if DOCS_ENABLED else None,
-    redoc_url=_REDOC_URL if DOCS_ENABLED else None,
-)
 
-# A 422 speaks the page's language like every other message (#208, ADR-191).
-app.add_exception_handler(RequestValidationError, validation_error_handler)
-
-
-@app.on_event("startup")
-async def _sweep_filtered_datasets() -> None:
+def _sweep_filtered_datasets() -> None:
     """Remove filtered dataset copies a killed process left behind (ADR-084, ADR-130).
 
     The context manager cleans up after itself, including on exception, but
@@ -120,6 +109,26 @@ async def _sweep_filtered_datasets() -> None:
     # A named profile keeps its filtered copies under its own models folder (ADR-114).
     for cache in sorted(Path("outputs/profiles").glob("*/models/_filtered")):
         sweep_orphans(cache)
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Startup work before the first request; nothing to undo at shutdown."""
+    _sweep_filtered_datasets()
+    yield
+
+
+app = FastAPI(
+    title="VisionForge",
+    openapi_tags=OPENAPI_TAGS,
+    version=__version__,
+    docs_url=_DOCS_URL if DOCS_ENABLED else None,
+    redoc_url=_REDOC_URL if DOCS_ENABLED else None,
+    lifespan=_lifespan,
+)
+
+# A 422 speaks the page's language like every other message (#208, ADR-191).
+app.add_exception_handler(RequestValidationError, validation_error_handler)
 
 
 @app.get("/api/health", tags=[TAG_SYSTEM])
