@@ -1,5 +1,6 @@
 /** The mask analysis of a segmentation dataset (ADR-234). */
 import type { AnalysisJob, SavedAnalysis } from "./analysis-job";
+import type { QualityReport } from "./dataset-explorer";
 
 export interface MaskRequest {
   base_dir: string;
@@ -69,6 +70,8 @@ export interface MaskReport {
   tiny_regions: { id: number; regions: number }[];
   tiny_images: number;
   examples: Record<string, MaskExample[]>;
+  /** Brightness, contrast and sharpness of the images (ADR-240); absent from older results. */
+  quality?: QualityReport;
 }
 
 export type MaskAnalysisJob = AnalysisJob<MaskReport>;

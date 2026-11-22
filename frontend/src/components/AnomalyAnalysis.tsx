@@ -4,6 +4,7 @@ import { useAnalysisJob } from "../lib/analysis-job";
 import { useT } from "../i18n/useT";
 import { ROUTE, useRouteOpen } from "../lib/session";
 import { AnalysisJobCard } from "./AnalysisJobCard";
+import { ImageQualityCard } from "./ImageQualityCard";
 import { DataTable, LearnMore } from "./DatasetLabParts";
 import { card, mono, sectionLabel, text, warn } from "./datasetExplorerStyles";
 
@@ -22,11 +23,17 @@ function LookAlikes({ items, title }: { items: LookAlike[]; title: string }) {
   );
 }
 
+/** Train, normal test or the defect kind, as the screen names a group. */
+function useGroupName(): (group: string) => string {
+  const t = useT().anomalyAnalysis;
+  return (group: string) =>
+    group === "train" ? t.train : group === "test_normal" ? t.testNormal : t.defect(group.slice(DEFECT_PREFIX.length));
+}
+
 /** What the anomaly dataset holds (ADR-236). */
 export function AnomalyReportView({ report }: { report: AnomalyReport }) {
   const t = useT().anomalyAnalysis;
-  const name = (group: string) =>
-    group === "train" ? t.train : group === "test_normal" ? t.testNormal : t.defect(group.slice(DEFECT_PREFIX.length));
+  const name = useGroupName();
   const defects = Object.entries(report.counts).filter(([g]) => g.startsWith(DEFECT_PREFIX));
   const anomalous = defects.reduce((sum, [, n]) => sum + n, 0);
   const few = defects.filter(([, n]) => n < report.few_images).map(([g, n]) => `${g.slice(DEFECT_PREFIX.length)} (${n})`);
@@ -120,10 +127,14 @@ function AnomalyAnalysisInner({ request }: { request: AnomalyRequest }) {
   const t = useT().anomalyAnalysis;
   const ready = request.base_dir.trim() !== "";
   const state = useAnalysisJob(ANOMALY_API, request, ready);
+  const name = useGroupName();
   return (
     <section data-testid="anomaly-analysis" style={{ display: "grid", gap: 12, marginTop: 18 }}>
       <AnalysisJobCard words={t} state={state} ready={ready} />
       {state.shown && <AnomalyReportView report={state.shown} />}
+      {state.shown?.quality && state.shown.quality.count > 0 && (
+        <ImageQualityCard quality={state.shown.quality} root={request.base_dir} splitLabel={name} />
+      )}
     </section>
   );
 }

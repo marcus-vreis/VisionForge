@@ -14,8 +14,10 @@ CSVs in full and reports, per target and split:
   deviations;
 
 and, across targets, the Pearson correlation of every pair over the rows where
-both are numeric. It also checks that every listed image exists. Nothing here
-writes to the dataset.
+both are numeric. It also checks that every listed image exists, and measures
+the brightness, contrast and sharpness of the images that do (ADR-240), on an
+evenly spaced sample past ``DEFAULT_IMAGE_LIMIT``. Nothing here writes to the
+dataset.
 """
 
 from __future__ import annotations
@@ -32,10 +34,13 @@ from pathlib import Path
 from typing import Any
 
 from visionforge.core.cancellation import CancellationToken, is_cancelled
+from visionforge.core.image_quality import QualityTally
 
 BINS = 20
 TUKEY_K = 1.5
 MAX_EXAMPLES = 50
+DEFAULT_IMAGE_LIMIT = 20_000
+MAX_IMAGE_LIMIT = 500_000
 
 
 @dataclass
@@ -54,6 +59,8 @@ class _Split:
     missing_images: int = 0
     missing_examples: list[dict[str, Any]] = field(default_factory=list)
     missing_columns: list[str] = field(default_factory=list)
+    # The listed images that exist, in CSV order (a repeated name repeats).
+    images: list[str] = field(default_factory=list)
 
 
 def _number(cell: str | None) -> float | None:
@@ -103,6 +110,8 @@ def _read_row(
         split.missing_images += 1
         if len(split.missing_examples) < MAX_EXAMPLES:
             split.missing_examples.append({"line": line, "image": image})
+    else:
+        split.images.append(image)
     numbers: dict[str, float] = {}
     for target in targets:
         if target not in row:
@@ -226,6 +235,46 @@ def _shift(mean: float | None, train: Mapping[str, float | None]) -> float | Non
     return (mean - train_mean) / std
 
 
+def _measure_images(
+    base: Path,
+    images_dir: str,
+    splits: Mapping[str, _Split],
+    max_images: int,
+    token: CancellationToken | None,
+    on_progress: Callable[[int, int], None] | None,
+    offset: int,
+) -> tuple[QualityTally, dict[str, Any]]:
+    """Brightness, contrast and sharpness of each split's images (ADR-240).
+
+    An image listed in several rows is measured once per split. Past
+    ``max_images`` an evenly spaced sample is measured.
+    """
+    listed = [
+        (name, image)
+        for name, sp in splits.items()
+        for image in dict.fromkeys(sp.images)
+    ]
+    limit = max(1, min(max_images, MAX_IMAGE_LIMIT))
+    step = max(1, math.ceil(len(listed) / limit)) if listed else 1
+    chosen = listed[::step]
+    tally = QualityTally()
+    unreadable = 0
+    for done, (name, image) in enumerate(chosen, start=1):
+        if is_cancelled(token):
+            break
+        rel = f"{images_dir}/{image}" if images_dir else image
+        if not tally.measure(name, Path(rel).as_posix(), base / rel):
+            unreadable += 1
+        if on_progress is not None:
+            on_progress(offset + done, offset + len(chosen))
+    info = {
+        "images_listed": len(listed),
+        "images_sampled": step > 1,
+        "images_unreadable": unreadable,
+    }
+    return tally, info
+
+
 def csv_signature(base: Path, csvs: Mapping[str, str]) -> str:
     """A hash of each CSV's name, size and modification time."""
     digest = hashlib.sha256()
@@ -246,10 +295,14 @@ def analyze_targets(
     images_dir: str = "images",
     image_column: str = "image",
     targets: Sequence[str] = ("target",),
+    max_images: int = DEFAULT_IMAGE_LIMIT,
     token: CancellationToken | None = None,
     on_progress: Callable[[int, int], None] | None = None,
 ) -> dict[str, Any]:
-    """Read every split's CSV and describe each target (see the module doc)."""
+    """Read every split's CSV and describe each target (see the module doc).
+
+    Progress counts the CSVs, then the CSVs plus the images measured.
+    """
     base = Path(base).resolve()
     images_root = base / images_dir
     splits: dict[str, _Split] = {}
@@ -262,11 +315,16 @@ def analyze_targets(
         splits[name] = _read_split(path, images_root, image_column, targets, token)
         if on_progress is not None:
             on_progress(done, len(csvs))
+    quality, image_info = _measure_images(
+        base, images_dir, splits, max_images, token, on_progress, len(csvs)
+    )
     cancelled = is_cancelled(token)
     pooled = [row for sp in splits.values() if sp.present for row in sp.by_row]
     return {
         "task": "regression",
         "cancelled": cancelled,
+        "quality": quality.report(),
+        **image_info,
         "tukey_k": TUKEY_K,
         "splits": {
             name: {

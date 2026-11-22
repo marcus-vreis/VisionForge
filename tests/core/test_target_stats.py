@@ -124,3 +124,47 @@ def test_the_signature_follows_the_csvs(tmp_path: Path) -> None:
     before = csv_signature(tmp_path, CSVS)
     (tmp_path / "val.csv").write_text("image,a,b\nv1.png,4,8\n", encoding="utf-8")
     assert csv_signature(tmp_path, CSVS) != before
+
+
+def test_the_listed_images_brightness_contrast_and_sharpness(tmp_path: Path) -> None:
+    """ADR-240: the images the CSV names are measured once each, missing ones skipped."""
+    from tests.quality_images import flagged, save_planted
+
+    names = save_planted(tmp_path / "images")
+    rows = "".join(f"{n},{i}\n" for i, n in enumerate(names))
+    # dark.png listed twice, and an image that does not exist.
+    (tmp_path / "train.csv").write_text(
+        "image,a\n" + rows + "dark.png,5\ngone.png,1\n", encoding="utf-8"
+    )
+    ticks: list[tuple[int, int]] = []
+    report = analyze_targets(
+        tmp_path,
+        {"train": "train.csv"},
+        targets=["a"],
+        on_progress=lambda done, total: ticks.append((done, total)),
+    )
+    quality = report["quality"]
+    assert report["images_listed"] == 27
+    assert quality["count"] == 27
+    assert report["images_unreadable"] == 0
+    assert {"dark"} <= flagged(quality, "dark")
+    assert {"flat"} <= flagged(quality, "flat")
+    assert {"blurry"} <= flagged(quality, "blurry")
+    assert quality["outliers"]["dark"][0]["path"] == "images/dark.png"
+    # One CSV, then the CSV plus the 27 images.
+    assert ticks[0] == (1, 1)
+    assert ticks[-1] == (28, 28)
+
+
+def test_image_sampling_past_the_limit(tmp_path: Path) -> None:
+    from tests.quality_images import save_planted
+
+    names = save_planted(tmp_path / "images")
+    rows = "".join(f"{n},1\n" for n in names)
+    (tmp_path / "train.csv").write_text("image,a\n" + rows, encoding="utf-8")
+    report = analyze_targets(
+        tmp_path, {"train": "train.csv"}, targets=["a"], max_images=4
+    )
+    # 27 images, limit 4: every seventh, so 4 are measured (0, 7, 14, 21).
+    assert report["images_sampled"] is True
+    assert report["quality"]["count"] == 4

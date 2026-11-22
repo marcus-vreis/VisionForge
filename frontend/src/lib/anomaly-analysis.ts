@@ -1,5 +1,6 @@
 /** The analysis of an anomaly-detection dataset (ADR-236). */
 import type { AnalysisJob, SavedAnalysis } from "./analysis-job";
+import type { QualityReport } from "./dataset-explorer";
 
 export interface AnomalyRequest {
   base_dir: string;
@@ -47,6 +48,8 @@ export interface AnomalyReport {
   missing_masks: { count: number; paths: string[] } | null;
   unreadable_count: number;
   unreadable: { group: string; path: string }[];
+  /** Brightness, contrast and sharpness of the images (ADR-240); absent from older results. */
+  quality?: QualityReport;
 }
 
 export type AnomalyAnalysisJob = AnalysisJob<AnomalyReport>;

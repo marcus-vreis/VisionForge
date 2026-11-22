@@ -6,7 +6,8 @@ import { card, mono, sectionLabel, stepTitle, text, warn } from "./datasetExplor
 
 const METRICS: QualityMetric[] = ["brightness", "contrast", "sharpness"];
 const KINDS: QualityKind[] = ["dark", "bright", "flat", "blurry"];
-const SPLIT_ORDER = ["train", "val", "test"];
+// The splits, and the anomaly groups (ADR-240): train first, defect kinds last.
+const SPLIT_ORDER = ["train", "val", "test", "test_normal"];
 /** Thumbnails per kind; the count above them is the full one. */
 const SHOWN = 12;
 
@@ -43,7 +44,16 @@ function Outliers({ root, kind, items, total }: { root: string; kind: QualityKin
 }
 
 /** Brightness, contrast and sharpness of the scanned images, and the outliers (ADR-238). */
-export function ImageQualityCard({ quality, root }: { quality: QualityReport; root: string }) {
+export function ImageQualityCard({
+  quality,
+  root,
+  splitLabel,
+}: {
+  quality: QualityReport;
+  root: string;
+  /** How to name a split or group key; the split names by default. */
+  splitLabel?: (key: string) => string;
+}) {
   const t = useT().imageQuality;
   const splitNames = useT().datasetExplorer.splitNames;
   if (!quality.metrics || !quality.outlier_count || !quality.outliers) return null;
@@ -52,7 +62,7 @@ export function ImageQualityCard({ quality, root }: { quality: QualityReport; ro
   const rank = (s: string) => (SPLIT_ORDER.includes(s) ? SPLIT_ORDER.indexOf(s) : SPLIT_ORDER.length);
   const splits = Object.keys(metrics.brightness.median_by_split).sort((a, b) => rank(a) - rank(b));
   const flagged = KINDS.filter((k) => counts[k] > 0);
-  const splitLabel = (s: string) => splitNames[s as keyof typeof splitNames] ?? s;
+  const label = splitLabel ?? ((s: string) => splitNames[s as keyof typeof splitNames] ?? s);
   return (
     <div style={card} data-testid="image-quality">
       <h3 style={{ ...stepTitle, margin: 0 }}>{t.title}</h3>
@@ -67,7 +77,7 @@ export function ImageQualityCard({ quality, root }: { quality: QualityReport; ro
             {splits.length > 1 &&
               splits.map((s) => (
                 <th key={s} style={{ textAlign: "right" }}>
-                  {t.medianIn(splitLabel(s))}
+                  {t.medianIn(label(s))}
                 </th>
               ))}
           </tr>

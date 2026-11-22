@@ -35,6 +35,7 @@ import numpy as np
 from PIL import Image
 
 from visionforge.core.cancellation import CancellationToken, is_cancelled
+from visionforge.core.image_quality import QualityTally
 from visionforge.core.near_duplicates import MAX_DISTANCE, difference_hash
 
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp")
@@ -153,23 +154,29 @@ def analyze_anomaly(
     hashes: dict[str, list[tuple[str, int]]] = {}
     unreadable: list[dict[str, str]] = []
     unreadable_count = 0
+    quality = QualityTally()
     cancelled = False
     for done, item in enumerate(chosen, start=1):
         if is_cancelled(token):
             cancelled = True
             break
+        rel = _rel(root, item.path)
         try:
             with Image.open(item.path) as im:
                 size, mode = f"{im.size[0]}×{im.size[1]}", im.mode
             value = difference_hash(item.path)
+            # Brightness, contrast and sharpness of an image that hashed (ADR-240).
+            measured = quality.measure(item.group, rel, item.path)
         except (OSError, ValueError, SyntaxError, Image.DecompressionBombError):
+            measured = False
+        if not measured:
             unreadable_count += 1
             if len(unreadable) < MAX_EXAMPLES:
-                unreadable.append({"group": item.group, "path": _rel(root, item.path)})
+                unreadable.append({"group": item.group, "path": rel})
         else:
             sizes.setdefault(item.group, Counter())[size] += 1
             modes.setdefault(item.group, Counter())[mode] += 1
-            hashes.setdefault(item.group, []).append((_rel(root, item.path), value))
+            hashes.setdefault(item.group, []).append((rel, value))
         if on_progress is not None:
             on_progress(done, len(chosen))
     defects = [h for g, hs in hashes.items() if g.startswith("defect:") for h in hs]
@@ -200,6 +207,7 @@ def analyze_anomaly(
         else None,
         "unreadable_count": unreadable_count,
         "unreadable": unreadable,
+        "quality": quality.report(),
     }
 
 

@@ -5,6 +5,7 @@ import { coverageLabel, sharePct as pct } from "../lib/mask-analysis";
 import { useT } from "../i18n/useT";
 import { ROUTE, useRouteOpen } from "../lib/session";
 import { AnalysisJobCard } from "./AnalysisJobCard";
+import { ImageQualityCard } from "./ImageQualityCard";
 import { BarList, DataTable, LearnMore } from "./DatasetLabParts";
 import { card, mono, sectionLabel, text, warn } from "./datasetExplorerStyles";
 
@@ -131,6 +132,9 @@ function MaskAnalysisInner({ request }: { request: MaskRequest }) {
     <section data-testid="mask-analysis" style={{ display: "grid", gap: 12, marginBottom: 18 }}>
       <AnalysisJobCard words={t} state={state} ready={ready} />
       {state.shown && <MaskReportView report={state.shown} />}
+      {state.shown?.quality && state.shown.quality.count > 0 && (
+        <ImageQualityCard quality={state.shown.quality} root={request.base_dir} />
+      )}
     </section>
   );
 }

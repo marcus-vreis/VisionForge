@@ -128,3 +128,21 @@ def test_the_signature_changes_when_a_mask_changes(tmp_path: Path) -> None:
     _pair(tmp_path, "train", "a", np.ones((5, 5), np.uint8))
     after = pairs_signature(list_pairs(tmp_path, SPLITS, "images", "masks")[0])
     assert before != after
+
+
+def test_the_images_brightness_contrast_and_sharpness(tmp_path: Path) -> None:
+    """ADR-240: the images of the pairs, not the masks, are measured."""
+    from tests.quality_images import flagged, save_planted
+
+    names = save_planted(tmp_path / "train" / "images")
+    (tmp_path / "train" / "masks").mkdir(parents=True)
+    for name in names:
+        Image.new("L", (64, 64)).save(tmp_path / "train" / "masks" / name)
+    report = _analyze(tmp_path)
+    quality = report["quality"]
+    assert quality["count"] == 27
+    assert "dark" in flagged(quality, "dark")
+    assert "flat" in flagged(quality, "flat")
+    assert "blurry" in flagged(quality, "blurry")
+    assert not any(n.startswith("n") for n in flagged(quality, "blurry"))
+    assert quality["outliers"]["dark"][0]["path"] == "train/images/dark.png"

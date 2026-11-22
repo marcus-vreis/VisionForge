@@ -1,5 +1,6 @@
 /** The target analysis of a regression dataset (ADR-235). */
 import type { AnalysisJob, SavedAnalysis } from "./analysis-job";
+import type { QualityReport } from "./dataset-explorer";
 
 export interface TargetRequest {
   base_dir: string;
@@ -55,6 +56,11 @@ export interface TargetReport {
   splits: Record<string, CsvSplit>;
   targets: TargetReportItem[];
   correlations: { a: string; b: string; r: number | null }[];
+  /** Brightness, contrast and sharpness of the images (ADR-240); absent from older results. */
+  quality?: QualityReport;
+  images_listed?: number;
+  images_sampled?: boolean;
+  images_unreadable?: number;
 }
 
 export type TargetAnalysisJob = AnalysisJob<TargetReport>;

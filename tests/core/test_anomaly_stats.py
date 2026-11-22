@@ -102,3 +102,19 @@ def test_the_signature_changes_when_an_image_changes(tmp_path: Path) -> None:
     before = images_signature(list_images(root, "train", "test", "good")[0])
     _noise(5).save(root / "train/good/n2.png")
     assert images_signature(list_images(root, "train", "test", "good")[0]) != before
+
+
+def test_the_images_brightness_contrast_and_sharpness(tmp_path: Path) -> None:
+    """ADR-240: measured per group, the planted images stand out in training."""
+    from tests.quality_images import flagged, save_planted
+
+    save_planted(tmp_path / "train" / "good")
+    (tmp_path / "test" / "good").mkdir(parents=True)
+    report = analyze_anomaly(tmp_path)
+    quality = report["quality"]
+    assert quality["count"] == 27
+    assert set(quality["metrics"]["brightness"]["median_by_split"]) == {"train"}
+    assert {"dark"} <= flagged(quality, "dark")
+    assert {"flat"} <= flagged(quality, "flat")
+    assert {"blurry"} <= flagged(quality, "blurry")
+    assert quality["outliers"]["flat"][0]["path"] == "train/good/flat.png"

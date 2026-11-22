@@ -60,6 +60,20 @@ describe("the brightness, contrast and sharpness card (ADR-238)", () => {
     expect(at("Validation")).toBeLessThan(at("Test"));
   });
 
+  it("names anomaly groups as the screen does, train first and defect kinds last", () => {
+    const q = quality(0);
+    for (const m of Object.values(q.metrics!)) m.median_by_split = { "defect:hole": 1, test_normal: 2, train: 3 };
+    const html = renderToStaticMarkup(
+      <LanguageContext.Provider value={{ lang: "en", t: en, locale: "en", setLang: () => {} }}>
+        <ImageQualityCard quality={q} root="/data/ds" splitLabel={(g) => `<${g}>`} />
+      </LanguageContext.Provider>,
+    );
+    const at = (g: string) => html.indexOf(en.imageQuality.medianIn(`&lt;${g}&gt;`));
+    expect(at("train")).toBeGreaterThan(-1);
+    expect(at("train")).toBeLessThan(at("test_normal"));
+    expect(at("test_normal")).toBeLessThan(at("defect:hole"));
+  });
+
   it("counts past the thumbnails shown", () => {
     const html = render("en", quality(15));
     expect(html).toContain(en.imageQuality.more(14));
