@@ -16,6 +16,8 @@ from typing import Any, Protocol
 
 from loguru import logger
 
+from visionforge.core.history_keys import upgrade_run_history
+
 
 class RunTracker(Protocol):
     """One external copy of a local run's parameters and epoch metrics."""
@@ -50,6 +52,8 @@ def export_run_record(factories: Iterable[TrackerFactory], run_dir: Path) -> Non
     except (OSError, ValueError) as exc:
         logger.warning("Run not exported to trackers ({})", type(exc).__name__)
         return
+    # A run saved before ADR-241 is sent under today's history names.
+    record = upgrade_run_history(record)
     config = record.get("config")
     history = record.get("history")
     rows = [

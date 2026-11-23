@@ -8,6 +8,7 @@ import {
   deleteRun,
   downloadRunMarkdown,
   fetchProfiles,
+  fetchRunDetail,
   fetchRuns,
   fetchStatus,
   withLang,
@@ -258,6 +259,20 @@ describe("fetchStatus", () => {
       "/api/experiment/status?run_id=a%20b",
       "/api/experiment/status",
     ]);
+  });
+});
+
+describe("fetchRunDetail", () => {
+  it("hands an anomaly run saved before ADR-241 over with test_auroc", async () => {
+    stubFetch({
+      run_id: "r1",
+      task: "anomaly",
+      config: { task: "anomaly" },
+      metrics: {},
+      history: [{ epoch: 1, val_auroc: 0.9 }],
+    });
+
+    expect((await fetchRunDetail("r1")).history).toEqual([{ epoch: 1, test_auroc: 0.9 }]);
   });
 });
 

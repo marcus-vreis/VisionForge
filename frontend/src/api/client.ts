@@ -16,6 +16,7 @@ import type {
   SavedClassSimilarity,
 } from "../lib/class-similarity";
 import type { SavedTargetAnalysis, TargetAnalysisJob, TargetRequest } from "../lib/target-analysis";
+import { upgradeRunHistory } from "../lib/history-keys";
 import {
   explorerBody,
   type ExplorerForm,
@@ -1427,8 +1428,9 @@ export interface TestRecord {
   artifacts: Record<string, string>;
 }
 
+/** A run as saved, its history under today's names (`lib/history-keys.ts`). */
 export async function fetchRunDetail(runId: string): Promise<RunDetail> {
-  return request<RunDetail>(`/runs/${encodeURIComponent(runId)}`);
+  return upgradeRunHistory(await request<RunDetail>(`/runs/${encodeURIComponent(runId)}`));
 }
 
 /** Continue a run that stopped before its last epoch (ADR-092/093). The config

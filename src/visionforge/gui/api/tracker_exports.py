@@ -16,6 +16,7 @@ from typing import Any, Protocol
 
 from fastapi import HTTPException
 
+from visionforge.core.history_keys import upgrade_run_history
 from visionforge.core.run_trackers import TrackerFactory, export_run_record
 from visionforge.gui.api import execution
 from visionforge.gui.api.dataset_scope import current_scope
@@ -78,7 +79,8 @@ def retry_record(
     # Any task: the sidecar above proves the run was exported (ADR-197).
     if not isinstance(data, dict) or not isinstance(data.get("config"), dict):
         raise HTTPException(409, tr(unavailable))
-    return data
+    # A retry resends the history under today's names (ADR-241).
+    return upgrade_run_history(data)
 
 
 async def exported(

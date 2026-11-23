@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from loguru import logger
 
 from visionforge.core.dataset_fingerprint import dataset_identity
+from visionforge.core.history_keys import upgrade_run_history
 from visionforge.gui.api.folder_opener import can_reveal
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST,
@@ -179,6 +180,7 @@ def _build_run_detail(
     run_dir: Path, data: dict[str, Any], host: str | None
 ) -> RunDetail:
     """Build the full detail response from one saved run."""
+    data = upgrade_run_history(data)
     status = data.get("status", "completed")
     started, finished = run_span(run_dir.name, data["timestamp"], status)
     resumable, configured_epochs = resume_status(run_dir, data)

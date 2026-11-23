@@ -151,7 +151,7 @@ export function metricKey(kind: MetricKind): string {
     case "miou":
       return "val_miou";
     case "auroc":
-      return "val_auroc";
+      return "test_auroc";
     default:
       // `primary` is a researcher's own task: its value arrives as the compat
       // field `val_accuracy` (ADR-058).

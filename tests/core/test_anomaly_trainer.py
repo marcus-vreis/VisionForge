@@ -120,8 +120,34 @@ class TestFitAutoencoder:
         assert kinds[0] == "start"
         assert kinds[-1] == "end"
         epoch_ev = next(e for e in events if e["event"] == "epoch_end")
-        assert "val_auroc" in epoch_ev
+        assert "test_auroc" in epoch_ev
         assert epoch_ev["lr"] == pytest.approx(0.01)
+
+    def test_history_names_the_auroc_for_its_split(self, tmp_path: Path) -> None:
+        """The per-epoch AUROC is scored on the test split: ``test_auroc`` (ADR-241)."""
+        trainer = AnomalyTrainer(_config(tmp_path))
+        result = trainer.fit(ConvAutoencoder(latent_dim=8), FakeAnomalyDataModule())
+        run_json = json.loads(
+            (result.model_path.parent / "run.json").read_text(encoding="utf-8")
+        )
+
+        assert [sorted(row) for row in run_json["history"]] == [
+            ["epoch", "test_auroc", "train_loss", "val_image_f1", "val_threshold"]
+        ] * result.total_epochs
+
+    def test_the_epoch_event_carries_the_same_names_as_the_history(
+        self, tmp_path: Path
+    ) -> None:
+        events: list[dict[str, object]] = []
+        trainer = AnomalyTrainer(_config(tmp_path))
+        result = trainer.fit(
+            ConvAutoencoder(latent_dim=8),
+            FakeAnomalyDataModule(),
+            progress_callback=events.append,
+        )
+        streamed = [e["test_auroc"] for e in events if e["event"] == "epoch_end"]
+
+        assert streamed == [h.test_auroc for h in result.history]
 
     def test_a_slow_epoch_streams_its_batches(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -391,7 +417,7 @@ class TestTensorBoardTracking:
         trainer.fit(ConvAutoencoder(latent_dim=8), FakeAnomalyDataModule())
 
         tags = {tag for tag, _, _ in calls}
-        assert {"loss/recon_train", "auroc/val", "image_f1/val"} <= tags
+        assert {"loss/recon_train", "auroc/test", "image_f1/val"} <= tags
         # one entry per epoch for the recon loss (2 epochs configured)
         recon_steps = [step for tag, _, step in calls if tag == "loss/recon_train"]
         assert recon_steps == [1, 2]
@@ -407,7 +433,7 @@ class TestTensorBoardTracking:
         model = PatchCore(backbone="resnet18", pretrained=False)
         AnomalyTrainer(cfg).fit(model, FakeAnomalyDataModule(size=64))
 
-        assert "auroc/val" in {t for t, _, _ in calls}
+        assert "auroc/test" in {t for t, _, _ in calls}
         assert all(step == 1 for _, _, step in calls)
 
 
@@ -457,13 +483,13 @@ class TestSingleClassTestSplit:
         result = trainer.fit(model, _NormalOnlyTestSplit(size=32))
 
         assert result.best_auroc is None
-        assert result.history[0].val_auroc is None
+        assert result.history[0].test_auroc is None
         assert result.history[0].val_image_f1 is None
         data = json.loads(
             (result.model_path.parent / "run.json").read_text(encoding="utf-8")
         )
         assert data["metrics"]["best_auroc"] is None
-        assert data["history"][0]["val_auroc"] is None
+        assert data["history"][0]["test_auroc"] is None
 
     def test_autoencoder_epochs_log_without_a_number(self, tmp_path: Path) -> None:
         trainer = AnomalyTrainer(_config(tmp_path))
@@ -475,7 +501,7 @@ class TestSingleClassTestSplit:
             progress_callback=events.append,
         )
 
-        assert [h.val_auroc for h in result.history] == [None] * result.total_epochs
+        assert [h.test_auroc for h in result.history] == [None] * result.total_epochs
         epochs = [e for e in events if e["event"] == "epoch_end"]
         assert epochs
-        assert all(e["val_auroc"] is None for e in epochs)
+        assert all(e["test_auroc"] is None for e in epochs)

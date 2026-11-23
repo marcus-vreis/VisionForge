@@ -97,7 +97,7 @@ RECORDS: dict[str, tuple[str | None, dict[str, Any], list[dict[str, Any]]]] = {
             {
                 "epoch": 1,
                 "train_loss": 0.1,
-                "val_auroc": 0.95,
+                "test_auroc": 0.95,
                 "val_image_f1": 0.9,
                 "val_threshold": 0.4,
             }
@@ -356,3 +356,15 @@ def test_built_in_task_metrics_stay_on_the_known_list() -> None:
 )
 def test_missing_metrics_give_an_empty_summary(record: Any) -> None:
     assert tracker_metrics(record) == {}
+
+
+def test_an_old_anomaly_run_is_exported_with_test_auroc(tmp_path: Path) -> None:
+    """A run.json saved before ADR-241 reaches the tracker under today's name."""
+    run_dir, record = _write_run(tmp_path, "anomaly")
+    record["history"] = [{"epoch": 1, "train_loss": 0.1, "val_auroc": 0.95}]
+    (run_dir / "run.json").write_text(json.dumps(record), encoding="utf-8")
+
+    export_run_record([_Recorder], run_dir)
+
+    (tracker,) = built
+    assert ("epoch", (1, {"train_loss": 0.1, "test_auroc": 0.95})) in tracker.calls

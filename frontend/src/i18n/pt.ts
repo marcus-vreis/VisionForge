@@ -3669,8 +3669,9 @@ export const pt = {
       val_miou: "Val mIoU",
       val_dice: "Val Dice",
       val_pixel_acc: "Val acurácia de pixel",
-      // O backend chama de `val_`, mas a anomalia pontua cada época no split de teste.
-      val_auroc: "AUROC (teste)",
+      // A anomalia pontua cada época no split de teste: o AUROC se chama `test_auroc`
+      // desde o ADR-241; o F1 ainda vem do backend com o prefixo `val_`.
+      test_auroc: "AUROC (teste)",
       val_image_f1: "F1 da imagem (teste)",
       val_threshold: "Limiar de decisão",
     },

@@ -113,7 +113,7 @@ function metricOf(e: EpochEnd, kind: MetricKind): number | null {
         : kind === "miou"
           ? e["val_miou"]
           : kind === "auroc"
-            ? e["val_auroc"]
+            ? e["test_auroc"]
             : e.val_accuracy;
   return typeof raw === "number" && Number.isFinite(raw) ? raw : null;
 }
