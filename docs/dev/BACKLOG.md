@@ -257,6 +257,10 @@ Itens das fontes que ficaram de fora desta rodada, para a próxima triagem.
 - Ideia do tema product-gui: tour da aba Código para tarefas custom lendo o código do pesquisador por inspect.
 - Citação do SUS (Brooke) só quando os resultados de usabilidade entrarem no paper, conferida na fonte.
 - Seletor de custom_model na GUI (docs/custom/MODELS.md promete campo inexistente): DOC-5 corrige o texto, a feature fica como issue separada sem task.
+- Achados 19 e 18 e parte da seção 6 do AUDIT: resolvidos em #398 (`doctor --json` no bug_report.yml), #399 e #402 (cobertura de selftest, updater, `__main__` e colab_remote_runner), #400 (warnings 116 → 0 e `filterwarnings = error` para as categorias próprias) e #401 (`gui --check`).
+- `pin_memory=True` sem acelerador: o DataLoader avisa a cada treino em CPU (a suíte ignora o aviso em pyproject.toml). Mudar o default ou desligar quando não houver GPU é decisão do mantenedor.
+- Médias macro divergentes (a confirmar): `core/evaluator.py` chama f1/precision/recall do sklearn sem `labels`, que tira a média só das classes presentes em `y_true` ou `y_pred`; o bootstrap de `core/metric_ci.py` (`_confusion_metrics`) tira a média das `n_classes`. Com uma classe ausente do split, o ponto e o IC podem medir coisas diferentes. Precisa de teste que reproduza antes de corrigir.
+- `gui --check` (#401) não sobe o servidor: confere import, build da SPA, `/api/health` chamado direto e porta livre. O AUDIT pedia o smoke completo (uvicorn numa porta efêmera e GET em `/api/health`).
 
 ## Fusões e ajustes do crítico
 
