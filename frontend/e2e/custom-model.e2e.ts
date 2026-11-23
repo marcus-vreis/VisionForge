@@ -89,7 +89,10 @@ test("a YAML that names a custom model trains it and every screen says so", asyn
 
   // The review names the model that will train, not the builtin default.
   const review = page.locator("main");
-  await expect(review.getByText("Modelo próprio", { exact: true })).toBeVisible();
+  // The summary's term, not the Modelo step's field label of the same name.
+  await expect(
+    review.getByRole("term").filter({ hasText: /^Modelo próprio$/ }),
+  ).toBeVisible();
   await expect(review.getByText("my_net", { exact: true }).first()).toBeVisible();
 
   // So does the Modelo step, with the way back to a builtin architecture.
