@@ -8,6 +8,7 @@ directory, one continuous history, and the resume file gone once it finishes.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +19,12 @@ import torch.nn as nn
 from visionforge.core.anomaly_trainer import AnomalyTrainer
 from visionforge.core.cancellation import CancellationToken
 from visionforge.core.regression_trainer import RegressionTrainer
-from visionforge.core.resume import RESUME_FILENAME, ResumeStateError, load_resume_state
+from visionforge.core.resume import (
+    RESUME_FILENAME,
+    ResumeStateError,
+    load_resume_state,
+    save_resume_state,
+)
 from visionforge.core.segmentation_trainer import SegmentationTrainer
 from visionforge.core.trainer import Trainer
 from visionforge.models.anomaly_factory import ConvAutoencoder
@@ -334,3 +340,31 @@ class TestAnomalyResume:
         assert [h.epoch for h in finished.history] == [1, 2, 3]
         assert _run_dirs(tmp_path / "models", "anom_resume") == [run_dir]
         assert not (run_dir / RESUME_FILENAME).exists()
+
+    def test_a_snapshot_from_before_the_auroc_rename_resumes(
+        self, tmp_path: Path
+    ) -> None:
+        """A resume file written under ``val_auroc`` still continues (ADR-241)."""
+        cfg = _anomaly_config(tmp_path)
+        token = CancellationToken()
+        stopped = AnomalyTrainer(cfg).fit(
+            ConvAutoencoder(latent_dim=8),
+            FakeAnomalyData(),
+            progress_callback=_stop_after_first_epoch(token),
+            cancel_token=token,
+        )
+        run_dir = stopped.model_path.parent
+        state = load_resume_state(run_dir)
+        assert state is not None
+        old_rows = [
+            {("val_auroc" if k == "test_auroc" else k): v for k, v in row.items()}
+            for row in state.history
+        ]
+        save_resume_state(run_dir, replace(state, history=old_rows))
+
+        finished = AnomalyTrainer(cfg).fit(
+            ConvAutoencoder(latent_dim=8), FakeAnomalyData(), resume_dir=run_dir
+        )
+
+        assert stopped.history[0].test_auroc is not None
+        assert finished.history[0].test_auroc == stopped.history[0].test_auroc

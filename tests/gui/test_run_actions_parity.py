@@ -54,8 +54,8 @@ class TestModelCardAcrossTasks:
             "experiment": "ragged",
             "metrics": {},
             "history": [
-                {"epoch": 1, "train_loss": 0.5, "val_auroc": 0.7},
-                {"epoch": 2, "train_loss": 0.4},  # no val_auroc this epoch
+                {"epoch": 1, "train_loss": 0.5, "test_auroc": 0.7},
+                {"epoch": 2, "train_loss": 0.4},  # no test_auroc this epoch
             ],
             "artifacts": {},
             "config": {},
@@ -63,7 +63,7 @@ class TestModelCardAcrossTasks:
 
         card = _render_run_markdown(Path("."), data)
 
-        assert "val_auroc" in card
+        assert "test_auroc" in card
         assert "—" in card  # the absent cell is shown as missing, not crashed on
 
     def test_non_numeric_history_values_survive(self) -> None:

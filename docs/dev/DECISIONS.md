@@ -8309,7 +8309,7 @@ Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS
 ## ADR-208 — The screens name what a run reports and what it trains
 
 **Date:** 2026-11-15
-**Status:** Accepted
+**Status:** Amended by ADR-241 (the backend's `val_auroc` is renamed after all)
 **Amends:** ADR-048 (custom models), ADR-051 (timm), ADR-038 (anomaly), ADR-201 (the History entry as the results page)
 
 **Context:** after 0.22.0 the first training of every task other than classification was walked through the interface, and a custom model was used the way `docs/custom/MODELS.md` describes. Every run trained. Three things on screen were wrong:
@@ -9239,3 +9239,27 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 **Consequences:** the mask and anomaly analyses decode each image once more at a reduced size (about 3 ms per image, ADR-238). The target analysis, which read only text, now opens every listed image and takes longer by that cost. Results kept before this have no `quality` and show no card until run again.
 
 **Known limits:** Tukey's fences come from the quartiles, so when a quarter or more of the images share a defect the normal range widens around them and they stop being flagged; found while writing the tests, where three planted images out of eleven left the flat one unflagged. The regression result is marked stale by its CSVs only (ADR-235): replacing an image file without touching the CSVs does not mark it stale.
+
+## ADR-241 — Anomaly's per-epoch AUROC is named `test_auroc`
+
+**Date:** 2026-11-23
+**Status:** Accepted
+**Amends:** ADR-208 (anomaly labels), ADR-038 (anomaly)
+**Relates to:** ADR-013 (`run.json`), ADR-092 (resume), ADR-197 (tracker export)
+
+**Context:** the anomaly trainer scores every epoch on the labelled test split (`data_module.test_loader()` in `core/anomaly_trainer.py`) and wrote that AUROC as `val_auroc`. There is no validation split in the task. Nothing leaks into the selection: the checkpoint is the epoch with the lowest `train_loss`, and the AUROC is only reported. ADR-208 fixed the labels on screen and kept the key, because renaming it would break reading the runs already saved. The key is still read outside the interface, though: in the `run.json` a researcher opens, in the columns a tracker shows, in the event stream. A reader of any of those is told the curve is a validation curve.
+
+**Decision:**
+
+- Writers use `test_auroc`: the `AnomalyEpochResult` field, the `run.json` `history` records, the `epoch_end` event, the resume snapshot and the trackers that receive the history (MLflow, W&B, Comet). The TensorBoard tag goes from `auroc/val` to `auroc/test`. The final `metrics` keep their names (`auroc` is the best epoch's, `test_auroc` the test of the saved checkpoint).
+- Compatibility rule: a history saved before this ADR is read under the new name, and the file on disk is not rewritten. Each side has one normalizer that knows the old name. On the server, `core/history_keys.py` (`upgrade_run_history`, `upgrade_anomaly_epoch`) is applied by the run detail (`runs_routes._build_run_detail`, which also feeds the comparison), by the tracker export and its retry (`run_trackers.export_run_record`, `tracker_exports.retry_record`) and by resume (an old `resume.pt`). In the page, `lib/history-keys.ts` (`upgradeRunHistory`) is applied in `fetchRunDetail`. When a record carries both names, `test_auroc` wins.
+- Only anomaly runs are renamed. A researcher's own task (ADR-058) streams `val_<metric>` for a metric it measured on its validation split, so its `val_auroc` keeps its name.
+- The curve keeps its label, "AUROC (teste)" / "AUROC (test)", now under the key `test_auroc`.
+
+**Consequences:** a new anomaly `run.json` and an old one plot, compare and export the same series. `run.json` has no version of its own (ADR-039 versions the config), so the rule lives in the two readers instead of a migration. The exports that copy the record as it is (the experiment bundle, Zenodo, DVC, the Hub card, the Markdown report) keep the name each run was saved with. An old run already sent to MLflow or W&B keeps `val_auroc` there until it is sent again. The other two per-epoch anomaly fields, `val_image_f1` and `val_threshold`, are also measured on the test split (and the threshold on the training normals) and still carry `val_`; the screens label them, as ADR-208 does.
+
+**Alternatives considered:**
+
+- *Keep the key and fix only the labels (ADR-208).* The labels were right, and the file and the trackers still said validation.
+- *Rewrite the saved `run.json` files on read.* It edits a research record behind the researcher's back, and a run folder may be read-only or copied elsewhere.
+- *Rename `val_image_f1` and `val_threshold` in the same change.* Same reasoning, a larger surface; left for a separate decision.

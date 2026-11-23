@@ -3384,7 +3384,7 @@ export const en: Dict = {
       val_miou: "Val mIoU",
       val_dice: "Val Dice",
       val_pixel_acc: "Val pixel accuracy",
-      val_auroc: "AUROC (test)",
+      test_auroc: "AUROC (test)",
       val_image_f1: "Image F1 (test)",
       val_threshold: "Decision threshold",
     },

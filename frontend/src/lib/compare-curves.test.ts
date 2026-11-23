@@ -109,9 +109,9 @@ describe("curveSeries", () => {
   });
 
   it("gives anomaly its val AUROC, which is the curve that says something", () => {
-    const h = history(["train_loss", "val_auroc", "val_image_f1", "val_threshold"]);
-    expect(initialOf("anomaly", h)).toEqual(["val_auroc"]);
-    expect(keysOf("anomaly", h)).toEqual(["val_auroc", "val_image_f1", "train_loss", "val_threshold"]);
+    const h = history(["train_loss", "test_auroc", "val_image_f1", "val_threshold"]);
+    expect(initialOf("anomaly", h)).toEqual(["test_auroc"]);
+    expect(keysOf("anomaly", h)).toEqual(["test_auroc", "val_image_f1", "train_loss", "val_threshold"]);
   });
 
   it("offers only what some run measured", () => {
@@ -154,7 +154,7 @@ describe("curveSeries", () => {
       "val_rmse",
       "val_mae",
       "val_miou",
-      "val_auroc",
+      "test_auroc",
       "val_image_f1",
       "val_pixel_acc",
       "val_threshold",
@@ -170,7 +170,7 @@ describe("curveSeries", () => {
       val_r2: "higher",
       val_rmse: "lower",
       val_mae: "lower",
-      val_auroc: "higher",
+      test_auroc: "higher",
       val_image_f1: "higher",
       val_threshold: null,
     });
