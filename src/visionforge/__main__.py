@@ -491,6 +491,14 @@ def main() -> None:
             "--host/--port free) and exit 0 or 1, without starting it"
         ),
     )
+    gui_parser.add_argument(
+        "--smoke",
+        action="store_true",
+        help=(
+            "with --check: also start the real server on an ephemeral 127.0.0.1 "
+            "port, GET /api/health and stop it (never opens a browser)"
+        ),
+    )
     _add_offline_flag(gui_parser)
 
     doctor_parser = subparsers.add_parser(
@@ -665,12 +673,15 @@ def main() -> None:
             run_doctor(fix=args.fix, confirm_fn=_default_confirm, json_output=args.json)
         )
 
+    if args.command == "gui" and args.smoke and not args.check:
+        parser.error("gui: --smoke only works together with --check")
+
     if args.command == "gui" and args.check:
         import sys as _sys
 
         from visionforge.gui.preflight import run_gui_check
 
-        _sys.exit(run_gui_check(args.host, args.port))
+        _sys.exit(run_gui_check(args.host, args.port, smoke=args.smoke))
 
     if args.command == "gui":
         from visionforge.gui.server import start_server

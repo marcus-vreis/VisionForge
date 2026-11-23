@@ -260,7 +260,7 @@ Itens das fontes que ficaram de fora desta rodada, para a próxima triagem.
 - Achados 19 e 18 e parte da seção 6 do AUDIT: resolvidos em #398 (`doctor --json` no bug_report.yml), #399 e #402 (cobertura de selftest, updater, `__main__` e colab_remote_runner), #400 (warnings 116 → 0 e `filterwarnings = error` para as categorias próprias) e #401 (`gui --check`).
 - `pin_memory=True` sem acelerador: o DataLoader avisa a cada treino em CPU (a suíte ignora o aviso em pyproject.toml). Mudar o default ou desligar quando não houver GPU é decisão do mantenedor.
 - Médias macro divergentes: refutado. `_confusion_metrics` em `core/metric_ci.py` já tira a média só das classes presentes, como o sklearn sem `labels` usado em `core/evaluator.py`. O teste `test_macro_point_matches_the_evaluator_when_a_declared_class_is_absent` (`tests/core/test_metric_ci.py`) fixa isso de ponta a ponta, com 4 classes declaradas e 3 presentes.
-- `gui --check` (#401) não sobe o servidor: confere import, build da SPA, `/api/health` chamado direto e porta livre. O AUDIT pedia o smoke completo (uvicorn numa porta efêmera e GET em `/api/health`).
+- `gui --check` (#401) não sobe o servidor: confere import, build da SPA, `/api/health` chamado direto e porta livre. Resolvido por `--smoke`: uvicorn numa porta efêmera de 127.0.0.1, GET em `/api/health` e encerramento limpo.
 
 ## Fusões e ajustes do crítico
 

@@ -53,7 +53,9 @@ a short guided tour of the interface.
 
 To check the install without starting the server, run `visionforge gui --check`:
 it prints one `[OK]`/`[FAIL]` line each for the server import, the interface
-build, `/api/health` and the port, and exits 0 only if all pass.
+build, `/api/health` and the port, and exits 0 only if all pass. Add `--smoke`
+for the full test: it starts the real server on a free loopback port (never
+yours, no browser), asks `/api/health` over HTTP and stops it.
 
 <details>
 <summary>Why PyTorch is installed separately</summary>
@@ -451,7 +453,9 @@ oferece um guia rápido da interface.
 
 Para conferir a instalação sem subir o servidor, rode `visionforge gui --check`:
 ele imprime uma linha `[OK]`/`[FAIL]` para o import do servidor, o build da
-interface, o `/api/health` e a porta, e sai com 0 só se tudo passar.
+interface, o `/api/health` e a porta, e sai com 0 só se tudo passar. Com `--smoke` ele faz
+o teste completo: sobe o servidor de verdade numa porta livre do loopback (nunca
+a sua, sem navegador), consulta o `/api/health` por HTTP e o encerra.
 
 <details>
 <summary>Por que o PyTorch é instalado à parte</summary>
