@@ -19,6 +19,7 @@ from torch.utils.data import DataLoader, Dataset
 
 from visionforge.core.data import _build_transforms, resolve_num_workers
 from visionforge.core.loader_lifecycle import LoaderCache
+from visionforge.core.pin_memory import pin_memory_for
 from visionforge.utils.anomaly_config import AnomalyConfig
 
 _IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp")
@@ -88,7 +89,7 @@ class AnomalyDataModule:
         self._batch_size = config.training.batch_size
         self._num_workers = cfg.num_workers
         self._cache = LoaderCache()
-        self._pin_memory = cfg.pin_memory
+        self._pin_memory = pin_memory_for(cfg.pin_memory, config.device)
 
         train_normal = base / cfg.train_dir / cfg.normal_dir
         train_items = [(p, 0) for p in _list_images(train_normal)]

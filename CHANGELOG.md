@@ -13,6 +13,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Changed
+
+- `data.pin_memory` só tem efeito quando o treino roda em CUDA; em CPU ou MPS o DataLoader recebe `False`. O padrão `true` continua o mesmo e o schema não muda, mas um treino em CPU não avisa mais "'pin_memory' argument is set as true but no accelerator is found" a cada execução.
+
 ### Fixed
 
 - Treinamento → Avançado: numa janela de 800 px a terceira coluna de campos passava da borda do cartão, porque três colunas iguais não encolhem abaixo do campo mais largo. A grade agora usa colunas de 300 px ou mais (duas no cartão, uma no celular), e um rótulo mais comprido que o próprio campo quebra linha em vez de vazar. O botão do Avançado diz a leitores de tela se está aberto (`aria-expanded`).

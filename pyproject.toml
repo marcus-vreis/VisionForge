@@ -238,8 +238,6 @@ filterwarnings = [
     # onnx_export.py keeps the TorchScript exporter on purpose (dynamo=False).
     "ignore:You are using the legacy TorchScript-based ONNX export:DeprecationWarning:visionforge.core.onnx_export",
     "ignore:The feature will be removed. Please remove usage of this function:DeprecationWarning:torch.onnx",
-    # CPU-only runs keep the default pin_memory=True; torch falls back to pageable memory.
-    "ignore:'pin_memory' argument is set as true but no accelerator is found:UserWarning:torch.utils.data.dataloader",
 ]
 
 
