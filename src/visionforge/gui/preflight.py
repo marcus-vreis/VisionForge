@@ -102,7 +102,9 @@ def _check_smoke() -> Check:
     def serve() -> None:
         try:
             uv_server.run()
-        except BaseException as exc:  # reported as the answer, not lost in the thread
+        # uvicorn ends a failed bind with sys.exit(1). This thread is the top of its
+        # own stack, so the exit is reported as the answer rather than re-raised.
+        except (Exception, SystemExit) as exc:  # NOSONAR python:S5754
             errors.append(exc)
 
     thread = threading.Thread(target=serve, name="gui-smoke", daemon=True)

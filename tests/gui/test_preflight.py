@@ -208,6 +208,25 @@ def test_smoke_fails_when_the_server_cannot_start(
     )
 
 
+def test_smoke_reports_a_server_that_exits_before_listening(
+    spa: Path,
+    free_port: int,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # uvicorn ends a failed bind with sys.exit(1); the thread must not lose it.
+    async def serve(self: uvicorn.Server, sockets: object = None) -> None:
+        await asyncio.sleep(0)
+        raise SystemExit(1)
+
+    monkeypatch.setattr(uvicorn.Server, "serve", serve)
+    assert run_gui_check("127.0.0.1", free_port, smoke=True) == 1
+    assert (
+        "[FAIL] smoke: the server did not start (SystemExit: 1)"
+        in capsys.readouterr().out
+    )
+
+
 def test_smoke_times_out_when_the_server_never_starts(
     spa: Path,
     free_port: int,
