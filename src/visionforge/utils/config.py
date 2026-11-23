@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -16,6 +16,18 @@ CONFIG_NOT_A_FILE_KEY = "config.not_a_file"
 # be migrated forward (see ``migrate_config_dict``) without losing traceability —
 # the reproducibility guarantee depends on this (ADR-039).
 CURRENT_SCHEMA_VERSION = 2
+
+
+# Shared by every task's data config, so each schema describes the field alike.
+PinMemory = Annotated[
+    bool,
+    Field(
+        description=(
+            "Fixa a memória dos lotes para acelerar a cópia à GPU. "
+            "**Só vale em CUDA:** em CPU ou MPS é ignorado, sem aviso."
+        )
+    ),
+]
 
 
 class GridSearchConfig(BaseModel):
@@ -272,7 +284,7 @@ class DataConfig(BaseModel):
         ge=-1,
         description="Processos paralelos que carregam as imagens. **-1 (padrão) decide sozinho** pela memória livre da máquina: cada worker é um processo que recarrega o torch e custa cerca de 1 GB, e pedir mais do que cabe faz o treino morrer antes da primeira época. 0 carrega no processo principal.",
     )
-    pin_memory: bool = True
+    pin_memory: PinMemory = True
     transforms: TransformConfig = TransformConfig()
     preprocessing: PreprocessingConfig = Field(default_factory=PreprocessingConfig)
 

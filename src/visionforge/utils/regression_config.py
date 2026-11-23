@@ -20,6 +20,7 @@ from visionforge.utils.config import (
     DETERMINISTIC_DESCRIPTION,
     DeviceConfig,
     OutputConfig,
+    PinMemory,
     PreprocessingConfig,
     SchedulerConfig,
     TransformConfig,
@@ -138,7 +139,7 @@ class RegressionDataConfig(BaseModel):
         ge=-1,
         description="Processos paralelos que carregam as imagens. **-1 (padrão) decide sozinho** pela memória livre da máquina: cada worker é um processo que recarrega o torch e custa cerca de 1 GB, e pedir mais do que cabe faz o treino morrer antes da primeira época. 0 carrega no processo principal.",
     )
-    pin_memory: bool = True
+    pin_memory: PinMemory = True
     transforms: TransformConfig = Field(default_factory=TransformConfig)
     preprocessing: PreprocessingConfig = Field(default_factory=PreprocessingConfig)
 

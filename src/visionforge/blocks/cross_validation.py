@@ -36,6 +36,7 @@ from visionforge.core.data import (
 )
 from visionforge.core.dataset_audit import load_group_manifest
 from visionforge.core.evaluator import Evaluator
+from visionforge.core.pin_memory import pin_memory_for
 from visionforge.core.replicates import sample_std
 from visionforge.core.run_groups import write_run_group
 from visionforge.core.trainer import Trainer, seed_before_building
@@ -134,7 +135,7 @@ class _FoldDataModule:
         # Already resolved by the caller (`resolve_num_workers`): the raw
         # config value can be -1, which DataLoader refuses.
         self._num_workers = num_workers
-        self._pin_memory = config.data.pin_memory
+        self._pin_memory = pin_memory_for(config.data.pin_memory, config.device)
         self._class_names: list[str] = list(train_ds.classes)
 
     def train_loader(self) -> DataLoader:  # type: ignore[type-arg]
