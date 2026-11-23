@@ -52,6 +52,7 @@ export const ROUTE = {
   pickFolder: "POST /api/dataset/pick",
   pickYaml: "POST /api/detection/dataset/pick_yaml",
   pickCheckpoint: "POST /api/checkpoint/pick",
+  customModels: "GET /api/model/custom",
   sampleDataset: "POST /api/sample-dataset",
   datasetDownload: "POST /api/dataset/download",
   datasetLab: "POST /api/explorer/summary",

@@ -838,6 +838,24 @@
       "integrations"
     ]
   },
+  "GET /api/model/custom": {
+    "operationId": "custom_models_api_model_custom_get",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "CustomModelsResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "experiments"
+    ]
+  },
   "GET /api/profiles": {
     "operationId": "get_profiles_api_profiles_get",
     "parameters": [

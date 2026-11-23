@@ -42,7 +42,8 @@ import type { PanelStrategy } from "./ExperimentHeader";
 import type { ReplicatesPayload } from "../lib/replicates-form";
 import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-form";
 import { Rich } from "./Rich";
-import { alternateModel } from "../lib/model-source";
+import { alternateModel, customModelChoice, withCustomModel } from "../lib/model-source";
+import { CustomModelField } from "./CustomModelField";
 import { ActionButton } from "./ui/ActionButton";
 import { StepShell, type StepDef } from "./StepShell";
 import {
@@ -2623,6 +2624,20 @@ export function ParamPanel({
           <div style={card}>
             <div style={sectionLabel}>{t.paramPanel.kickers.model}</div>
             <div style={fieldGrid}>
+              {modelProps["custom_model"] && (
+                <CustomModelField
+                  value={customModelChoice(modelData)}
+                  onChange={(choice) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      model: withCustomModel(
+                        (prev["model"] ?? {}) as Record<string, unknown>,
+                        choice,
+                      ),
+                    }))
+                  }
+                />
+              )}
               {modelProps["name"] && (
                 <SchemaFieldVF
                   name="name"
@@ -2634,7 +2649,8 @@ export function ParamPanel({
                   path={["model", "name"]}
                 />
               )}
-              {modelProps["pretrained"] && (
+              {/* A model of the researcher's own ignores `pretrained`. */}
+              {modelProps["pretrained"] && otherModel?.source !== "custom_model" && (
                 <SchemaFieldVF
                   name="pretrained"
                   schema={modelProps["pretrained"]}

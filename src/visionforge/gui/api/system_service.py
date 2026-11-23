@@ -10,6 +10,7 @@ from pathlib import Path
 from visionforge import __version__
 from visionforge.gui.api.schemas import (
     CollapseEvidenceResponse,
+    CustomModelsResponse,
     DeviceInfoResponse,
     GPUInfo,
     LearningRatePlanRequest,
@@ -146,3 +147,15 @@ def learning_rate_plan(req: LearningRatePlanRequest) -> LearningRatePlanResponse
             for trial in trials
         ]
     )
+
+
+def custom_models() -> CustomModelsResponse:
+    """The models ``user_models/`` registers, scanned on each call (ADR-048).
+
+    The scan imports the folder's files, so a file dropped in while the GUI is
+    open is listed without a restart. The registry imports torch, so it is
+    loaded here and not with this module (GUI-11).
+    """
+    from visionforge.models.registry import load_user_models
+
+    return CustomModelsResponse(models=load_user_models())

@@ -209,6 +209,8 @@ ROUTE_CLASSES: dict[str, RouteClass] = {
     "DELETE /api/hub/token": "owner",
     "GET /api/hub/token": "owner",
     "PUT /api/hub/token": "owner",
+    # Lists the models of user_models/ by importing them: code a user brings.
+    "GET /api/model/custom": "off",
     "POST /api/model/defaults": "open",
     "POST /api/model/learning-rate-plan": "open",
     "GET /api/profiles": "owner",

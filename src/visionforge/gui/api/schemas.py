@@ -920,6 +920,17 @@ class ModelDefaultsResponse(BaseModel):
     note: str | None = None
 
 
+class CustomModelsResponse(BaseModel):
+    """The models registered with ``@register_model`` in ``user_models/`` (ADR-048).
+
+    ``models`` holds the names ``model.custom_model`` accepts, sorted; it is
+    empty when the folder is missing or registers nothing. A file that fails to
+    import is skipped by the registry, so it is not listed.
+    """
+
+    models: list[str]
+
+
 class SystemInfo(BaseModel):
     """System probe for sensible UI defaults (workers, threads)."""
 
