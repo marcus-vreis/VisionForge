@@ -24,6 +24,7 @@ from visionforge.utils.config import (
     DETERMINISTIC_DESCRIPTION,
     DeviceConfig,
     OutputConfig,
+    PinMemory,
     PreprocessingConfig,
     SchedulerConfig,
     TransformConfig,
@@ -63,10 +64,7 @@ class TaskDataConfig(BaseModel):
     base_dir: Path
     image_size: int = Field(default=224, ge=32)
     num_workers: int = Field(default=4, ge=0)
-    pin_memory: bool = Field(
-        default=True,
-        description="Fixa a memória dos lotes para acelerar a cópia à GPU. **Só vale em CUDA:** em CPU ou MPS é ignorado, sem aviso.",
-    )
+    pin_memory: PinMemory = True
     transforms: TransformConfig = Field(default_factory=TransformConfig)
     preprocessing: PreprocessingConfig = Field(default_factory=PreprocessingConfig)
 
