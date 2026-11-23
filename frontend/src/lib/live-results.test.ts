@@ -141,7 +141,7 @@ describe("curveOf and metricKey", () => {
     expect(metricKey("map50")).toBe("map50");
     expect(metricKey("r2")).toBe("val_r2");
     expect(metricKey("miou")).toBe("val_miou");
-    expect(metricKey("auroc")).toBe("val_auroc");
+    expect(metricKey("auroc")).toBe("test_auroc");
     expect(metricKey("primary")).toBe("val_accuracy");
   });
 });

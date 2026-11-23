@@ -70,7 +70,7 @@ const HEADLINE_KEYS: Record<string, readonly string[]> = {
   detection: ["map50", "map50_95"],
   regression: ["test_r2", "val_r2", "r2"],
   segmentation: ["test_miou", "val_miou", "miou"],
-  anomaly: ["test_auroc", "val_auroc", "auroc"],
+  anomaly: ["test_auroc", "auroc"],
 };
 
 // Bookkeeping, never a result.

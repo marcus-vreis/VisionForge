@@ -137,7 +137,7 @@ class AnomalyBlock:
         epochs = [r.epoch for r in self._train_result.history]
         # An undefined AUROC (one-class test split) is a gap, not a point.
         values = [
-            math.nan if r.val_auroc is None else r.val_auroc
+            math.nan if r.test_auroc is None else r.test_auroc
             for r in self._train_result.history
         ]
         MetricsPlotter.metric_curve(
