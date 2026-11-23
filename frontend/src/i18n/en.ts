@@ -1487,16 +1487,26 @@ export const en: Dict = {
     dfl: "Weight of the distribution focal loss (DFL), which refines the box edges.",
   },
   paramPanel: {
-    // An imported YAML can name a model of the researcher's own or a timm one; see pt.ts.
+    // A model of the researcher's own comes from the Model step's selector or an
+    // imported YAML; a timm one only from the YAML. See pt.ts.
     otherModel: {
       label: { custom_model: "Your own model", timm_model: "timm model" },
       note: {
         custom_model: (name: string) =>
-          `The imported YAML uses your model **${name}**, from user_models/. It is the one that will train: the Architecture and the Pretrained weights below are ignored.`,
+          `This config uses your model **${name}**, from user_models/. It is the one that will train: the Architecture below is ignored, and pretrained weights do not apply.`,
         timm_model: (name: string) =>
           `The imported YAML uses the timm model **${name}**. It is the one that will train: the Architecture below is ignored.`,
       },
       useBuiltin: "Use the architecture below",
+    },
+    // The Model step's selector for `model.custom_model` (CustomModelField).
+    customModel: {
+      builtin: "None",
+      builtinSub: "trains the chosen Architecture",
+      missing: "not registered in user_models/",
+      help: "A model of your own, registered with @register_model in a .py file under user_models/. It replaces the Architecture, and pretrained weights do not apply.",
+      empty:
+        "None yet. Register one with `@register_model` in a `.py` file under `user_models/`; the steps are in `docs/custom/MODELS.md`.",
     },
     sectionLabels: {
       model: "Model",

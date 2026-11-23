@@ -195,6 +195,13 @@ describe("classification steps (ADR-156)", () => {
     expect(model).toMatch(/<fieldset disabled=""/);
     expect(model).toContain("um bloco por vez");
   });
+
+  it("hides the pretrained field in Modelo while a model of the researcher's own trains", () => {
+    const label = pt.paramPanel.fieldLabels.pretrained;
+    expect(section(renderSteps(baseForm), "model")).toContain(label);
+    const own = renderSteps({ ...baseForm, model: { ...baseForm.model, custom_model: "my_net" } });
+    expect(section(own, "model")).not.toContain(label);
+  });
 });
 
 function renderWithReplicates(

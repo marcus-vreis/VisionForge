@@ -1194,6 +1194,14 @@ export async function fetchModelDefaults(
   });
 }
 
+/** The models `user_models/` registers with `@register_model` (ADR-048): the
+ *  names `model.custom_model` accepts, sorted. The server scans the folder on
+ *  each call, so a file added while the GUI is open is listed. */
+export async function fetchCustomModels(): Promise<string[]> {
+  const body = await request<{ models: string[] }>("/model/custom");
+  return body.models;
+}
+
 export async function fetchSystemInfo(): Promise<SystemInfo> {
   return request<SystemInfo>("/system/info");
 }

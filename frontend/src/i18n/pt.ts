@@ -1534,17 +1534,26 @@ export const pt = {
   // that ParamPanel's <Rich> turns into elements, so a translation can reorder
   // the words around them.
   paramPanel: {
-    // Um YAML importado pode trazer `model.custom_model` ou `model.timm_model`,
-    // que o formulário não tem como escolher (lib/model-source.ts).
+    // `model.custom_model` vem do seletor da etapa Modelo ou de um YAML
+    // importado; `model.timm_model`, só do YAML (lib/model-source.ts).
     otherModel: {
       label: { custom_model: "Modelo próprio", timm_model: "Modelo timm" },
       note: {
         custom_model: (name: string) =>
-          `O YAML importado usa o seu modelo **${name}**, de user_models/. É ele que vai treinar: a Arquitetura e os Pesos pré-treinados abaixo são ignorados.`,
+          `Este config usa o seu modelo **${name}**, de user_models/. É ele que vai treinar: a Arquitetura abaixo é ignorada, e os pesos pré-treinados não se aplicam.`,
         timm_model: (name: string) =>
           `O YAML importado usa o modelo timm **${name}**. É ele que vai treinar: a Arquitetura abaixo é ignorada.`,
       },
       useBuiltin: "Usar a arquitetura abaixo",
+    },
+    // O seletor de `model.custom_model` da etapa Modelo (CustomModelField).
+    customModel: {
+      builtin: "Nenhum",
+      builtinSub: "treina a Arquitetura escolhida",
+      missing: "não registrado em user_models/",
+      help: "Um modelo seu, registrado com @register_model num arquivo .py em user_models/. Ele substitui a Arquitetura, e os pesos pré-treinados não se aplicam.",
+      empty:
+        "Nenhum ainda. Registre um com `@register_model` num arquivo `.py` em `user_models/`; o passo a passo está em `docs/custom/MODELS.md`.",
     },
     sectionLabels: {
       model: "Modelo",
