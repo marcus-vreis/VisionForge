@@ -6,17 +6,31 @@ binds the port, opens a browser or runs the server: it imports what
 the health route in this process and asks whether the port is free. One line per
 check, ``[OK]``/``[FAIL]`` like ``visionforge doctor``; the exit code is 0 only
 when every line is ``[OK]``.
+
+``--smoke`` adds the full test: the real app under uvicorn on an ephemeral
+loopback port (never the chosen one, never a browser), one HTTP GET of
+``/api/health``, then a clean shutdown. Its startup runs the same sweep of
+orphaned filtered datasets (``outputs/models/_filtered`` under the current
+folder) that ``visionforge gui`` runs; nothing else is written.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
+import threading
+import time
+import urllib.request
 from collections.abc import Callable
+from typing import Any
 
 from visionforge.gui.security import is_wildcard
 from visionforge.gui.updater import port_in_use
 
 Check = tuple[bool, str]
+
+_SMOKE_TIMEOUT = 15.0  # seconds, for startup and again for shutdown
+_SMOKE_HOST = "127.0.0.1"
 
 
 def _check_server_imports() -> Check:
@@ -65,14 +79,79 @@ def _port_check(host: str, port: int) -> Callable[[], Check]:
     return check
 
 
-def run_gui_check(host: str, port: int) -> int:
-    """Print one line per check; return 0 when all pass, else 1."""
+def _smoke_port(uv_server: Any) -> int | None:
+    """The port uvicorn bound once started, or None while it has not."""
+    if not uv_server.started or not uv_server.servers:
+        return None
+    sockets = uv_server.servers[0].sockets
+    return int(sockets[0].getsockname()[1]) if sockets else None
+
+
+def _check_smoke() -> Check:
+    """Run the real app on an ephemeral loopback port and GET /api/health."""
+    import uvicorn
+
+    from visionforge import __version__
+    from visionforge.gui import server
+
+    uv_server = uvicorn.Server(
+        uvicorn.Config(server.app, host=_SMOKE_HOST, port=0, log_level="warning")
+    )
+    errors: list[BaseException] = []
+
+    def serve() -> None:
+        try:
+            uv_server.run()
+        except BaseException as exc:  # reported as the answer, not lost in the thread
+            errors.append(exc)
+
+    thread = threading.Thread(target=serve, name="gui-smoke", daemon=True)
+    thread.start()
+    try:
+        deadline = time.monotonic() + _SMOKE_TIMEOUT
+        port = _smoke_port(uv_server)
+        while port is None and thread.is_alive() and time.monotonic() < deadline:
+            time.sleep(0.02)
+            port = _smoke_port(uv_server)
+        if port is None:
+            why = f"{type(errors[0]).__name__}: {errors[0]}" if errors else "timed out"
+            return False, f"smoke: the server did not start ({why})"
+        return _smoke_get(port, __version__)
+    finally:
+        uv_server.should_exit = True
+        thread.join(_SMOKE_TIMEOUT)
+
+
+def _smoke_get(port: int, version: str) -> Check:
+    url = f"http://{_SMOKE_HOST}:{port}/api/health"  # NOSONAR python:S5332 - loopback
+    try:
+        with urllib.request.urlopen(url, timeout=_SMOKE_TIMEOUT) as response:  # noqa: S310
+            status = response.status
+            body = json.loads(response.read())
+    except Exception as exc:
+        return False, f"smoke: GET {url} failed: {type(exc).__name__}: {exc}"
+    if status != 200:
+        return False, f"smoke: GET {url} answered {status}"
+    reported = body.get("version") if isinstance(body, dict) else None
+    if reported != version:
+        return False, f"smoke: GET {url} reports version {reported!r}"
+    return True, f"smoke: the server answered GET {url} (version {version}) and stopped"
+
+
+def run_gui_check(host: str, port: int, smoke: bool = False) -> int:
+    """Print one line per check; return 0 when all pass, else 1.
+
+    ``smoke`` adds the full server test (see the module docstring).
+    """
     # The rest needs the server module: skip it when the import itself failed.
     ok_import, message = _check_server_imports()
     print(f"[{'OK' if ok_import else 'FAIL'}] {message}")
     failed = not ok_import
     if ok_import:
-        for check in (_check_spa_build, _check_health, _port_check(host, port)):
+        checks = [_check_spa_build, _check_health, _port_check(host, port)]
+        if smoke:
+            checks.append(_check_smoke)
+        for check in checks:
             ok, message = check()
             print(f"[{'OK' if ok else 'FAIL'}] {message}")
             failed = failed or not ok
