@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 import socket
 import sys
 from pathlib import Path
 
 import pytest
+import uvicorn
 
+import visionforge
 import visionforge.__main__ as cli
+import visionforge.gui.preflight as preflight
 import visionforge.gui.server as server
 from visionforge.gui.preflight import run_gui_check
 
@@ -145,3 +149,136 @@ def test_the_flag_exits_with_the_result_and_never_starts_the_server(
     assert started == []
     assert opened == []
     assert "[FAIL]" in capsys.readouterr().out
+
+
+def test_smoke_serves_health_on_an_ephemeral_port(
+    spa: Path, free_port: int, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert run_gui_check("127.0.0.1", free_port, smoke=True) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert len(lines) == 5
+    assert lines[4].startswith("[OK] smoke: ")
+    assert f"(version {visionforge.__version__})" in lines[4]
+
+
+def test_smoke_leaves_the_chosen_port_alone(spa: Path, free_port: int) -> None:
+    assert run_gui_check("127.0.0.1", free_port, smoke=True) == 0
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", free_port))
+        assert sock.getsockname()[1] == free_port
+
+
+def test_without_smoke_no_server_starts(
+    spa: Path, free_port: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    built: list[object] = []
+    monkeypatch.setattr(uvicorn, "Server", lambda config: built.append(config))
+    assert run_gui_check("127.0.0.1", free_port) == 0
+    assert built == []
+
+
+def test_smoke_fails_on_a_wrong_version(
+    spa: Path,
+    free_port: int,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # The route captured its handler at import; make the process report another version.
+    monkeypatch.setattr(visionforge, "__version__", "0.0.0-stale")
+    assert run_gui_check("127.0.0.1", free_port, smoke=True) == 1
+    assert "[FAIL] smoke: GET http://127.0.0.1:" in capsys.readouterr().out
+
+
+def test_smoke_fails_when_the_server_cannot_start(
+    spa: Path,
+    free_port: int,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    async def serve(self: uvicorn.Server, sockets: object = None) -> None:
+        await asyncio.sleep(0)
+        raise RuntimeError("no socket for you")
+
+    monkeypatch.setattr(uvicorn.Server, "serve", serve)
+    assert run_gui_check("127.0.0.1", free_port, smoke=True) == 1
+    out = capsys.readouterr().out
+    assert (
+        "[FAIL] smoke: the server did not start (RuntimeError: no socket for you)"
+        in out
+    )
+
+
+def test_smoke_reports_a_server_that_exits_before_listening(
+    spa: Path,
+    free_port: int,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # uvicorn ends a failed bind with sys.exit(1); the thread must not lose it.
+    async def serve(self: uvicorn.Server, sockets: object = None) -> None:
+        await asyncio.sleep(0)
+        raise SystemExit(1)
+
+    monkeypatch.setattr(uvicorn.Server, "serve", serve)
+    assert run_gui_check("127.0.0.1", free_port, smoke=True) == 1
+    assert (
+        "[FAIL] smoke: the server did not start (SystemExit: 1)"
+        in capsys.readouterr().out
+    )
+
+
+def test_smoke_times_out_when_the_server_never_starts(
+    spa: Path,
+    free_port: int,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    async def serve(self: uvicorn.Server, sockets: object = None) -> None:
+        while not self.should_exit:
+            await asyncio.sleep(0.01)
+
+    monkeypatch.setattr(preflight, "_SMOKE_TIMEOUT", 0.3)
+    monkeypatch.setattr(uvicorn.Server, "serve", serve)
+    assert run_gui_check("127.0.0.1", free_port, smoke=True) == 1
+    assert (
+        "[FAIL] smoke: the server did not start (timed out)" in capsys.readouterr().out
+    )
+
+
+def test_smoke_flag_reaches_the_check(
+    spa: Path, free_port: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import visionforge.utils.logger as vf_logger
+
+    seen: list[bool] = []
+
+    def fake(host: str, port: int, smoke: bool = False) -> int:
+        seen.append(smoke)
+        return 0
+
+    monkeypatch.setattr(cli, "_use_utf8_console", lambda: None)
+    monkeypatch.setattr(vf_logger, "setup_logger", lambda: None)
+    monkeypatch.setattr(preflight, "run_gui_check", fake)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["visionforge", "gui", "--check", "--smoke", "--port", str(free_port)],
+    )
+    with pytest.raises(SystemExit) as done:
+        cli.main()
+    assert done.value.code == 0
+    assert seen == [True]
+
+
+def test_smoke_without_check_is_a_parser_error(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import visionforge.utils.logger as vf_logger
+
+    monkeypatch.setattr(cli, "_use_utf8_console", lambda: None)
+    monkeypatch.setattr(vf_logger, "setup_logger", lambda: None)
+    monkeypatch.setattr(sys, "argv", ["visionforge", "gui", "--smoke"])
+    with pytest.raises(SystemExit) as bad:
+        cli.main()
+    assert bad.value.code == 2
+    assert "--smoke only works together with --check" in capsys.readouterr().err
