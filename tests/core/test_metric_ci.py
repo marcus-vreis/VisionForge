@@ -146,6 +146,33 @@ class TestPointEstimates:
             roc_auc_score(true, proba, multi_class="ovr", average="macro")
         )
 
+    @pytest.mark.parametrize(
+        ("name", "score"),
+        [("f1", f1_score), ("precision", precision_score), ("recall", recall_score)],
+    )
+    def test_macro_point_matches_the_evaluator_when_a_declared_class_is_absent(
+        self, name, score
+    ):
+        """The model declares 4 classes; class 3 is neither a true nor a predicted label.
+
+        The Evaluator calls sklearn without ``labels``, so its macro average runs
+        over the 3 classes present. The interval must headline that same number,
+        not the average over all 4 declared classes (0.599 for F1 here).
+        """
+        true = np.array([0] * 10 + [1] * 10 + [2] * 10)
+        pred = np.array([0] * 8 + [1] * 11 + [2] * 8 + [0] * 3)
+        proba = np.eye(4)[pred] * 0.7 + 0.075  # 4 columns, rows sum to 1
+
+        cis = bootstrap_classification_cis(
+            true, pred, task="multiclass", y_proba_full=proba, n_resamples=200
+        )
+
+        expected = score(true, pred, average="macro", zero_division=0)
+        assert cis[name].value == pytest.approx(expected)
+        assert cis[name].value != pytest.approx(
+            score(true, pred, average="macro", zero_division=0, labels=range(4))
+        )
+
 
 class TestIntervals:
     def test_interval_brackets_the_point_estimate(self):
