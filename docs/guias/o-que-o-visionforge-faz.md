@@ -31,8 +31,8 @@ Revisão.
 | Segmentação semântica | DeepLabV3, FCN, LR-ASPP, U-Net | mIoU, Dice, acurácia de pixel |
 | Detecção de anomalia | autoencoder convolucional, PatchCore | AUROC de imagem, F1, limiar |
 
-Os backends YOLO e RT-DETR usam o Ultralytics (AGPL-3.0), que só é instalado
-com o extra `detection`; o backend torchvision já vem na instalação.
+Os backends YOLO e RT-DETR usam o Ultralytics (AGPL-3.0), que já vem instalado
+com o pacote; o backend torchvision não o usa.
 
 Se o seu problema não é nenhum dos cinco, veja [Estender](#estender).
 
