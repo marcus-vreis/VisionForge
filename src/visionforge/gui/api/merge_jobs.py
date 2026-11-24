@@ -85,7 +85,11 @@ class MergeJobs(DerivedJobs):
         return job
 
     def start_apply(
-        self, analysis: MergeAnalysis, plan: MergePlan, dest_name: str
+        self,
+        analysis: MergeAnalysis,
+        plan: MergePlan,
+        dest_name: str,
+        **placed: Any,
     ) -> MergeJob:
         """Launch the write.
 
@@ -96,7 +100,12 @@ class MergeJobs(DerivedJobs):
 
         def run() -> None:
             result = build_merged_dataset(
-                analysis, plan, dest_name, token=job.token, on_progress=job.progress
+                analysis,
+                plan,
+                dest_name,
+                token=job.token,
+                on_progress=job.progress,
+                **placed,
             )
             if result is None:
                 job.state = "cancelled"

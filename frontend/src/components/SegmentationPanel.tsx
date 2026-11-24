@@ -9,6 +9,7 @@ import { runPicker } from "../lib/picker-feedback";
 import { PickerNote } from "./PickerNote";
 import { sampleSegmentationForm } from "../lib/guides/sample-forms";
 import { SampleDatasetButton } from "./SampleDatasetButton";
+import { ServerFoldersNote } from "./ServerFoldersNote";
 import { ModelAdvice } from "./ModelAdvice";
 import { AdvancedFields } from "./AdvancedFields";
 import { useState } from "react";
@@ -32,9 +33,17 @@ import { ReplicatesCard } from "./ReplicatesCard";
 import { ReplicatedComparisonCard } from "./ReplicatedComparisonCard";
 import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-form";
 import { SegmentationDatasetStats } from "./TaskDatasetStats";
+import { DatasetAudit } from "./DatasetAudit";
+import { MaskAnalysis } from "./MaskAnalysis";
 import { SweepCard, type SweepPayload } from "./SweepCard";
 import { TransformsSection } from "./TransformsSection";
 import type { ReplicatesPayload } from "../lib/replicates-form";
+import { ROUTE, useOpenStrategies, useRouteOpen } from "../lib/session";
+
+/** A split's image folder for the audit; blank when the split is (it is then left out). */
+function imagesOf(dir: string, subdir: string): string {
+  return dir.trim() ? `${dir}/${subdir}` : "";
+}
 
 const SWEEP_PATH_HINTS = [
   "training.learning_rate",
@@ -133,6 +142,7 @@ export function SegmentationPanel({
   const setPreprocessing = (steps: SegmentationForm["preprocessing"]) =>
     setFormData((p) => ({ ...p, preprocessing: steps }));
 
+  const canPickFolder = useRouteOpen(ROUTE.pickFolder);
   const onPickFolder = async () => {
     setPicking(true);
     try {
@@ -170,13 +180,13 @@ export function SegmentationPanel({
 
   const defaults = makeDefaultSegmentationForm();
   const datasetPath = formData.data.base_dir;
-  const strategies: { value: PanelStrategy; label: string }[] = [
+  const strategies = useOpenStrategies<{ value: PanelStrategy; label: string }>("segmentation", [
     { value: "simple", label: t.paramPanel.blocks.simple },
     { value: "cv", label: t.paramPanel.blocks.crossValidation },
     { value: "sweep", label: t.taskPanel.sweep },
     { value: "replicates", label: t.taskPanel.replicates },
     { value: "replicatedComparison", label: t.taskPanel.replicatedComparison },
-  ];
+  ]);
   const strategyLabel = strategies.find((s) => s.value === strategy)!.label;
   const suggestion = suggestExperimentName({
     datasetPath, model: formData.model.name,
@@ -253,26 +263,29 @@ export function SegmentationPanel({
                     mono
                   />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void onPickFolder()}
-                  disabled={picking}
-                  style={{
-                    padding: "12px 16px",
-                    background: "var(--accent-soft)",
-                    border: `1px solid ${accent}`,
-                    borderRadius: 10,
-                    color: "var(--vf-text)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 12,
-                    cursor: picking ? "default" : "pointer",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {picking ? "…" : t.taskPanel.dataset.browse}
-                </button>
+                {canPickFolder && (
+                  <button
+                    type="button"
+                    onClick={() => void onPickFolder()}
+                    disabled={picking}
+                    style={{
+                      padding: "12px 16px",
+                      background: "var(--accent-soft)",
+                      border: `1px solid ${accent}`,
+                      borderRadius: 10,
+                      color: "var(--vf-text)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 12,
+                      cursor: picking ? "default" : "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {picking ? "…" : t.taskPanel.dataset.browse}
+                  </button>
+                )}
               </div>
               <PickerNote text={pickNote} />
+              <ServerFoldersNote />
               <SampleDatasetButton
                 task="segmentation"
                 onApply={(path, setup) => setFormData((p) => sampleSegmentationForm(p, path, setup))}
@@ -345,6 +358,28 @@ export function SegmentationPanel({
                 valDir={formData.data.val_dir}
                 testDir={formData.data.test_dir}
                 onApplyClasses={(n) => setModel({ num_classes: n })}
+              />
+              <DatasetAudit
+                baseDir={formData.data.base_dir}
+                splits={{
+                  train: imagesOf(formData.data.train_dir, formData.data.images_subdir),
+                  val: imagesOf(formData.data.val_dir, formData.data.images_subdir),
+                  test: imagesOf(formData.data.test_dir, formData.data.images_subdir),
+                }}
+                optionalSplits={["test"]}
+                note={t.evidence.notes.masks}
+              />
+              <MaskAnalysis
+                request={{
+                  base_dir: formData.data.base_dir,
+                  train_dir: formData.data.train_dir,
+                  val_dir: formData.data.val_dir,
+                  test_dir: formData.data.test_dir,
+                  images_subdir: formData.data.images_subdir,
+                  masks_subdir: formData.data.masks_subdir,
+                  num_classes: formData.model.num_classes,
+                  ignore_index: formData.data.ignore_index,
+                }}
               />
             </div>
           </div>

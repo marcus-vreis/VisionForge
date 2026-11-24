@@ -7,10 +7,21 @@ import {
 } from "../i18n/lang";
 import { pt, type Dict } from "../i18n/pt";
 import type { TaskDescriptor } from "../lib/custom-tasks";
+import type { AnomalyAnalysisJob, AnomalyRequest, SavedAnomalyAnalysis } from "../lib/anomaly-analysis";
+import type { LabelSuspectsReport, SuspectSplit } from "../lib/label-suspects";
+import type { MaskAnalysisJob, MaskRequest, SavedMaskAnalysis } from "../lib/mask-analysis";
+import type {
+  ClassSimilarityJob,
+  ClassSimilarityRequest,
+  SavedClassSimilarity,
+} from "../lib/class-similarity";
+import type { SavedTargetAnalysis, TargetAnalysisJob, TargetRequest } from "../lib/target-analysis";
+import { upgradeRunHistory } from "../lib/history-keys";
 import {
   explorerBody,
   type ExplorerForm,
   type ExplorerSummary,
+  type SavedScan,
   type ScanJob,
 } from "../lib/dataset-explorer";
 import type {
@@ -45,6 +56,7 @@ import {
   type ProfileInfo,
   type Pronoun,
 } from "../lib/profile";
+import { LOCAL_SESSION, parseSession, type Session } from "../lib/session";
 import type { JsonSchema } from "../types/schema";
 import type {
   DatasetInfo,
@@ -59,21 +71,35 @@ import type {
 
 const BASE = "/api";
 
+/** Where a task keeps its split images (ADR-230): folders, a YOLO root, or one CSV per split. */
+export type DatasetAuditLayout = "folders" | "yolo" | "csv";
+
 export interface DatasetAuditRequest {
   base_dir: string;
   splits?: Record<string, string> | null;
+  layout?: DatasetAuditLayout;
+  images_dir?: string;
+  image_column?: string;
+  optional_splits?: string[];
   group_manifest?: string | null;
   strict_groups?: boolean;
+  /** Also decode every image and look for visual near-copies (ADR-228). */
+  near_duplicates?: boolean;
 }
 
 export interface DatasetAuditReport {
   ok: boolean;
   root: string;
   hash_algorithm: "sha256";
-  visual_similarity_checked: false;
+  visual_similarity_checked: boolean;
+  /** Empty when `visual_similarity_checked` is false. */
+  near_duplicate_groups: { splits: string[]; paths: string[] }[];
+  near_duplicate_max_distance: number;
   image_counts: Record<string, number>;
   duplicate_groups: { sha256: string; splits: string[]; paths: string[] }[];
   missing_splits: string[];
+  /** Optional splits (a test set) that do not exist: no finding (ADR-230). */
+  absent_optional_splits?: string[];
   empty_splits: string[];
   unreadable_count: number;
   unreadable: { path: string; reason: string }[];
@@ -501,6 +527,19 @@ export async function fetchRuns(): Promise<RunSummary[]> {
   return request<RunSummary[]>("/runs");
 }
 
+/** What this server offers to whoever is asking (ADR-216).
+ *
+ * An older server has no such route and a failed read says nothing: both read
+ * as a local install, where nothing is closed.
+ */
+export async function fetchSession(): Promise<Session> {
+  try {
+    return parseSession(await request<unknown>("/session"));
+  } catch {
+    return LOCAL_SESSION;
+  }
+}
+
 /** Every profile on the server, the default one first (ADR-114). */
 export async function fetchProfiles(): Promise<ProfileInfo[]> {
   const body = await request<{ profiles: ProfileInfo[] }>("/profiles");
@@ -703,6 +742,23 @@ export interface BatchPredictResponse {
   total_processed: number;
   failed_count: number;
   failed_files: string[];
+}
+
+/** Predict the run's dataset and find the images whose label it disputes (ADR-237). */
+export async function labelSuspectsRun(runId: string, splits: SuspectSplit[]): Promise<LabelSuspectsReport> {
+  return request<LabelSuspectsReport>(`/runs/${encodeURIComponent(runId)}/label_suspects`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ splits }),
+  });
+}
+
+/** The last report of the run, `null` when it was never computed. */
+export async function labelSuspectsSaved(runId: string): Promise<LabelSuspectsReport | null> {
+  const body = await request<{ report: LabelSuspectsReport | null }>(
+    `/runs/${encodeURIComponent(runId)}/label_suspects`,
+  );
+  return body.report;
 }
 
 export async function batchPredictRun(
@@ -1058,10 +1114,6 @@ export interface SystemInfo {
   suggested_workers: number;
   platform: string;
   version: string;
-  /** The optional `detection` extra (ultralytics, AGPL-3.0) is importable (ADR-195). */
-  ultralytics_installed: boolean;
-  /** The line that installs that extra for this kind of install. */
-  detection_install_command: string;
 }
 
 /** What was measured for an architecture's family at Adam 1e-3 (ADR-099/100):
@@ -1137,6 +1189,14 @@ export async function fetchModelDefaults(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ architecture, base_dir: baseDir ?? null, pretrained }),
   });
+}
+
+/** The models `user_models/` registers with `@register_model` (ADR-048): the
+ *  names `model.custom_model` accepts, sorted. The server scans the folder on
+ *  each call, so a file added while the GUI is open is listed. */
+export async function fetchCustomModels(): Promise<string[]> {
+  const body = await request<{ models: string[] }>("/model/custom");
+  return body.models;
 }
 
 export async function fetchSystemInfo(): Promise<SystemInfo> {
@@ -1364,8 +1424,9 @@ export interface TestRecord {
   artifacts: Record<string, string>;
 }
 
+/** A run as saved, its history under today's names (`lib/history-keys.ts`). */
 export async function fetchRunDetail(runId: string): Promise<RunDetail> {
-  return request<RunDetail>(`/runs/${encodeURIComponent(runId)}`);
+  return upgradeRunHistory(await request<RunDetail>(`/runs/${encodeURIComponent(runId)}`));
 }
 
 /** Continue a run that stopped before its last epoch (ADR-092/093). The config
@@ -1389,6 +1450,24 @@ export async function revealRunFolder(
 /** Permanently delete a run directory. The backend refuses to delete the
  *  currently running run (409) and rejects anything outside the profile's models
  *  folder (400); a run of another profile is a 404 (ADR-114). */
+/** One folder of the person's own dataset folder on a shared server (ADR-227). */
+export interface OwnDataset {
+  name: string;
+  path: string;
+  size_bytes: number;
+}
+
+/** The datasets of the signed-in person's own folder; empty on a local install. */
+export async function fetchOwnDatasets(): Promise<OwnDataset[]> {
+  const body = await request<{ datasets: OwnDataset[] }>("/datasets/own");
+  return body.datasets;
+}
+
+/** Delete one of them for good. 409 while a training of theirs runs or waits. */
+export async function deleteOwnDataset(name: string): Promise<{ name: string; status: string }> {
+  return request(`/datasets/own/${encodeURIComponent(name)}`, { method: "DELETE" });
+}
+
 export async function deleteRun(runId: string): Promise<{ run_id: string; status: string }> {
   return request(`/runs/${encodeURIComponent(runId)}`, { method: "DELETE" });
 }
@@ -1733,11 +1812,25 @@ export async function explorerImages(
 export async function explorerScanStart(
   form: ExplorerForm,
   maxImages: number,
+  nearDuplicates = false,
 ): Promise<ScanJob> {
   return request<ScanJob>("/explorer/scan", {
     method: "POST",
     headers: JSON_HEADERS,
-    body: JSON.stringify({ ...explorerBody(form), max_images: maxImages }),
+    body: JSON.stringify({
+      ...explorerBody(form),
+      max_images: maxImages,
+      near_duplicates: nearDuplicates,
+    }),
+  });
+}
+
+/** The last finished scan of the dataset, if the server kept one (ADR-231). */
+export async function explorerScanSaved(form: ExplorerForm): Promise<SavedScan> {
+  return request<SavedScan>("/explorer/scan/saved", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(explorerBody(form)),
   });
 }
 
@@ -1748,6 +1841,98 @@ export async function explorerScanStatus(jobId: string): Promise<ScanJob> {
 export async function explorerScanCancel(jobId: string): Promise<void> {
   await request<unknown>(`/explorer/scan/${encodeURIComponent(jobId)}/cancel`, {
     method: "POST",
+  });
+}
+
+// ── the masks of a segmentation dataset (ADR-234) ────────────────────────────
+
+/** Start the analysis; progress and result come through the scan status route. */
+export async function maskAnalysisStart(req: MaskRequest): Promise<MaskAnalysisJob> {
+  return request<MaskAnalysisJob>("/explorer/masks", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(req),
+  });
+}
+
+export async function maskAnalysisStatus(jobId: string): Promise<MaskAnalysisJob> {
+  return request<MaskAnalysisJob>(`/explorer/scan/${encodeURIComponent(jobId)}`);
+}
+
+export async function maskAnalysisSaved(req: MaskRequest): Promise<SavedMaskAnalysis> {
+  return request<SavedMaskAnalysis>("/explorer/masks/saved", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(req),
+  });
+}
+
+// ── which classes look alike before training (ADR-239) ──────────────────────
+
+/** Start the comparison; progress and result come through the scan status route. */
+export async function classSimilarityStart(req: ClassSimilarityRequest): Promise<ClassSimilarityJob> {
+  return request<ClassSimilarityJob>("/explorer/classes", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(req),
+  });
+}
+
+export async function classSimilarityStatus(jobId: string): Promise<ClassSimilarityJob> {
+  return request<ClassSimilarityJob>(`/explorer/scan/${encodeURIComponent(jobId)}`);
+}
+
+export async function classSimilaritySaved(req: ClassSimilarityRequest): Promise<SavedClassSimilarity> {
+  return request<SavedClassSimilarity>("/explorer/classes/saved", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(req),
+  });
+}
+
+// ── the targets of a regression dataset (ADR-235) ────────────────────────────
+
+/** Start the analysis; progress and result come through the scan status route. */
+export async function targetAnalysisStart(req: TargetRequest): Promise<TargetAnalysisJob> {
+  return request<TargetAnalysisJob>("/explorer/targets", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(req),
+  });
+}
+
+export async function targetAnalysisStatus(jobId: string): Promise<TargetAnalysisJob> {
+  return request<TargetAnalysisJob>(`/explorer/scan/${encodeURIComponent(jobId)}`);
+}
+
+export async function targetAnalysisSaved(req: TargetRequest): Promise<SavedTargetAnalysis> {
+  return request<SavedTargetAnalysis>("/explorer/targets/saved", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(req),
+  });
+}
+
+// ── an anomaly-detection dataset (ADR-236) ───────────────────────────────────
+
+/** Start the analysis; progress and result come through the scan status route. */
+export async function anomalyAnalysisStart(req: AnomalyRequest): Promise<AnomalyAnalysisJob> {
+  return request<AnomalyAnalysisJob>("/explorer/anomaly", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(req),
+  });
+}
+
+export async function anomalyAnalysisStatus(jobId: string): Promise<AnomalyAnalysisJob> {
+  return request<AnomalyAnalysisJob>(`/explorer/scan/${encodeURIComponent(jobId)}`);
+}
+
+export async function anomalyAnalysisSaved(req: AnomalyRequest): Promise<SavedAnomalyAnalysis> {
+  return request<SavedAnomalyAnalysis>("/explorer/anomaly/saved", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(req),
   });
 }
 

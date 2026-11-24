@@ -20,6 +20,7 @@ from pydantic import SecretStr
 
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.gui.api.dataset_download import credentials_in_play, download_dataset
+from visionforge.gui.api.dataset_scope import current_scope, preview_cache
 from visionforge.gui.api.error_messages import unexpected_error
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST_TEXT,
@@ -73,7 +74,9 @@ credentials_router = APIRouter(
 
 # Same for the download: its body can hold an api_key or token.
 download_router = APIRouter(
-    route_class=quiet_validation_route("download.request_invalid")
+    route_class=quiet_validation_route(
+        "download.request_invalid", {"out_dir": "server.dataset_write_outside"}
+    )
 )
 
 
@@ -120,7 +123,14 @@ def _remember_dataset_root(base_dir: str | Path) -> None:
 
 
 def _is_inside_allowed_root(path: Path) -> bool:
-    """True iff ``path`` resolves inside one of the remembered dataset roots."""
+    """True iff ``path`` resolves inside one of the remembered dataset roots.
+
+    In server mode the remembered roots are everybody's, so the request's own
+    scope decides instead (ADR-214).
+    """
+    scope = current_scope()
+    if scope is not None:
+        return scope.holds(path)
     for root in _ALLOWED_DATASET_ROOTS:
         try:
             if path.is_relative_to(root):
@@ -529,7 +539,7 @@ def _render_augment_preview(req: AugmentPreviewRequest) -> AugmentPreviewRespons
             img = TF.adjust_saturation(img, rng.uniform(0.8, 1.2))
         return img
 
-    cache_dir = _AUGMENT_CACHE_DIR
+    cache_dir = preview_cache(_AUGMENT_CACHE_DIR.parent) / _AUGMENT_CACHE_DIR.name
     cache_dir.mkdir(parents=True, exist_ok=True)
     for old in cache_dir.glob("*.png"):
         try:

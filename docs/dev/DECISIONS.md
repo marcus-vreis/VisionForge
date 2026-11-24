@@ -3708,7 +3708,7 @@ implying the backbone is untouched — the distinction matters in a paper, where
 **Status:** Accepted
 **Supersedes:** the per-feature extras of ADR-005 (the hardware extras stay)
 **Amended by:** ADR-170/171/172/176 (`mlflow`, `hub`, `wandb` and `dvc` are optional extras that install something; the seven extras named here stay empty)
-**Superseded in part by:** ADR-195 (`ultralytics`, AGPL-3.0, is again the `detection` extra; the other six stay in `dependencies`)
+**Superseded in part by:** ADR-195 (`ultralytics`, AGPL-3.0, is again the `detection` extra; the other six stay in `dependencies`), itself reverted by ADR-243 (`ultralytics` is back in `dependencies`)
 
 **Context:** seven capabilities were optional extras — `detection`, `timm`,
 `optuna`, `tensorboard`, `roboflow`, `kaggle`, `huggingface`. The reasoning was
@@ -7811,7 +7811,7 @@ differently now. Each fix has a test that failed before it
 ## ADR-195 — Ultralytics (AGPL-3.0) is the optional `detection` extra
 
 **Date:** 2026-11-11
-**Status:** Accepted
+**Status:** Amended by ADR-243 (`ultralytics` is a required dependency again; `detection` is an empty extra)
 **Supersedes in part:** ADR-106 (for `ultralytics` only; the other six stay in `dependencies`)
 
 **Context:** ADR-106 made `ultralytics` a base dependency of an MIT package. It
@@ -8309,7 +8309,7 @@ Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS
 ## ADR-208 — The screens name what a run reports and what it trains
 
 **Date:** 2026-11-15
-**Status:** Accepted
+**Status:** Amended by ADR-241 (the backend's `val_auroc` is renamed after all)
 **Amends:** ADR-048 (custom models), ADR-051 (timm), ADR-038 (anomaly), ADR-201 (the History entry as the results page)
 
 **Context:** after 0.22.0 the first training of every task other than classification was walked through the interface, and a custom model was used the way `docs/custom/MODELS.md` describes. Every run trained. Three things on screen were wrong:
@@ -8380,3 +8380,968 @@ Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS
 
 **Amended 2026-11-18: four gaps found in review.** A metric the reproduction reports as NaN or infinite, where the group has a `pi95`, counts as outside (exit 1); before, it left the verdict at `no_interval` and exit 0. A replicate group whose reproduction has no test split exits 2: the group's aggregates are test scores and cannot judge validation ones. The recorded value and the delta are reported only for the seed's own finished run: a single run re-trained with `--seed` other than its recorded seed, or a replicate that stopped or failed, gets `recorded: null`. A `--output` that is a file, or a config whose `training` or `output` is not a mapping, exits 2 instead of a traceback.
 
+## ADR-211 — Colab is chosen where the GPU is chosen, and its dataset is asked on the Dados step
+
+**Date:** 2026-11-18
+**Status:** Accepted
+**Amends:** ADR-163 (training on Colab through the official CLI), ADR-164 (dataset in Google Drive)
+
+**Context:** ADR-163 put everything about Colab in one panel of the header: installing the CLI, signing in, and also a second "train" button with its own dataset field and GPU dropdown. The GUI then had two ways to start a training, and the one for Colab bypassed the Revisão step and the Treinar button every other run goes through. The first use with a real account showed the cost: the person looked for Colab where the GPU is picked, and pointed Drive for desktop at the local dataset folder as a backup, which lands under "Computers" and not "My Drive", so the VM cannot reach it; nothing on screen said so.
+
+**Decision:**
+
+- The device selector of the bottom bar offers the account's Colab under this machine's devices: one button per GPU (`T4`, `L4`, `A100`, `H100`, `G4`). With it picked, the usual Treinar button reads "Treinar no Colab" and sends the classification to `/api/colab/experiment/run`. Picking a local device goes back to this machine. Nothing changes on the server.
+- While Colab is picked, the selector's button shows what only Colab has: the GPU asked for, the balance in compute units and the runtimes alive (`/api/colab/usage`, `/api/colab/sessions`). The status is asked when the selector mounts and each time its menu opens; the balance and the runtimes only once connected and on screen.
+- The Dados step of the classification shows a card that asks where the VM takes the dataset from: a folder of "My Drive" (the browser of ADR-203) or a link (zip URL, `torchvision:`, `hf:`), and whether the run is also saved to the Drive. The card says that a backup-only folder is not in "My Drive". The step counts as filled when that origin can be sent, and Treinar stays locked, with the reason, until then.
+- The options are off, with the reason, while the account is not connected, on another task, and for Réplicas and the replicated comparison (ADR-056, ADR-193).
+- The header panel keeps the install, the login, the account and the runtimes, and points to the selector for training.
+
+**Consequences:** one way to start a training. A Colab run now passes the Revisão step like any other. The three origins stay: the Drive is the first option, not the only one, because a public dataset by link costs no upload. A Drive folder picked in the card is also a folder of this computer, so it fills the form's dataset folder and the form reads its splits and classes as for a local dataset; the Revisão step adds a row with where the VM takes the dataset from. A link's dataset is not read here before the run, so its task type and number of classes stay the form's, and the card says so.
+
+**Alternatives considered:**
+
+- *Make the Drive the only origin.* Simpler to explain, and it would take away the zip URL and the public catalogs that work today.
+- *Lift the header panel's state into the page and share it with the selector.* One request less per menu opening, at the price of threading the panel's eight handlers through the header; the selector asking for itself keeps the two apart.
+- *A fifth `kind` in the device selection.* The selection is saved in the config as this machine's device; Colab is where the run goes, not a device of this machine, so it is a separate choice.
+
+## ADR-212 — A multi-user server mode in this repository: threat model, route inventory and phases (proposal)
+
+**Date:** 2026-11-18
+**Status:** Proposed. Nothing here is built; this ADR fixes what has to be true before the first line of server code, and each phase gets its own ADR when it lands.
+**Extends:** ADR-075 (one run queue per server), ADR-114 (profiles are output folders, not access control), ADR-179 (security headers)
+
+**Context:** VisionForge is a local tool: the browser and the Python process are on the same machine and belong to the same person. ADR-114 let a lab share one `visionforge gui --host` and said in its title what it was not: access control. Issue 352 asks for the other thing: one server for many people, each signing in, each seeing only their own runs and datasets, a queue that says how many jobs are ahead and not whose, datasets that arrive by upload and are deleted after use, and sign-in with GitHub and other accounts to publish weights and runs.
+
+The code as it is on 2026-11-18 (`development`, b95c6919), read through the FastAPI app's own route table:
+
+- **Identity is a header the client writes.** 79 of the 163 routes read `X-VF-Profile`; the server believes it. Any client can send any slug.
+- **84 routes do not read the profile at all:**
+  - 16 are read-only and hold nothing personal: the schemas, `/api/tasks`, the code tour, `/api/system/info`, `/api/device/info`, the model defaults, `/api/health`, `GET /api/update` and the SPA.
+  - 18 read a dataset from a path of the server's disk that the client names: the `dataset/stats`, `samples`, `detect`, `preview_*` and `audit` routes of every task, `/api/dataset/file`, and the explorer's `summary`, `images`, `thumb` and `scan`. `/api/dataset/file` is confined to an allow-list, and that list is one per process: a folder one person probed is readable by all.
+  - 28 write to a path of the server's disk that the client names: the explorer's merge, resplit, incorporate and COCO import/export jobs (25 routes, with job ids nobody owns), `/api/dataset/download`, `/api/sample-dataset` and `/api/dvc/prepare`.
+  - 6 act on the desktop of the machine the server runs on: the tkinter pickers (`/api/dataset/pick`, `/api/checkpoint/pick`, `/api/detection/dataset/pick_yaml`) and the Drive for desktop routes (`/api/colab/drive/folders`, `open`, `continue`).
+  - 16 hold state every user shares: `/api/credentials` (the dataset providers' keys), `/api/profiles` (anyone lists, creates and renames), `/api/queue` and `DELETE /api/queue/{run_id}` (every job with its profile and name, cancellable by anyone), `/api/experiment/events`, `status` and `result/{run_id}`, `/api/artifacts/{path}` (everything under `outputs/`, every profile's), the custom tasks' delete, hide and unhide, and `/api/update/apply`.
+- **Code a user brings runs inside the server process.** A training is `asyncio.to_thread(block.run)`: a thread of the server, with its memory, its files and its tokens. A custom task is a Python file loaded with `exec_module` (`tasks/registry.py`). The 22 `torch.load` calls of the package all pass `weights_only=True`, but a detection checkpoint goes to `YOLO(weights_path)`, and Ultralytics 8.4.60 sets `weights_only=False` when the caller does not say (`ultralytics/utils/patches.py`): a `.pt` a user supplies for detection is a pickle the server executes.
+- **Tokens are plain files.** The Hugging Face, GitHub, Zenodo, W&B and Comet tokens of a profile are text files under the config folder, found from the profile's slug. Whoever sends that slug publishes with that token.
+- **What already exists.** `HostOriginGuard` refuses a foreign `Host` or `Origin`; the CSP and the fixed headers are on every response; `reveal`, `dvc/prepare`, the Drive `open`/`continue` and `update/apply` already answer only a loopback client.
+
+**Threat model.** What is protected: each person's datasets, runs, checkpoints and tokens; the server's disk and GPU; the other tenants' time in the queue. Who is assumed hostile in phase 1: any signed-in user, and anyone on the network who is not signed in. Who is trusted: the operator, and in phase 0 the members of the group.
+
+| Threat | Today | Needed |
+| --- | --- | --- |
+| Pass for someone else | send their slug in `X-VF-Profile` | identity from an authenticated session only; the header is ignored |
+| Read or delete another's runs | `/api/artifacts`, `/api/experiment/*`, `/api/queue` are shared | every route that names a run checks its owner; the queue answers a count |
+| Read the server's disk | dataset routes take any path | every path resolves inside the user's own root; no native dialogs |
+| Write over the server's disk | explorer jobs and downloads take any output path | same confinement; jobs owned by who started them |
+| Run code as the server | custom task, detection `.pt`, the training thread | phase 0: accepted, said in the docs; phase 1: one process per job with no access to the server's files, or the feature is off |
+| Use another's publishing token | plain file found from the slug | read only for the session's user; encrypted at rest in phase 1 |
+| Starve the others | one queue, no limits | per-user limits on queued jobs, disk and upload size |
+| Fill the disk with an archive | zip downloads are extracted as they come | size and entry limits before extraction |
+| Take over a browser session | not applicable (no session) | HttpOnly, Secure, SameSite cookie; the existing Origin check covers cross-site posts |
+| Leftover data | datasets stay where the user put them | uploaded datasets deleted at the end of the run, the deletion logged and written to `run.json` |
+
+**Decision:**
+
+- **One repository, one flag.** Server mode is `visionforge gui --server`, off by default. Without it nothing changes: the local tool keeps its pickers, its folder buttons and its header. A fork is rejected: every fix would be made twice.
+- **Phase 0, a group that trusts its members.** VisionForge writes no login. An authenticating reverse proxy (oauth2-proxy or Authelia, with GitHub or Google) sits in front; VisionForge listens on loopback, accepts the user name only in a header from the proxy's address (`--trusted-proxy`), and refuses to start in server mode without one. That name is the profile; `X-VF-Profile` from the client is ignored and `/api/profiles` stops creating and renaming.
+- **In server mode every route is in one of four classes,** declared where the route is declared and checked by a test that walks the app's route table, so a new route without a class fails the suite:
+  - *open*: the 16 read-only routes;
+  - *owner*: the 79 that read the profile today, plus the queue, the events, the status, the result, the artifacts and the explorer jobs, each checking that the run or job is the session user's;
+  - *confined*: every route that takes a dataset path, which must resolve inside that user's dataset root;
+  - *off*: the native pickers, `reveal`, the Drive for desktop routes, `update/apply`, the shared `/api/credentials`, and the custom tasks. An *off* route answers 404 and the GUI hides its button, with the reason where a person would look for it.
+- **The queue answers a number.** A user sees their own jobs in full and, of the rest, only how many are ahead.
+- **Phase 0 does not isolate code.** A member can supply a detection checkpoint, and with it run code as the server. The install guide says so in its first paragraph, and that is why phase 0 is for a group that already shares the machine.
+- **Phase 1, open multi-user,** needs, in this order: each job in its own process with its own working folder and no read access to the config folder (a container where the host has one); upload of datasets in resumable parts with a per-user quota and archive limits; deletion at the end of the run, logged and recorded in `run.json`; tokens encrypted at rest and OAuth with GitHub for publishing; per-user limits in the queue. Custom tasks and user-supplied checkpoints stay off until the first item is done.
+- **Colab in server mode** is the Drive through Google's API with the user's consent, not Drive for desktop, and waits for phase 1.
+
+**Consequences:** the local tool pays nothing: the flag is off and the classes only bite in server mode. Phase 0 is small (a header reader, the class of each route, owner checks, path confinement) and is useful by itself to the lab ADR-114 was written for, which today has organisation and no privacy. The route-class test turns "did someone remember to protect the new route" into a failing check. The hard part is phase 1's process isolation; until it exists, VisionForge must not be offered to people who do not trust each other, and the docs say so.
+
+**Not verified:** the inventory comes from the route table and each route's dependencies, not from reading the 163 handlers; a route that reads the profile may still take a path outside it, and phase 0 starts by reading each one. Nobody has tried to break the current `--host` mode on purpose. The Ultralytics behaviour was read in the installed 8.4.60 only.
+
+**Alternatives considered:**
+
+- *A fork for the server.* Two code bases for one trainer; rejected in the issue.
+- *VisionForge's own passwords.* Password storage, reset, lockout and 2FA are a product of their own, and a proxy that does them well exists. Revisit only if someone needs a server with no identity provider.
+- *One VisionForge process per user behind a spawner (the JupyterHub way).* Real isolation with little new code, and it fits phase 1's "one process per job" well. It loses the shared queue, which is the point of sharing one GPU; kept as the fallback if confinement inside one process proves leaky.
+- *Keep the header and add a shared password.* It protects the server from the network and nobody from each other.
+
+## ADR-213 — Server mode starts as a gate: only the login proxy is answered, it names the user, and a route answers only once it has a class and was read
+
+**Date:** 2026-11-18
+**Status:** Accepted
+**Extends:** ADR-212 (the server-mode proposal), ADR-114 (profiles are output folders), ADR-178 (the Host and Origin guard)
+
+**Context:** ADR-212 proposed phase 0 of a multi-user server: a group that trusts its members, behind a reverse proxy that signs them in. Its inventory found 84 routes that ignore the profile and 79 that believe a header the browser writes. Phase 0 cannot land in one change: each of the 163 routes has to be read before it may answer several people. What can land first is the part every later change stands on: who is asking, and a rule that keeps a route closed until someone has read it.
+
+**Decision:**
+
+- `visionforge gui --server --trusted-proxy <address>` turns the mode on. It is off by default and experimental. Without `--trusted-proxy` the command stops with the reason; `--trusted-proxy` and `--user-header` without `--server` stop too.
+- `ServerModeGate` (`gui/server_mode.py`) is an ASGI middleware inside the Host and Origin guard. Off, it passes every request through. On:
+  - a client whose address is not one of the trusted proxies gets 403: someone who reaches the port directly could write the user header themselves;
+  - the account comes from the proxy's header (`X-Forwarded-User`, or `--user-header`), trimmed and case-folded; missing or unusable is 401. `GET /api/health` alone needs no user, for the proxy's probe;
+  - the account becomes a profile: the folder is `<readable part>-<10 hex of the SHA-256 of the whole name>`, made on the first request. The digest is what keeps `a.b@lab.org` and `a-b@lab.org` apart, since both fold to the same readable part;
+  - the gate overwrites `X-VF-Profile` on the request with that folder. The 79 routes that resolve a profile keep their code and now work in the signed-in person's folder, whatever the browser sent.
+- Every route has a class in one table, `ROUTE_CLASSES`: `open`, `owner`, `confined` or `off` (ADR-212). A test compares the table with the app's OpenAPI document in both directions, so a new route without a class, or a class of a route that is gone, fails the suite. The gate finds the route of a request by matching the table's own path templates, not through the app's router: how a router keeps the routes of an included one changed between FastAPI 0.135 and 0.165, and the first version of the gate, which walked `app.routes`, found no API route on the newer one.
+- **The gate fails closed.** In server mode a route answers only when it is `open`, or `owner` and listed in `OWNER_READY`, the routes whose handler was read. Anything else is 404 with a message that says the feature is not available on a server: `off`, `confined`, the `owner` routes not read yet, a route the table does not know, and every WebSocket.
+- This change reads and opens the History (`GET /api/runs`, `GET` and `DELETE /api/runs/{run_id}`, which look only inside the profile's models folder) and the 18 token routes (a file found from the profile). `GET /api/session` is new and `open`: whether the server is in server mode, and the account and profile of who asks.
+
+**Consequences:** server mode cannot train yet: the dataset routes, the training routes, the queue and the events are closed, and the guide says so in its first paragraph. Each later change opens a group of routes after reading it (confinement of dataset paths to a per-user folder, owner checks on the queue and events, then training). The GUI does not read `/api/session` yet and shows buttons that answer 404. The routes that check for a loopback client today (`reveal`, `dvc/prepare`, the Drive routes, `update/apply`) would be fooled by a proxy on the same machine, whose address is loopback; they are `off`, so the gate refuses them before that check runs.
+
+**Amends ADR-212:** the class of a route is declared in one table and not where the route is declared. The guarantee is the same (the test fails for a route without a class), the change does not touch 163 decorators, and the whole policy can be read in one place. `--trusted-proxy` does not force a loopback bind: the proxy may run in another container, and the address check is what protects the port.
+
+**Not verified:** no install behind a real oauth2-proxy or Authelia; the gate was exercised with simulated requests from a trusted and an untrusted address. The 21 `owner` routes opened here were read; the other 50 were not.
+
+**Alternatives considered:**
+
+- *A FastAPI dependency per route instead of a middleware.* It would see the matched route for free, and it would run beside the profile dependency with no guaranteed order; the header has to be overwritten before any handler reads it.
+- *Open every `owner` route now, since each already resolves a profile.* The training routes take dataset paths in their body, and a route that resolves a profile can still read outside it. Reading first is the point.
+- *The readable slug alone as the folder.* Two accounts that fold to the same slug would share runs and tokens.
+
+## ADR-214 — In server mode a request reads datasets only from the person's own folder and the folders the operator shares
+
+**Date:** 2026-11-18
+**Status:** Accepted
+**Extends:** ADR-212 (the server-mode proposal), ADR-213 (the gate)
+
+**Context:** ADR-213 left the 45 `confined` routes closed: each takes a dataset path the client writes, and on a server that path could be anyone's folder or the server's own files. The routes that only read a dataset to show it (splits, counts per class, samples, thumbnails) are what the Dados step needs first. They share one shape: an absolute `base_dir` and names inside it (`train`, `images`, `train.csv`). `/api/dataset/file` serves a thumbnail from an allow-list of folders "the user probed this session", and that list is one per process: on a server it is everybody's.
+
+**Decision:**
+
+- A person has a dataset folder, `outputs/profiles/<slug>/datasets/`, made by the gate on their first request. The operator shares folders with everyone, read-only, with `--datasets-dir <folder>` (repeatable; it must exist, and it needs `--server`).
+- The gate binds a `DatasetScope` for each request, in a context variable: the person's folder first, then the shared ones, all resolved. `GET /api/session` lists them in `dataset_dirs`. A local install binds none.
+- Two field types carry the rule (`gui/api/dataset_scope.py`), and the request models of the dataset routes use them in place of `str`:
+  - `DatasetDir`, for `base_dir`: with a scope bound it must be absolute, not start with `~`, and resolve inside the scope; the model keeps the resolved path, so the handler works on the path that was checked.
+  - `DatasetPart`, for a name inside the dataset: with a scope bound it may only go down (no `..`, no root, no drive, no `~`), read both as a Windows and as a POSIX path.
+  - With no scope bound both accept what `str` accepts: the local tool is unchanged, and so is the OpenAPI document.
+- A path outside the scope fails the validation of the body (422 with the reason), before any handler runs.
+- `_is_inside_allowed_root`, behind `/api/dataset/file`, asks the request's scope when one is bound and ignores the process-wide list.
+- Nine `confined` routes are read and open in server mode: `/api/dataset/detect`, `stats`, `samples` and `file`, the detection `stats` and `samples`, and the segmentation, anomaly and regression `stats`. A test finds the request model of every open `confined` route in the OpenAPI document and fails when one has a plain `str` field that is not on a short list of fields that are not paths.
+
+**Consequences:** the Dados step can inspect a dataset on a server. Nobody can add a dataset through the GUI yet: the download, the sample dataset and the Laboratório de datasets write to the disk and stay closed until a write scope (the person's own folder only) exists; until then the operator places the files. The two previews stay closed because they serve their images through `/api/artifacts`, which is still everyone's. `OWNER_READY` is now `READY`, since it lists open `confined` routes too.
+
+**Known limits:** a regression manifest may name an image by an absolute path; the handler does not open it, but the count of missing images tells whether the file exists. A symlink inside a dataset folder that points outside is followed for the names inside (`DatasetPart` checks the text, not the target); in phase 0 only the operator can create one.
+
+**Not verified:** the validators run in the request's context because FastAPI validates the body in the task the middleware calls; that was exercised through the real app with a test client, not behind a real proxy. The 36 other `confined` routes were not read.
+
+**Alternatives considered:**
+
+- *Check the path in each handler.* Nine handlers today and 45 in the end, each a place to forget; the type is checked by a test.
+- *Inspect the JSON body in the gate.* The gate would have to know which strings are paths, and it would check a path the handler then reads again in another spelling.
+- *A fixed list of dataset names instead of paths.* Cleaner for a server, and it would fork the request models and the forms from the local tool, which names folders.
+
+## ADR-215 — In server mode a run, its progress and the queue belong to who started it, and a config names only what its owner may reach
+
+**Date:** 2026-11-18
+**Status:** Accepted
+**Extends:** ADR-075 (one run queue per server), ADR-212, ADR-213 (the gate), ADR-214 (the dataset scope)
+
+**Context:** after ADR-214 a person could inspect a dataset on a server and do nothing with it. Three groups of routes stood between that and a training. The queue and the run routes (`/api/queue`, `/api/experiment/events`, `status`, `result`) showed every job to everyone and let anyone stop any of them. `/api/artifacts` served everything under `outputs/`. And the five run routes take a whole config: a dataset folder, weights, names inside the dataset, and a model name that Ultralytics and timm resolve as a file or a remote address when it looks like one (`YOLO("../x.pt")` unpickles that file).
+
+**Decision:**
+
+- The request scope (ADR-214) also names its owner, the signed-in person's profile. A started job keeps the profile it was submitted under, and the record a lane keeps after the job's state is gone carries it too.
+- With an owner bound:
+  - `/api/experiment/status`, `events` and `result/{run_id}` and `DELETE /api/queue/{run_id}` treat a run of another profile as a run that does not exist: the same 404, idle status or empty stream. With no `run_id`, "the latest run" is the person's own latest, not the server's.
+  - `GET /api/queue` lists the person's jobs and adds `others_ahead` to each lane and to the snapshot: how many jobs of other people run or wait before the person's first job, or all of them when the person has none. No label, id or profile of another person's job leaves the server. It is 0 on a local install.
+  - `/api/artifacts/{path}` serves only what sits under the person's profile folder.
+- The five run routes (`/api/experiment/run` and the detection, segmentation, regression and anomaly `run`) call `confine_config` on the validated config, after the profile has rewritten its output folders. With a scope bound it walks every field and answers 422 naming the field when:
+  - a path is outside the person's profile folder and the shared dataset folders, or a path the run writes (`output.*`, `output_csv`, `output_onnx`) is outside the person's folder;
+  - a name inside the dataset (`train_dir`, `images_subdir`, `train_csv`...) climbs out of it;
+  - `model.name` or `model.timm_model` has a path separator, a colon, a leading dot or `~`, or `..`;
+  - `model.custom_model` is set.
+- The configs live in `utils/` and are shared with the command line, so the rule is a walk over the validated model and not a field type. A test lists every text field of the five configs and fails when one is in none of the four sets (dataset part, model name, forbidden, read and free): a new text field has to be read before the suite passes.
+- These routes are open in server mode. The strategies (23 routes), resume, the evaluation routes and the exporters stay closed until each is read.
+
+**Consequences:** a person can train one run at a time on a server with a shared dataset and follow it; nobody sees what the others train, only how long the line is. Weights must sit in the person's folder or a shared one, and nobody can put a file there through the GUI yet, so a detection checkpoint, which Ultralytics unpickles, can only be one the operator placed or one the person's own run wrote. The training still runs in a thread of the server: one person's job can exhaust the memory or the GPU of all, and phase 0 remains for a group that trusts its members.
+
+**Known limits:** the config is validated before it is confined, and its own validators say whether `base_dir` or `weights_path` exists, so the 422 of a path outside the scope can differ from that of a path that does not exist. `status.queued` still counts every waiting job on the server. A data YAML or a CSV inside a shared dataset may name files elsewhere; the operator controls those.
+
+**Not verified:** nothing ran behind a real proxy; no GPU run, and only classification was trained (see the amendment).
+
+**Amended 2026-11-18: a search could leave the scope.** `grid_search.hyperparameters` and `random_search.search_space` were listed here as text that names nothing on the disk. They name fields of the config, which the block sets per trial after the walk. ADR-216 closes every classification `block` but the plain run on a server.
+
+**Amended 2026-11-18: a real run.** The real server, in server mode in a temporary folder, trained a one-epoch classification on the CPU for one account while a second account submitted 40 ms later: the second job queued and ran next, each run landed in its owner's folder and History, the second account got an idle status, 404 and 404 for the first one's status, result and stop, and a plot of the first run answered 200 to its owner and 403 to the other. The first attempt found a bug that is not server mode's: the second submission answered 500, because `cuda_context_broken` reads `sys.modules["torch"]`, which holds the module from the first line of its import, while the first job's thread was still importing it and `torch.cuda` did not exist yet. A torch without `cuda.is_initialized` now reads as no context to break. A local install had the same window on a cold server: two submissions within the three seconds of the first import.
+
+**Alternatives considered:**
+
+- *One queue per person.* Nobody would wait for anybody, on one GPU that cannot be true; the shared queue with a count is what the request asked for.
+- *Hide `others_ahead` too.* The person would see their job waiting with no reason.
+- *Field types in the configs, as in ADR-214.* `utils/` imports nothing of the GUI, and the command line must keep accepting any folder.
+
+## ADR-216 — In server mode the screen asks the server what it offers and hides the rest
+
+**Date:** 2026-11-18
+**Status:** Accepted
+**Extends:** ADR-213 (the gate), ADR-214, ADR-215
+
+**Context:** after ADR-215 a person could train on a server, and the page did not know it was on one. It offered the folder dialog (which would open on the server's screen), four strategies per task, the datasets sheet, Colab and a dozen actions in History; each answered "not available". On opening it also called `/api/profiles` and `/api/colab/status`, both closed. Reading how the page submits a strategy found a hole in ADR-215: classification sends cross-validation and the searches through `/api/experiment/run`, as the `block` field, so the gate let them through; and a search rewrites fields of the config for each trial (`{"data.base_dir": [...]}`) after `confine_config` has walked it. A grid axis could name a dataset, weights or an output folder outside the person's reach. `grid_search.hyperparameters` had been listed as text that names nothing on the disk.
+
+**Decision:**
+
+- `GET /api/session` also returns `closed`, the keys of `ROUTE_CLASSES` that do not answer (`"METHOD /api/template"`), and `closed_blocks`, the values of classification's `block` the server refuses. Both are empty on a local install. The list of what a server offers stays in one place, the table of ADR-213: the page holds no copy of it.
+- With a scope bound, `confine_config` refuses every `block` but `classification` with 422. The two fields that rewrite others are listed apart (`REWRITING`), not as free text.
+- The page reads the session before it is first drawn (`bootSession`, at most 3 s of wait; a slower answer is applied when it comes) and keeps it in a store outside React (`lib/session.ts`). An older server, a failed read and a local install all read as "nothing closed": the server is what refuses, the page only stops offering.
+- A component asks by the key of the route it would call (`ROUTE.pickFolder`, `strategyRoute(task, strategy)`). What is closed is absent, not disabled: a greyed button with "not on a server" on every card would be most of the page. A test on the server side reads `session.ts` and fails if a key it asks about is not in `ROUTE_CLASSES`.
+- Where the folder dialog is gone, the dataset field lists the folders the server accepts (`dataset_dirs`), the person's own first. The profile menu names the account and the profile folder and offers no other profile. The first-run invitation offers the tour alone, and the tour skips the datasets button.
+
+**Consequences:** a person on a server sees a smaller page in which everything works, and each route opened later lights up its button with no change to the page, as long as the button asks by that route's key. A classification search on a server is closed until its axes are confined; the local tool is unchanged. The greeting still asks a name on the first visit and keeps it in the browser, since the profile cannot be renamed there yet.
+
+**Known limits:** the page asks about 32 routes and a route it does not ask about is still offered; opening a closed route by hand still answers 404, which is the rule that counts. The integrations (MLflow, W&B, Comet) are not configurable on a server, because they are saved through `PUT /api/profiles/{slug}`. A session that arrives after the 3 s wait redraws the page with fewer buttons.
+
+**Not verified:** nothing ran behind a real login proxy: the page was opened behind a stand-in that only adds the account header. Not checked at phone width or with a screen reader in this mode. No Playwright test covers server mode.
+
+**Alternatives considered:**
+
+- *A list of features in the page ("on a server, hide these").* Two lists to keep equal; the one in the page would be wrong the day a route opened.
+- *Disable instead of hide.* Honest about what exists, but most of the page would be grey, and the reason would be the same sentence everywhere.
+- *Confine the axes of a search now.* It is the right end state, and it belongs with the strategies, which are read together (23 routes); until then the block is closed.
+
+**Amended 2026-11-19:** ADR-217 reads the axes and opens the strategies; `closed_blocks` now lists only the two blocks that do not train.
+
+## ADR-217 — In server mode a strategy runs, and what it rewrites per trial is read like the config
+
+**Date:** 2026-11-19
+**Status:** Accepted
+**Extends:** ADR-215 (the config), ADR-216 (which closed the searches)
+
+**Context:** ADR-216 closed every classification `block` but the plain run, because a search sets fields of the config for each trial after `confine_config` has walked it. The other strategies have the same shape and were still closed by the gate: a sweep (`search_space`), a paired comparison (`variants`) and a model comparison (`model_names`) each apply dotted names to the base config once per trial. Twenty routes and five values of `block` were waiting on one question: what may be rewritten.
+
+**Decision:**
+
+- `confine_axes(config_type, axes)` reads the dotted names a strategy sets. An axis may name only a field whose annotation holds numbers, text, switches or choices (`int`, `float`, `bool`, `str`, `Literal`, an enum, and lists, tuples and unions of those). A path, a `dict`, a config section, `Any` and a name the config does not have are refused with 422. So are a name inside the dataset (`DATASET_PARTS`), a custom model, `block` and the search spaces themselves, which are text or choices by type. The rule is by annotation, not by value, so a field that is `None` in the base config (`model.weights_path`) is still seen as a path, and a field added later is closed unless it is plain.
+- A model name an axis offers (`model.name`, `model.timm_model`) is checked like the field itself: every text inside the offered value (a list, a `choice` spec's options, one variant's value) must be a plain name. `YOLO("../x.pt")` unpickles that file.
+- The value an axis offers for any other open field is not read: the trial validates it against the config.
+- Every strategy start confines its base config like a plain run, after the profile scopes its output: comparison, sweep, K-fold, replicates and paired comparison. `confine_config` calls `confine_axes` on `grid_search.hyperparameters` and `random_search.search_space`, so the classification blocks follow the same rule through `/api/experiment/run`.
+- The twenty strategy routes of the built-in tasks join `READY`. `OPEN_BLOCKS` becomes every block that trains; `batch_prediction` and `export_onnx` stay closed and are read with the evaluation routes. The custom-task strategies stay `off` with the custom tasks.
+- `cross_validation.group_manifest` is a path the loader resolves against the dataset folder and refuses outside it: a relative one only has to go down (`DATASET_FILES`); an absolute one is checked like any path.
+- The page changes nothing: it asks by route key and by `closed_blocks` (ADR-216), so the strategies appear when the server stops listing them.
+
+**Consequences:** on a server a person can cross-validate, search, compare and replicate, and no trial reads or writes outside what the base config was allowed. A search cannot vary the dataset or the weights there: that takes one job per dataset. The local tool is unchanged, since neither function does anything with no scope bound.
+
+**Known limits:** a strategy is one job in the queue from its first trial to its last, and nothing caps the number of trials: a long search holds the queue for everyone until it ends or its owner stops it. The rule trusts the annotations: a text field that named a file would have to be added to one of the sets of ADR-215, which the suite enforces for every text field of the five configs.
+
+**Not verified:** nothing ran behind a real login proxy. Only a classification grid search trained for real in this mode (two trials, CPU); for the other tasks and strategies the requests were tested and the training was not. Optuna and stopping a strategy midway were not tried in this mode.
+
+**Alternatives considered:**
+
+- *Check each offered value against the field's rule (allow a search over datasets inside the scope).* It needs the type of the field and the validators that resolve it, per trial combination; a config validator that joins or expands a path would be one more thing to mirror. Varying the dataset inside one search is rare, and a job per dataset does it.
+- *Confine inside the trial, when the config is built.* The scope is bound to the request, and the trial runs later from the queue in a worker thread; and a refusal would come after GPU time was spent, as a failed trial instead of a 422.
+- *A list of the fields a search may vary.* Shorter to read, and wrong the day a config gains a field; the annotation rule fails closed instead.
+
+## ADR-218 — In server mode a finished run can be resumed, tested, explained and exported, inside its owner's reach
+
+**Date:** 2026-11-19
+**Status:** Accepted
+**Extends:** ADR-214 (the dataset types), ADR-215 (the config)
+
+**Context:** after ADR-217 a person could train anything on a server and do nothing with the result but look at it: resuming, testing on another dataset, Grad-CAM, batch prediction and ONNX export still answered 404. The four evaluation routes take a run id and a body; they load the checkpoint `run.json` records (`artifacts.model`), read images from a folder the body names, and write into the run folder or, for the CSV and the ONNX file, wherever the body says. Resuming rebuilds the config from `run.json` and queues it. Loading a detection checkpoint unpickles it.
+
+**Decision:**
+
+- The folder a body names is typed `DatasetDir`, like every dataset path since ADR-214: `RunTestRequest.data_dir`, `GradCamRequest.input_dir`, `BatchPredictRequest.input_dir`. The three routes move from `owner` to `confined`, and the test that walks the bodies of the confined routes covers them.
+- An output path is typed `RunFolderFile`: on a server only an empty one passes (`ExportOnnxRequest.output_onnx`, `BatchPredictRequest.output_csv`), so the file is written into the run's own folder. A person has no other folder on the server worth naming, and one rule (the run folder) is easier to state than a second scope for writes.
+- Before any of the four actions runs, `_reject_foreign_checkpoint` reads `artifacts.model` and answers 409 when it resolves outside the owner's profile folder. A run trained on the server always records a file of its own; the check is there so that what gets unpickled never depends on a `run.json` being as the server left it.
+- Resuming calls `confine_config` on the stored config after the profile scopes its output: the folders a server shares may have changed since the run started, and a stored config is read like a new one.
+- The five routes join `READY`. The classification blocks `batch_prediction` and `export_onnx` stay closed for good on a server: they take a checkpoint path and an output path in the config, and the run routes do the same work from a run id.
+- The page changes little: the actions appear because the server stops listing them. The "browse" button of their folder fields is absent where the folder dialog is closed, and the note of ADR-216 lists the folders the server accepts under each.
+
+**Consequences:** a run trained on a server can be used there. Nothing an action reads comes from outside the person's folders and the shared ones, and nothing it writes leaves the run folder. The local tool is unchanged: the types accept what `str` accepts and the checkpoint check does nothing with no scope bound.
+
+**Known limits:** the four evaluation actions run at once, in a worker thread, outside the queue: they share the CPU or the GPU with whatever job is training, another person's included. `run.json` itself is trusted for everything but the checkpoint path (the model section the action rebuilds, the names of the dataset parts): it sits in the person's own folder, which only the server writes today. Downloading the run (ZIP, Markdown), the publishers and the tracker retries are still closed.
+
+**Not verified:** nothing ran behind a real login proxy. Test, Grad-CAM, batch prediction and ONNX export ran for real on one classification run (CPU); the other four tasks were not run in this mode. Resuming was tested as a request, not by continuing a stopped run.
+
+**Alternatives considered:**
+
+- *Let the output path be anywhere in the person's folder.* A second rule and a second type for a need nobody has on a server: the file is downloaded from the run, not picked up from a path.
+- *Open the two classification blocks instead.* They name a checkpoint and an output file as config paths; confining them would repeat what the run routes already guarantee by taking a run id.
+- *Put the evaluation actions in the queue.* It would settle the shared-GPU limit, and it changes how the page waits for their result (a request today, a job then); it belongs with a decision about fairness, not with opening the routes.
+
+## ADR-219 — In server mode a person writes a dataset into their own folder only, with their own key
+
+**Date:** 2026-11-19
+**Status:** Accepted
+**Extends:** ADR-214 (the dataset scope), ADR-055 (downloads), ADR-115 (the sample dataset)
+
+**Context:** on a server only the operator could put data there, by sharing a folder. The two routes that write a dataset were closed: `POST /api/dataset/download` writes wherever `out_dir` says, and `POST /api/sample-dataset` writes into `datasets/` under the server's working folder, shared by everyone. A download also falls back to the keys saved on the machine and to the process environment (`resolve_credential`, `load_dataset(token=None)`), which on a server are the operator's; and the Kaggle client takes its key only from `KAGGLE_API_TOKEN`, which `download_kaggle` sets in the process.
+
+**Decision:**
+
+- `DatasetScope` gains `own`, the signed-in person's dataset folder, which the gate already made and listed first in `readable`. It is the only place a request may write a dataset.
+- `DatasetDownloadRequest.out_dir` is typed `OwnDatasetDir`: on a server an absolute path that resolves to a sub-folder of `own`. The folder itself is refused, so two downloads cannot mix their split folders at its root; a shared folder, another person's folder and a scope with no `own` are refused.
+- The sample dataset is written under `own` on a server (`_sample_root`), so each person has their own copy and the 200 "already there" answer speaks of their folder, not of someone else's.
+- On a server a download uses only the key its request carries (`_credential`). With none, Roboflow answers that a key is needed, and the Hub client is given `token=False`, which sends no token, where `None` would let it read one from the environment or from the server account's saved login.
+- Kaggle is refused on a server with a message that says why and what to do. Putting a person's key in the process environment would hand it to every other download running in that process.
+- The download's 422 hides its body, because the body may hold a key (`quiet_validation_route`). It now names the rule when `out_dir`'s own validator is what refused the request, still without repeating anything the request carried.
+- The page asks for a folder name, not a path, on a server, shows where the dataset will land, leaves Kaggle out of the providers, and takes the Roboflow key and the Hub token as fields of this one download (the saved-key controls call the credential routes, which stay off). The datasets sheet shows only the tabs whose routes answer.
+
+**Consequences:** a person can bring a public dataset, or a private one with their own key, to a server without the operator, and nothing they download lands where another person reads or writes. The first-training guide is offered again there, since it needs only the sample dataset. The local tool is unchanged: the type accepts what `str` accepts, the sample goes to `datasets/`, and the saved keys are used as before.
+
+**Known limits:** no disk quota per person and no cap on concurrent downloads; a download runs at once, outside the queue. The Hub's cache sits in the home of the account the server runs as, so a second download of the same dataset is served from it. A key typed for a download travels in the request body, like on a local install, and the proxy in front must be TLS for that to be private. The Laboratory (explore, merge, re-split, incorporate, COCO), the previews and the audit are still closed.
+
+**Not verified:** nothing ran behind a real login proxy. A torchvision download and the sample dataset ran for real in this mode; Roboflow and Hugging Face were exercised only through recorded clients. The first-training guide was not walked through on a server.
+
+**Alternatives considered:**
+
+- *Let a download go anywhere in the scope.* The shared folders are the operator's; a person writing there changes what everyone trains on.
+- *Per-person saved keys.* The right end state for convenience, and it needs the credential store moved under the profile (it is one file per machine today); typing the key per download is safe now.
+- *Set and unset `KAGGLE_API_TOKEN` around a Kaggle download.* The client authenticates at import, once per process, and two downloads at once would race on the variable; a lock would serialize every Kaggle download and still leave the first key authenticated.
+
+## ADR-220 — In server mode the dataset Laboratory reads the scope, its jobs have an owner, and what it writes lands in the person's folder
+
+**Date:** 2026-11-19
+**Status:** Accepted
+**Extends:** ADR-214 (the dataset scope), ADR-219 (the own folder), ADR-166, ADR-167 (the derived datasets)
+
+**Context:** the Laboratory is 31 routes under `/api/explorer`: open and page a dataset, an integrity scan, and five features that read a dataset and write a new one (re-split, incorporate, merge, COCO export, COCO import). Three things kept it closed on a server. Its request models took paths as plain text. Its background jobs sat in registries shared by the process: a job id was all it took to read a preview, apply it or cancel it, one running job blocked everyone, and the registries kept only the last few jobs of anyone. And every feature writes its result next to its source (`root.parent / dest_name`), which for a shared dataset is the operator's folder, building it out of hard links to the source files.
+
+**Decision:**
+
+- Every path of a Laboratory request is typed: `DatasetDir` for the dataset and for the second folder of a feature (the other dataset of a merge, the new images, the COCO folder), `DatasetPart` for the split names and the group file. The thumbnail route already asked the scope (`_is_inside_allowed_root`).
+- A job records `owner`, the profile of the request that registered it (`job_owner`, `""` on a local install), and a registry answers a job only to its owner: `get` returns `None` for anybody else, so status, plan, apply and cancel answer 404. "One job at a time" becomes one per person, and a registry drops the oldest jobs of the person registering, so another person's work never evicts a preview about to be applied.
+- The five build functions take `parent`, the folder the result is created in; `None` keeps "next to the source". `derived_jobs.placement(source_root)` decides it per request: nothing on a local install; nothing on a server when the source's parent is inside the person's own folder; otherwise `parent=own` and `link=copy_only`, a link function that always fails, so `link_or_copy` copies every file. The routes check the destination name against that same folder (`destination_parent`).
+- The 31 routes join `READY`.
+- The page hides the folder dialog's button in the Laboratory where the dialog is closed and lists the accepted folders in its place; the hint under a destination name says, on a server, that the result goes into the person's folder and is a copy when the original is shared.
+
+**Consequences:** on a server a person can inspect a shared dataset and derive their own version of it without the operator and without touching what everyone else reads. Their derived dataset shares no inode with the shared one, so nothing done to either can reach the other. The local tool is unchanged: no owner, one job at a time as before, and the result next to its source with hard links.
+
+**Known limits:** a copy costs the dataset's size in the person's folder, and there is no disk quota. Laboratory jobs run at once, outside the training queue: one per person and kind. The suggested destination name is computed next to the source; for a shared source it can already exist in the person's folder, and the apply then answers 409. The index cache and the jobs live in the process: a restart forgets them, as on a local install.
+
+**Not verified:** nothing ran behind a real login proxy. Exploring, the scan and a re-split of a shared dataset ran for real in this mode; incorporate, merge and the COCO conversions were exercised through their requests and the shared placement rule, not run end to end there. Two people using the Laboratory at the same time was tested with the registries and the test client, not with two browsers.
+
+**Alternatives considered:**
+
+- *Refuse to derive from a shared dataset.* One line, and it removes the main use on a server: the data is the operator's, the split is the person's.
+- *Hard-link into the person's folder.* Free on disk, and it ties a person's dataset to files the operator may replace or remove in place; a copy is theirs.
+- *Keep one job at a time for the whole server.* It protects the disk, and one person's long analysis would answer "busy" to everyone else with no way to see why.
+- *Per-owner registries.* A dictionary of registries keyed by owner; the owner on the job does the same with one lock and one place to look a job up.
+
+## ADR-221 — In server mode a run leaves the server through its owner: download, and publish with the owner's token
+
+**Date:** 2026-11-19
+**Status:** Accepted
+**Extends:** ADR-213 (the gate), ADR-140 (the bundle), ADR-171, ADR-174, ADR-175 (the publishers), ADR-176 (DVC)
+
+**Context:** a run trained on a server could be used there (ADR-218) and could not be taken out: the ZIP, the Markdown card and the publishers still answered 404. Reading them found nothing to confine. Each takes a run id and looks the run up in the caller's profile (`find(run_id, profile)`), which on a server is the signed-in person's. Each packager takes its files from inside the run folder and refuses a path outside it and a linked file (`_contained_file`, `_safe_file`). A publisher sends with `read_token(service, profile)`, a file per profile that the token routes, open since ADR-213, already write; no publisher falls back to a key of the machine. DVC is the exception: it runs the server's own `git` and `dvc` on a folder of the server's disk, commits with the identity of whoever operates the machine, and its router already refuses a client that is not the machine itself.
+
+**Decision:**
+
+- Eight routes join `READY`: `GET /api/runs/{run_id}/bundle`, `GET /api/runs/{run_id}/export_md`, and `preview` and `export` of `/api/hub`, `/api/zenodo` and `/api/github`. No handler changes.
+- The two DVC routes that were waiting (`preview`, `export`) become `off`, like `prepare`: the feature is about a repository on the machine the page is opened on, which on a server is nobody's.
+- The tracker retries (MLflow, W&B, Comet) stay closed: they need the integrations a profile turns on, which a server cannot configure yet.
+- The page changes nothing: the buttons appear because the server stops listing the routes, and the DVC panel stays absent.
+
+**Consequences:** a person can download their run and publish it under their own account, and nobody else can do either: the run does not exist for them and their token is never read for another profile. The local tool is unchanged.
+
+**Known limits:** a bundle is built in the server's temporary folder and streamed; several large downloads at once use that much disk for as long as they last. The Markdown card and the `run.json` inside the plain ZIP carry the server's absolute paths (the run folder, the dataset), which the person then holds; the Hub, Zenodo and GitHub packages carry a public record without them (ADR-171, ADR-174, ADR-175). Tokens are stored on the server, per profile, readable by whoever operates it.
+
+**Not verified:** nothing ran behind a real login proxy. The downloads and the three previews ran for real in this mode; no real upload to the Hub, Zenodo or GitHub was made there (the tests record the upload and check whose token it carries).
+
+**Alternatives considered:**
+
+- *Add a second containment check in the routes.* The packagers already refuse what is outside the run folder, for the local tool too; a copy of that rule in the routes would be a second place to keep right.
+- *Open DVC against a folder inside the person's profile.* It would still commit as the server's git user and push with the server's credentials and remotes; a person's repository belongs on their machine, fed by the ZIP.
+
+## ADR-222 — In server mode a preview's images are written inside the person's profile
+
+**Date:** 2026-11-19
+**Status:** Accepted
+**Extends:** ADR-214 (the dataset scope), ADR-215 (the artifact route)
+
+**Context:** three dataset routes were still closed on a server: the augmentation preview, the preprocessing preview and the audit. All three read a dataset; the two previews also write a few PNGs and return their paths, which the page loads through `/api/artifacts/{path}`. Two things were in the way. Their `base_dir` was plain text (a `Path` for the audit). And the previews write into `outputs/preview_cache`, one folder for the process: each render first deletes the PNGs already there, so on a server one person's preview would erase another's, and the artifact route, which in server mode serves a person only what sits under their profile folder (ADR-215), would refuse the images anyway.
+
+**Decision:**
+
+- `base_dir` of the three requests is typed `DatasetDir`. The audit's split paths and group manifest were already confined to the dataset root by `audit_dataset` and `load_group_manifest`, so they stay as they are.
+- `dataset_scope.preview_cache(local)` says where a preview writes: `local` (`outputs/preview_cache`) on a local install, and on a server `preview_cache/` beside the person's dataset folder, inside their profile. Both previews use it. The images land where the artifact route already serves their owner from, and a render clears only its owner's earlier ones.
+- The three routes join `READY`. The page changes nothing: its preview and audit panels hide by route key (ADR-216) and appear when the server stops listing them.
+
+**Consequences:** on a server a person sees what their augmentation and preprocessing do to an image, and audits a dataset for duplicates across splits, before training. Nothing one person previews is visible to, or erased by, another. The local tool is unchanged.
+
+**Known limits:** the previews and the audit run at once, in a worker thread, outside the queue; an audit hashes every image of the dataset. A preview folder holds one render per kind and class and is never larger than a handful of PNGs, but it is not removed when a profile stops being used.
+
+**Not verified:** nothing ran behind a real login proxy. The three routes ran for real in this mode against a shared dataset, and the images were fetched through the artifact route; the panels themselves were not opened in the page there.
+
+**Alternatives considered:**
+
+- *A cache folder named after the person under `outputs/preview_cache`.* It keeps the previews together, and the artifact route would need a second place it serves a person from; the profile folder is already that place.
+- *Return the images inline (base64) on a server.* No file to place, and a different response shape for the page in one mode only.
+
+## ADR-223 — In server mode a person edits their own profile; W&B and Comet use their key, local MLflow is off
+
+**Date:** 2026-11-19
+**Status:** Accepted
+**Extends:** ADR-213 (the account is the profile), ADR-216 (the page hides closed routes)
+**Amends:** ADR-170 (local MLflow), on a server only
+
+**Context:** the trackers a training feeds (MLflow, ADR-170; Weights & Biases, ADR-172; Comet, ADR-200) are switched on in the profile, through `PUT /api/profiles/{slug}`. That route was `off` on a server and `GET /api/profiles` closed: the first takes any slug, the second lists everybody. So nobody could turn an integration on, the three History retries had nothing to resend, and the page worked on a placeholder profile: the name a person typed stayed in the browser. The token routes of W&B and Comet were already open, each bound to the signed-in person's profile.
+
+**Decision:**
+
+- `GET /api/profiles` answers on a server with one profile: the signed-in person's. `PUT /api/profiles/{slug}` answers for that slug only; any other, `default` included, is 404, the answer for a profile that does not exist. `POST /api/profiles` stays `off`: the profile is the account.
+- W&B and Comet work as on a local install. The settings are the person's, each export is built in the request that starts the training with the key read from their profile, and the two retries already look the run up inside the caller's models folder. W&B's own local files go to `outputs/wandb/<profile>`, one folder per person.
+- Local MLflow is off on a server. Its store is one SQLite file on the server's disk; no route reads it, so the person who turned it on could not open it, and an operator who served it with `mlflow ui` would show every person's parameters to the others. Turning it on answers 422 with the reason, its retry is `off`, and `profile_trackers` leaves it out there even when a profile carried over from a local install has it on.
+- The page: on a server the welcome takes the listed profile as the one in use. While its name is still the login (how `ensure_profile` creates it) it asks the name and the greeting and saves them in the profile; later visits go straight in. The profile menu shows the integrations again, without the MLflow switch, which hides by its route key like everything else (ADR-216).
+
+**Consequences:** a person on a shared server follows their runs in their own W&B or Comet project and resends one that failed. Their name and greeting follow them across browsers. Of the routes that waited for a review since ADR-213, none is left closed: what does not answer on a server is `off` by decision.
+
+**Known limits:** an export runs inside the training job, and a retry at once in a worker thread, outside the queue; a stuck W&B call holds the next queued job up to its timeout, as on a local install (ADR-197), and here that job may be another person's. A person who already typed a name in the browser is asked once more, with that name filled in. The key hint in the menu still says the key is saved "on this computer"; on a server that is the server.
+
+**Not verified:** nothing ran behind a real login proxy. No real export to W&B or Comet ran in this mode: the tests use the fake W&B SDK and check whose key a retry sends; Comet's retry is only checked for who reaches it.
+
+**Alternatives considered:**
+
+- *Keep MLflow, with one store per person inside their profile.* Isolated, and still a file nobody but the operator can open; serving `mlflow ui` per person is a second web application to sign people into.
+- *A separate `/api/me` route for the settings.* A cleaner name, and a second code path for the page's profile menu, which already speaks `/api/profiles`.
+
+## ADR-224 — The e2e suite runs a second server in server mode, with the browser as the login proxy
+
+**Date:** 2026-11-19
+**Status:** Accepted
+**Extends:** ADR-133 (the Playwright suite), ADR-212 (server mode)
+
+**Context:** eleven slices opened server mode route by route (ADR-212 to ADR-223). Each was tested with the app object under pytest and checked by hand in a browser behind a stand-in proxy; no browser test ran in this mode, so a change to the welcome, the profile menu or the route keys the page hides could break a shared server and pass CI.
+
+**Decision:**
+
+- `playwright.config.ts` starts a second `visionforge gui` through the same `e2e/serve.mjs`, with `VF_E2E_SERVER_MODE=1`: `--server --trusted-proxy 127.0.0.1 --datasets-dir <work>/shared`, in its own work folder (`e2e/.work-server`) and port (8766). A second project, `server-mode`, points its `baseURL` there and runs `e2e/server-mode.e2e.ts`; the `chromium` project ignores that file. `npm run e2e` runs both, so the CI job does not change.
+- The browser plays the login proxy. The server trusts this machine's address, and a context sets `X-Forwarded-User` through `extraHTTPHeaders`: the file's default page and `request` are one account, and a second `browser.newContext` is another. A client with no header checks the 401.
+- The file covers the path a person walks, with two accounts on the one server: the refusal without an account; the first visit's name, saved in the profile; the profile menu (W&B and Comet, no MLflow, no other profile); one epoch on the sample dataset written into the person's own folder, found in the History; the other account's empty History and 404 for that run; and a few refusals of the running process (a dataset path outside the folders, another profile, MLflow, the folder picker).
+
+**Consequences:** the server-mode start-up through the real CLI flags, the gate and the page are exercised together on every pull request, about 35 s more on the e2e job. The suite now needs two free ports.
+
+**Known limits:** one training, of classification; the strategies, the evaluation actions, the downloads, the Laboratory, the publishers and the previews are covered by pytest only. The servers start for every run, also when one project is selected.
+
+**Not verified:** a real login proxy. The header comes from the test itself, so this proves what the server does with an account, not that a proxy sets it or strips a forged one.
+
+**Alternatives considered:**
+
+- *A small proxy process in front, as in the manual checks.* Closer to the deployment, and a third process and port for what `extraHTTPHeaders` already does; it would still not be oauth2-proxy.
+- *oauth2-proxy with a mock identity provider in CI.* The only way to test the real hand-off; a container stack for the e2e job, left for the deployment test of phase 0.
+
+## ADR-225 — In server mode `--quota-gb` caps each person's folder, checked when an action that writes is asked for
+
+**Date:** 2026-11-20
+**Status:** Accepted
+**Extends:** ADR-213 (the account is the profile), ADR-214 (a person's own dataset folder)
+
+**Context:** on a shared server every person writes into their own profile folder: runs with their checkpoints, plots, reports, the datasets they download or derive (ADR-219, ADR-220). Nothing limited it, so one person could fill the disk and stop everybody's training. Every earlier server-mode decision listed "no disk quota" among its known limits.
+
+**Decision:**
+
+- `visionforge gui --server --quota-gb N` gives every person the same ceiling, in GiB (shown as GB), on the size of their profile folder, datasets included. Without the option nothing is measured. The option needs `--server` and a value above zero.
+- `gui/disk_quota.py` measures a folder (`folder_bytes`: regular files, links not followed) and remembers the figure for 15 s per folder (`DiskUsage`), since the walk is slow on a large dataset. `grows(route)` says which routes write new data, by their last path segment: a training or strategy start, `resume`, `download`, `sample-dataset`, a Laboratory `apply`, and `test`, `gradcam`, `batch_predict`, `export_onnx` of a run. A test pins how many answering routes that is (37), so a new one is a decision.
+- `ServerModeGate` checks it before the handler: for a route that grows, when the folder is at or over the ceiling, it answers 507 with the used size and the ceiling, and says to delete runs in the History. Everything else answers as before: reading, opening, downloading, publishing and deleting. After any `DELETE` request the person's figure is forgotten, so freed space counts on the next request.
+- `GET /api/session` gains `quota` (`used_bytes`, `limit_bytes`, or null). The profile menu shows it, with a notice when the folder is full.
+
+**Consequences:** an operator bounds what each account can take, and a person who hits the ceiling is told why and what to do, and can do it. The local tool is unchanged.
+
+**Known limits:** it is a check before an action, not a limit on writing: a job that already runs finishes past the ceiling, and several started while under it may pass it together. A figure up to 15 s old can let one more action start. The ceilings are not reserved: a disk smaller than their sum can still fill. A person cannot delete a dataset of their own from the page; only runs. The previews and the tracker stores are not gated (a few files each). One ceiling for everybody; there is none per account.
+
+**Not verified:** nothing ran behind a real login proxy. The walk was not timed on a folder with tens of thousands of files. The symlink test is skipped on a Windows account that cannot create links; it runs on the Linux CI.
+
+**Alternatives considered:**
+
+- *Check inside each handler.* The handler knows what it will write, and thirty-seven of them would each need the call; the gate has one table and one test.
+- *Filesystem quotas (XFS project quotas, ZFS datasets).* A hard limit enforced while writing, the only real one; it depends on the operator's filesystem and privileges, and a write that fails mid-training is a worse message than a refusal before it starts. The two can be used together.
+- *Refuse by free disk space instead of per person.* Protects the disk, and lets one person take all of it.
+
+## ADR-226 — In server mode at most `--max-actions` heavy actions run at once outside the queue
+
+**Date:** 2026-11-20
+**Status:** Accepted
+**Extends:** ADR-218 (the actions of a finished run), ADR-219 (downloads), ADR-221 (publishers), ADR-223 (tracker retries)
+
+**Context:** a training waits in the queue (ADR-185). The evaluation actions, a dataset download or audit, the publishers and the tracker retries do their work inside the request, in a worker thread. Each server-mode decision that opened one listed it as a known limit: nothing bounded how many ran together, so a few people pressing Grad-CAM or downloading at once could exhaust memory or the GPU for everybody. Two designs were on the table: turn these actions into queued jobs, or bound how many run at once. The owner chose the bound: queued jobs mean every action's screen follows a job and may wait hours behind a long training.
+
+**Decision:**
+
+- `gui/action_limit.py` names the routes that count (`HEAVY_ROUTES`, eleven): `test`, `gradcam`, `batch_predict` and `export_onnx` of a run; `dataset/download` and `dataset/audit`; the Hub, Zenodo and GitHub exports; the W&B and Comet retries. `ActionSlots` counts the ones running.
+- `ServerModeGate` takes a slot before the handler of such a route and gives it back when the response is done, whatever the outcome. With `--max-actions` (default 2) taken, the next one is answered 429 with a message saying the server is busy and to try again. Nothing waits in line. The bound is across everybody, not per person.
+- The option needs `--server` and a value of 1 or more. Without `--server` nothing is counted.
+
+**Consequences:** the memory and the threads these actions take are bounded by a number the operator chooses. A person who is refused loses nothing and tries again. The page needed no change: it already shows the server's message where the action was asked.
+
+**Known limits:** the bound does not wait for a training: an action still shares the CPU or the GPU with whatever job is running. One person can hold every slot. The Laboratory jobs and the dataset scan run after their request ends and are not counted; they keep their own bound, one per person and kind (ADR-220). The previews, the sample dataset, the run's ZIP and the reads are not counted. A refused request is not retried by the page.
+
+**Not verified:** nothing ran behind a real login proxy. No measurement of how many of these actions a given machine holds: 2 is a guess for one GPU.
+
+**Alternatives considered:**
+
+- *Queue these actions as jobs.* It would also keep them off a running training; set aside by the owner for its cost in every action's screen.
+- *Wait for a free slot instead of refusing.* Friendlier for a few seconds, and a request that hangs behind a ten-minute download with no word to the person.
+- *A bound per person.* Fair between people, and four people still run four at once.
+
+## ADR-227 — In server mode a person lists and deletes the datasets of their own folder
+
+**Date:** 2026-11-20
+**Status:** Accepted
+**Extends:** ADR-219 (a person writes datasets only into their own folder), ADR-225 (the disk quota)
+
+**Context:** the quota of ADR-225 counts a person's datasets, and the page could delete runs only. A folder filled by downloaded or derived datasets left its owner locked out of every action that writes, with the operator as the only way out; ADR-225 listed it as a known limit.
+
+**Decision:**
+
+- `gui/api/own_datasets.py` adds two routes, both `owner` and open on a server. `GET /api/datasets/own` lists the folders directly inside the signed-in person's dataset folder, each with its name, path and size (`folder_bytes`). `DELETE /api/datasets/own/{name}` removes one of them with everything in it and answers with its name.
+- What may be deleted is decided by name, not by path: one path segment, a real folder (not a link) whose parent is the person's own folder. Anything else is 404, the answer for a dataset that is not there. The shared folders and other people's are out of reach by construction.
+- While a job of that person runs or waits in the queue the delete answers 409: the job may be reading the dataset, and which one it reads is not worth parsing out of every task's config.
+- On a local install nobody has an own folder: the list is empty, the delete is 404, and the page does not offer the tab.
+- The page: the Datasets sheet gains a third tab, "Meus datasets", on a server. Each row has the size and a delete button that asks in the row itself before deleting. After a delete the list and the session are read again, so the profile menu's disk figure follows. The gate already forgets the person's measured size after any `DELETE` (ADR-225).
+
+**Consequences:** a person at the quota can always get under it on their own. Deleting a dataset does not touch the runs trained on it; actions that read it again (resuming, the default folder of an evaluation) fail for those runs as they would for any dataset that moved.
+
+**Known limits:** there is no trash and no undo. Only whole top-level folders are listed and deleted, not parts of one. A Laboratory job or a preview reading the dataset is not checked, only queued and running trainings. The size of each folder is walked on every listing.
+
+**Not verified:** nothing ran behind a real login proxy. Deleting a dataset of several gigabytes was not timed: the request waits for it.
+
+**Alternatives considered:**
+
+- *Delete by path, typed as `OwnDatasetDir`.* One more place where a path from the browser reaches `rmtree`; a name under a fixed folder cannot point anywhere else.
+- *Refuse only when a job reads this dataset.* Kinder, and it needs the dataset path of every task's config, strategies included; the queue is short-lived and the message says what to do.
+- *A trash folder emptied later.* An undo, and the space is not freed, which is the reason the person is deleting.
+
+## ADR-228 — The image audit can look for visual near-duplicates across splits
+
+**Date:** 2026-11-21
+**Status:** Accepted
+**Extends:** ADR-136 (content audit), ADR-140 (the GUI exposes the audit), ADR-153 (dataset inspection)
+
+**Context:** the audit compares SHA-256, so it finds only the same bytes in two splits. The leak that matters more in practice is the same photo saved twice, once as PNG and once as JPEG, resized, or a little brighter: the bytes differ and the test set still sees the training images. The report has carried `visual_similarity_checked: false` since ADR-136, and the explorer, the incorporation, the merge and the re-split say "near-duplicates are not detected" for the same reason. Issue 351 asks for it as the first slice of a dataset analysis.
+
+**Decision:**
+
+- `core/near_duplicates.py` hashes each image with a 64-bit difference hash (dHash): grayscale at 9x8 pixels, one bit per pair of horizontal neighbours, set when the left one is brighter. Two images are near when the hashes differ in at most `MAX_DISTANCE = 6` bits.
+- Candidates are found without comparing every pair: the hash is cut into 8 bands of 8 bits, and only hashes that share a band are compared. With 7 or fewer differing bits some band is equal, so no pair within the distance is missed. Images with the same hash are joined directly; the near pairs are joined into groups (union-find), so A near B near C is one group.
+- A group is reported when it spans more than one split and holds more than one SHA-256: pairs within a split are not a leak, and byte copies are already in `duplicate_groups`.
+- A flat image (one colour) hashes to 0 and is left out: a red and a blue square would otherwise match.
+- `audit_dataset(..., near_duplicates=True)` decodes every readable image after the exact pass. An image that verifies but fails to decode (a truncated file) is counted unreadable. The report always carries `near_duplicate_groups` (empty when not looked for), `near_duplicate_max_distance` and `visual_similarity_checked`, which is now true when the search ran. Near groups make `ok` false.
+- The option is off by default everywhere: `--near-duplicates` on `visionforge audit-data`, `near_duplicates` on `POST /api/dataset/audit`, and a toggle "Procurar quase-duplicatas entre splits" in the audit panel of the data step. The screen states the distance before the first audit with a constant that a test holds equal to the server's.
+
+**Consequences:** the audit finds re-encoded, resized and re-exposed copies across splits. With the option on it decodes the whole dataset: on 12 000 PNGs of 32x32 pixels (CIFAR-sized, warm disk cache, Ryzen 7 9800X3D) the audit took 6.0 s against 2.9 s for the exact pass alone; large photographs take much longer. The request still runs in one call without progress, as the exact audit did.
+
+**Known limits:** a crop, a rotation, a mirror or another photo of the same object is not near under dHash. Very similar distinct images (frames of a video, a fixed camera) can be joined, so a group is something to look at, not a verdict. The threshold is fixed. The search lives in the data step's audit, not yet in the Laboratory, and has no progress or cache; issue 351 keeps those for the next slices.
+
+**Not verified:** the time on a dataset of full-size photographs and the false-positive rate on a real dataset were not measured; the timing above used synthetic random images, which form no groups.
+
+**Alternatives considered:**
+
+- *Perceptual hash (pHash, DCT) or CNN embeddings.* More robust to crops and colour changes; pHash needs a DCT per image and embeddings need a model and a GPU. dHash needs Pillow only and is enough for the re-encoded and resized copies that cause most leaks.
+- *Compare every pair of hashes.* Exact but quadratic: 60 000 images are 1.8 billion pairs in Python. The band index makes it near linear for real data.
+- *Turn it on by default.* Decoding every image slows down an audit that today only reads bytes; the researcher asks for it.
+
+## ADR-229 — Live Grad-CAM can show N images of each class, up to 48
+
+**Date:** 2026-11-21
+**Status:** Accepted
+**Extends:** ADR-162 (live Grad-CAM of fixed validation images)
+
+**Context:** the live gallery explains 6 validation images in all (`LIVE_GRADCAM_SAMPLES`), taking the classes in turn. With more than 6 classes some never show; with two or three, each has two or three images and one look says little about what the model attends to in a class. Issue 349 asks for a number of images per class.
+
+**Decision:**
+
+- `training.live_gradcam_per_class` (0 to 16, default 0). 0 keeps the 6 images of ADR-162, so a saved config and a default run are unchanged. A positive value takes that many images of each class (all of a smaller class), still drawn once with the run's seed and a generator of its own.
+- The gallery is capped at `LIVE_GRADCAM_MAX = 48` images: an epoch that writes it costs at most 48 forward and backward passes up to the target layer. The classes are still taken in turn, so past the cap every class shows once before any shows twice.
+- The images go through the model in chunks of `LIVE_GRADCAM_BATCH = 16`, so a large gallery of a large model needs no more memory than a small training batch. In eval mode each image's map depends on that image alone, and a test holds the chunked maps equal to one batch.
+- As before, only the latest gallery and the best epoch's are kept on disk (`insights/latest`, `insights/best`); no gallery per epoch.
+- The Results tab groups the gallery by true class, the classes in name order, each under its name and count.
+- The four rules of ADR-162 hold; the test that compares history and weights with and without the gallery runs with 3 images per class too.
+
+**Consequences:** with many classes the researcher sees each one; with few, several images of each. The cost of an epoch that writes the gallery grows with it, up to 8 times the default's.
+
+**Known limits:** the cap and the per-class bound are fixed. The images are chosen once, at random within each class; there is no choosing which ones. Keeping every epoch's gallery is still not offered.
+
+**Not verified:** the gallery of a real training with 48 images, on screen and on a GPU.
+
+**Alternatives considered:**
+
+- *A total instead of a per-class count.* The issue asks per class, and a total already exists in the default.
+- *Keep each epoch's gallery.* 48 images per written epoch is disk the run keeps forever, for a comparison the latest and the best already give.
+- *No cap.* 16 images of each of 100 classes would be 1 600 backward passes on every written epoch.
+
+## ADR-230 — The image audit reads the layout of every task
+
+**Date:** 2026-11-21
+**Status:** Accepted
+**Extends:** ADR-136 (content audit), ADR-140 (the GUI exposes the audit), ADR-228 (near-duplicates)
+
+**Context:** the audit walks one folder per split and was offered only in the classification panel. The other tasks keep their images elsewhere: a YOLO root in `images/<split>` or `<split>/images` beside the labels, segmentation in `<split>/<images_subdir>` beside the masks, anomaly in `train/<normal_dir>` and `test/<defect>`, and regression in one `images_dir` that CSVs split. Walking a segmentation split whole would report every all-background mask as a leak; a regression dataset has no split folder at all. Issue 351 asks for the same checks in every task as its second slice.
+
+**Decision:**
+
+- `audit_dataset` takes `split_images`: for each split a list of image paths, or None when the list is missing. A path listed twice in one split is one image. A listed path is resolved like a walked one: outside the root it is reported as escaping, absent it counts as unreadable (`FileNotFoundError`).
+- `core/dataset_audit_layouts.py` turns a task's layout into the audit's input: `"folders"` passes the folders through, `"yolo"` resolves each split with `resolve_yolo_split` (the trainer's own resolver; a split neither layout has is reported missing), `"csv"` reads each CSV's `image_column` under `images_dir` (a CSV outside the root or without the column is a 400; an absent CSV is a missing split).
+- `optional_splits` names splits training runs without. One that does not exist is listed in `absent_optional_splits`, leaves `image_counts` and is no finding; one that exists is audited like any other. The panels pass `test` for detection, segmentation and regression, whose trainers run without a test set. Classification and anomaly pass none, as before.
+- `POST /api/dataset/audit` gains `layout`, `images_dir`, `image_column` and `optional_splits`. The defaults keep every earlier request unchanged.
+- Each task panel shows the audit beside its dataset stats, with one line on what it reads: detection the YOLO image folders (not with a `data.yaml` source, whose paths the server does not resolve), segmentation `<split>/<images_subdir>` only, regression the CSVs (a blank optional CSV is left out), anomaly `train_dir` and the whole `test_dir`.
+
+**Consequences:** every task can find byte copies, near copies, unreadable images and missing or empty splits before training. In regression an image listed in two CSVs is reported as a cross-split duplicate whose two paths are the same file.
+
+**Known limits:** a detection dataset given as a `data.yaml` is not audited. The CLI `audit-data` still walks folders only. As in ADR-228, the request runs in one call, without progress or cache; moving the analysis into the Laboratory stays in issue 351.
+
+**Alternatives considered:**
+
+- *Let the browser name the folders for YOLO too.* It does not know which of the two layouts a root uses; the server already resolves it for training.
+- *Audit the whole split folder in segmentation and skip mask-named folders.* The mask folder name is configurable; naming the images folder is exact.
+
+## ADR-231 — The Laboratory scan looks for near-duplicates on request and keeps its last report
+
+**Date:** 2026-11-21
+**Status:** Accepted
+**Extends:** ADR-165 (explorer and its integrity scan), ADR-220 (the Laboratory on a server), ADR-222 (previews inside the profile), ADR-228 (near-duplicates)
+
+**Context:** the Laboratory's integrity scan runs in the background with progress and cancellation, and finds unreadable files, exact copies and cross-split leaks. The near-duplicate search of ADR-228 lives only in the data step's audit. And a finished scan lives only in the page: reopening the dataset, or reloading, meant opening every image again. Issue 351 asks that each analysis run in the background with progress and keep its result.
+
+**Decision:**
+
+- `scan_integrity(..., near_duplicates=True)` adds a second pass over the images the first could read: dHash each one and group the near ones across splits with `near_duplicate_groups` (same threshold and rules as ADR-228). Progress counts both passes (`total` doubles). An image that verifies but fails to decode is reported as corrupted. The report gains `near_checked`, `near_max_distance`, `near_group_count` and `near_groups` (capped at `MAX_REPORTED`); cancelling during the second pass keeps the first pass's findings and leaves `near_checked` false.
+- `core/scan_store.py` keeps the last finished report of each dataset as JSON, named by a hash of the dataset root, task and split folders (`scan_key`), next to a signature: a hash of every listed image's split, path, labels, size and modification time (`scan_signature`). A cancelled scan is not kept. A sampled scan is, and says so as before.
+- `POST /api/explorer/scan/saved` rebuilds the index, recomputes the signature and returns `{report, saved_at, stale}`; `report` is null when nothing was kept, or when the file is unreadable or of another format.
+- The store is `outputs/explorer_scans/` on a local install. On a server it is `explorer_scans/` inside the person's profile, next to their dataset folder, resolved in the request (the worker thread does not see the scope), so a shared dataset scanned by two people keeps two reports and neither sees the other's. The route is `confined`.
+- The Overview shows a toggle "Procurar quase-duplicatas entre splits" beside the limit. On opening, it asks for the kept scan and shows it under "Última varredura guardada: <data>", with a warning when stale. A scan started in the page replaces it.
+
+**Consequences:** reopening a scanned dataset shows its last findings at once, and says when they may be out of date. The near search costs a second decode of every image, about twice the scan time. Checking staleness reads the size and time of every listed image on each open of the Overview.
+
+**Known limits:** one report per dataset, the last one: a scan with the near search on is replaced by a later one without it. A change that keeps an image's size and modification time is not seen. The kept reports are never pruned. Detection and classification only, as the Laboratory itself.
+
+**Alternatives considered:**
+
+- *Keep the report inside the dataset folder.* The explorer is read-only by design (ADR-165), and a shared dataset is not the person's to write into.
+- *A content hash as the signature.* Exact, but it costs what the scan costs; size and time are what `dataset_fingerprint`'s manifest mode already trusts.
+- *Keep every scan.* A history nobody asked for; the last one answers "what did I find here".
+
+## ADR-232 — The Laboratory says whether the splits share the class mix
+
+**Date:** 2026-11-21
+**Status:** Accepted
+**Extends:** ADR-165 (explorer summary), ADR-168 (stratified re-split)
+
+**Context:** the Overview draws images per class, split by split, but leaves the reading to the eye: with twenty classes nobody sees that one is 3% of training and 12% of test, or absent from validation. A validation or test split with another class mix measures the model on another problem. Issue 351 lists "class distribution per split and whether the division is stratified" as the first classification analysis.
+
+**Decision:**
+
+- `core/split_balance.py` reads the per-class counts the summary already has; no image is opened. Splits with no labeled image are left out.
+- Per class: its share of each split's labels (percent), the gap between its largest and smallest share in percentage points, and the splits where it is missing. Classes are listed largest gap first.
+- Per split: the imbalance ratio, largest class count over smallest among the classes it holds (None with one class).
+- Cramér's V of the split-by-class table, computed by hand (no scipy at import): 0 for the same mix everywhere, 1 when the split decides the class. It is reported as an effect size; no p-value, because with thousands of images every difference is significant.
+- A verdict for the headline: `one_split` (nothing to compare), `missing_class` (some class absent from some split), `stratified` (largest gap ≤ 2 points), `close` (≤ 5 points), `uneven`. The thresholds travel in the report (`thresholds_pp`) so the screen states them.
+- Shares are over a split's labels, so in detection (an image per class it contains) they sum to 100 as in classification.
+- `POST /api/explorer/summary` gains `balance`. The Overview shows a card "As divisões têm a mesma mistura de classes?" under the per-class bars, with the verdict, the missing classes, the five largest gaps, V, the imbalance per split and the full table behind a toggle; an uneven division points at Re-split, which stratifies by class (ADR-168).
+
+**Consequences:** a non-stratified division, a class missing from validation and a heavily imbalanced split are stated in words on opening the dataset, at the cost of a few arithmetic operations per class.
+
+**Known limits:** the thresholds are fixed rules of thumb, not derived from the dataset's size: a class of 10 images moves several points by chance. Classes absent from every split are not listed. Classification and detection only, like the Laboratory.
+
+**Alternatives considered:**
+
+- *A chi-square test with its p-value.* It answers "is there any difference", which on a real dataset is always yes; the gap in points and V say how large it is.
+- *Compute it in the browser.* The numbers belong with the other dataset analyses, tested by hand-computed cases on the server.
+
+## ADR-233 — The integrity scan describes the boxes of a detection dataset
+
+**Date:** 2026-11-21
+**Status:** Accepted
+**Extends:** ADR-165 (explorer and integrity scan), ADR-231 (kept scan)
+
+**Context:** issue 351 lists the detection analyses done before training: boxes per image, box size (small, medium, large), aspect ratio, a heatmap of positions, classes seen together, invalid boxes and images with no box. The Overview counted boxes per class and nothing else; a dataset of tiny objects, or one whose objects always sit in the middle, or one with rows the trainer silently drops, looked the same as any other.
+
+**Decision:**
+
+- `core/box_stats.py` tallies one image at a time (`BoxTally.add(split, rel, label, size)`) and reports JSON. It reads the label file; it never writes.
+- It runs inside the integrity scan, for detection only: the scan already opens every image to learn its size, and COCO's size buckets need the area in pixels, which a normalized YOLO row cannot give alone. The report gains `boxes` (None for classification). The scan's sampling, cancellation, progress and kept result (ADR-231) apply unchanged.
+- Box size by COCO's rule on the pixel area: small below 32², medium below 96², large above; also per class. These are the buckets of `mAP_small/medium/large`, so the counts say which of those numbers rests on enough boxes.
+- Boxes per image in bins 0, 1, 2–3, 4–7, 8–15, 16–31, 32+; mean and maximum. Images with no box are split into no label file and an empty label (or one with only invalid rows).
+- Aspect ratio of the box in pixels; a 10×10 grid of box centers; the ten most frequent pairs of classes in the same image.
+- A row is a box when it is five finite numbers with an integer class (the trainer's five-field rule), the class is below the count `data.yaml`/`classes.txt` declares (none declared: no range check), width and height are positive, and the box stays inside the image with a 1% tolerance for the rounding of labeling tools. Otherwise it is counted by reason (`malformed`, `class_out_of_range`, `zero_area`, `outside_image`) and the first 200 are listed with file and line.
+- A box of an image that does not open is counted and placed on the heatmap but has no pixel size (`unsized`).
+- The screen shows a card "Caixas" under the scan's results, with bars for size, boxes per image and aspect, the heatmap, the pairs, a per-class size table and the invalid rows behind toggles.
+
+**Consequences:** the scan of a detection dataset reads one more small text file per image. Box statistics appear only after a scan; the summary stays free of image I/O.
+
+**Known limits:** in a sampled scan the statistics describe the sample. The edge tolerance and the bins are fixed. Pairs count images, not boxes, and only the top ten are kept. Classification and detection only, like the Laboratory.
+
+**Alternatives considered:**
+
+- *Compute from the labels alone in the summary.* Fast, but sizes would be in fractions of the image, not COCO's pixel buckets, and the aspect ratio would be wrong on non-square images.
+- *A separate job.* It would open every image a second time for the size the scan already reads.
+
+## ADR-234 — The masks of a segmentation dataset are analyzed before training
+
+**Date:** 2026-11-22
+**Status:** Accepted
+**Extends:** ADR-037 (segmentation), ADR-165 (explorer jobs), ADR-231 (kept results)
+
+**Context:** issue 351 lists for segmentation the share of pixels per class, the coverage of each mask, tiny regions, masks whose size differs from the image and class ids outside the expected range. The Data step paired images and masks by stem and sampled class ids from 20 train masks; nothing measured the masks themselves. A dataset whose masks hold an id past `num_classes`, or that is 99% background, trained without a word.
+
+**Decision:**
+
+- `core/mask_stats.py` pairs images and masks by stem per split (the trainer's rule and extension lists, copied so it does not import torch), opens each pair and tallies: images without a mask and masks without an image; color (RGB/RGBA) masks, which the trainer refuses; masks whose size differs from the image; the pixel count of each id per split; ids that are neither `0..num_classes-1` nor `ignore_index`; the coverage of each mask (share of pixels that are neither class 0 nor void; class 0 as background is the usual convention and the screen says so); and connected regions of one class (`scipy.ndimage.label`, 4-connectivity) below 0.01% of their image.
+- Past 5 000 pairs it reads an evenly spaced sample and says so, like the integrity scan. Cancelling keeps what was read.
+- It runs as a background job in the explorer's registry: `ScanJobs.start_work` takes any work with a token and a progress callback, the integrity scan becomes one such work, and status and cancel go through the existing `/explorer/scan/{job_id}` routes. One job per person at a time, as before.
+- `POST /api/explorer/masks` starts it; `POST /api/explorer/masks/saved` returns the last finished result. Results go to the scan store (ADR-231) under a key of the folders, the class count and `ignore_index` (another class count is another analysis), with a signature of every pair's paths, sizes and modification times; a change marks the result stale.
+- On a shared server both routes are `confined`, like the scan.
+- The Segmentation panel shows "O que as máscaras contêm" under the image audit, with the per-class pixel table per split, coverage bars, the tiny-region count and the files found behind a toggle.
+
+**Consequences:** each pair's mask is decoded once and labelled once per class it holds; on large masks with many classes that is the slow part. Results survive a restart of the GUI.
+
+**Known limits:** the tiny threshold is a fixed share of the original image, not of the training size. Class 0 is taken as background for coverage. A color mask is reported, not converted. Regression and anomaly have their own analyses still to come.
+
+**Alternatives considered:**
+
+- *Extend the image audit.* It is synchronous and its report is shared by every task; mask statistics would grow it for one task.
+- *Open segmentation in the Laboratory.* The Laboratory's index, gallery and tools are built around classes per image; a mask analysis fits the Data step, where the class count and `ignore_index` are known.
+
+## ADR-235 — The targets of a regression dataset are analyzed before training
+
+**Date:** 2026-11-22
+**Status:** Accepted
+**Extends:** ADR-036 (regression), ADR-234 (analysis jobs)
+
+**Context:** issue 351 lists for regression a histogram of each target per split, outliers, missing targets and the correlation between targets. The Data step reported count, mean, min and max of the first 50 000 rows and checked the images of the first 500. A validation split whose targets sit in another range than training, a column with a few "n/a" cells, or two targets that are the same quantity in two units went unnoticed until training failed or reported a misleading score.
+
+**Decision:**
+
+- `core/target_stats.py` reads every split's CSV in full and, per target and split, reports the numeric count, blank or non-numeric cells, mean, sample standard deviation, inclusive quartiles, minimum and maximum, and a 20-bin histogram over the target's range across all splits, so the splits share bins and can be drawn on one axis.
+- Outliers by Tukey's rule with k = 1.5, on fences from the training split (the split the model learns from), with the CSV line and the image of each.
+- The shift of a split: (split mean − train mean) / train standard deviation. The screen warns from 0.5 standard deviations; it is a size, not a test.
+- Pearson's r for every pair of targets, over the rows where both are numbers, all splits pooled; None with fewer than three pairs or a constant side.
+- Every listed image is checked for existence; the first 50 missing images and the first 50 bad cells are listed with their line.
+- It runs as an explorer job through `ScanJobs.start_work` (ADR-234): `POST /api/explorer/targets` and `POST /api/explorer/targets/saved`, `confined` on a shared server. The kept result's signature is the CSVs' size and modification time; a CSV path or `images_dir` outside the dataset is refused with 400 before the job starts.
+- The frontend's job handling (start, poll, cancel, kept result) moved into `useAnalysisJob` and `AnalysisJobCard`, shared by the mask analysis and this one.
+
+**Consequences:** a CSV of a million rows is held in memory as floats per target; at the sizes of image datasets that is small. Checking every image is one stat per row.
+
+**Known limits:** the kept result does not notice an image added or removed without a CSV change. Fences come from training only; with no training CSV there are no outliers. The 0.5 sd threshold is a rule of thumb.
+
+**Alternatives considered:**
+
+- *Extend the existing `/regression/dataset/stats`.* It answers synchronously with row and image caps that keep the Data step fast; the full read belongs in a job.
+- *A Kolmogorov–Smirnov test per split.* With thousands of rows every difference is significant; the shift in standard deviations says how large it is.
+
+## ADR-236 — An anomaly dataset is analyzed before training
+
+**Date:** 2026-11-22
+**Status:** Accepted
+**Extends:** ADR-038 (anomaly), ADR-234 (analysis jobs), ADR-228 (near-duplicates)
+
+**Context:** issue 351 lists for anomaly detection the count of normal and anomalous images, an anomalous image in the training folder and the consistency of resolution. The Data step counted images per folder. A defect photo filed under `train/good` teaches the model that the defect is normal, and nothing pointed at it; a test split in grayscale against an RGB training split, or a defect kind with three images, went unnoticed.
+
+**Decision:**
+
+- `core/anomaly_stats.py` lists the MVTec layout (`train/<normal>`, `test/<normal>`, `test/<defect>`, optional `ground_truth/<defect>`), opens every image (an evenly spaced sample past 20 000) and reports images per group, extra folders under train (training reads only the normal one), the most common sizes and color modes per group and the groups whose most common size or mode differs from training's.
+- An anomalous training image cannot be detected without labels; the closest observable sign is a training image that looks like a test defect image. Each image gets the 64-bit dHash of the near-duplicate search (ADR-228) and every training image is compared with every defect image (vectorized XOR and popcount); a distance within `near_duplicates.MAX_DISTANCE` is reported with the pair. The same comparison finds normal test images that look like a training image, where the test measures memory. Flat images (hash 0) never match.
+- A defect kind with fewer than 10 test images is pointed at: one image moves its AUROC by several points.
+- With `ground_truth/`, defect images without `<stem>_mask.*` (or `<stem>.*`) are counted.
+- It runs as an explorer job (ADR-234): `POST /api/explorer/anomaly` and `POST /api/explorer/anomaly/saved`, `confined` on a shared server; the kept result's signature covers every image's path, size and modification time.
+- The three per-task analyses now share one route helper for the dataset folder.
+
+**Consequences:** each image is decoded twice (size and dHash) — at MVTec sizes, seconds. The all-pairs comparison is train × defects; at tens of thousands each it is the slow part.
+
+**Known limits:** a defect that does not resemble any test defect photo is not found; this looks for the same photo, not the same kind of defect. The 10-image threshold is a rule of thumb.
+
+**Alternatives considered:**
+
+- *Score the training images with a trained model.* That needs a run; it belongs with the suspicious-label analysis that depends on one.
+- *Reuse the image audit's near-duplicate pass.* It groups across splits without knowing which side is a defect; here the direction (train against defects) is the finding.
+
+## ADR-237 — Suspicious labels after a classification run
+
+**Date:** 2026-11-22
+**Status:** Accepted
+**Extends:** ADR-041 (batch prediction), ADR-218 (run actions on a server)
+
+**Context:** issue 351 asks, after training, for the images whose label the model disputes with high confidence, and for the classes the model takes for each other. A mislabeled image costs twice: it teaches the wrong class and it counts as a model error in evaluation. Finding it by hand means looking through every misclassification.
+
+**Decision:**
+
+- `core/label_suspects.py` implements confident learning (Northcutt, Jiang and Chuang, "Confident Learning: Estimating Uncertainty in Dataset Labels", JAIR 70, 2021) in its simplest form: the threshold of class j is the mean probability the model gives j on the images labeled j; an image counts toward the most probable class among those over their threshold; it is a suspect when that class is not its label. Suspects are ranked by the probability left to the given label. The confident joint (given × confident counts) gives the pairs of classes the model confuses.
+- Deviation from the paper: each threshold is capped at 0.95. A network trained to saturation gives its classes a mean self-confidence near 0.999; found on the first real run, an image labeled `class_b` that the model called `class_a` with 0.9988 never passed `class_a`'s 0.9994 threshold. Below the cap, calibrated models behave as in the paper.
+- The probabilities come from the run's checkpoint through `BatchPredictionBlock`, the inference `/runs/{id}/batch_predict` already uses (binary runs: the single sigmoid becomes two columns). The label of an image is its class folder; images outside a known class folder are skipped. The class order is `run.json`'s `class_names`.
+- `POST /api/runs/{id}/label_suspects` (body: which splits, validation and test by default) predicts each split, writes `<run_dir>/label_suspects/<split>.csv` and `report.json`, and returns the report; `GET` returns the kept one. Both are `owner` on a shared server: they read the run's own dataset from its `run.json`. Refused with 400 for any other task, an unknown split, or a run without class names or checkpoint.
+- The run detail shows a "Rótulos suspeitos" tool for classification runs: split toggles (training marked in-sample), the suspects with both probabilities, and the confused pairs.
+
+**Consequences:** the action runs inference over every image of the chosen splits in the request, like batch prediction; on a large dataset it takes minutes on CPU. Probabilities on the training split are in-sample and the screen says so; out-of-fold probabilities (the paper's setting) would need a K-fold run, which this does not require.
+
+**Known limits:** single-label classification only. The cap is a fixed rule of thumb. The request is synchronous (no progress bar), as `batch_predict`.
+
+**Alternatives considered:**
+
+- *Depend on cleanlab.* A new dependency for twenty lines of arithmetic that are tested here by hand.
+- *List every misclassification.* That is the confusion matrix already in the run; the thresholds keep only the images the model is confidently sure about.
+
+## ADR-238 — The integrity scan measures brightness, contrast and sharpness
+
+**Date:** 2026-11-22
+**Status:** Accepted
+**Extends:** ADR-165 (explorer and integrity scan), ADR-231 (kept scan), ADR-233 (box statistics in the scan)
+
+**Context:** issue 351 asks for images out of pattern in brightness, contrast or sharpness: an underexposed or blown-out frame, a blank image, a photo out of focus or upscaled from a thumbnail. They rarely break training, but they are usually capture errors or images from another source, and one in a test split moves the metric.
+
+**Decision:**
+
+- `core/image_quality.py` decodes each image as 8-bit grayscale (PIL's `L`), shrunk to at most 256 px on its longest side so sizes compare and a large dataset stays cheap (JPEG decodes at a reduced scale through `draft`). Brightness is the mean gray level (0 to 255); contrast, the standard deviation; sharpness, the variance of the 4-neighbour Laplacian, the usual focus measure (Pech-Pacheco et al., "Diatom autofocusing in brightfield microscopy: a comparative study", ICPR 2000).
+- An outlier is outside Tukey's fences (1.5 × IQR) over all scanned images, so a dataset that is dark by nature is not flagged as a whole. Four kinds: too dark and too bright (brightness), flat (low contrast), blurry (low sharpness). High contrast and sharpness are not defects and are not flagged. Sharpness spans orders of magnitude, so its fences are taken on `log1p`. The IQR is floored per metric (8 gray levels, 4 gray levels, 0.5 in `log1p`), so a dataset of near-identical images does not flag every small difference.
+- It runs inside the integrity scan, for classification and detection, on the first pass, which already opens every image for its size (ADR-233). The report gains `quality`: per metric the quartiles, the fences and the median per split; per kind the count and up to 50 images, most extreme first.
+- An image that passes PIL's `verify()` but fails to decode is now reported as corrupted in the first pass, and left out of duplicates, sizes and boxes. Before, it was counted as readable there and only the optional near-duplicate pass (ADR-231) reported it.
+- The Overview shows a card with the table and, for each kind found, thumbnails of the images with their value.
+
+**Consequences:** the first pass now decodes every image instead of reading its header. Measured on 1000 random-noise 640×480 JPEGs (the worst case for decoding), warm disk cache, CPU: 0.54 s without the measure, 3.47 s with it, about 3 ms more per image, so roughly a minute more at the default limit of 20 000 images. The scan runs in the background with progress, as before. The scan's sampling, cancellation, progress and kept result apply unchanged; a scan kept before this has no `quality` and shows no card until scanned again. A dark or blown-out image often also shows as flat and blurry, since it loses its tones; the screen says so.
+
+**Known limits:** grayscale only, so a color cast is not seen. The fences are relative to the dataset: a dataset where most images are blurry flags the sharp ones as normal and nothing as blurry. Segmentation, regression and anomaly datasets have their own analyses (ADR-234 to ADR-236), which do not measure this yet.
+
+**Alternatives considered:**
+
+- *Absolute thresholds (e.g. brightness below 30).* What is dark depends on the domain; X-rays and night footage would be flagged whole.
+- *A separate analysis job.* It would open every image a second time; the scan already does.
+
+## ADR-239 — Similar classes are compared before training
+
+**Date:** 2026-11-22
+**Status:** Accepted
+**Extends:** ADR-165 (explorer), ADR-231 (kept scan), ADR-234 (analyses as explorer jobs)
+**Related:** ADR-237 (suspicious labels after a run)
+
+**Context:** issue 351 asks which classes look alike before any training. ADR-237 answers it after a run, from the run's own model; before training there is no model of the dataset, and pixel statistics (color, size) say nothing about what an image shows.
+
+**Decision:**
+
+- `core/class_similarity.py` describes each image with torchvision's resnet18 pretrained on ImageNet, last layer removed (512 features, the weights' own preprocessing: resize 256, center crop 224, ImageNet normalization), on the CPU so a training running on the GPU is not disturbed. At most `per_class` images per class (200 by default, 2000 at most), evenly spaced from the first to the last over all splits.
+- For each described image, its nearest other image by cosine similarity, in any split. Per class, the share whose nearest image is of the same class. Per pair of classes A, B: the share of A's images whose nearest image is a B and the reverse (what a 1-nearest-neighbour classifier on these features would confuse), and the cosine between the classes' mean features. A pair is flagged when either share reaches 10%. The images where two classes meet are listed with their nearest image of the other class, most similar first, for every listed pair and not only the flagged ones: a single misfiled image is a small share (1 of 17 on the first check) and would otherwise stay hidden.
+- The similarity matrix is computed in blocks of 1024 rows, so memory stays at 1024 × N.
+- It runs as an explorer job (`POST /api/explorer/classes`, status and cancel through `/scan/{job_id}`) and the last finished result is kept under the integrity scan's signature (`POST /api/explorer/classes/saved`). Classification only; `confined` on a shared server like the other analyses.
+- The Laboratory's Overview shows a "Classes parecidas" card for classification datasets.
+
+**Consequences:** the first run loads the ImageNet weights from torchvision's cache, downloading them (about 45 MB) when they are not there; offline without them the job fails with torchvision's error. Tests use random weights in place of the download (ADR-010). Measured on a Ryzen 7 9800X3D CPU: 800 JPEGs of 640×480 (4 classes, 200 each) in 10.4 s, about 13 ms per image, so a 10-class dataset at the default 200 per class takes under half a minute.
+
+**Known limits:** the features come from ImageNet, not from the dataset: classes that differ by a detail ImageNet ignores (two defect types on the same part, two similar species) can look alike here and still be learned apart, and the screen says so. The 10% threshold is a fixed rule of thumb. Exact copies across classes are the integrity scan's label conflict (ADR-165), not repeated here.
+
+**Alternatives considered:**
+
+- *Color and size statistics per class.* Cheap, but two classes photographed under the same light would always look alike.
+- *A short training run.* Closer to the real task, but minutes of GPU before the user has decided to train; ADR-237 covers the after-training case.
+- *CLIP or DINOv2 features.* Better general descriptions, but a new dependency or a larger download; resnet18's ImageNet weights are already the default backbone here.
+
+## ADR-240 — Segmentation, regression and anomaly datasets are measured for brightness, contrast and sharpness
+
+**Date:** 2026-11-22
+**Status:** Accepted
+**Extends:** ADR-238 (the measure in the integrity scan), ADR-234 (masks), ADR-235 (targets), ADR-236 (anomaly)
+
+**Context:** ADR-238 measures brightness, contrast and sharpness in the Laboratory's integrity scan, which only opens classification and detection datasets. Its known limits named the other three tasks; issue 396 asks for the same measure there.
+
+**Decision:**
+
+- The same `QualityTally` (ADR-238) runs inside each task's own analysis, so no image is opened by a second job. `QualityTally.measure` measures one file and says whether it decoded.
+- Segmentation: the mask analysis measures each pair's image (not its mask), per split. An image that does not decode counts as unreadable, as a mask that does not open already did.
+- Anomaly: the analysis measures each image it already hashes, per group (training normals, test normals, each defect kind). The fences are taken over all groups together, so a defect kind photographed darker than the normals shows as dark: that is a difference between the groups, which the screen's medians per group make visible.
+- Regression: the target analysis read only the CSVs. It now also measures the listed images that exist, once per split even when several rows name the same one, on an evenly spaced sample past 20 000. Progress counts the CSVs, then the CSVs plus the images. The report gains `images_listed`, `images_sampled` and `images_unreadable`.
+- Each task's data step shows the same "Brilho, contraste e nitidez" card next to its analysis, with the thumbnails. On anomaly the groups are named as the rest of that screen names them, training first and defect kinds last.
+
+**Consequences:** the mask and anomaly analyses decode each image once more at a reduced size (about 3 ms per image, ADR-238). The target analysis, which read only text, now opens every listed image and takes longer by that cost. Results kept before this have no `quality` and show no card until run again.
+
+**Known limits:** Tukey's fences come from the quartiles, so when a quarter or more of the images share a defect the normal range widens around them and they stop being flagged; found while writing the tests, where three planted images out of eleven left the flat one unflagged. The regression result is marked stale by its CSVs only (ADR-235): replacing an image file without touching the CSVs does not mark it stale.
+
+## ADR-241 — Anomaly's per-epoch AUROC is named `test_auroc`
+
+**Date:** 2026-11-23
+**Status:** Accepted
+**Amends:** ADR-208 (anomaly labels), ADR-038 (anomaly)
+**Relates to:** ADR-013 (`run.json`), ADR-092 (resume), ADR-197 (tracker export)
+
+**Context:** the anomaly trainer scores every epoch on the labelled test split (`data_module.test_loader()` in `core/anomaly_trainer.py`) and wrote that AUROC as `val_auroc`. There is no validation split in the task. Nothing leaks into the selection: the checkpoint is the epoch with the lowest `train_loss`, and the AUROC is only reported. ADR-208 fixed the labels on screen and kept the key, because renaming it would break reading the runs already saved. The key is still read outside the interface, though: in the `run.json` a researcher opens, in the columns a tracker shows, in the event stream. A reader of any of those is told the curve is a validation curve.
+
+**Decision:**
+
+- Writers use `test_auroc`: the `AnomalyEpochResult` field, the `run.json` `history` records, the `epoch_end` event, the resume snapshot and the trackers that receive the history (MLflow, W&B, Comet). The TensorBoard tag goes from `auroc/val` to `auroc/test`. The final `metrics` keep their names (`auroc` is the best epoch's, `test_auroc` the test of the saved checkpoint).
+- Compatibility rule: a history saved before this ADR is read under the new name, and the file on disk is not rewritten. Each side has one normalizer that knows the old name. On the server, `core/history_keys.py` (`upgrade_run_history`, `upgrade_anomaly_epoch`) is applied by the run detail (`runs_routes._build_run_detail`, which also feeds the comparison), by the tracker export and its retry (`run_trackers.export_run_record`, `tracker_exports.retry_record`) and by resume (an old `resume.pt`). In the page, `lib/history-keys.ts` (`upgradeRunHistory`) is applied in `fetchRunDetail`. When a record carries both names, `test_auroc` wins.
+- Only anomaly runs are renamed. A researcher's own task (ADR-058) streams `val_<metric>` for a metric it measured on its validation split, so its `val_auroc` keeps its name.
+- The curve keeps its label, "AUROC (teste)" / "AUROC (test)", now under the key `test_auroc`.
+
+**Consequences:** a new anomaly `run.json` and an old one plot, compare and export the same series. `run.json` has no version of its own (ADR-039 versions the config), so the rule lives in the two readers instead of a migration. The exports that copy the record as it is (the experiment bundle, Zenodo, DVC, the Hub card, the Markdown report) keep the name each run was saved with. An old run already sent to MLflow or W&B keeps `val_auroc` there until it is sent again. The other two per-epoch anomaly fields, `val_image_f1` and `val_threshold`, are also measured on the test split (and the threshold on the training normals) and still carry `val_`; the screens label them, as ADR-208 does.
+
+**Alternatives considered:**
+
+- *Keep the key and fix only the labels (ADR-208).* The labels were right, and the file and the trackers still said validation.
+- *Rewrite the saved `run.json` files on read.* It edits a research record behind the researcher's back, and a run folder may be read-only or copied elsewhere.
+- *Rename `val_image_f1` and `val_threshold` in the same change.* Same reasoning, a larger surface; left for a separate decision.
+
+## ADR-242 — A K-fold can score each fold at its last epoch
+
+**Date:** 2026-11-24
+**Status:** Accepted
+**Relates to:** ADR-039 (`schema_version`), ADR-158 (an ignored field bumps the version), ADR-111 (stopped folds), ADR-123 (K-fold `run.json`)
+
+**Context:** the classification K-fold reloads each fold's `best_model.pth`, the epoch with the lowest `val_loss` on the fold's validation split, and scores it on that same split. The choice and the score read the same data, so the fold mean is optimistic. Issue #212 made the LaTeX caption, the README and `docs/dev/VALIDATION.md` say so. The maintainer (STAT-7) asked for a way to get a fold score with no selection on the fold.
+
+**Decision:**
+
+- `cross_validation.select_on: Literal["best", "last"] = "best"`. `best` is the behaviour before this ADR. `last` scores the weights the fold's model holds after its final epoch and does not load `best_model.pth`. Classification only: the regression and segmentation K-folds (`_cv_common`) take no `CrossValidationConfig` and keep scoring the best epoch.
+- Every fold record carries `select_on` and `selected_epoch` (the epoch scored: `best_epoch` for `best`, the last epoch run for `last`; `null` for a fold that scored nothing), in `metrics.fold_results` of the K-fold `run.json` and in `cv_summary.json`. The group report and `cv_summary.json` also carry `select_on` at the top.
+- The LaTeX K-fold caption ends with the sentence of the rule: the #212 sentence for `best`, "Each fold is scored at its last trained epoch, with no epoch selected on its own fold's validation split" for `last`. A report without `select_on` gets the `best` sentence, which is what it did.
+- `CURRENT_SCHEMA_VERSION` goes to 3. The v2 → v3 step changes no shape: the default keeps a v2 K-fold scoring as written. An older build refuses a v3 config instead of reading `select_on: last` and scoring the best epoch without saying so, the reasoning of ADR-158.
+- The GUI K-fold card gains the field (pt "Época por fold", en "Epoch per fold") with its explanation.
+
+**Consequences:**
+
+- A v2 config or a saved `run.json` loads as before and scores the best epoch. Configs and `run.json` files written from now on carry `schema_version: 3`, and builds before this one refuse them, as with ADR-158. Every task config shares the number.
+- `last` removes the epoch selection, not every use of the fold's validation split. With `training.early_stopping_patience` above 0 (the default is 0), the epoch where training stops is still decided by that split, and a `plateau` scheduler still reads it. The caption says "last trained epoch", which stays true in both cases.
+- The `best_model.pth` in each fold folder is still the best epoch. The weights `last` scores are not saved apart; rerunning the same config reproduces them.
+- `best_val_loss` in each fold record, and its mean in the K-fold `run.json`, remain the best validation loss of the fold, under either rule.
+- The classification K-fold writes no LaTeX table today (only the task K-folds go through `write_group_summary`); the caption rule applies wherever a K-fold report is turned into one.
+- Tests that mock a fold's `TrainResult` now set `best_epoch`, as the real one does.
+
+**Alternatives considered:**
+
+- *Nested cross-validation.* Removes the bias and keeps the selection, at K times the training. Larger than the problem asked for; still open.
+- *Save `last_model.pth` and reload it.* Same score, one more file per fold, and a second checkpoint path to keep in step with the trainer. The weights are already in memory when the fold is scored.
+- *Turn off early stopping under `last`.* It would change a training setting the config states; documenting it leaves the choice to the researcher.
+- *Add the field without a version bump.* An older build would ignore it and score the best epoch while the config says `last`.
+## ADR-243 — Ultralytics is a required dependency again (amends ADR-195)
+
+**Date:** 2026-11-24
+**Status:** Accepted
+**Amends:** ADR-195 (reverts its `detection` extra), ADR-106 (`ultralytics` is back in its list)
+
+**Context:** ADR-195 made `ultralytics` (AGPL-3.0) the optional `detection`
+extra (SEC-11, #223), so a plain `pip install visionforge-studio` trained
+detection only with the `torchvision` backend, and YOLO / RT-DETR needed a
+second install line. On 2026-11-24 the maintainer decided to revert it, after
+being reminded of ADR-195: the default detection backend should work from the
+one install, and the install stays simpler without a second line to know
+about. ADR-243 skips 242 on purpose: another change in flight reserved it.
+
+**Decision:**
+
+- `ultralytics>=8.3` is back in `[project].dependencies`. The `detection` extra
+  stays, empty, like the six ADR-106 kept: an install line saved with
+  `[detection]` keeps resolving instead of failing.
+- A missing `ultralytics` now means a damaged install, as it did before
+  ADR-195. Training, testing, ONNX export and the submit of a
+  `backend: ultralytics` config still fail with `detection.ultralytics_missing`
+  (pt/en), which now names the reinstall line of `missing_package_hint`
+  instead of the extra.
+- `GET /api/system/info` no longer reports `ultralytics_installed` or
+  `detection_install_command`, and the detection form drops the install line
+  that used them. The "sem AGPL" / "no AGPL" badge on the `torchvision` backend
+  stays: it is still true, and still the backend to pick to avoid AGPL code.
+- The install smoke installs one variant again, the CI jobs install `[dev]`
+  instead of `[dev,detection]`, the wheel smoke no longer checks that
+  `ultralytics` is absent, and the license gate walks `[project].dependencies`
+  without extras.
+- `THIRD_PARTY_NOTICES.md`, the README and `docs/INSTALL.md` say that
+  `pip install visionforge-studio` installs `ultralytics`, `ultralytics-thop`
+  and `ultralytics-platform`; their description of what the AGPL-3.0 asks is
+  the text ADR-195 left there, unchanged.
+
+**Consequences:** every install carries AGPL-3.0 code again, the situation
+ADR-195 described: an organisation that does not accept the AGPL cannot adopt
+VisionForge, even for classification, without Ultralytics' Enterprise License
+(#223). The packages already published (0.22.x) keep the extra; the change
+ships with the next release.
+
+**Alternatives considered:**
+
+- *Keep ADR-195.* The maintainer's call was that the simpler install is worth
+  more than a plain install without AGPL code.
+- *Drop the `detection` extra.* The empty names exist so an install line saved
+  in a requirements file or a README elsewhere keeps resolving (ADR-106); the
+  same holds for `[detection]`.

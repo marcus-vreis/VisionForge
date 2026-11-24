@@ -7,7 +7,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const work = path.join(here, ".work");
+// VF_E2E_SERVER_MODE starts the shared-server mode (ADR-212) in a folder of its
+// own. The suite's browser plays the login proxy: this machine is the trusted
+// address, and each test names its account in the proxy's header.
+const serverMode = process.env.VF_E2E_SERVER_MODE === "1";
+const work = path.join(here, serverMode ? ".work-server" : ".work");
 const exe = process.env.VF_E2E_EXECUTABLE;
 const port = process.env.VF_E2E_PORT;
 if (!exe || !port) {
@@ -17,10 +21,13 @@ if (!exe || !port) {
 
 rmSync(work, { recursive: true, force: true });
 mkdirSync(work, { recursive: true });
+const shared = path.join(work, "shared");
+if (serverMode) mkdirSync(shared);
 
 // An explicit interpreter also supports worktrees that share the original venv.
 const python = process.env.VF_E2E_PYTHON;
 const args = ["gui", "--port", port, "--no-browser"];
+if (serverMode) args.push("--server", "--trusted-proxy", "127.0.0.1", "--datasets-dir", shared);
 const child = spawn(python ?? exe, python ? ["-m", "visionforge", ...args] : args, {
   cwd: work,
   stdio: "inherit",

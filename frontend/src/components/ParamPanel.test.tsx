@@ -24,29 +24,48 @@ const schema: JsonSchema = {
         shuffle: { type: "boolean", default: true },
         fold_seed: { type: "integer", default: 42 },
         group_manifest: { anyOf: [{ type: "string" }, { type: "null" }], default: null },
+        select_on: { type: "string", enum: ["best", "last"], default: "best" },
       },
     },
   },
 };
 const formData = {
   block: "cross_validation",
-  cross_validation: { n_folds: 5, stratified: true, shuffle: true, fold_seed: 42, group_manifest: "fold-groups.csv" },
+  cross_validation: {
+    n_folds: 5,
+    stratified: true,
+    shuffle: true,
+    fold_seed: 42,
+    group_manifest: "fold-groups.csv",
+    select_on: "last",
+  },
 };
+
+function renderKFoldPanel(): string {
+  return renderToStaticMarkup(
+    <LanguageContext.Provider value={{ lang: "pt", t: pt, locale: "pt-BR", setLang: () => {} }}>
+      <ParamPanel task={taskDefinitions(pt)[0]} schema={schema} formData={formData} setFormData={() => {}} validationErrors={[]} />
+    </LanguageContext.Provider>,
+  );
+}
 
 describe("classification K-fold group configuration", () => {
   it("renders the config-bound CSV field with the real nullable Pydantic schema", () => {
-    const html = renderToStaticMarkup(
-      <LanguageContext.Provider value={{ lang: "pt", t: pt, locale: "pt-BR", setLang: () => {} }}>
-        <ParamPanel task={taskDefinitions(pt)[0]} schema={schema} formData={formData} setFormData={() => {}} validationErrors={[]} />
-      </LanguageContext.Provider>,
-    );
+    const html = renderKFoldPanel();
     expect(html).toContain('value="fold-groups.csv"');
     expect(html.match(/CSV de grupos \(opcional\)/g)).toHaveLength(2);
     expect(html).toContain('data-testid="classification-cross-validation"');
   });
 
+  it("offers the epoch each fold is scored at (ADR-242)", () => {
+    const html = renderKFoldPanel();
+    expect(html).toContain(pt.paramPanel.fieldLabels.select_on);
+    expect(html).toMatch(/>last<\/span>/);
+  });
+
   it("keeps the group CSV through YAML export and reviewed import", () => {
     const yaml = serializeConfigToYaml(formData);
+    expect(yaml).toContain("select_on: last");
     expect(yaml).toContain("group_manifest: fold-groups.csv");
     const parsed = parseYamlToConfig(yaml);
     expect(parsed).toEqual(formData);
@@ -194,6 +213,13 @@ describe("classification steps (ADR-156)", () => {
     const model = section(html, "model");
     expect(model).toMatch(/<fieldset disabled=""/);
     expect(model).toContain("um bloco por vez");
+  });
+
+  it("hides the pretrained field in Modelo while a model of the researcher's own trains", () => {
+    const label = pt.paramPanel.fieldLabels.pretrained;
+    expect(section(renderSteps(baseForm), "model")).toContain(label);
+    const own = renderSteps({ ...baseForm, model: { ...baseForm.model, custom_model: "my_net" } });
+    expect(section(own, "model")).not.toContain(label);
   });
 });
 

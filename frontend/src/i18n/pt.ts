@@ -55,6 +55,225 @@ export interface LrPlanEvidence {
 }
 
 export const pt = {
+  classSimilarity: {
+    title: "Classes parecidas",
+    help: "Antes de treinar, descreve cada imagem com um modelo já treinado no ImageNet e compara as classes: quais têm imagens que se parecem mais com outra classe do que com a própria. São os pares que o treino vai ter mais dificuldade de separar, e às vezes uma imagem guardada na pasta errada. Roda no processador e lê até 200 imagens por classe.",
+    start: "Comparar as classes",
+    progress: (done: number, total: number) => `${done} de ${total} imagens descritas`,
+    described: (n: number, perClass: number, model: string) =>
+      `${n} imagens descritas, até ${perClass} por classe, com ${model}.`,
+    sampled: "Nas classes maiores entrou uma amostra espaçada.",
+    unreadable: (n: number) => `${n} não abriram.`,
+    found: (n: number, share: string) =>
+      `${n} ${n === 1 ? "par de classes parecidas" : "pares de classes parecidas"}: ${n === 1 ? "nele" : "em cada um"}, pelo menos ${share} das imagens de uma classe se parecem mais com uma imagem da outra.`,
+    none: (share: string) => `Nenhum par passa de ${share}: as classes se separam bem nessa descrição.`,
+    pairColumn: "Par",
+    aLooksLikeB: "1ª parece a 2ª",
+    bLooksLikeA: "2ª parece a 1ª",
+    centroid: "Semelhança dos centros",
+    morePairs: (n: number) => `Mais ${n} pares com pouca mistura não mostrados.`,
+    examplesTitle: (a: string, b: string) => `Ver onde ${a} e ${b} se encontram`,
+    examplesHelp:
+      "À esquerda, a imagem; à direita, a imagem mais parecida com ela, que é da outra classe. Confira se o rótulo da esquerda está certo: mesmo num par com pouca mistura, uma imagem só pode estar na pasta errada.",
+    nearest: (cls: string, sim: number) => `mais parecida: ${cls} (${sim.toFixed(3)})`,
+    purityTitle: "Ver a separação de cada classe",
+    purityHelp: "Parte das imagens cuja imagem mais parecida é da mesma classe (entre parênteses, quantas foram descritas).",
+    howTitle: "Como é medido",
+    how: "Cada imagem passa por um resnet18 treinado no ImageNet, sem a última camada: 512 números que deixam perto imagens do mesmo tipo de coisa. Para cada imagem acha-se a mais parecida (similaridade de cosseno, em qualquer divisão). Um par é apontado quando 10% ou mais das imagens de uma das classes têm a mais parecida na outra. A semelhança dos centros compara a média de cada classe (1 é igual). A descrição vem do ImageNet, não do seu dataset: classes que diferem num detalhe que o ImageNet ignora podem parecer iguais aqui e ainda assim ser separadas pelo treino.",
+  },
+  imageQuality: {
+    title: "Brilho, contraste e nitidez",
+    intro: (n: number) =>
+      `Medidos em ${n} imagens. Uma imagem fora da faixa normal do próprio dataset costuma ser um erro de captura (subexposta, estourada, fora de foco) ou vir de outra fonte; confira antes de treinar.`,
+    metric: "Medida",
+    median: "Mediana",
+    middleHalf: "Metade central",
+    normalRange: "Faixa normal",
+    medianIn: (split: string) => `Mediana em ${split}`,
+    metrics: { brightness: "Brilho (0–255)", contrast: "Contraste", sharpness: "Nitidez" },
+    range: (metric: "brightness" | "contrast" | "sharpness", lo: number, hi: number) =>
+      metric === "brightness" ? `${lo.toFixed(0)}–${hi.toFixed(0)}` : `≥ ${lo >= 100 ? lo.toFixed(0) : lo.toFixed(1)}`,
+    none: "Nenhuma imagem fora da faixa normal.",
+    found: (kinds: string) =>
+      `Fora da faixa normal: ${kinds}. Uma imagem escura ou estourada costuma sair também sem contraste e borrada, porque perde os tons.`,
+    kinds: { dark: "Escuras demais", bright: "Claras demais", flat: "Sem contraste", blurry: "Borradas" },
+    kindHelp: {
+      dark: "Brilho abaixo da faixa normal. O número é o brilho médio, de 0 (preto) a 255 (branco).",
+      bright: "Brilho acima da faixa normal: imagens estouradas ou quase brancas.",
+      flat: "Desvio dos tons de cinza abaixo da faixa normal: imagens quase de uma cor só, às vezes vazias.",
+      blurry: "Bordas mais fracas que as do resto do dataset: fora de foco, tremidas ou ampliadas de uma imagem pequena.",
+    },
+    more: (n: number) => `Mais ${n} não mostradas.`,
+    howTitle: "Como é medido",
+    how: (side: number, k: number) =>
+      `Cada imagem é lida em tons de cinza e reduzida a no máximo ${side} px no lado maior. Brilho é a média dos tons; contraste, o desvio padrão; nitidez, a variância do Laplaciano, a medida usual de foco. A faixa normal vem dos quartis do próprio dataset (Tukey, ${k} vezes a distância entre o primeiro e o terceiro quartil), então um dataset escuro por natureza não tem todas as imagens apontadas. Contraste e nitidez altos não são defeito e não são apontados.`,
+  },
+  labelSuspects: {
+    open: "Rótulos suspeitos",
+    short: "Imagens cujo rótulo o modelo contesta com confiança",
+    hint: "Roda o modelo deste run sobre as divisões do dataset e aponta as imagens em que ele tem certeza de outra classe (confident learning).",
+    help:
+      "Para cada classe, o limite é a confiança média do modelo nas imagens daquela classe, no máximo 95%. Uma imagem é suspeita quando outra classe passa do próprio limite e ganha da classe do rótulo. Confira cada uma: pode ser rótulo errado, imagem ambígua ou erro do modelo. Os CSVs completos ficam na pasta do run, em label_suspects/.",
+    start: "Procurar rótulos suspeitos",
+    running: "Rodando o modelo…",
+    runningHint: "O modelo está passando por todas as imagens das divisões escolhidas; em datasets grandes leva alguns minutos.",
+    error: (e: string) => `Falhou: ${e}`,
+    computedAt: (when: string) => `Calculado em ${when}.`,
+    missing: (splits: string) => `Sem pasta no dataset: ${splits}.`,
+    found: (n: number, images: number) =>
+      n === 0
+        ? `Nenhuma suspeita em ${images} imagens.`
+        : `${n} ${n === 1 ? "suspeita" : "suspeitas"} em ${images} imagens.`,
+    failed: (n: number) => `${n} imagens não abriram.`,
+    inSample:
+      "O modelo treinou nestas imagens e tende a concordar com os rótulos que decorou; validação e teste dizem mais.",
+    image: "Imagem",
+    given: "Rótulo",
+    suspected: "O modelo diz",
+    pGiven: "p(rótulo)",
+    pSuspected: "p(modelo)",
+    more: (n: number, split: string) => `mais ${n} no CSV label_suspects/${split}.csv`,
+    pairsTitle: "Ver as classes que o modelo confunde",
+    pair: (given: string, taken: string, n: number) => `${given} tomada por ${taken}: ${n} ${n === 1 ? "imagem" : "imagens"}`,
+    splitNames: { train: "Treino", val: "Validação", test: "Teste" },
+  },
+  anomalyAnalysis: {
+    title: "O que o dataset de anomalia contém",
+    help:
+      "Abre cada imagem e mostra quantas há em cada grupo, os tamanhos e modos de cor por grupo, as imagens do treino parecidas com uma imagem de defeito e as normais do teste já vistas no treino, e os defeitos sem máscara de referência. Roda em segundo plano e o último resultado fica guardado.",
+    start: "Analisar o dataset",
+    progress: (done: number, total: number) => `${done} de ${total} imagens`,
+    complete: (n: number) => `${n} imagens analisadas.`,
+    sampled: (n: number, total: number) => `Amostra de ${n} das ${total} imagens, espaçada para cobrir todos os grupos.`,
+    cancelled: (n: number) => `Cancelada depois de ${n} imagens; o resultado cobre só essas.`,
+    totals: (train: number, normal: number, anomalous: number, kinds: number) =>
+      `Treino: ${train} normais. Teste: ${normal} normais e ${anomalous} com defeito, em ${kinds} ${kinds === 1 ? "tipo" : "tipos"}.`,
+    noProblems: "Nenhuma pasta ignorada, imagem suspeita, tamanho ou modo diferente do treino, ou máscara faltando.",
+    noTrain: "Falta a pasta de normais do treino: o modelo não tem do que aprender.",
+    noDefects: "O teste não tem nenhuma pasta de defeito: sem anomalias, as métricas não têm o que medir.",
+    extraTrain: (folders: string) =>
+      `O treino tem outras pastas além da de normais (${folders}). O treino só lê a de normais; essas imagens ficam de fora.`,
+    few: (list: string, min: number) =>
+      `Tipos de defeito com menos de ${min} imagens: ${list}. Com tão poucas, uma imagem muda a métrica desse tipo em vários pontos.`,
+    trainLikeDefect: (n: number) =>
+      `${n} imagens do treino parecem uma imagem de defeito. Se forem defeitos, o modelo aprende que eles são normais.`,
+    testLikeTrain: (n: number) =>
+      `${n} imagens normais do teste parecem uma imagem do treino. O teste mede memória nelas, não generalização.`,
+    sizeMismatch: (groups: string) =>
+      `Tamanho mais comum diferente do treino em: ${groups}. O modelo é medido em imagens num formato que não viu.`,
+    modeMismatch: (groups: string) => `Modo de cor diferente do treino em: ${groups} (por exemplo, cinza contra RGB).`,
+    missingMasks: (n: number) =>
+      `${n} imagens de defeito sem máscara em ground_truth. As métricas por pixel não podem usá-las.`,
+    unreadable: (n: number) => `${n} imagens não abriram.`,
+    lookHelp: (d: number) =>
+      `"Parecida" é uma imagem cujo dHash difere em até ${d} de 64 bits: a mesma foto reencodada, redimensionada ou em cinza. Confira cada par; não é um veredito.`,
+    groupsTitle: "Grupos",
+    groupColumn: "Grupo",
+    imagesColumn: "Imagens",
+    sizeColumn: "Tamanhos mais comuns",
+    modeColumn: "Modo de cor",
+    train: "Treino (normais)",
+    testNormal: "Teste (normais)",
+    defect: (kind: string) => `Defeito: ${kind}`,
+    trainLikeDefectList: "Ver as imagens do treino parecidas com defeitos",
+    testLikeTrainList: "Ver as imagens do teste parecidas com o treino",
+    missingMasksList: "Ver os defeitos sem máscara",
+  },
+  targetAnalysis: {
+    title: "Como estão os alvos",
+    help:
+      "Lê os CSVs inteiros e mostra, por alvo e divisão, a distribuição, os outliers e o quanto validação e teste se afastam do treino; a correlação entre alvos; e as linhas com imagem faltando ou célula que não é número. Roda em segundo plano e o último resultado fica guardado.",
+    tukeyHelp: (k: number) =>
+      `Outlier: valor abaixo de Q1 − ${k}×IQR ou acima de Q3 + ${k}×IQR do treino (regra de Tukey). Deslocamento: quanto a média da divisão se afasta da do treino, em desvios-padrão do treino.`,
+    start: "Analisar alvos",
+    progress: (done: number, total: number) => `${done} de ${total} CSVs`,
+    complete: (rows: string) => `Linhas lidas: ${rows}.`,
+    cancelled: "Cancelada; o resultado cobre só os CSVs lidos até ali.",
+    noProblems: "Todas as colunas existem, todas as imagens listadas existem e todas as células dos alvos são números.",
+    missingColumns: (split: string, cols: string) => `${split}: faltam as colunas ${cols} no CSV.`,
+    missingImages: (split: string, n: number, rows: number) =>
+      `${split}: ${n} de ${rows} linhas apontam para uma imagem que não existe. O treino para nelas.`,
+    badCells: (n: number) =>
+      `${n} células de alvo vazias ou que não são número. O treino para nelas; a lista com a linha está abaixo.`,
+    splitColumn: "Divisão",
+    n: "n",
+    bad: "inválidas",
+    mean: "média",
+    std: "desvio",
+    min: "mín",
+    median: "mediana",
+    max: "máx",
+    outliers: "outliers",
+    shift: "desloc. (dp)",
+    histogramLabel: (name: string) => `Histograma de ${name} por divisão`,
+    range: (lo: string, hi: string) => `de ${lo} a ${hi}`,
+    strokes: { train: "linha cheia", val: "tracejada", test: "pontilhada" } as Record<string, string>,
+    shifted: (split: string, sd: string) =>
+      `${split}: a média fica ${sd} desvios-padrão do treino. A divisão mede o modelo numa faixa diferente da que ele aprendeu.`,
+    outliersList: (n: number, lo: string, hi: string) => `Ver os ${n} outliers (fora de ${lo} a ${hi})`,
+    line: (n: number) => `linha ${n}`,
+    noImage: (image: string) => (image ? `${image} não existe` : "sem imagem"),
+    correlationTitle: "Correlação entre alvos",
+    correlation: (a: string, b: string, r: string) => `${a} × ${b}: r = ${r}`,
+    correlationHelp:
+      "r de Pearson sobre as linhas em que os dois são número, todas as divisões juntas. Perto de ±1, um alvo quase determina o outro.",
+    rowsTitle: "Ver as linhas com problema",
+  },
+  analysisJob: {
+    splitNames: { train: "Treino", val: "Validação", test: "Teste" } as Record<string, string>,
+    cancel: "Cancelar",
+    cancelling: "Cancelando…",
+    failed: (error: string) => `A análise falhou: ${error}`,
+    savedAt: (when: string) => `Última análise guardada: ${when}.`,
+    savedStale: "Os arquivos mudaram desde então: o resultado pode estar desatualizado.",
+  },
+  maskAnalysis: {
+    title: "O que as máscaras contêm",
+    help:
+      "Abre cada par imagem/máscara e mede a fração de pixels de cada classe, por divisão; a cobertura de cada máscara; ids fora das classes; máscaras de tamanho diferente da imagem ou coloridas; e regiões minúsculas, que o redimensionamento do treino pode apagar. Roda em segundo plano e o último resultado fica guardado.",
+    start: "Analisar máscaras",
+    progress: (done: number, total: number) => `${done} de ${total} pares`,
+    complete: (n: number) => `${n} pares analisados.`,
+    sampled: (n: number, total: number) =>
+      `Amostra de ${n} dos ${total} pares, espaçada para cobrir todas as divisões.`,
+    cancelled: (n: number) => `Cancelada depois de ${n} pares; o resultado cobre só esses.`,
+    unpaired: (split: string, noMask: number, noImage: number) =>
+      `${split}: ${noMask} imagens sem máscara e ${noImage} máscaras sem imagem (o par é pelo nome do arquivo, sem extensão). O treino recusa imagem sem máscara.`,
+    noProblems: "Nenhum id fora das classes, máscara colorida, tamanho diferente ou arquivo ilegível.",
+    outOfRange: (ids: string, pixels: number, last: number) =>
+      `Ids fora das classes: ${ids} (${pixels} pixels). As classes vão de 0 a ${last}; confira o número de classes ou o ignore_index.`,
+    color: (n: number) =>
+      `${n} máscaras coloridas (RGB). O treino espera uma máscara de um canal, com o id da classe em cada pixel.`,
+    sizeMismatch: (n: number) =>
+      `${n} máscaras de tamanho diferente da imagem. O treino redimensiona as duas, e a máscara deixa de cair sobre o objeto.`,
+    unreadable: (n: number) => `${n} pares não abriram.`,
+    absent: (ids: string) => `Classes sem nenhum pixel: ${ids}. O modelo não tem como aprendê-las.`,
+    classesTitle: "Fração de pixels por classe",
+    classColumn: "Classe (id)",
+    allColumn: "Todas",
+    ignoreId: (id: number) => `${id} (ignorado)`,
+    badId: (id: number) => `${id} (fora das classes)`,
+    classesHelp:
+      "Em porcentagem dos pixels de cada divisão. Uma classe com fração muito pequena pesa pouco na perda: pesos por classe ou outra perda podem ajudar.",
+    coverageTitle: "Cobertura de cada máscara",
+    coverageEmpty: "vazia",
+    coverageHelp:
+      "Fração de cada máscara que não é fundo (classe 0) nem ignorada. Muitas máscaras vazias ensinam o modelo a prever só fundo.",
+    tinyTitle: "Regiões minúsculas",
+    tiny: (images: number, list: string, share: number) =>
+      `${images} máscaras têm regiões menores que ${share}% da imagem: ${list}. Ao reduzir a imagem para o tamanho do treino, elas podem sumir.`,
+    tinyClass: (id: number, n: number) => `classe ${id}: ${n}`,
+    noTiny: (share: number) => `Nenhuma região menor que ${share}% da imagem.`,
+    examplesTitle: "Ver os arquivos achados",
+    kinds: {
+      out_of_range: "id fora das classes",
+      color: "máscara colorida",
+      size_mismatch: "tamanho diferente da imagem",
+      unreadable: "não abriu",
+      tiny: "região minúscula",
+    },
+    splitNames: { train: "Treino", val: "Validação", test: "Teste" },
+  },
   evidence: {
     audit: "Auditar imagens",
     auditing: "Auditando imagens…",
@@ -68,8 +287,15 @@ export const pt = {
     groupPlaceholder: "groups.csv",
     strictGroups: "Exigir grupo para todas as imagens",
     strictHint: "Use com um CSV de grupos para detectar imagens sem grupo.",
+    nearDuplicates: "Procurar quase-duplicatas entre splits",
+    nearHint:
+      "Abre cada imagem e compara um hash visual de 64 bits: acha a mesma foto reencodada, redimensionada ou com o brilho mudado em splits diferentes, o que vaza o teste para o treino. Demora mais que a busca por cópias exatas. Imagens de uma cor só ficam de fora.",
+    scopeNear: (bits: number) =>
+      `Duplicatas exatas por SHA-256 e quase-duplicatas visuais entre splits (dHash, até ${bits} de 64 bits diferentes).`,
+    nearCount: (n: number) => `Grupos de quase-duplicatas entre splits: ${n}`,
     duplicateCount: (n: number) => `Grupos de duplicatas exatas: ${n}`,
     missingCount: (n: number) => `Splits ausentes: ${n}`,
+    optionalAbsent: (split: string) => `${split}: ausente (opcional, o treino roda sem ele)`,
     emptyCount: (n: number) => `Splits vazios: ${n}`,
     unreadableCount: (n: number) => `Imagens ilegíveis: ${n}`,
     groupCount: (n: number) => `Grupos entre splits: ${n}`,
@@ -78,6 +304,13 @@ export const pt = {
     bundle: "Baixar bundle do experimento",
     bundling: "Preparando bundle…",
     bundleFailed: "Não foi possível baixar o bundle.",
+    // What each task's audit reads (ADR-230).
+    notes: {
+      yolo: "Lê images/<split> ou <split>/images; os rótulos não entram.",
+      masks: "Lê só a pasta de imagens de cada split; as máscaras não entram.",
+      csv: "Lê as imagens que cada CSV lista: a mesma imagem em dois CSVs é uma duplicata entre splits.",
+      anomaly: "Compara o treino com o teste inteiro, normais e defeitos: uma imagem do teste copiada no treino aparece aqui.",
+    },
   },
   common: {
     back: "Voltar",
@@ -150,15 +383,10 @@ export const pt = {
     noRate: "Nenhum runtime ativo agora; as horas restantes dependem da GPU escolhida.",
     usageFailed: "Não foi possível ler o saldo.",
     loadFailed: "Não foi possível falar com o servidor.",
-    trainTitle: "Treinar no Colab",
-    trainSource: "Dataset: URL de zip, torchvision:nome ou hf:dono/nome",
-    driveSource: "Dataset no Google Drive",
     driveRoot: "Pasta \"Meu Drive\" deste computador",
     driveRootPlaceholder: "G:\\Meu Drive",
     driveRootOther: "usar outra pasta \"Meu Drive\"",
     driveExport: "Salvar o run também no Drive",
-    driveNote:
-      "A VM monta o seu Drive e copia a pasta antes de treinar; o Google pede permissão a cada runtime. Sem pasta escolhida, vale a pasta do dataset do formulário.",
     driveChecking: "Procurando o Google Drive para desktop…",
     driveFolder: "Pasta do dataset",
     driveFolderPlaceholder: "vazio = pasta do formulário",
@@ -178,16 +406,44 @@ export const pt = {
     driveStep3: "Volte aqui e escolha a pasta.",
     sourcePlaceholder: "https://…/dataset.zip",
     badSource: "Use uma URL http(s) de um zip, torchvision:<nome> ou hf:<dono/nome>.",
-    accelerator: "GPU",
-    train: "treinar no Colab",
-    trainNote:
-      "Entra na mesma fila dos treinos locais e a aba ao vivo acompanha. Com \"Salvar no Drive\", o run vai também para MyDrive/VisionForge/runs.",
     // The strategy step has Réplicas on (ADR-056): Colab trains one run.
     replicatesBlocked:
       "Réplicas roda só neste computador: o Colab treina uma execução por vez. Volte a estratégia para Treino simples para treinar no Colab.",
     // The same for the replicated comparison (ADR-193).
     comparisonBlocked:
       "A comparação replicada roda só neste computador: o Colab treina uma execução por vez. Volte a estratégia para Treino simples para treinar no Colab.",
+    // Colab as a place to train, in the device selector (ADR-211).
+    target: {
+      menuTitle: "google colab",
+      option: (gpu: string) => `Colab · ${gpu}`,
+      optionSubtitle: "GPU da sua conta Google",
+      pill: (gpu: string) => `COLAB · ${gpu}`,
+      account: (email: string) => `conta ${email}`,
+      balance: (units: string) => `${units} CU`,
+      balanceTitle: (units: string) => `Saldo: ${units} compute units`,
+      runtimes: (n: number) => (n === 1 ? "1 runtime ativo" : `${n} runtimes ativos`),
+      allocated: (hardware: string) => `alocado: ${hardware}`,
+      notConnected: "Para usar: instale a CLI e entre com o Google no botão colab do cabeçalho.",
+      onlyClassification: "O Colab treina só classificação por enquanto.",
+      train: "▶ Treinar no Colab",
+      lockedData: "Diga de onde o Colab tira o dataset, na etapa Dados, para liberar o Treinar",
+      panelHint:
+        "Para treinar: escolha Colab no seletor de dispositivo, ao lado do botão Treinar. O dataset é pedido na etapa Dados.",
+      dataKicker: "// dataset para o colab",
+      dataIntro:
+        "O treino vai rodar no Colab, e a máquina de lá não lê as pastas deste computador. Diga de onde ela tira o dataset.",
+      kind: "Origem do dataset",
+      kindDrive: "Pasta no Meu Drive",
+      kindLink: "Link ou catálogo",
+      linkLabel: "URL de zip, torchvision:nome ou hf:dono/nome",
+      backupNote:
+        "Uma pasta do PC que o Drive para desktop só espelha como backup fica em \"Computadores\", não em \"Meu Drive\", e o Colab não a alcança. Copie o dataset para dentro de \"Meu Drive\".",
+      linkClasses:
+        "O dataset de um link não é lido neste computador: confira o Tipo de tarefa e o Nº de classes logo abaixo.",
+      reviewOrigin: "Dataset no Colab",
+      noFolder: "Escolha a pasta do dataset no Meu Drive.",
+      formFolder: (path: string) => `Sem pasta escolhida, vale a do formulário: ${path}`,
+    },
     sessionsTitle: "Runtimes ativos",
     sessionsNone: "Nenhum runtime ativo.",
     stopSession: "parar",
@@ -261,6 +517,8 @@ export const pt = {
     // The browser tab title while no run has just ended (the static one in
     // index.html is only what shows before the page loads).
     pageTitle: "VisionForge — Treino local de IA",
+    // The same on a server several people share (`--server`, ADR-212).
+    pageTitleServer: "VisionForge — Treino de IA num servidor compartilhado",
     train: {
       simple: "▶ Treinar",
       cv: "▶ Rodar K-fold",
@@ -287,7 +545,7 @@ export const pt = {
     trainLockedData: "Escolha o dataset na etapa Dados para liberar o Treinar",
     history: "histórico",
     datasets: "datasets",
-    datasetsTitle: "Baixar um dataset para uma pasta local",
+    datasetsTitle: "Baixar um dataset para a sua pasta de datasets",
     queue: "fila",
     queueTitle:
       "Abrir o treino em execução e ver os que esperam a GPU — dá para parar um ou remover outro",
@@ -341,7 +599,7 @@ export const pt = {
     saveTarget: "Salvar destino",
     saveFailed: "Falha ao salvar a configuração do W&B.",
     token: "Chave de API do W&B",
-    tokenHint: "Crie a chave nas configurações da sua conta W&B. Ela fica salva neste computador, só para este perfil, e nunca volta para a tela.",
+    tokenHint: "Crie a chave nas configurações da sua conta W&B. Ela fica salva no servidor do VisionForge, só para este perfil, e nunca volta para a tela.",
     configured: "Chave salva neste perfil.",
     saveToken: "Salvar chave",
     removeToken: "Esquecer chave",
@@ -365,7 +623,7 @@ export const pt = {
     saveTarget: "Salvar destino",
     saveFailed: "Falha ao salvar a configuração do Comet.",
     token: "Chave de API do Comet",
-    tokenHint: "Crie a chave nas configurações da sua conta Comet. Ela fica salva neste computador, só para este perfil, e nunca volta para a tela.",
+    tokenHint: "Crie a chave nas configurações da sua conta Comet. Ela fica salva no servidor do VisionForge, só para este perfil, e nunca volta para a tela.",
     configured: "Chave salva neste perfil.",
     saveToken: "Salvar chave",
     removeToken: "Esquecer chave",
@@ -565,14 +823,51 @@ export const pt = {
     failed: "Não foi possível criar o perfil.",
     queueOwner: (name: string) => `perfil ${name}`,
   },
+  // Um servidor para várias pessoas (`visionforge gui --server`, ADR-216).
+  server: {
+    account: (user: string) => `conta: ${user}`,
+    quota: (used: string, limit: string) => `disco: ${used} de ${limit}`,
+    quotaFull:
+      "Sua pasta está cheia. Apague treinos no Histórico para treinar ou baixar datasets de novo.",
+    menuNote:
+      "Servidor compartilhado. O que ainda não funciona em um servidor fica escondido.",
+    foldersTitle: "Neste servidor, o dataset precisa estar em uma destas pastas:",
+    foldersTitleRun: "Neste servidor, as imagens precisam estar em uma destas pastas:",
+    folderOwn: "sua pasta",
+    keyOnce: "Usada só neste download; o servidor não guarda a chave.",
+    downloadFolder: "Nome da pasta",
+    downloadTarget: "Vai para a sua pasta de datasets:",
+    destHint:
+      "Neste servidor, fica na sua pasta de datasets; se o original for compartilhado, é uma cópia.",
+    folderShared: "compartilhada",
+    foldersHint: "Cole o caminho completo no campo acima.",
+    foldersLabel: "Pastas de dataset do servidor",
+  },
   datasetsOverlay: {
     kicker: "// datasets",
-    title: "Obter dados",
+    title: "Dados de treino",
     description:
-      "Baixe uma vez para uma pasta local; depois aponte o campo de dataset de qualquer task para ela.",
+      "Baixe um dataset uma vez e aponte para a pasta dele o campo de dataset de qualquer tarefa.",
     tabGet: "Baixar",
     tabExplore: "Explorar",
+    tabMine: "Meus datasets",
     tabsLabel: "Ferramentas de dataset",
+  },
+  ownDatasets: {
+    title: "Meus datasets neste servidor",
+    intro:
+      "Os datasets que você baixou ou criou neste servidor ficam na sua pasta e contam no seu espaço em disco. Apague os que não usa mais para liberar espaço.",
+    loading: "carregando…",
+    loadFailed: "Não foi possível listar os seus datasets.",
+    empty: "Sua pasta de datasets está vazia.",
+    delete: "Apagar",
+    deleteLabel: (name: string) => `Apagar o dataset ${name}`,
+    confirm: "Apagar de vez? Não dá para desfazer.",
+    confirmYes: "Sim, apagar",
+    confirmNo: "Cancelar",
+    deleting: "apagando…",
+    deleted: (name: string) => `O dataset ${name} foi apagado.`,
+    failed: "Não foi possível apagar o dataset.",
   },
   datasetLab: {
     kicker: "// laboratório de datasets",
@@ -611,6 +906,28 @@ export const pt = {
     boxesPerClassTitle: "Caixas por classe",
     perClassHelp: "Cada barra soma as divisões; o número no fim é o total da classe.",
     tableToggle: "Ver a tabela por classe e divisão",
+    balanceTitle: "As divisões têm a mesma mistura de classes?",
+    balanceVerdict: {
+      stratified: (gap: number, limit: number) =>
+        `Sim: cada classe tem quase a mesma proporção em todas as divisões (diferença máxima de ${gap.toFixed(1)} pontos; até ${limit} conta como estratificada).`,
+      close: (gap: number, _limit: number, close: number) =>
+        `Quase: a proporção de uma classe muda até ${gap.toFixed(1)} pontos entre as divisões (até ${close} conta como próxima).`,
+      uneven: (gap: number) =>
+        `Não: a proporção de uma classe muda até ${gap.toFixed(1)} pontos entre as divisões. A validação mede uma mistura diferente da do treino; Refazer divisão redistribui estratificando por classe.`,
+      missing_class: () =>
+        "Não: há classe ausente em alguma divisão, e o desempenho nela nunca é medido ali. Refazer divisão redistribui estratificando por classe.",
+      one_split: () => "",
+    },
+    balanceMissing: (name: string, splits: string) => `${name} não aparece em: ${splits}.`,
+    balanceCramer: (v: number) =>
+      `V de Cramér entre divisão e classe: ${v.toFixed(3)} (0 = mesma mistura em todas, 1 = a divisão determina a classe).`,
+    balanceImbalance: (split: string, ratio: number | null) =>
+      ratio === null ? `${split}: uma classe só` : `${split}: maior classe / menor = ${ratio.toFixed(1)}×`,
+    balanceTable: "Ver a proporção de cada classe por divisão",
+    balanceGap: "Diferença (pontos)",
+    balanceTop: (list: string) => `Maiores diferenças, em pontos: ${list}.`,
+    balanceHelp:
+      "Conta só os rótulos que o resumo já tem, sem abrir imagens. Na detecção, uma imagem conta uma vez para cada classe que contém.",
     segmentTitle: (split: string, n: number) => `${split}: ${n}`,
     learnMore: "Saiba mais",
     leadResplit:
@@ -695,9 +1012,49 @@ export const pt = {
     groupFiles: (n: number) => `arquivos: ${n}`,
     labelConflict: "mesma imagem, classes diferentes",
     moreNotShown: (n: number) => `mais ${n} não mostrados`,
+    scanNear: "Procurar quase-duplicatas entre splits",
+    scanNearHint:
+      "Uma segunda passada abre cada imagem e compara um hash visual de 64 bits: acha a mesma foto reencodada, redimensionada ou com o brilho mudado em splits diferentes. A varredura leva mais ou menos o dobro do tempo.",
+    nearTitle: "Quase-duplicatas entre splits",
+    nearHelp: (bits: number) =>
+      `Imagens parecidas (até ${bits} de 64 bits diferentes no hash visual) em splits diferentes. Confira cada grupo: quadros de um vídeo ou fotos de uma câmera fixa também se parecem.`,
+    nearNotChecked: "Quase-duplicatas não foram procuradas.",
+    savedAt: (when: string) => `Última varredura guardada: ${when}.`,
+    savedStale:
+      "O dataset mudou desde então (imagens adicionadas, removidas, renomeadas, editadas ou com outra classe): varra de novo para um resultado atual.",
     sizesTitle: "Tamanhos das imagens",
     longestSide: "Maior lado (px)",
     aspectRatio: "Proporção (largura / altura)",
+    boxesTitle: "Caixas",
+    boxTotals: (boxes: number, images: number, mean: number, max: number) =>
+      `${boxes} caixas em ${images} imagens: ${mean.toFixed(2)} por imagem, no máximo ${max} numa só.`,
+    boxEmpty: (n: number, noFile: number, emptyFile: number) =>
+      `${n} imagens sem caixa (${noFile} sem arquivo de rótulo, ${emptyFile} com o rótulo vazio ou só com linhas inválidas). Para o treino, uma imagem sem caixa diz que ali não há objeto: confira se é intencional.`,
+    boxInvalid: (n: number, list: string) =>
+      `${n} linhas de rótulo que o treino não lê como caixa: ${list}. A lista com arquivo e linha está abaixo.`,
+    boxProblems: {
+      malformed: "não são cinco números",
+      class_out_of_range: "classe fora do data.yaml",
+      zero_area: "largura ou altura zero",
+      outside_image: "passa da borda da imagem",
+    },
+    boxSizesTitle: "Tamanho das caixas (área em pixels)",
+    boxSmall: (side: number) => `pequena (< ${side}²)`,
+    boxMedium: (lo: number, hi: number) => `média (${lo}²–${hi}²)`,
+    boxLarge: (side: number) => `grande (≥ ${side}²)`,
+    boxSizesHelp:
+      "Critério do COCO, o mesmo do mAP pequeno, médio e grande: com poucas caixas num grupo, a métrica dele oscila muito.",
+    boxUnsized: (n: number) => `${n} caixas de imagens que não abriram ficaram fora dos tamanhos.`,
+    boxPerImage: "Caixas por imagem",
+    boxAspect: "Proporção das caixas (largura / altura, em pixels)",
+    boxHeatmapTitle: "Onde ficam os centros das caixas",
+    boxHeatmapHelp:
+      "A imagem dividida em 10 × 10; quanto mais forte a célula, mais centros de caixa caem nela. Objetos sempre no centro ensinam o modelo a procurar só ali.",
+    boxPairsTitle: "Classes que aparecem juntas",
+    boxPair: (a: string, b: string, n: number) => `${a} + ${b}: ${n} ${n === 1 ? "imagem" : "imagens"}`,
+    boxClassTable: "Ver os tamanhos por classe",
+    boxInvalidList: "Ver as linhas inválidas",
+    boxLine: (n: number) => `linha ${n} do rótulo`,
     widthStats: (min: number, median: number, max: number) =>
       `largura mín ${min} · mediana ${median} · máx ${max}`,
     heightStats: (min: number, median: number, max: number) =>
@@ -1141,6 +1498,8 @@ export const pt = {
       "Precisão mista: usa 16 bits onde dá. Treina mais rápido e ocupa menos VRAM, com risco baixo de instabilidade.",
     mixed_precision:
       "Faz parte das contas em 16 bits. Acelera o treino e ocupa menos VRAM em GPUs recentes; em modelos sensíveis pode custar precisão numérica.",
+    live_gradcam_per_class:
+      "Quantas imagens de cada classe entram no Grad-CAM ao vivo, até 48 no total (com muitas classes, cada uma aparece ao menos uma vez antes de alguma repetir). 0 mostra 6 imagens, revezando as classes. Cada imagem custa uma passada para a frente e uma para trás nas épocas em que a galeria é gerada; o treino não muda.",
     live_gradcam_every:
       "A cada quantas épocas mostrar, na aba Resultados, onde o modelo olha em algumas imagens fixas da validação (Grad-CAM). Também mostra na última época e em cada nova melhor. 0 desliga. Não muda o treino: com a mesma seed, os números saem iguais.",
     deterministic:
@@ -1169,23 +1528,34 @@ export const pt = {
     box: "Peso da perda de localização das caixas.",
     cls: "Peso da perda de classificação.",
     dfl: "Peso da perda de distribuição das bordas da caixa.",
+    select_on:
+      "Qual época avalia cada fold. best fica com a de menor loss de validação no próprio fold, que depois a avalia: estimativa otimista. last avalia a última época, sem escolha feita no fold.",
   } satisfies Record<string, string>,
   // The hyperparameter form (components/ParamPanel.tsx). Sentences with inline
   // emphasis are written whole, with `code`, **strong** and __emphasis__ marks
   // that ParamPanel's <Rich> turns into elements, so a translation can reorder
   // the words around them.
   paramPanel: {
-    // Um YAML importado pode trazer `model.custom_model` ou `model.timm_model`,
-    // que o formulário não tem como escolher (lib/model-source.ts).
+    // `model.custom_model` vem do seletor da etapa Modelo ou de um YAML
+    // importado; `model.timm_model`, só do YAML (lib/model-source.ts).
     otherModel: {
       label: { custom_model: "Modelo próprio", timm_model: "Modelo timm" },
       note: {
         custom_model: (name: string) =>
-          `O YAML importado usa o seu modelo **${name}**, de user_models/. É ele que vai treinar: a Arquitetura e os Pesos pré-treinados abaixo são ignorados.`,
+          `Este config usa o seu modelo **${name}**, de user_models/. É ele que vai treinar: a Arquitetura abaixo é ignorada, e os pesos pré-treinados não se aplicam.`,
         timm_model: (name: string) =>
           `O YAML importado usa o modelo timm **${name}**. É ele que vai treinar: a Arquitetura abaixo é ignorada.`,
       },
       useBuiltin: "Usar a arquitetura abaixo",
+    },
+    // O seletor de `model.custom_model` da etapa Modelo (CustomModelField).
+    customModel: {
+      builtin: "Nenhum",
+      builtinSub: "treina a Arquitetura escolhida",
+      missing: "não registrado em user_models/",
+      help: "Um modelo seu, registrado com @register_model num arquivo .py em user_models/. Ele substitui a Arquitetura, e os pesos pré-treinados não se aplicam.",
+      empty:
+        "Nenhum ainda. Registre um com `@register_model` num arquivo `.py` em `user_models/`; o passo a passo está em `docs/custom/MODELS.md`.",
     },
     sectionLabels: {
       model: "Modelo",
@@ -1214,6 +1584,7 @@ export const pt = {
       deterministic: "Determinístico",
       mixed_precision: "Precisão mista (AMP)",
       live_gradcam_every: "Grad-CAM ao vivo (a cada N épocas)",
+      live_gradcam_per_class: "Grad-CAM ao vivo: imagens por classe",
       kind: "Tipo",
       step_size: "Step size",
       gamma: "Gamma",
@@ -1236,6 +1607,7 @@ export const pt = {
       stratified: "Stratified",
       shuffle: "Shuffle",
       fold_seed: "Fold seed",
+      select_on: "Época por fold",
       mode: "Modo",
       unfreeze_from_layer: "Descongelar a partir de",
       backbone_lr_multiplier: "LR do backbone (×)",
@@ -1590,8 +1962,6 @@ export const pt = {
       backend: "Backend",
       backendHint: "origem do modelo",
       noAgplBadge: "sem AGPL",
-      ultralyticsMissing: (command: string) =>
-        `O Ultralytics (AGPL-3.0) não está instalado, e um treino com ele será recusado. Instale com \`${command}\` e reinicie o VisionForge, ou escolha Torchvision.`,
       architecture: "Arquitetura",
       architectureHint: "detector",
       pretrained: "Pesos pré-treinados",
@@ -2249,7 +2619,7 @@ export const pt = {
   // names, the Kaggle token format and the example dataset ids stay as they are
   // in both languages; the sentences that carry them are whole strings.
   datasetDownload: {
-    title: "Baixar dataset (online → pasta local)",
+    title: "Baixar dataset (online → sua pasta de datasets)",
     cancel: "cancelar",
     open: "+ baixar dataset",
     provider: "Provedor",
@@ -2331,7 +2701,7 @@ export const pt = {
   // The panels' "use the sample dataset" button (ADR-117).
   sampleDataset: {
     button: "usar dataset de exemplo",
-    title: "Cria datasets/exemplo-<tarefa>/ (ou reaproveita) e preenche a pasta base",
+    title: "Cria a pasta exemplo-<tarefa> na sua pasta de datasets (ou reaproveita) e preenche a pasta base",
     failed: (reason: string) => `Não foi possível criar o dataset de exemplo: ${reason}`,
   },
   // The pre-training overview of a classification dataset (components/DatasetStats.tsx).
@@ -2911,6 +3281,26 @@ export const pt = {
       buildingBank: "montando o banco",
       scoring: "pontuando",
     },
+    remoteStages: {
+      allocated: (gpu: string) => `VM do Colab alocada (${gpu})`,
+      kernelReady: "VM pronta para receber o job",
+      driveMount: "montando o Google Drive na VM",
+      driveConsentSent: "permissão do Drive enviada",
+      driveMounted: "Google Drive montado",
+      driveCopy: (files: string, seconds: string) =>
+        `dataset copiado do Drive: ${files} arquivos em ${seconds} s`,
+      retry: "o job não começou na VM; tentando de novo",
+      install: (version: string) => `instalando o VisionForge ${version} na VM`,
+      dataset: "preparando o dataset na VM",
+      numClasses: (old: string, next: string) =>
+        `num_classes ajustado de ${old} para ${next} pelas pastas do dataset`,
+      train: (device: string) => `treinando (${device})`,
+      pack: "empacotando o run",
+      driveExport: "run salvo no Drive",
+      driveExportFailed: (error: string) => `não foi possível salvar o run no Drive: ${error}`,
+      download: "baixando o pacote do run",
+      released: "VM do Colab liberada",
+    },
     // The first two lines of the log.
     initializing: (runId: string) => `> inicializando runtime · ${runId}`,
     loadingDataset: "> carregando dataset…",
@@ -3062,10 +3452,19 @@ export const pt = {
     gradcamTitle: (epoch: number, best: boolean) =>
       `Grad-CAM da validação · época ${epoch}${best ? " · melhor até aqui" : ""}`,
     gradcamNote: "onde o modelo olhou para decidir; as mesmas imagens a cada vez",
+    gradcamClass: (name: string, n: number) => `${name} · ${n} ${n === 1 ? "imagem" : "imagens"}`,
     gradcamCaption: (actual: string, predicted: string) =>
       actual === predicted ? `${actual} ✓` : `${actual} → lida como ${predicted}`,
     lrChart: "Learning rate",
     confusionTitle: (epoch: number) => `Matriz de confusão da validação · época ${epoch}`,
+    confusionBestTitle: (epoch: number) =>
+      `Matriz de confusão da validação · melhor época (${epoch})`,
+    confusionLatestIsBest: (epoch: number) =>
+      `Matriz de confusão da validação · época ${epoch} · a melhor até aqui`,
+    f1Chart: "F1 macro da validação",
+    recallChart: "Recall por classe na validação",
+    recallOmitted: (shown: number, omitted: number) =>
+      `As ${shown} classes com o menor recall agora; ${omitted} ${omitted === 1 ? "outra fica" : "outras ficam"} de fora.`,
     confusionAxes: "linhas: classe verdadeira · colunas: classe prevista",
     topTitle: (epoch: number) => `Confusões mais frequentes na validação · época ${epoch}`,
     topRow: (actual: string, predicted: string) => `${actual} lida como ${predicted}`,
@@ -3271,8 +3670,9 @@ export const pt = {
       val_miou: "Val mIoU",
       val_dice: "Val Dice",
       val_pixel_acc: "Val acurácia de pixel",
-      // O backend chama de `val_`, mas a anomalia pontua cada época no split de teste.
-      val_auroc: "AUROC (teste)",
+      // A anomalia pontua cada época no split de teste: o AUROC se chama `test_auroc`
+      // desde o ADR-241; o F1 ainda vem do backend com o prefixo `val_`.
+      test_auroc: "AUROC (teste)",
       val_image_f1: "F1 da imagem (teste)",
       val_threshold: "Limiar de decisão",
     },
@@ -3419,7 +3819,7 @@ export const pt = {
           pytorch: "A biblioteca de redes neurais em que todo modelo aqui é treinado.",
           torchvision: "Arquiteturas prontas, pesos pré-treinados e transformações de imagem.",
           timm: "Centenas de arquiteturas a mais, escolhidas pelo nome.",
-          ultralytics: "YOLO e RT-DETR para detecção de objetos. É opcional e se instala à parte.",
+          ultralytics: "YOLO e RT-DETR para detecção de objetos. Vem instalado com o VisionForge (AGPL-3.0).",
           sklearn: "As métricas do resultado e a divisão do K-fold.",
           optuna: "A busca guiada de hiperparâmetros.",
           onnx: "Roda o modelo exportado em ONNX, fora do PyTorch.",
@@ -3463,6 +3863,9 @@ export const pt = {
     inviteTitle: "Quer um guia?",
     inviteBody:
       "Há dois. O tour da interface faz sete paradas curtas pelos pontos principais: onde escolher a tarefa, como apontar o dataset, o que já vem decidido para você e onde os resultados ficam guardados. O primeiro treino leva você por um treino de verdade, com um dataset de exemplo que o VisionForge cria, e espera você fazer cada passo. Dá para sair a qualquer momento — e os dois continuam no menu “guia” do cabeçalho.",
+    // Num servidor compartilhado só o tour é oferecido (ADR-216).
+    inviteBodyTourOnly:
+      "O tour da interface faz paradas curtas pelos pontos principais: onde escolher a tarefa, como apontar o dataset, o que já vem decidido para você e onde os resultados ficam guardados. Dá para sair a qualquer momento — e ele continua no menu “guia” do cabeçalho.",
     notNow: "Agora não",
     next: "Continuar →",
     finish: "Concluir",
@@ -3497,7 +3900,7 @@ export const pt = {
     },
     datasets: {
       title: "Seus datasets",
-      body: "Aqui você baixa um dataset (torchvision, Roboflow, Kaggle ou Hugging Face) para uma pasta local e aponta qualquer tarefa para ela. Com a pasta definida, o painel da tarefa mostra a distribuição das classes — vale conferir antes do primeiro treino: quase todo resultado estranho começa em um dataset desbalanceado.",
+      body: "Aqui você baixa um dataset (torchvision, Roboflow, Kaggle ou Hugging Face) para a sua pasta de datasets e aponta qualquer tarefa para ele. Com a pasta definida, o painel da tarefa mostra a distribuição das classes — vale conferir antes do primeiro treino: quase todo resultado estranho começa em um dataset desbalanceado.",
     },
   },
   // The guide menu and the guides' own texts (lib/guides/, ADR-115). The tour's

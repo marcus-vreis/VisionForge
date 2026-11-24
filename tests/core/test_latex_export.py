@@ -242,6 +242,32 @@ class TestStoppedRunsInTheTables:
         assert "folds finished" in caption
         assert "selected on its own fold's validation split" in caption
 
+    def test_cv_caption_names_the_last_epoch_rule(self) -> None:
+        report = TestCvTable()._report()
+        report["select_on"] = "last"
+
+        caption = _caption(cv_to_latex(report))
+
+        assert "scored at its last trained epoch" in caption
+        assert "optimistic" not in caption
+
+    def test_partial_cv_caption_names_the_last_epoch_rule_too(self) -> None:
+        report = TestCvTable()._report()
+        report["select_on"] = "last"
+        report["n_folds"] = 5
+
+        caption = _caption(cv_to_latex(report))
+
+        assert "folds finished" in caption
+        assert "scored at its last trained epoch" in caption
+
+    def test_an_explicit_best_rule_keeps_the_caption_of_old_reports(self) -> None:
+        report = TestCvTable()._report()
+        old = _caption(cv_to_latex(report))
+        report["select_on"] = "best"
+
+        assert _caption(cv_to_latex(report)) == old
+
     def test_replicates_list_only_the_seeds_that_finished(self) -> None:
         report = _replicates_report()
         report["seeds"] = [42, 43, 44, 45, 46]

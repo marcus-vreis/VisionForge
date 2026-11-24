@@ -19,10 +19,11 @@ import tempfile
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from loguru import logger
 
+from visionforge.gui.api.dataset_scope import current_scope
 from visionforge.utils.credentials import (
     PROVIDERS,
     load_credential,
@@ -417,7 +418,7 @@ def _materialize_hf(
     return written
 
 
-def _resolve_hf_revision(dataset: str, token: str | None) -> str:
+def _resolve_hf_revision(dataset: str, token: str | Literal[False] | None) -> str:
     """The commit SHA the dataset's default branch points at right now.
 
     ``load_dataset(id)`` follows ``main``, so the same id can yield different data
@@ -452,7 +453,7 @@ def _write_source_sidecar(out: Path, result: DatasetDownloadResult) -> None:
 
 
 def download_huggingface(
-    dataset: str, out_dir: str | Path, *, token: str | None = None
+    dataset: str, out_dir: str | Path, *, token: str | Literal[False] | None = None
 ) -> DatasetDownloadResult:
     """Download a Hugging Face image dataset and materialize it as an ImageFolder.
 
@@ -531,6 +532,20 @@ def credentials_in_play(api_key: str | None, token: str | None) -> list[str]:
     return [s for s in secrets if s]
 
 
+def _credential(provider: str, supplied: str | None) -> str | Literal[False] | None:
+    """The key a download uses: the request's, else the one saved on this machine.
+
+    On a server the saved key and the process's environment are the operator's,
+    not the person's (ADR-219): only the request's own key is used, and with
+    none ``False`` tells the client to send no token at all, where ``None``
+    would let it pick one up from the environment.
+    """
+    if current_scope() is None:
+        return resolve_credential(provider, supplied)
+    text = (supplied or "").strip()
+    return text or False
+
+
 def download_dataset(
     provider: str,
     *,
@@ -553,17 +568,19 @@ def download_dataset(
             out_dir,
             # Falls back to the key saved for this user, so it is typed once.
             # An explicit value still wins, for a one-off key.
-            api_key=resolve_credential("roboflow", provider_kwargs.get("api_key")),
+            api_key=_credential("roboflow", provider_kwargs.get("api_key")) or None,
             version=provider_kwargs.get("version"),
             dataset_format=provider_kwargs.get("dataset_format") or "folder",
         )
     if provider == "kaggle":
+        if current_scope() is not None:
+            raise ValueError(tr("server.kaggle_closed"))
         return download_kaggle(dataset, out_dir)
     if provider == "huggingface":
         return download_huggingface(
             dataset,
             out_dir,
-            token=resolve_credential("huggingface", provider_kwargs.get("token")),
+            token=_credential("huggingface", provider_kwargs.get("token")),
         )
     raise ValueError(
         f"Unknown dataset provider '{provider}' "

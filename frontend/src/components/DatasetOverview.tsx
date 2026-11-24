@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   explorerImages,
   explorerScanCancel,
+  explorerScanSaved,
   explorerScanStart,
   explorerScanStatus,
   type ExplorerImagesPage,
@@ -12,25 +13,31 @@ import {
   barsOf,
   binBars,
   classSplitRows,
+  explorerBody,
   hasProblems,
   isScanFinished,
   pagingOf,
   scanPercent,
   stepOffset,
   thumbUrl,
-  type Bar,
   type DuplicateGroup,
   type ExplorerForm,
   type ExplorerSummary,
+  type NearGroup,
+  type SavedScan,
   type ScanJob,
   type ScanReport,
   type SplitName,
 } from "../lib/dataset-explorer";
 import { classStacks, totalBoxes } from "../lib/dataset-lab";
 import { useT } from "../i18n/useT";
-import { SelectField, TextField } from "./controls";
+import { SelectField, TextField, Toggle } from "./controls";
 import { ActionButton } from "./ui/ActionButton";
-import { DataTable, LearnMore } from "./DatasetLabParts";
+import { BarList, DataTable, LearnMore, track } from "./DatasetLabParts";
+import { BoxStatsCard } from "./BoxStatsCard";
+import { ClassSimilarity } from "./ClassSimilarity";
+import { ImageQualityCard } from "./ImageQualityCard";
+import { SplitBalanceCard } from "./SplitBalanceCard";
 import {
   card,
   danger,
@@ -49,29 +56,9 @@ const SPLIT_FILL: Record<SplitName, string> = {
   test: "color-mix(in oklch, var(--accent-vf) 28%, transparent)",
 };
 
-const track = "rgb(var(--lt-ink, 255 255 255) / 0.06)";
 
 function CardTitle({ children }: { children: string }) {
   return <h3 style={{ ...stepTitle, margin: 0 }}>{children}</h3>;
-}
-
-/** Horizontal bars, the exact count at the end of each. */
-export function BarList({ bars }: { bars: Bar[] }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      {bars.map((b) => (
-        <div key={b.label} className="vf-lab-bar">
-          <span className="vf-lab-bar__label" title={b.label}>
-            {b.label}
-          </span>
-          <span className="vf-lab-bar__track" style={{ background: track }}>
-            <span style={{ display: "block", height: "100%", width: `${b.pct}%`, background: "var(--accent-vf)" }} />
-          </span>
-          <span className="vf-lab-bar__value">{b.value}</span>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 /** The dataset's totals as cards: all images, classes, then one card per split. */
@@ -361,9 +348,46 @@ function GroupList({
   );
 }
 
+/** Visually near images across splits: something to look at, not a verdict. */
+function NearList({ report }: { report: ScanReport }) {
+  const t = useT().datasetExplorer;
+  const groups: NearGroup[] = report.near_groups ?? [];
+  const total = report.near_group_count ?? 0;
+  if (total === 0) return null;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={sectionLabel}>
+        {t.nearTitle} ({total})
+      </div>
+      <div style={warn}>{t.nearHelp(report.near_max_distance ?? 6)}</div>
+      {groups.map((g) => (
+        <div key={g.paths.join("|")} style={{ ...mono, paddingLeft: 10, borderLeft: "2px solid var(--vf-panel-stroke)" }}>
+          <div>{t.groupFiles(g.paths.length)}</div>
+          {g.paths.map((path) => (
+            <div key={path} style={{ wordBreak: "break-all" }}>{path}</div>
+          ))}
+        </div>
+      ))}
+      {total > groups.length && <div style={mono}>{t.moreNotShown(total - groups.length)}</div>}
+    </div>
+  );
+}
+
+/** When the shown report was kept, and whether the dataset changed since. */
+export function SavedNote({ saved }: { saved: SavedScan }) {
+  const t = useT().datasetExplorer;
+  const when = saved.saved_at ? new Date(saved.saved_at).toLocaleString() : "";
+  return (
+    <div style={saved.stale ? warn : text} role="status">
+      {t.savedAt(when)}
+      {saved.stale && ` ${t.savedStale}`}
+    </div>
+  );
+}
+
 /** What a finished scan found. The sampled notice stays first: a clean sample
  *  proves nothing about the images it skipped. */
-export function Report({ report }: { report: ScanReport }) {
+export function Report({ report, root }: { report: ScanReport; root: string }) {
   const t = useT().datasetExplorer;
   const { sizes } = report;
   return (
@@ -374,6 +398,7 @@ export function Report({ report }: { report: ScanReport }) {
           : report.sampled
             ? t.scanSampled(report.scanned, report.total_images)
             : t.scanComplete(report.scanned)}
+        {report.near_checked ? "" : ` ${t.nearNotChecked}`}
       </div>
       <div className="vf-lab-overview-pair">
         <div style={card}>
@@ -402,6 +427,7 @@ export function Report({ report }: { report: ScanReport }) {
             groups={report.leakage_groups}
             total={report.leakage_group_count}
           />
+          <NearList report={report} />
           <GroupList
             title={t.duplicatesTitle}
             groups={report.duplicate_groups}
@@ -436,6 +462,8 @@ export function Report({ report }: { report: ScanReport }) {
           </div>
         )}
       </div>
+      {report.quality && report.quality.count > 0 && <ImageQualityCard quality={report.quality} root={root} />}
+      {report.boxes && <BoxStatsCard boxes={report.boxes} />}
     </>
   );
 }
@@ -446,7 +474,27 @@ function ScanPanel({ form }: { form: ExplorerForm }) {
   const [job, setJob] = useState<ScanJob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [near, setNear] = useState(false);
+  const [kept, setKept] = useState<{ dataset: string; scan: SavedScan } | null>(null);
   const jobId = job?.job_id ?? null;
+  // The form object may be rebuilt on every render; the dataset it names is what counts.
+  const dataset = JSON.stringify(explorerBody(form));
+  // A kept scan answered for another dataset is never shown for this one.
+  const saved = kept?.dataset === dataset ? kept.scan : null;
+
+  useEffect(() => {
+    let live = true;
+    explorerScanSaved(form)
+      .then((scan) => {
+        if (live) setKept({ dataset, scan });
+      })
+      // No kept scan to show is not an error worth a message.
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the dataset, see above
+  }, [dataset]);
   const running = job !== null && !isScanFinished(job.state);
 
   useEffect(() => {
@@ -470,11 +518,11 @@ function ScanPanel({ form }: { form: ExplorerForm }) {
     setJob(null);
     const n = Math.max(1, Math.floor(Number(limit)) || 20000);
     try {
-      setJob(await explorerScanStart(form, n));
+      setJob(await explorerScanStart(form, n, near));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [form, limit]);
+  }, [form, limit, near]);
 
   const cancel = async () => {
     if (!jobId) return;
@@ -503,6 +551,9 @@ function ScanPanel({ form }: { form: ExplorerForm }) {
               hint={t.scanLimitHint}
             />
           </div>
+          <div className="vf-lab-row__field">
+            <Toggle label={t.scanNear} value={near} onChange={setNear} help={t.scanNearHint} />
+          </div>
           <div className="vf-lab-row__actions vf-lab-row__actions--start">
             {running ? (
               <button type="button" style={ghostButton} onClick={() => void cancel()} disabled={cancelling}>
@@ -530,7 +581,17 @@ function ScanPanel({ form }: { form: ExplorerForm }) {
         {error && <div style={danger}>{t.scanFailed(error)}</div>}
         {job?.state === "failed" && job.error && <div style={danger}>{t.scanFailed(job.error)}</div>}
       </div>
-      {job?.result && <Report report={job.result} />}
+      {job?.result ? (
+        <Report report={job.result} root={form.base_dir} />
+      ) : (
+        !running &&
+        saved?.report && (
+          <>
+            <SavedNote saved={saved} />
+            <Report report={saved.report} root={form.base_dir} />
+          </>
+        )
+      )}
     </div>
   );
 }
@@ -553,8 +614,10 @@ export function DatasetOverview({ form, summary }: { form: ExplorerForm; summary
         <>
           <TotalCards summary={summary} />
           <Distribution summary={summary} />
+          {summary.balance && <SplitBalanceCard balance={summary.balance} />}
           <Gallery form={form} summary={summary} />
           <ScanPanel form={form} />
+          <ClassSimilarity form={form} />
         </>
       )}
     </section>

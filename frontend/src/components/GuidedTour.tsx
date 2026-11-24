@@ -3,8 +3,8 @@ import { revealStepFor } from "../lib/steps";
 
 import { useT } from "../i18n/useT";
 import {
-  GUIDES,
   guideById,
+  offeredGuides,
   type ActionResult,
   type GuideContext,
   type GuideId,
@@ -15,6 +15,7 @@ import {
 import { gateOpen } from "../lib/guides/gates";
 import { FLOATING_WIDTH, placeFloating } from "../lib/guides/placement";
 import { useGuideFacts } from "../lib/guides/useGuideFacts";
+import { useSession } from "../lib/session";
 import { CARD_WIDTH, markTourSeen, placeCard } from "../lib/tour";
 
 /** Os guias (ADR-104, ADR-115): o tour da interface e o primeiro treino.
@@ -72,6 +73,7 @@ export function GuidedTour({
   onLearn,
 }: GuidedTourProps) {
   const t = useT();
+  const session = useSession();
   const [guideId, setGuideId] = useState<GuideId | null>(invite ? null : guide);
   // A tarefa é fixada quando o guia começa: trocar de aba no meio dele não
   // troca o roteiro, e o portão do dataset segue olhando o formulário dela.
@@ -81,6 +83,7 @@ export function GuidedTour({
     [guideId, t, task],
   );
   const [step, setStep] = useState(invite ? -1 : 0);
+  const offered = offeredGuides(session);
   // O que já estava na lista de eventos quando o guia abriu não conta: a trava
   // só abre um portão por um evento que aparece depois (lib/guides/gates).
   const facts = useGuideFacts(events, datasetPaths[task]);
@@ -401,20 +404,20 @@ export function GuidedTour({
         {!current && (
           // Wraps: at 375 px the two titles, kept on one line each, overflow the card side by side.
           <div style={{ marginTop: 20, display: "flex", flexWrap: "wrap", gap: 10 }}>
-            {GUIDES.map((g, i) => (
+            {offered.map((g, i) => (
               <button
                 key={g.id}
                 type="button"
                 onClick={() => choose(g.id)}
                 style={{
-                  ...(i === GUIDES.length - 1 ? primaryStyle : secondaryStyle),
+                  ...(i === offered.length - 1 ? primaryStyle : secondaryStyle),
                   flex: 1,
                   whiteSpace: "nowrap",
                   padding: "10px 8px",
                 }}
               >
                 {g.title(t)}
-                {i === GUIDES.length - 1 ? " →" : ""}
+                {i === offered.length - 1 ? " →" : ""}
               </button>
             ))}
           </div>
@@ -522,11 +525,14 @@ function Shade({
 
 function InviteBody() {
   const t = useT();
+  const tourOnly = offeredGuides(useSession()).length === 1;
   return (
     <>
       <div style={eyebrowStyle}>{t.guidedTour.eyebrow}</div>
       <div style={titleStyle}>{t.guidedTour.inviteTitle}</div>
-      <p style={bodyStyle}>{t.guidedTour.inviteBody}</p>
+      <p style={bodyStyle}>
+        {tourOnly ? t.guidedTour.inviteBodyTourOnly : t.guidedTour.inviteBody}
+      </p>
     </>
   );
 }

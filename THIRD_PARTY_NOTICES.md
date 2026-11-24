@@ -13,13 +13,13 @@ legal advice; the license each package ships with is the one that applies.
 contain their code. The license column is what each package declares in its
 own metadata; `scripts/check_licenses.py` checks this table against the
 installed packages in CI. `ultralytics`, `ultralytics-thop` and
-`ultralytics-platform` come only with the optional `detection` extra
-(`pip install "visionforge-studio[detection]"`).
+`ultralytics-platform` are installed with the package
+(`pip install visionforge-studio`).
 
 <!-- license-table:start (scripts/check_licenses.py --write) -->
 | Package | License | Why it is installed |
 |---|---|---|
-| `ultralytics` | AGPL-3.0 | YOLO / RT-DETR detection backend (`detection` extra) |
+| `ultralytics` | AGPL-3.0 | YOLO / RT-DETR detection backend |
 | `ultralytics-thop` | AGPL-3.0 | required by `ultralytics` |
 | `ultralytics-platform` | AGPL-3.0-only | required by `ultralytics` (8.4.x and later, Python 3.11+) |
 | `pi-heif` | BSD-3-Clause; its binary wheels bundle libheif and libde265 (LGPL-3.0) | required by `roboflow` |
@@ -32,10 +32,9 @@ installed packages in CI. `ultralytics`, `ultralytics-thop` and
 
 `ultralytics`, `ultralytics-thop` and `ultralytics-platform` (pulled in by
 recent `ultralytics` releases) are licensed under the GNU Affero General Public
-License v3.0. A plain `pip install visionforge-studio` does not install
-them; the `detection` extra does. VisionForge then imports `ultralytics` in its
-own process when you train, test or export a detection model with the
-`ultralytics` backend (YOLO, RT-DETR). The AGPL-3.0 requires that whoever
+License v3.0. `pip install visionforge-studio` installs them. VisionForge
+imports `ultralytics` in its own process when you train, test or export a
+detection model with the `ultralytics` backend (YOLO, RT-DETR). The AGPL-3.0 requires that whoever
 distributes a program built on it, or lets users interact with a modified
 version over a network, offers that program's source code under the same
 license. Ultralytics offers an

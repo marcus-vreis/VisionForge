@@ -10,8 +10,9 @@ import { enter, openStep, train } from "./helpers";
  * interface: a file in `user_models/`, a YAML that names it in
  * `model.custom_model`, imported in the Revisão step.
  *
- * The form has no field for it, and it used to train the model while every
- * screen still said resnet18. The screens now name the model that trains.
+ * It used to train the model while every screen still said resnet18. The
+ * screens now name the model that trains, and the Modelo step's own field
+ * (CustomModelField) lists the file's model and shows it chosen.
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -88,7 +89,10 @@ test("a YAML that names a custom model trains it and every screen says so", asyn
 
   // The review names the model that will train, not the builtin default.
   const review = page.locator("main");
-  await expect(review.getByText("Modelo próprio", { exact: true })).toBeVisible();
+  // The summary's term, not the Modelo step's field label of the same name.
+  await expect(
+    review.getByRole("term").filter({ hasText: /^Modelo próprio$/ }),
+  ).toBeVisible();
   await expect(review.getByText("my_net", { exact: true }).first()).toBeVisible();
 
   // So does the Modelo step, with the way back to a builtin architecture.
@@ -96,6 +100,8 @@ test("a YAML that names a custom model trains it and every screen says so", asyn
   const note = page.locator("[data-other-model='custom_model']");
   await expect(note).toContainText("my_net");
   await expect(note.getByRole("button", { name: "Usar a arquitetura abaixo" })).toBeVisible();
+  // The field reads `user_models/` through GET /api/model/custom.
+  await expect(page.locator("[data-custom-model='custom']")).toContainText("my_net");
 
   await openStep(page, "Revisão");
   const sheet = await train(page);

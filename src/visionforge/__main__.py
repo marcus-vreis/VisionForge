@@ -165,6 +165,7 @@ def _run_audit_data_command(args: argparse.Namespace) -> None:
         splits,
         group_manifest=args.groups,
         strict_groups=args.strict_groups,
+        near_duplicates=args.near_duplicates,
     )
     payload = json.dumps(report, indent=2, ensure_ascii=False)
     if args.json is not None:
@@ -419,9 +420,84 @@ def main() -> None:
         ),
     )
     gui_parser.add_argument(
+        "--server",
+        action="store_true",
+        help=(
+            "serve several people behind a reverse proxy that signs them in "
+            "(experimental, ADR-213); needs --trusted-proxy"
+        ),
+    )
+    gui_parser.add_argument(
+        "--trusted-proxy",
+        action="append",
+        default=[],
+        metavar="ADDRESS",
+        help=(
+            "IP address or CIDR block of the login proxy, the only client "
+            "answered in --server mode; repeatable"
+        ),
+    )
+    gui_parser.add_argument(
+        "--datasets-dir",
+        action="append",
+        default=[],
+        metavar="FOLDER",
+        help=(
+            "folder of datasets every signed-in user may read in --server mode, "
+            "besides their own; repeatable"
+        ),
+    )
+    gui_parser.add_argument(
+        "--quota-gb",
+        type=float,
+        default=None,
+        metavar="GB",
+        help=(
+            "in --server mode, the most each person's folder may hold (runs and "
+            "datasets); past it no new training or dataset starts until they "
+            "delete runs. Default: no limit"
+        ),
+    )
+    gui_parser.add_argument(
+        "--max-actions",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "in --server mode, how many heavy actions (evaluating a run, "
+            "downloading or auditing a dataset, publishing) run at once outside "
+            "the queue; the next one is told the server is busy. Default: 2"
+        ),
+    )
+    gui_parser.add_argument(
+        "--user-header",
+        default="X-Forwarded-User",
+        metavar="NAME",
+        help=(
+            "header in which the proxy names the signed-in user "
+            "(default X-Forwarded-User)"
+        ),
+    )
+    gui_parser.add_argument(
         "--no-browser",
         action="store_true",
         help="do not open a browser tab (used when an update restarts the GUI)",
+    )
+    gui_parser.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            "check that the GUI can start (server imports, SPA build, /api/health, "
+            "--host/--port free) and exit 0 or 1, without starting it"
+        ),
+    )
+    gui_parser.add_argument(
+        "--smoke",
+        action="store_true",
+        help=(
+            "with --check: also start the real server on an ephemeral 127.0.0.1 "
+            "port, GET /api/health and stop it (never opens a browser)"
+        ),
     )
     _add_offline_flag(gui_parser)
 
@@ -432,6 +508,12 @@ def main() -> None:
         "--fix",
         action="store_true",
         help="Run the recommended install after prompting for confirmation.",
+    )
+    doctor_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the report as one JSON object (for scripts and bug reports). "
+        "Cannot be combined with --fix.",
     )
 
     selftest_parser = subparsers.add_parser(
@@ -492,6 +574,11 @@ def main() -> None:
     )
     audit_parser.add_argument(
         "--strict-groups", action="store_true", help="report groups crossing splits"
+    )
+    audit_parser.add_argument(
+        "--near-duplicates",
+        action="store_true",
+        help="also decode every image and report visual near-copies across splits",
     )
     audit_parser.add_argument(
         "--json", type=Path, help="write a new JSON report (never overwrite)"
@@ -580,10 +667,37 @@ def main() -> None:
 
         from visionforge.utils.doctor import _default_confirm, run_doctor
 
-        _sys.exit(run_doctor(fix=args.fix, confirm_fn=_default_confirm))
+        if args.json and args.fix:
+            parser.error("doctor: --json cannot be combined with --fix")
+        _sys.exit(
+            run_doctor(fix=args.fix, confirm_fn=_default_confirm, json_output=args.json)
+        )
+
+    if args.command == "gui" and args.smoke and not args.check:
+        parser.error("gui: --smoke only works together with --check")
+
+    if args.command == "gui" and args.check:
+        import sys as _sys
+
+        from visionforge.gui.preflight import run_gui_check
+
+        _sys.exit(run_gui_check(args.host, args.port, smoke=args.smoke))
 
     if args.command == "gui":
         from visionforge.gui.server import start_server
+        from visionforge.gui.server_mode import ServerMode, ServerModeError
+
+        try:
+            server_mode = ServerMode.from_options(
+                enabled=args.server,
+                trusted_proxies=args.trusted_proxy,
+                user_header=args.user_header,
+                datasets_dirs=args.datasets_dir,
+                quota_gb=args.quota_gb,
+                max_actions=args.max_actions,
+            )
+        except ServerModeError as exc:
+            parser.error(str(exc))
 
         # The updater relaunches with VISIONFORGE_NO_BROWSER rather than the flag:
         # the relaunch runs the *new* version, and an environment variable it does
@@ -594,6 +708,7 @@ def main() -> None:
             port=args.port,
             open_browser=not quiet,
             allowed_hosts=args.allowed_host,
+            server_mode=server_mode,
         )
         return
 

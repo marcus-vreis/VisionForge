@@ -2,14 +2,17 @@ import { useEffect, useRef, useState } from "react";
 
 import { ApiError, createProfile, fetchProfiles, updateProfile } from "../api/client";
 import { useT } from "../i18n/useT";
+import { ROUTE, getSession, routeOpen } from "../lib/session";
 import { greeting } from "../lib/greeting";
 import {
   DEFAULT_PROFILE_INFO,
   PRONOUNS,
+  accountProfile,
   canCreateProfile,
   clearProfile,
   entryStep,
   legacyDefaultName,
+  namedAfterAccount,
   normalizeProfileName,
   offersProfileChoice,
   pickStoredProfile,
@@ -149,7 +152,11 @@ export function WelcomeOverlay({
     const at = (ms: number, fn: () => void) =>
       timers.push(window.setTimeout(fn, ms));
 
-    const load = fetchProfiles()
+    // A server that predates ADR-223 lists no profile at all (ADR-216).
+    const listed = routeOpen(getSession(), ROUTE.profiles)
+      ? fetchProfiles()
+      : Promise.reject<ProfileInfo[]>(new Error("no profile list"));
+    const load = listed
       .then((list) => {
         listRef.current = list;
         setProfiles(list);
@@ -174,6 +181,15 @@ export function WelcomeOverlay({
             }
           : DEFAULT_PROFILE_INFO;
         return chosenRef.current;
+      }
+      // On a shared server the profile is the account's: nothing to pick.
+      const account = accountProfile(getSession().server_mode, list);
+      if (account) {
+        chosenRef.current = account;
+        saveProfile(account);
+        if (account.pronoun) setPronoun(account.pronoun);
+        setLastSlug(account.slug);
+        return account;
       }
       const legacy = legacyDefaultName(list, stored, readUserName());
       if (legacy) void nameTheDefault(legacy);
@@ -210,6 +226,13 @@ export function WelcomeOverlay({
       settle(list);
       // "Trocar nome" é sobre o perfil em uso: vai direto ao campo.
       if (forceAsk) {
+        setPhase("ask");
+        return;
+      }
+      // A new account is named after its login: ask what to call the person.
+      const account = accountProfile(getSession().server_mode, list);
+      if (account && namedAfterAccount(account, getSession().user)) {
+        setDraft(readUserName());
         setPhase("ask");
         return;
       }

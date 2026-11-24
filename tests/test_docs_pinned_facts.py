@@ -18,6 +18,7 @@ from visionforge.utils.config import ExperimentConfig, ModelConfig, TrainingConf
 _ROOT = Path(__file__).resolve().parent.parent
 _DOCS = _ROOT / "docs"
 _EN_STRINGS = _ROOT / "frontend" / "src" / "i18n" / "en.ts"
+_PT_STRINGS = _ROOT / "frontend" / "src" / "i18n" / "pt.ts"
 _CUSTOM_PREFIX = "/api/custom/{key}"
 
 
@@ -65,12 +66,18 @@ def test_quickstart_walks_the_six_configuration_steps():
         assert f"**{step}**" in text
 
 
-def test_models_guide_sends_custom_model_through_yaml():
-    # There is no selector in the interface; if one lands, this guide changes.
+def test_models_guide_names_the_selector_and_the_yaml_route() -> None:
+    # The Classification Modelo step picks `model.custom_model` (CustomModelField):
+    # the guide names the field and its builtin option as the interface labels them.
     assert "custom_model" in ModelConfig.model_fields
-    # Form fields are labelled by their dotted path in the interface strings.
-    assert "model.custom_model" not in _EN_STRINGS.read_text(encoding="utf-8")
+    source = _PT_STRINGS.read_text(encoding="utf-8")
+    field = re.search(r'label: \{ custom_model: "([^"]+)"', source)
+    assert field is not None
+    builtin = re.search(r'customModel: \{\s*builtin: "([^"]+)"', source)
+    assert builtin is not None
     text = _read("custom", "MODELS.md")
+    assert f"**{field.group(1)}**" in text
+    assert f"**{builtin.group(1)}**" in text
     assert "**Modelo**" not in text
     assert "YAML" in text
 

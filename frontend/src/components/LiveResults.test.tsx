@@ -125,6 +125,49 @@ describe("LiveResults", () => {
     expect(html).not.toContain('title="defeito → ok: 2"');
   });
 
+  it("shows the best epoch's matrix beside the latest when they differ", () => {
+    const html = render([
+      epoch(1, 0.5, { confusion: { classes: ["ok", "defeito"], matrix: [[6, 0], [1, 8]] } }),
+      epoch(2, 0.8, { confusion: { classes: ["ok", "defeito"], matrix: [[5, 1], [2, 7]] } }),
+    ]);
+    expect(html).toContain(pt.liveResults.confusionTitle(2));
+    expect(html).toContain(pt.liveResults.confusionBestTitle(1));
+    expect(html.match(/data-confusion="matrix"/g)).toHaveLength(2);
+    expect(html).toContain('title="defeito → ok: 1"');
+    expect(html).toContain('title="defeito → ok: 2"');
+  });
+
+  it("draws one matrix, named as both, when the latest epoch is the best", () => {
+    const html = render([
+      epoch(1, 0.9, { confusion: { classes: ["ok", "defeito"], matrix: [[5, 1], [2, 7]] } }),
+      epoch(2, 0.8, { confusion: { classes: ["ok", "defeito"], matrix: [[6, 0], [1, 8]] } }),
+    ]);
+    expect(html.match(/data-confusion="matrix"/g)).toHaveLength(1);
+    expect(html).toContain(pt.liveResults.confusionLatestIsBest(2));
+  });
+
+  it("charts macro F1 and the recall of each class from the epochs' matrices", () => {
+    const html = render([
+      epoch(1, 0.9, { confusion: { classes: ["ok", "defeito"], matrix: [[5, 1], [2, 7]] } }),
+      epoch(2, 0.8, { confusion: { classes: ["ok", "defeito"], matrix: [[6, 0], [1, 8]] } }),
+    ]);
+    expect(html).toContain(`aria-label="${pt.liveResults.f1Chart}"`);
+    expect(html).toContain(`aria-label="${pt.liveResults.recallChart}"`);
+  });
+
+  it("draws neither derived chart without a matrix", () => {
+    const html = render([epoch(1, 0.9), epoch(2, 0.8)]);
+    expect(html).not.toContain(`aria-label="${pt.liveResults.f1Chart}"`);
+    expect(html).not.toContain(`aria-label="${pt.liveResults.recallChart}"`);
+  });
+
+  it("says how many classes the recall chart leaves out", () => {
+    const classes = Array.from({ length: 10 }, (_, i) => `c${i}`);
+    const matrix = classes.map((_, i) => classes.map((_, j) => (i === j ? 5 : 0)));
+    const html = render([epoch(1, 0.9, { confusion: { classes, matrix } })]);
+    expect(html).toContain(pt.liveResults.recallOmitted(8, 2));
+  });
+
   it("lists the most frequent mistakes when there are too many classes", () => {
     const classes = Array.from({ length: 31 }, (_, i) => `c${i}`);
     const html = render([epoch(1, 0.9, { confusion: { classes, top: [[5, 7, 3]] } })]);
@@ -154,6 +197,30 @@ describe("LiveResults", () => {
     expect(html).toContain(pt.liveResults.gradcamTitle(1, true));
     expect(html).toContain("/artifacts/outputs/models/r/insights/latest/1.png?epoch=1");
     expect(html).toContain(pt.liveResults.gradcamCaption("ok", "defeito"));
+  });
+
+  it("groups the gallery by the images' true class", () => {
+    const image = (n: number, cls: string) => ({
+      path: `outputs/models/r/insights/latest/${n}.png`,
+      true_class: cls,
+      predicted_class: cls,
+    });
+    const html = render([
+      epoch(1, 0.9),
+      {
+        event: "insight",
+        kind: "gradcam",
+        epoch: 1,
+        best: false,
+        images: [image(0, "gato"), image(1, "cachorro"), image(2, "gato")],
+      },
+    ]);
+    expect(html).toContain(pt.liveResults.gradcamClass("gato", 2));
+    expect(html).toContain(pt.liveResults.gradcamClass("cachorro", 1));
+    // Classes in name order: cachorro before gato.
+    expect(html.indexOf('data-gradcam-class="cachorro"')).toBeLessThan(
+      html.indexOf('data-gradcam-class="gato"'),
+    );
   });
 
   it("shows no gallery for a run that did not ask for one", () => {

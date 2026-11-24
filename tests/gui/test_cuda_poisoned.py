@@ -115,3 +115,21 @@ def test_a_process_without_torch_has_no_context_to_break(
     monkeypatch.setitem(sys.modules, "torch", None)  # as if never imported
 
     assert cuda_context_broken() is False
+
+
+def test_a_torch_still_being_imported_has_no_context_to_break(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A second submit while the first job's thread imports torch is not a 500.
+
+    ``sys.modules`` holds the module from the first line of its import, before
+    ``torch.cuda`` exists. Seen on a cold server with two submissions three
+    seconds apart: the second answered 500 with an AttributeError.
+    """
+    import types
+
+    from visionforge.gui.api.gpu_health import cuda_context_broken
+
+    monkeypatch.setitem(sys.modules, "torch", types.ModuleType("torch"))
+
+    assert cuda_context_broken() is False

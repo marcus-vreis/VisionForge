@@ -6,12 +6,20 @@ import csv
 import hashlib
 import os
 from collections import defaultdict
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from PIL import Image
 
+from visionforge.core.near_duplicates import (
+    MAX_DISTANCE as NEAR_MAX_DISTANCE,
+)
+from visionforge.core.near_duplicates import (
+    NearImage,
+    difference_hash,
+    near_duplicate_groups,
+)
 from visionforge.utils.messages import tr
 
 _IMAGE_SUFFIXES = {
@@ -118,8 +126,19 @@ def audit_dataset(
     group_manifest: Path | None = None,
     strict_groups: bool = False,
     max_issues: int = 100,
+    near_duplicates: bool = False,
+    split_images: Mapping[str, Sequence[Path] | None] | None = None,
+    optional_splits: Collection[str] = (),
 ) -> dict[str, Any]:
     """Return a deterministic JSON report without changing the dataset.
+
+    ``near_duplicates`` also decodes every image to find visual near-copies
+    across splits (ADR-228); an image that fails to decode counts as unreadable.
+    ``split_images`` replaces ``splits`` for a dataset whose splits are lists of
+    files rather than folders (a regression CSV, ADR-230): each split names its
+    images, or None when its list is missing. A split in ``optional_splits``
+    that does not exist is listed in ``absent_optional_splits`` and is no
+    finding: training runs without it (a regression or segmentation test set).
 
     Raises:
         ValueError: if root, split paths, or a supplied group manifest are invalid.
@@ -131,41 +150,57 @@ def audit_dataset(
         if splits is not None
         else {"train": "train", "val": "val", "test": "test"}
     )
-    if not split_paths:
+    names = list(split_images if split_images is not None else split_paths)
+    if not names:
         raise ValueError("At least one split is required")
-    counts = dict.fromkeys(split_paths, 0)
+    counts = dict.fromkeys(names, 0)
     missing: list[str] = []
+    absent_optional: list[str] = []
     present: list[str] = []
     issues: list[dict[str, str]] = []
     unreadable_count = 0
     hashes: dict[str, list[tuple[str, str]]] = defaultdict(list)
     images: list[Path] = []
     memberships: list[str] = []
+    digests: list[str] = []
 
     def record_issue(path: Path, reason: str) -> None:
         """Count every unreadable image while bounding the reported details."""
         nonlocal unreadable_count
         unreadable_count += 1
         if len(issues) < max_issues:
-            issues.append({"path": path.relative_to(root).as_posix(), "reason": reason})
+            issues.append({"path": _shown_path(root, path), "reason": reason})
 
-    for split, directory in split_paths.items():
-        split_root = root / _relative_path(directory)
-        if not split_root.resolve().is_relative_to(root):
-            record_issue(split_root, "path escapes dataset root")
+    for split in names:
+        found = (
+            _listed_split_images(root, split_images[split], record_issue)
+            if split_images is not None
+            else _folder_split_images(root, split_paths[split], record_issue)
+        )
+        if found is _ESCAPED:
             continue
-        if not split_root.is_dir():
-            missing.append(split)
+        if found is None:
+            if split in optional_splits:
+                absent_optional.append(split)
+                del counts[split]
+            else:
+                missing.append(split)
             continue
         present.append(split)
 
-        for path, digest in _walk_split_images(root, split_root, record_issue):
+        for path, digest in found:
             relative = path.relative_to(root).as_posix()
             counts[split] += 1
             hashes[digest].append((split, relative))
             images.append(path)
             memberships.append(split)
+            digests.append(digest)
     duplicates = _cross_split_groups(hashes, "sha256")
+    near = (
+        _near_groups(root, images, memberships, digests, record_issue)
+        if near_duplicates
+        else []
+    )
     overlaps: list[dict[str, Any]] = []
     if group_manifest is not None:
         overlaps = _group_overlaps(root, Path(group_manifest), images, memberships)
@@ -173,6 +208,7 @@ def audit_dataset(
     return {
         "ok": not (
             duplicates
+            or near
             or unreadable_count
             or missing
             or empty
@@ -180,10 +216,13 @@ def audit_dataset(
         ),
         "root": str(root),
         "hash_algorithm": "sha256",
-        "visual_similarity_checked": False,
+        "visual_similarity_checked": near_duplicates,
+        "near_duplicate_groups": near,
+        "near_duplicate_max_distance": NEAR_MAX_DISTANCE,
         "image_counts": counts,
         "duplicate_groups": duplicates,
         "missing_splits": missing,
+        "absent_optional_splits": absent_optional,
         "empty_splits": empty,
         "unreadable_count": unreadable_count,
         "unreadable": issues,
@@ -191,6 +230,76 @@ def audit_dataset(
         "strict_groups": strict_groups,
         "group_overlaps": overlaps,
     }
+
+
+def _near_groups(
+    root: Path,
+    images: list[Path],
+    memberships: list[str],
+    digests: list[str],
+    record_issue: Callable[[Path, str], None],
+) -> list[dict[str, Any]]:
+    """Decode and hash every image, then group the near ones across splits."""
+    hashed: list[NearImage] = []
+    for path, split, digest in zip(images, memberships, digests, strict=True):
+        try:
+            value = difference_hash(path)
+        except (
+            OSError,
+            ValueError,
+            SyntaxError,
+            Image.DecompressionBombError,
+        ) as error:
+            record_issue(path, type(error).__name__)
+            continue
+        hashed.append(
+            NearImage(split, path.relative_to(root).as_posix(), value, digest)
+        )
+    return near_duplicate_groups(hashed)
+
+
+_SplitImages = Iterator[tuple[Path, str]]
+# A split folder outside the root is reported once and is neither present nor missing.
+_ESCAPED: _SplitImages = iter(())
+
+
+def _shown_path(root: Path, path: Path) -> str:
+    """The path relative to the root, or as given when a listed one is outside it."""
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _folder_split_images(
+    root: Path, directory: str, record_issue: Callable[[Path, str], None]
+) -> _SplitImages | None:
+    """Walk one split folder; None when it does not exist."""
+    split_root = root / _relative_path(directory)
+    if not split_root.resolve().is_relative_to(root):
+        record_issue(split_root, "path escapes dataset root")
+        return _ESCAPED
+    if not split_root.is_dir():
+        return None
+    return _walk_split_images(root, split_root, record_issue)
+
+
+def _listed_split_images(
+    root: Path,
+    listed: Sequence[Path] | None,
+    record_issue: Callable[[Path, str], None],
+) -> _SplitImages | None:
+    """Verify the images a split lists; None when the list itself is missing."""
+    if listed is None:
+        return None
+    # A file listed twice is one image: counting it twice would invent a
+    # duplicate inside the split, and hashing it twice is wasted work.
+    unique = sorted({Path(path) for path in listed})
+    return (
+        (path, digest)
+        for path in unique
+        if (digest := _verified_image_digest(root, path, record_issue)) is not None
+    )
 
 
 def _validate_audit_options(

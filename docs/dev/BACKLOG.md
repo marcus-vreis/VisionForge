@@ -208,40 +208,20 @@ Governança do GitHub, hooks, cobertura, refatoração da API, Sonar.
 
 ## Decisões do mantenedor
 
-Estas tasks esperam uma escolha que muda produto, licença, conta do GitHub ou o paper.
-Onde há um default proposto, ele está na issue.
+Ainda abertas, todas do paper e à espera do mantenedor ou do orientador:
 
-- STAT-3: método do IC da diferença pareada (dual do teste t/Hodges-Lehmann, recomendado, ou BCa para todos); muda números já exibidos na GUI e no LaTeX.
-- STAT-6: AUROC com uma só classe vira null + aviso (recomendado) ou o dataset é recusado no carregamento.
-- STAT-7: oferecer cross_validation.select_on: last (schema novo + ADR) além da nota nas legendas.
-- SEC-1: com --host 0.0.0.0, exigir --allowed-host (proposto) ou aceitar qualquer Host nesse modo.
-- SEC-2: /docs desligado por padrão com VISIONFORGE_DOCS=1 (proposto) ou ligado com exceção de CSP para cdn.jsdelivr.net.
-- SEC-8: pesos (weights/*.pt) fora do bundle público (proposto) ou publicados com train_args reescritos; o paper precisa dos pesos?
-- SEC-10: revisar o texto legal sobre AGPL antes do merge.
-- SEC-11: ultralytics obrigatório e só avisar (A), extra 'detection' (B) ou B + selo 'sem AGPL' no backend torchvision (C). Bloqueia GUI-8.
-- SEC-12: assumir publicamente o modo offline garantido (flag nova, citação no paper).
-- GUI-2: variantes em um eixo (proposto) ou livres; teto de seeds na GUI.
-- GUI-8: mostrar código AGPL do Ultralytics na aba Código (a, b com notas tolerantes, ou c com teto de versão).
-- GUI-15: confirmar que logger, linhas de época/trial, STOPPED_NOTE e descrições de schema ficam em inglês de propósito.
-- GUI-16: quem valida MPS num Mac Apple Silicon; sem testador, experimental sem anúncio ou espera.
-- DOC-1: redação final da garantia de privacidade em README/INSTALL.
-- DOC-10/DOC-11: publicar no site recursos só de development com marca 'a partir da 0.22' ou esperar a tag.
-- DOC-15: instalar o Chromium do Playwright (~170 MB) nesta máquina.
-- PAP-1: entregar o texto do Overleaf e dizer se substitui ou mescla o paper.md.
-- PAP-2: tornar público o repositório privado de pesquisa (commit 7620659), depositar no Zenodo ou retirar os números da Research impact statement.
-- PAP-3: run.json do estudo no repositório (~2,5 MB) ou depósito Zenodo; a exportação roda na máquina do usuário.
-- PAP-6: mudar título/posicionamento do paper de 'local-first' para o desenho estatístico (opcional).
-- PAP-9: facilitador do estudo de usabilidade, pré-registro externo e n-alvo (aguarda orientador).
-- PAP-11: liberar as fichas de literatura do repositório privado e definir onde o preprint será submetido.
-- PAP-12: houve vínculo com empresa ou financiamento a declarar no paper?
-- OPS-1: ruleset (checks obrigatórios, bypass do dono), ligar delete_branch_on_merge (hoje off de propósito), apagar as 29 branches mescladas, descrição e topics: configuração de conta.
-- OPS-2: ligar secret scanning, push protection e Dependabot security updates (conta); frequência do Dependabot.
-- OPS-4: pre-push (default) ou filtro por arquivo no pre-commit; instalar o hook pre-push em cada clone/worktree.
-- OPS-5: contato para vulnerabilidades e Code of Conduct, private vulnerability reporting e Discussions.
-- OPS-11: criar token com escrita no repositório do site para disparar o deploy pelo cd.yml.
-- OPS-12: fechar a #118 agora ou só após a release 0.22.
-- OPS-17: critérios de 1.0 e conteúdo do roadmap público.
-- OPS-18: nível de compromisso de estabilidade da API de tarefas custom e TASK_API_VERSION.
+- PAP-1 (#177): entregar o texto do Overleaf e dizer se substitui ou mescla o paper.md.
+- PAP-9 (#229): facilitador do estudo de usabilidade, pré-registro externo e n-alvo (aguarda orientador).
+- PAP-11 (#230): liberar as fichas de literatura do repositório privado e definir onde o preprint será submetido.
+
+Já decididas e implementadas (conferido em 2026-11-24 pelo estado das issues):
+STAT-3 (#162), STAT-6 (#170), STAT-7 (#212 e ADR-242), SEC-1 (#156), SEC-2 (#157),
+SEC-8 (#164), SEC-10 (#176), SEC-11 (#223, ADR-195, revertido pelo ADR-243: o
+ultralytics é dependência obrigatória), SEC-12 (#226), GUI-2 (#201), GUI-8 (#224),
+GUI-15 (#208), GUI-16 (#227), DOC-1 (#171), DOC-10 (#219), DOC-11 (#222),
+DOC-15 (#221), PAP-2 (#181), PAP-3 (#166), PAP-6 (#180), PAP-12 (#231), OPS-1 (#174),
+OPS-2 (#175), OPS-4 (#173), OPS-5 (#183), OPS-11 (#189), OPS-12 (#217),
+OPS-17 (#218), OPS-18 (#216).
 
 ## Ainda sem task
 
@@ -253,10 +233,16 @@ Itens das fontes que ficaram de fora desta rodada, para a próxima triagem.
 - AUDIT seção 6 apostas maiores sem task: 'visionforge reproduce <bundle>' (re-treina 1 seed e compara com o IC), catálogo de experimentos em SQLite no lugar de varrer outputs/, entry-point visionforge.exporters para exportadores de terceiros, figura 'tempo até o primeiro treino' no paper.
 - reviews product-competitive medium: risco de diluição por sete integrações externas em uma semana (manutenção contra APIs de terceiros) não virou task; é decisão de produto.
 - Tracking (MLflow/W&B) para as demais tarefas: resolvido na #286 (ADR-197); regressão, segmentação, anomalia, detecção e tarefas próprias exportam o `run.json` ao fim do treino.
-- Anomalia: campo val_auroc é calculado no split de teste a cada época (nome engana; sem vazamento de seleção, checkpoint por train_loss): anotar no backlog.
+- Anomalia: campo do AUROC por época calculado no split de teste com nome de validação: resolvido no ADR-241. O campo passou a `test_auroc` no `history`, no evento `epoch_end`, na retomada e nos trackers; runs antigos são lidos com o nome novo por um normalizador em cada lado (`core/history_keys.py`, `frontend/src/lib/history-keys.ts`). Ficam com `val_` o `val_image_f1` e o `val_threshold`, também medidos no teste.
 - Ideia do tema product-gui: tour da aba Código para tarefas custom lendo o código do pesquisador por inspect.
 - Citação do SUS (Brooke) só quando os resultados de usabilidade entrarem no paper, conferida na fonte.
-- Seletor de custom_model na GUI (docs/custom/MODELS.md promete campo inexistente): DOC-5 corrige o texto, a feature fica como issue separada sem task.
+- Seletor de custom_model na GUI: resolvido. A etapa Modelo da classificação tem o campo **Modelo próprio**, que lista o que `GET /api/model/custom` acha em `user_models/` e preenche `model.custom_model`; sem nada registrado, o campo aponta `user_models/` e `docs/custom/MODELS.md`. No modo servidor a rota é `off` e o campo não aparece. `docs/custom/MODELS.md` descreve o campo.
+- Achados 19 e 18 e parte da seção 6 do AUDIT: resolvidos em #398 (`doctor --json` no bug_report.yml), #399 e #402 (cobertura de selftest, updater, `__main__` e colab_remote_runner), #400 (warnings 116 → 0 e `filterwarnings = error` para as categorias próprias) e #401 (`gui --check`).
+- ~~`pin_memory=True` sem acelerador~~ Resolvido: o `pin_memory` do config só vale quando o treino roda em CUDA (`core/pin_memory.py`); em CPU ou MPS o DataLoader recebe `False` e o aviso sumiu da suíte.
+- Médias macro divergentes: refutado. `_confusion_metrics` em `core/metric_ci.py` já tira a média só das classes presentes, como o sklearn sem `labels` usado em `core/evaluator.py`. O teste `test_macro_point_matches_the_evaluator_when_a_declared_class_is_absent` (`tests/core/test_metric_ci.py`) fixa isso de ponta a ponta, com 4 classes declaradas e 3 presentes.
+- `gui --check` (#401) não sobe o servidor: confere import, build da SPA, `/api/health` chamado direto e porta livre. Resolvido por `--smoke`: uvicorn numa porta efêmera de 127.0.0.1, GET em `/api/health` e encerramento limpo.
+- `cross_validation.select_on: last` (ADR-242): com `early_stopping_patience > 0` ou o scheduler `plateau`, o fold ainda lê a própria validação. Recusar essa combinação no config é decisão do mantenedor.
+- `select_on` só existe no K-fold de classificação: regressão e segmentação usam `TaskCvRequest` e não têm a opção.
 
 ## Fusões e ajustes do crítico
 

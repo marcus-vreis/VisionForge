@@ -33,6 +33,13 @@ from visionforge.core.gradcam import overlay_cam, resolve_target_layer
 # How many validation images are explained. Enough to see whether the model looks
 # at the object, few enough to cost a handful of forward passes per epoch.
 LIVE_GRADCAM_SAMPLES = 6
+# With ``training.live_gradcam_per_class`` the gallery grows with the classes;
+# this caps it so an epoch that writes it costs at most this many forward and
+# backward passes (issue 349).
+LIVE_GRADCAM_MAX = 48
+# How many images go through the model at once: a large gallery of a large
+# model must not need more memory than a small training batch.
+LIVE_GRADCAM_BATCH = 16
 
 
 @contextmanager
@@ -49,18 +56,21 @@ def preserved_rng(device: torch.device) -> Iterator[None]:
             np.random.set_state(np_state)
 
 
-def choose_samples(labels: Sequence[int], k: int, seed: int) -> list[int]:
-    """``k`` dataset indices, the classes taken in turn so each one shows.
+def choose_samples(
+    labels: Sequence[int], k: int, seed: int, per_class: int | None = None
+) -> list[int]:
+    """Up to ``k`` dataset indices, the classes taken in turn so each one shows.
 
-    Drawn once with a generator of its own, so the choice is the same on every
-    run of the same seed and costs the training's generators nothing.
+    ``per_class`` takes at most that many images of each class (all of a smaller
+    class). Drawn once with a generator of its own, so the choice is the same on
+    every run of the same seed and costs the training's generators nothing.
     """
     gen = torch.Generator().manual_seed(seed)
     order = torch.randperm(len(labels), generator=gen).tolist()
     by_class: dict[int, list[int]] = {}
     for index in order:
         by_class.setdefault(int(labels[index]), []).append(index)
-    queues = [by_class[c] for c in sorted(by_class)]
+    queues = [by_class[c][:per_class] for c in sorted(by_class)]
     chosen: list[int] = []
     while len(chosen) < k and any(queues):
         for queue in queues:
@@ -169,7 +179,13 @@ class LiveGradCam:
             )
             return None
         with preserved_rng(device):
-            indices = choose_samples(labels, LIVE_GRADCAM_SAMPLES, config.training.seed)
+            per_class = int(config.training.live_gradcam_per_class)
+            indices = choose_samples(
+                labels,
+                LIVE_GRADCAM_MAX if per_class else LIVE_GRADCAM_SAMPLES,
+                config.training.seed,
+                per_class or None,
+            )
             samples = [(dataset[i][0], int(dataset[i][1])) for i in indices]
         transforms = config.data.transforms
         insights = cls(
@@ -231,18 +247,7 @@ class LiveGradCam:
     def _write(
         self, model: nn.Module, epoch: int, is_best: bool
     ) -> list[dict[str, Any]]:
-        net = model.module if isinstance(model, nn.DataParallel) else model
-        was_training = net.training
-        batch = torch.stack([image for image, _ in self._samples]).to(self._device)
-        with preserved_rng(self._device):
-            net.eval()
-            try:
-                with torch.enable_grad():
-                    cams, predicted = gradcam_batch(
-                        net, resolve_target_layer(net), batch
-                    )
-            finally:
-                net.train(was_training)
+        cams, predicted = self._explain(model)
         latest = self._dir / "latest"
         latest.mkdir(parents=True, exist_ok=True)
         images: list[dict[str, Any]] = []
@@ -264,6 +269,32 @@ class LiveGradCam:
         logger.info("Live Grad-CAM written for epoch {}.", epoch)
         return images
 
+    def _explain(self, model: nn.Module) -> tuple[torch.Tensor, torch.Tensor]:
+        """Grad-CAM maps ``[N, H, W]`` and predictions ``[N]`` of the samples.
+
+        In chunks of ``LIVE_GRADCAM_BATCH``: in eval mode each image's map depends
+        on that image alone, so the chunks add up to one batch.
+        """
+        net = model.module if isinstance(model, nn.DataParallel) else model
+        was_training = net.training
+        images = [image for image, _ in self._samples]
+        cams: list[torch.Tensor] = []
+        predicted: list[torch.Tensor] = []
+        with preserved_rng(self._device):
+            net.eval()
+            try:
+                layer = resolve_target_layer(net)
+                for start in range(0, len(images), LIVE_GRADCAM_BATCH):
+                    chunk = images[start : start + LIVE_GRADCAM_BATCH]
+                    batch = torch.stack(chunk).to(self._device)
+                    with torch.enable_grad():
+                        chunk_cams, chunk_pred = gradcam_batch(net, layer, batch)
+                    cams.append(chunk_cams)
+                    predicted.append(chunk_pred)
+            finally:
+                net.train(was_training)
+        return torch.cat(cams), torch.cat(predicted)
+
     def _name(self, index: int) -> str:
         return (
             self._class_names[index]
@@ -273,6 +304,8 @@ class LiveGradCam:
 
 
 __all__ = [
+    "LIVE_GRADCAM_BATCH",
+    "LIVE_GRADCAM_MAX",
     "LIVE_GRADCAM_SAMPLES",
     "LiveGradCam",
     "choose_samples",

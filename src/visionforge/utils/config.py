@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -15,7 +15,19 @@ CONFIG_NOT_A_FILE_KEY = "config.not_a_file"
 # config carries the version it was written with so old YAML/run.json files can
 # be migrated forward (see ``migrate_config_dict``) without losing traceability —
 # the reproducibility guarantee depends on this (ADR-039).
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
+
+
+# Shared by every task's data config, so each schema describes the field alike.
+PinMemory = Annotated[
+    bool,
+    Field(
+        description=(
+            "Fixa a memória dos lotes para acelerar a cópia à GPU. "
+            "**Só vale em CUDA:** em CPU ou MPS é ignorado, sem aviso."
+        )
+    ),
+]
 
 
 class GridSearchConfig(BaseModel):
@@ -49,6 +61,17 @@ class CrossValidationConfig(BaseModel):
             "Optional path,group CSV; image paths are relative to data.base_dir. "
             "Relative manifest paths are also resolved against data.base_dir. "
             "All training images require a group; folds keep groups disjoint."
+        ),
+    )
+    # Which epoch scores each fold (ADR-242). A field an older build would
+    # ignore, so it bumped the schema to v3 (the ADR-158 rule).
+    select_on: Literal["best", "last"] = Field(
+        default="best",
+        description=(
+            "Época que pontua cada fold. 'best' (padrão) fica com a de menor "
+            "val_loss no próprio fold de validação, que também a avalia: "
+            "estimativa otimista. 'last' avalia a última época treinada, sem "
+            "escolher a época na validação do fold."
         ),
     )
 
@@ -192,6 +215,15 @@ class TrainingConfig(BaseModel):
             "época e em cada nova melhor. 0 (padrão) desliga."
         ),
     )
+    live_gradcam_per_class: int = Field(
+        default=0,
+        ge=0,
+        le=16,
+        description=(
+            "Quantas imagens de cada classe entram no Grad-CAM ao vivo, até 48 no "
+            "total. 0 (padrão) mostra 6 imagens, revezando as classes."
+        ),
+    )
 
     @field_validator("batch_size")
     @classmethod
@@ -263,7 +295,7 @@ class DataConfig(BaseModel):
         ge=-1,
         description="Processos paralelos que carregam as imagens. **-1 (padrão) decide sozinho** pela memória livre da máquina: cada worker é um processo que recarrega o torch e custa cerca de 1 GB, e pedir mais do que cabe faz o treino morrer antes da primeira época. 0 carrega no processo principal.",
     )
-    pin_memory: bool = True
+    pin_memory: PinMemory = True
     transforms: TransformConfig = TransformConfig()
     preprocessing: PreprocessingConfig = Field(default_factory=PreprocessingConfig)
 
@@ -287,18 +319,22 @@ def _default_figure_formats() -> list[FigureFormat]:
 class OutputConfig(BaseModel):
     """Output directory paths for models, logs, graphics, and reports."""
 
+    # A factory, not default=Path(...): pydantic cannot JSON-encode a WindowsPath
+    # default and warns on every schema build; json_schema_extra publishes it.
     models_dir: Path = Field(
-        default=Path("outputs/models"), json_schema_extra={"default": "outputs/models"}
+        default_factory=lambda: Path("outputs/models"),
+        json_schema_extra={"default": "outputs/models"},
     )
     graphics_dir: Path = Field(
-        default=Path("outputs/graphics"),
+        default_factory=lambda: Path("outputs/graphics"),
         json_schema_extra={"default": "outputs/graphics"},
     )
     logs_dir: Path = Field(
-        default=Path("outputs/logs"), json_schema_extra={"default": "outputs/logs"}
+        default_factory=lambda: Path("outputs/logs"),
+        json_schema_extra={"default": "outputs/logs"},
     )
     reports_dir: Path = Field(
-        default=Path("outputs/reports"),
+        default_factory=lambda: Path("outputs/reports"),
         json_schema_extra={"default": "outputs/reports"},
     )
     figure_formats: list[FigureFormat] = Field(
@@ -577,6 +613,10 @@ def migrate_config_dict(raw: dict[str, Any]) -> dict[str, Any]:
     # Their defaults keep a v1 config training as written, so no shape changes.
     if version < 2:
         version = 2
+    # v2 -> v3 (ADR-242): cross_validation.select_on. Its default "best" keeps
+    # a v2 K-fold scoring each fold on its best epoch, as before.
+    if version < 3:
+        version = 3
     out["schema_version"] = version
     return out
 

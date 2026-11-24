@@ -8,6 +8,8 @@ import {
   selectionLabel,
   type DeviceSelection,
 } from "../lib/device-selection";
+import { useColabAccount } from "../hooks/useColabAccount";
+import { ColabDeviceSection, type ColabDeviceChoice } from "./ColabTarget";
 
 export type { DeviceSelection };
 
@@ -15,6 +17,8 @@ interface DeviceSelectorProps {
   selection: DeviceSelection;
   onChange: (next: DeviceSelection) => void;
   variant?: "header" | "bottom";
+  /** Colab as a place to train, offered under this machine's devices (ADR-211). */
+  colab?: ColabDeviceChoice;
 }
 
 function formatMem(mb: number): string {
@@ -24,7 +28,12 @@ function formatMem(mb: number): string {
 }
 
 /** Real device picker — fetches GPUs from the backend and stores the choice. */
-export function DeviceSelector({ selection, onChange, variant = "bottom" }: DeviceSelectorProps) {
+export function DeviceSelector({
+  selection,
+  onChange,
+  variant = "bottom",
+  colab,
+}: DeviceSelectorProps) {
   const t = useT();
   const [info, setInfo] = useState<DeviceInfoResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,16 +73,30 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
     return () => window.removeEventListener("mousedown", onClick);
   }, [open]);
 
-  const cudaActive = acceleratorActive(selection, info);
-  const label = selectionLabel(selection, info);
+  const account = useColabAccount(open, colab?.active ?? false);
+  const onColab = colab?.active ?? false;
+  // Colab reads as an accelerator in use, like a local GPU.
+  const cudaActive = onColab || acceleratorActive(selection, info);
+  const label =
+    onColab && colab ? t.colab.target.pill(colab.accelerator) : selectionLabel(selection, info);
+  // What only Colab has: the balance and the hardware already allocated.
+  const colabFacts = onColab
+    ? [
+        account.facts.balance !== null ? t.colab.target.balance(account.facts.balance) : null,
+        account.facts.runtimes > 0 ? t.colab.target.runtimes(account.facts.runtimes) : null,
+      ].filter((fact): fact is string => fact !== null)
+    : [];
 
   return (
     <div ref={wrapRef} style={{ position: "relative" }}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        data-device-target={onColab ? "colab" : "local"}
         title={
-          loading
+          onColab && account.facts.balance !== null
+            ? t.colab.target.balanceTitle(account.facts.balance)
+            : loading
             ? t.deviceSelector.loadingTitle
             : error
               ? error
@@ -124,6 +147,11 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
         >
           {label}
         </span>
+        {colabFacts.map((fact) => (
+          <span key={fact} style={{ color: "var(--vf-text-dim)" }}>
+            · {fact}
+          </span>
+        ))}
         <Chevron open={open} size={9} />
       </button>
 
@@ -168,7 +196,7 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
           </div>
 
           <DeviceOption
-            active={selection.kind === "cpu"}
+            active={!onColab && selection.kind === "cpu"}
             title={info?.cpu_name || "CPU"}
             subtitle={t.deviceSelector.cpuSubtitle}
             onClick={() => {
@@ -179,7 +207,7 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
 
           {info?.mps_available && (
             <DeviceOption
-              active={selection.kind === "mps"}
+              active={!onColab && selection.kind === "mps"}
               title={t.deviceSelector.mpsOption}
               subtitle={t.deviceSelector.mpsSubtitle}
               onClick={() => {
@@ -193,6 +221,7 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
             <DeviceOption
               key={g.index}
               active={
+                !onColab &&
                 selection.kind === "cuda" &&
                 (selection.gpu_ids?.[0] ?? 0) === g.index
               }
@@ -209,7 +238,7 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
 
           {info && info.gpus.length >= 2 && (
             <DeviceOption
-              active={selection.kind === "multi_cuda"}
+              active={!onColab && selection.kind === "multi_cuda"}
               title={t.deviceSelector.multiGpu(info.gpus.length)}
               subtitle="DataParallel"
               onClick={() => {
@@ -218,6 +247,19 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
                   gpu_ids: info.gpus.map((g) => g.index),
                 });
                 setOpen(false);
+              }}
+            />
+          )}
+
+          {colab && (
+            <ColabDeviceSection
+              account={account}
+              choice={{
+                ...colab,
+                onPick: (accelerator) => {
+                  colab.onPick(accelerator);
+                  setOpen(false);
+                },
               }}
             />
           )}

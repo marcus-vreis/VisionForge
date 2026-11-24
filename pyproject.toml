@@ -1,7 +1,7 @@
 [project]
 name = "visionforge-studio"
 authors = [{ name = "Marcus Reis", email = "marcusvinicius0083@gmail.com" }]
-version = "0.22.3"
+version = "0.23.0"
 dynamic = []
 description = "Local-first computer-vision experimentation platform: five task families, multi-seed replicates with confidence intervals, K-fold CV, sweeps and full run provenance — on your own GPU."
 readme = "README.md"
@@ -59,8 +59,9 @@ dependencies = [
   # were optional extras, and the split cost more than it saved: the detection
   # tab shipped without a backend until you found the right install line. They
   # add ~83 MB, against the 2-3 GB a CUDA torch already pulls.
-  # Except ultralytics (AGPL-3.0): it is the `detection` extra (ADR-195), and
-  # detection trains with the torchvision backend without it.
+  # ultralytics is AGPL-3.0 (THIRD_PARTY_NOTICES.md); ADR-195 made it the
+  # `detection` extra and ADR-243 brought it back here.
+    "ultralytics>=8.3",      # YOLO / RT-DETR backends
     "timm>=1.0",             # extra backbones via model.timm_model
     "optuna>=3.0",           # TPE-guided sweeps
     "tensorboard>=2.0",      # per-epoch scalars under <run_dir>/tensorboard/
@@ -96,17 +97,16 @@ cu126 = ["torch>=2.13", "torchvision>=0.28"]
 cu128 = ["torch>=2.10", "torchvision>=0.25"]
 cu130 = ["torch>=2.13", "torchvision>=0.28"]
 # mlflow, wandb, comet, dvc and hub are optional exporters (ADR-170, ADR-171,
-# ADR-172, ADR-200, ADR-176): they install something. detection installs ultralytics, the AGPL-3.0
-# YOLO / RT-DETR backend (ADR-195): pip install "visionforge-studio[detection]".
-# timm, optuna, tensorboard, roboflow, kaggle and huggingface are empty:
-# everything they used to install ships with the package (ADR-106). Those names
+# ADR-172, ADR-200, ADR-176): they install something. detection, timm, optuna,
+# tensorboard, roboflow, kaggle and huggingface are empty: everything they used
+# to install ships with the package (ADR-106, ADR-243). Those names
 # stay so an install line saved in a requirements file or a README elsewhere
 # keeps resolving instead of failing.
 mlflow = ["mlflow==3.18.0"]
 wandb = ["wandb==0.31.0"]
 comet = ["comet-ml==3.58.12"]
 dvc = ["dvc==3.67.1"]
-detection = ["ultralytics>=8.3"]
+detection = []
 timm = []
 optuna = []
 tensorboard = []
@@ -175,7 +175,7 @@ skip = ".venv,*.lock,outputs,htmlcov,*.egg-info,package-lock.json,src/visionforg
 ignore-words = ".codespell-ignore-words.txt"
 
 [tool.bumpversion]
-current_version = "0.22.3"
+current_version = "0.23.0"
 parse           = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
 serialize       = ["{major}.{minor}.{patch}"]
 commit          = true
@@ -224,6 +224,20 @@ pythonpath = ["src"]
 addopts   = "-v --cov=src --cov-report=term-missing -m 'not slow'"
 markers = [
     "slow: end-to-end cases that start a server and train real models",
+]
+# Later entries win. Deprecations raised from our own code (src, tests, research)
+# and schema warnings on our models fail the suite (AUDIT achado 18); the ignores
+# below are third-party warnings we cannot fix, each matched by message and module.
+filterwarnings = [
+    "error::DeprecationWarning:visionforge",
+    "error::PendingDeprecationWarning:visionforge",
+    "error::FutureWarning:visionforge",
+    "error::DeprecationWarning:tests",
+    "error::DeprecationWarning:research",
+    "error::pydantic.json_schema.PydanticJsonSchemaWarning",
+    # onnx_export.py keeps the TorchScript exporter on purpose (dynamo=False).
+    "ignore:You are using the legacy TorchScript-based ONNX export:DeprecationWarning:visionforge.core.onnx_export",
+    "ignore:The feature will be removed. Please remove usage of this function:DeprecationWarning:torch.onnx",
 ]
 
 

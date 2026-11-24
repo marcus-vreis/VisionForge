@@ -36,6 +36,9 @@ import {
 import { runPicker } from "../lib/picker-feedback";
 import { errorMessage, useJobPolling } from "../lib/useJobPolling";
 import { useT } from "../i18n/useT";
+import { ROUTE, useRouteOpen } from "../lib/session";
+import { useDestHint } from "../lib/dest-hint";
+import { ServerFoldersNote } from "./ServerFoldersNote";
 import { TextField } from "./controls";
 import { danger, ghostButton, mono, sectionLabel, stepTitle, text, warn } from "./datasetExplorerStyles";
 import { ActionRow, AnalyzeButton, ApplyButton, DataTable, LabStep, LabTool, LearnMore } from "./DatasetLabParts";
@@ -241,6 +244,8 @@ export function MergePanel({
 }) {
   const t = useT().datasetMerge;
   const lab = useT().datasetLab;
+  const canPick = useRouteOpen(ROUTE.pickFolder);
+  const destHint = useDestHint(t.destHint);
   const [otherDir, setOtherDir] = useState("");
   const [pickNote, setPickNote] = useState<string | null>(null);
   const [previewJob, setPreviewJob] = useState<IncorporateJob<MergePreview> | null>(null);
@@ -354,6 +359,7 @@ export function MergePanel({
             <>
               <button
                 type="button"
+                hidden={!canPick}
                 style={ghostButton}
                 onClick={() =>
                   void runPicker(
@@ -384,6 +390,7 @@ export function MergePanel({
             mono
           />
         </ActionRow>
+        <ServerFoldersNote />
         {pickNote && <div style={text}>{pickNote}</div>}
       </LabStep>
 
@@ -448,7 +455,7 @@ export function MergePanel({
                 label={t.destName}
                 value={destName}
                 onChange={setDestName}
-                hint={t.destHint}
+                hint={destHint}
                 mono
                 error={destName !== "" && !destOk ? t.destInvalid : undefined}
               />

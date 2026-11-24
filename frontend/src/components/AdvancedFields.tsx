@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useT } from "../i18n/useT";
 import { Chevron } from "./controls";
 
@@ -29,6 +29,7 @@ export function AdvancedFields({
 }) {
   const t = useT();
   const [open, setOpen] = useState(startOpen);
+  const gridId = useId();
 
   if (count === 0) return null;
 
@@ -36,6 +37,8 @@ export function AdvancedFields({
     <div style={{ marginBottom: flush ? 0 : 26 }}>
       <button
         type="button"
+        aria-expanded={open}
+        aria-controls={gridId}
         onClick={() => setOpen((v) => !v)}
         style={{
           display: "flex",
@@ -65,9 +68,14 @@ export function AdvancedFields({
       </button>
       {open && (
         <div
+          id={gridId}
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
+            // Three `1fr` columns never shrink below their widest field, so at
+            // 800 px the third ran off the card. Columns of 300 px or more fit
+            // the longest label on one line: two in the card's ~900 px, one on
+            // a phone.
+            gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 300px), 1fr))",
             gap: 18,
             marginTop: 18,
           }}

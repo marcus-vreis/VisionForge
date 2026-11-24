@@ -193,6 +193,14 @@ def task_of(record: Mapping[str, Any], config: Mapping[str, Any]) -> str:
         raise ReproduceError(
             f"reproducing the custom task '{top}' is not supported yet"
         )
+    if top is None and "task" not in config and "block" not in config:
+        # Every built-in config names its task or its classification block. A
+        # custom task's group stopped before any seed wrote run.json inherits
+        # no ``custom:<key>`` (issue 343); training classification would be wrong.
+        raise ReproduceError(
+            "the bundle does not say which task it trained (a custom task group "
+            "stopped before any run finished?); nothing to reproduce"
+        )
     task = str(config.get("task", "multiclass"))
     block = config.get("block", "classification")
     if task in _CLASSIFICATION_TASKS and block != "classification":

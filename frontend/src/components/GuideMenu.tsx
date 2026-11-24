@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useT } from "../i18n/useT";
-import { GUIDES, type GuideId } from "../lib/guides";
+import { offeredGuides, type GuideId } from "../lib/guides";
+import { useSession } from "../lib/session";
 
 /** The header's "guia" button, which opens a small menu of the guides (ADR-115).
  *
@@ -22,6 +23,7 @@ export function GuideMenu({
   initialOpen?: boolean;
 }) {
   const t = useT();
+  const guides = offeredGuides(useSession());
   const [open, setOpen] = useState(initialOpen);
   const root = useRef<HTMLDivElement>(null);
 
@@ -90,7 +92,7 @@ export function GuideMenu({
             ...(onLearn
               ? [{ key: "learn", title: t.learn.menuTitle, summary: t.learn.menuSummary, pick: onLearn }]
               : []),
-            ...GUIDES.map((guide) => ({
+            ...guides.map((guide) => ({
               key: guide.id,
               title: guide.title(t),
               summary: guide.summary(t),

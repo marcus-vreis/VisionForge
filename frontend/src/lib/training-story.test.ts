@@ -156,7 +156,7 @@ describe("trainingStory: the headline metric", () => {
       ["detection", { map50: 0.42 }, "map50", 0.42],
       ["regression", { val_r2: 0.81 }, "r2", 0.81],
       ["segmentation", { val_miou: 0.67 }, "miou", 0.67],
-      ["anomaly", { val_auroc: 0.93 }, "auroc", 0.93],
+      ["anomaly", { test_auroc: 0.93 }, "auroc", 0.93],
     ];
     for (const [task, extra, kind, value] of cases) {
       const s = story([start(2), epoch(1, 2, extra)], { spec: storySpecFor(task, {}) });
@@ -292,7 +292,7 @@ describe("trainingStory: PatchCore phases", () => {
     const s = pc([
       start(1),
       phase("pontuando", 2, 2),
-      epoch(1, 1, { train_loss: 0, val_auroc: 0.93 }),
+      epoch(1, 1, { train_loss: 0, test_auroc: 0.93 }),
     ]);
     // An epoch 1 of 1 would read as the end of training in a run with epochs.
     expect(s.stage).toBe("training");

@@ -4,6 +4,7 @@ import { runPicker } from "../lib/picker-feedback";
 import { PickerNote } from "./PickerNote";
 import { sampleAnomalyForm } from "../lib/guides/sample-forms";
 import { SampleDatasetButton } from "./SampleDatasetButton";
+import { ServerFoldersNote } from "./ServerFoldersNote";
 import { useState } from "react";
 import { fetchTaskSchema, pickDatasetFolder } from "../api/client";
 import {
@@ -27,6 +28,8 @@ import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-f
 import { ReviewStep } from "./ReviewStep";
 import { StepShell } from "./StepShell";
 import { AnomalyDatasetStats } from "./TaskDatasetStats";
+import { AnomalyAnalysis } from "./AnomalyAnalysis";
+import { DatasetAudit } from "./DatasetAudit";
 import { CompareModelsCard } from "./CompareModelsCard";
 import { TransformsSection } from "./TransformsSection";
 import { datasetLabel, suggestExperimentName } from "../lib/experiment-name";
@@ -34,6 +37,7 @@ import { useAutoExperimentName } from "../lib/use-auto-experiment-name";
 import { countChanged, errorsUnder } from "../lib/steps";
 import type { ReplicatesPayload } from "../lib/replicates-form";
 import type { ComparePayload } from "../lib/compare-form";
+import { ROUTE, useOpenStrategies, useRouteOpen } from "../lib/session";
 
 // Anomaly has no sweep: these are the comparison's own suggested axes.
 const ANOMALY_PATH_HINTS = [
@@ -136,6 +140,7 @@ export function AnomalyPanel({
   const setPreprocessing = (steps: AnomalyForm["preprocessing"]) =>
     setFormData((p) => ({ ...p, preprocessing: steps }));
 
+  const canPickFolder = useRouteOpen(ROUTE.pickFolder);
   const onPickFolder = async () => {
     setPicking(true);
     try {
@@ -157,12 +162,12 @@ export function AnomalyPanel({
   // No sweep: anomaly has no labelled validation split to select on, and
   // the server refuses one rather than tune on the test set (ADR-131).
   // The comparison stays: it reports test metrics and tunes nothing.
-  const strategies: { value: PanelStrategy; label: string }[] = [
+  const strategies = useOpenStrategies<{ value: PanelStrategy; label: string }>("anomaly", [
     { value: "simple", label: t.paramPanel.blocks.simple },
     { value: "compare", label: t.anomalyPanel.compareLabel },
     { value: "replicates", label: t.taskPanel.replicates },
     { value: "replicatedComparison", label: t.taskPanel.replicatedComparison },
-  ];
+  ]);
   const strategyLabel = strategies.find((s) => s.value === strategy)?.label ?? "";
 
   const suggestion = suggestExperimentName({
@@ -220,26 +225,29 @@ export function AnomalyPanel({
                 mono
               />
             </div>
-            <button
-              type="button"
-              onClick={() => void onPickFolder()}
-              disabled={picking}
-              style={{
-                padding: "12px 16px",
-                background: "var(--accent-soft)",
-                border: `1px solid ${accent}`,
-                borderRadius: 10,
-                color: "var(--vf-text)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 12,
-                cursor: picking ? "default" : "pointer",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {picking ? "…" : t.taskPanel.dataset.browse}
-            </button>
+            {canPickFolder && (
+              <button
+                type="button"
+                onClick={() => void onPickFolder()}
+                disabled={picking}
+                style={{
+                  padding: "12px 16px",
+                  background: "var(--accent-soft)",
+                  border: `1px solid ${accent}`,
+                  borderRadius: 10,
+                  color: "var(--vf-text)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 12,
+                  cursor: picking ? "default" : "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {picking ? "…" : t.taskPanel.dataset.browse}
+              </button>
+            )}
           </div>
           <PickerNote text={pickNote} />
+          <ServerFoldersNote />
           <SampleDatasetButton
             task="anomaly"
             onApply={(path, setup) => setFormData((p) => sampleAnomalyForm(p, path, setup))}
@@ -270,6 +278,19 @@ export function AnomalyPanel({
             trainDir={formData.data.train_dir}
             testDir={formData.data.test_dir}
             normalDir={formData.data.normal_dir}
+          />
+          <DatasetAudit
+            baseDir={formData.data.base_dir}
+            splits={{ train: formData.data.train_dir, test: formData.data.test_dir }}
+            note={t.evidence.notes.anomaly}
+          />
+          <AnomalyAnalysis
+            request={{
+              base_dir: formData.data.base_dir,
+              train_dir: formData.data.train_dir,
+              test_dir: formData.data.test_dir,
+              normal_dir: formData.data.normal_dir,
+            }}
           />
         </div>
       </div>

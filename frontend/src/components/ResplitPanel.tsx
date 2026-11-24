@@ -33,6 +33,7 @@ import {
 } from "../lib/dataset-resplit";
 import { errorMessage as message, useJobPolling } from "../lib/useJobPolling";
 import { useT } from "../i18n/useT";
+import { useDestHint } from "../lib/dest-hint";
 import { TextField } from "./controls";
 import {
   danger,
@@ -180,6 +181,7 @@ export function ResplitPanel({
   const t = useT().datasetResplit;
   const ex = useT().datasetExplorer;
   const lab = useT().datasetLab;
+  const destHint = useDestHint(t.destHint);
   const [groupCsv, setGroupCsv] = useState("");
   const [previewJob, setPreviewJob] = useState<IncorporateJob<ResplitPreview> | null>(null);
   const [applyJob, setApplyJob] = useState<IncorporateJob<ResplitResult> | null>(null);
@@ -437,7 +439,7 @@ export function ResplitPanel({
                 label={t.destName}
                 value={destName}
                 onChange={setDestName}
-                hint={t.destHint}
+                hint={destHint}
                 mono
                 error={destName !== "" && !destOk ? t.destInvalid : undefined}
               />

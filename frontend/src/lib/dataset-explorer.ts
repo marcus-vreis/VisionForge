@@ -85,6 +85,31 @@ export interface ExplorerSummary {
   class_names: string[];
   total_images: number;
   splits: Record<SplitName, SplitSummary>;
+  /** Whether the splits share the class mix (ADR-232); absent from older servers. */
+  balance?: SplitBalance;
+}
+
+export type BalanceVerdict = "stratified" | "close" | "uneven" | "missing_class" | "one_split";
+
+export interface ClassBalance {
+  name: string;
+  counts: Partial<Record<SplitName, number>>;
+  /** Percent of the split's labels, 0-100. */
+  shares: Partial<Record<SplitName, number>>;
+  /** Largest minus smallest share, in percentage points. */
+  gap_pp: number;
+  missing_in: SplitName[];
+}
+
+export interface SplitBalance {
+  splits: SplitName[];
+  /** Largest gap first. */
+  classes: ClassBalance[];
+  max_gap_pp: number;
+  cramers_v: number | null;
+  imbalance: Partial<Record<SplitName, number | null>>;
+  verdict: BalanceVerdict;
+  thresholds_pp: [number, number];
 }
 
 export interface Bar {
@@ -163,7 +188,87 @@ export interface ScanReport {
   duplicate_groups: DuplicateGroup[];
   leakage_group_count: number;
   leakage_groups: DuplicateGroup[];
+  /** The optional second pass (ADR-231); absent from scans kept before it. */
+  near_checked?: boolean;
+  near_max_distance?: number;
+  near_group_count?: number;
+  near_groups?: NearGroup[];
   sizes: SizeReport;
+  /** Detection only (ADR-233); null for classification, absent from older scans. */
+  boxes?: BoxReport | null;
+  /** Brightness, contrast and sharpness (ADR-238); absent from older scans. */
+  quality?: QualityReport;
+}
+
+export type QualityMetric = "brightness" | "contrast" | "sharpness";
+export type QualityKind = "dark" | "bright" | "flat" | "blurry";
+
+export interface QualityMetricReport {
+  min: number;
+  q1: number;
+  median: number;
+  q3: number;
+  max: number;
+  /** Tukey's fences, in the metric's own units. */
+  fences: [number, number];
+  median_by_split: Record<string, number>;
+}
+
+export interface QualityOutlier {
+  split: string;
+  path: string;
+  value: number;
+}
+
+/** Brightness, contrast and sharpness of the scanned images (ADR-238). */
+export interface QualityReport {
+  count: number;
+  tukey_k?: number;
+  measure_side?: number;
+  metrics?: Record<QualityMetric, QualityMetricReport>;
+  outlier_count?: Record<QualityKind, number>;
+  outliers?: Record<QualityKind, QualityOutlier[]>;
+}
+
+export type BoxSize = "small" | "medium" | "large";
+export type BoxProblem = "malformed" | "class_out_of_range" | "zero_area" | "outside_image";
+
+/** What the boxes of the scanned images look like (ADR-233). */
+export interface BoxReport {
+  images: number;
+  boxes: number;
+  mean_per_image: number;
+  max_per_image: number;
+  per_image_bins: Bin[];
+  no_label_file: number;
+  empty_label: number;
+  /** COCO's area limits in px², small below the first, large above the second. */
+  size_thresholds: [number, number];
+  sizes: Record<BoxSize, number>;
+  class_sizes: ({ name: string } & Record<BoxSize, number>)[];
+  /** Boxes of images that did not open: counted, but with no pixel size. */
+  unsized: number;
+  aspect_bins: Bin[];
+  /** Box centers on a 10x10 grid, row by row from the top. */
+  heatmap: number[][];
+  pairs: { a: string; b: string; images: number }[];
+  invalid_count: number;
+  invalid: Partial<Record<BoxProblem, number>>;
+  invalid_examples: { split: string; path: string; line: number; reason: BoxProblem }[];
+}
+
+/** Visually near images in more than one split, not byte copies (ADR-228). */
+export interface NearGroup {
+  splits: string[];
+  paths: string[];
+}
+
+/** The last finished scan of a dataset, kept by the server (ADR-231). */
+export interface SavedScan {
+  report: ScanReport | null;
+  saved_at: string | null;
+  /** The dataset changed since: what the report found may be gone. */
+  stale: boolean;
 }
 
 export type ScanState = "running" | "done" | "cancelled" | "failed";
@@ -187,7 +292,7 @@ export function scanPercent(done: number, total: number): number {
   return Math.min(100, Math.floor((done / total) * 100));
 }
 
-export type ProblemKind = "corrupted" | "duplicates" | "leakage";
+export type ProblemKind = "corrupted" | "duplicates" | "leakage" | "near";
 
 /** How many findings of each kind, in the order the list shows them. */
 export function problemCounts(report: ScanReport): Record<ProblemKind, number> {
@@ -195,12 +300,13 @@ export function problemCounts(report: ScanReport): Record<ProblemKind, number> {
     corrupted: report.corrupted_count,
     duplicates: report.duplicate_group_count,
     leakage: report.leakage_group_count,
+    near: report.near_group_count ?? 0,
   };
 }
 
 export function hasProblems(report: ScanReport): boolean {
   const c = problemCounts(report);
-  return c.corrupted + c.duplicates + c.leakage > 0;
+  return c.corrupted + c.duplicates + c.leakage + c.near > 0;
 }
 
 /** "64-128", "2048+" for a half-open bin. */

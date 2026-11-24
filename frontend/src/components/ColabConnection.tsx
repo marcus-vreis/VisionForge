@@ -21,8 +21,6 @@ import {
   fetchColabSessions,
   startColabLogin,
   stopColabSession,
-  type ColabAccelerator,
-  type ColabLaunch,
   type ColabSessionInfo,
   type ColabStatus,
   type ColabUsage,
@@ -31,20 +29,12 @@ import { useT } from "../i18n/useT";
 import {
   cleanAuthCode,
   colabStage,
-  parseDatasetSource,
   roundHours,
 } from "../lib/colab-connection";
-import { loadMyDriveRoot, saveMyDriveRoot } from "../lib/drive-consent";
-import { driveLaunchSource } from "../lib/drive-folders";
-import { DrivePicker } from "./ColabDrivePicker";
-import { MenuSelect } from "./controls/MenuSelect";
-import { switchStyle } from "./trackerStyles";
-import { ACTION, BODY, CHECK_ROW, DIM, ERROR, FIELD, LABEL, LINK, MONO, STACK } from "./colabStyles";
+import { ACTION, BODY, DIM, ERROR, FIELD, LABEL, LINK, MONO, STACK } from "./colabStyles";
+import { ROUTE, useRouteOpen } from "../lib/session";
 
 const INSTALL_POLL_MS = 2000;
-const ACCELERATORS: ColabAccelerator[] = ["T4", "L4", "A100", "H100", "G4"];
-const isAccelerator = (value: string): value is ColabAccelerator =>
-  (ACCELERATORS as string[]).includes(value);
 
 const SECTION_TITLE: CSSProperties = {
   ...LABEL,
@@ -91,129 +81,6 @@ export interface ColabPanelProps {
   /** Runtimes alive on the account; null until asked. */
   sessions: ColabSessionInfo[] | null;
   onStopSession: (name: string) => void;
-  /** Present only when the open task can train on Colab (classification). */
-  onTrain?: (launch: ColabLaunch) => void;
-  /** Why the open experiment cannot train on Colab now: the button is off. */
-  trainBlocked?: string;
-}
-
-function TrainOnColab({ busy, onTrain, trainBlocked }: ColabPanelProps) {
-  const t = useT();
-  const c = t.colab;
-  const [source, setSource] = useState("");
-  const [accelerator, setAccelerator] = useState<ColabAccelerator>("T4");
-  const [bad, setBad] = useState(false);
-  const [useDrive, setUseDrive] = useState(false);
-  const [driveRoot, setDriveRoot] = useState(loadMyDriveRoot);
-  const [drivePath, setDrivePath] = useState("");
-  const [driveRemote, setDriveRemote] = useState<string | null>(null);
-  const [driveExport, setDriveExport] = useState(false);
-  if (!onTrain) return null;
-
-  const submit = () => {
-    if (useDrive) {
-      saveMyDriveRoot(driveRoot);
-      setBad(false);
-      onTrain({
-        source: driveLaunchSource(driveRoot, drivePath),
-        accelerator,
-        drive_export: driveExport,
-      });
-      return;
-    }
-    const parsed = parseDatasetSource(source);
-    setBad(parsed === null);
-    if (parsed !== null) onTrain({ source: parsed, accelerator, drive_export: driveExport });
-  };
-
-  return (
-    <div style={{ ...STACK, gap: 12 }} data-colab-train>
-      <label style={CHECK_ROW}>
-        <input
-          type="checkbox"
-          checked={useDrive}
-          onChange={(e) => setUseDrive(e.target.checked)}
-          style={switchStyle(useDrive)}
-        />
-        {c.driveSource}
-      </label>
-      {useDrive ? (
-        <>
-          <DrivePicker
-            driveRoot={driveRoot}
-            onDriveRoot={setDriveRoot}
-            folder={drivePath}
-            remote={driveRemote}
-            onPick={(folder, remote) => {
-              setDrivePath(folder);
-              setDriveRemote(remote);
-            }}
-          />
-          <More summary={c.learnMore}>{c.driveNote}</More>
-        </>
-      ) : (
-        <div style={{ ...STACK, gap: 6 }}>
-          <label style={LABEL} htmlFor="colab-source">
-            {c.trainSource}
-          </label>
-          <input
-            id="colab-source"
-            type="text"
-            autoComplete="off"
-            spellCheck={false}
-            value={source}
-            placeholder={c.sourcePlaceholder}
-            onChange={(e) => setSource(e.target.value)}
-            style={FIELD}
-          />
-          {bad && <p style={ERROR}>{c.badSource}</p>}
-        </div>
-      )}
-      <label style={CHECK_ROW}>
-        <input
-          type="checkbox"
-          checked={driveExport}
-          onChange={(e) => setDriveExport(e.target.checked)}
-          style={switchStyle(driveExport)}
-        />
-        {c.driveExport}
-      </label>
-      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-        <span id="colab-accelerator-label" style={LABEL}>
-          {c.accelerator}
-        </span>
-        <div
-          role="group"
-          aria-labelledby="colab-accelerator-label"
-          style={{ display: "flex", flex: 1, minWidth: 0 }}
-        >
-          <MenuSelect
-            size="field"
-            value={accelerator}
-            title={c.accelerator}
-            options={ACCELERATORS}
-            onChange={(value) => {
-              if (isAccelerator(value)) setAccelerator(value);
-            }}
-          />
-        </div>
-        <button
-          type="button"
-          style={{ ...ACTION, padding: "12px 16px", borderRadius: 10 }}
-          disabled={busy || trainBlocked !== undefined}
-          onClick={submit}
-        >
-          {c.train}
-        </button>
-      </div>
-      {trainBlocked !== undefined && (
-        <p style={DIM} data-colab-train-blocked>
-          {trainBlocked}
-        </p>
-      )}
-      <More summary={c.learnMore}>{c.trainNote}</More>
-    </div>
-  );
 }
 
 function Sessions({ sessions, busy, onStopSession }: ColabPanelProps) {
@@ -290,11 +157,10 @@ export function ColabPanel(props: ColabPanelProps) {
           <Section title={c.sectionAccount}>
             <Connected {...props} />
           </Section>
-          {props.onTrain && (
-            <Section title={c.trainTitle}>
-              <TrainOnColab {...props} />
-            </Section>
-          )}
+          {/* Training is started from the device selector (ADR-211). */}
+          <p style={DIM} data-colab-train-hint>
+            {c.target.panelHint}
+          </p>
           {props.sessions !== null && (
             <Section title={c.sessionsTitle}>
               <Sessions {...props} />
@@ -397,13 +263,7 @@ function Connected({ status, usage, usageError, busy, onSwitch }: ColabPanelProp
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** The header chip and its panel; one instance per profile (keyed by the header). */
-export function ColabConnection({
-  onTrain,
-  trainBlocked,
-}: {
-  onTrain?: (launch: ColabLaunch) => void;
-  trainBlocked?: string;
-} = {}) {
+function ColabConnectionInner() {
   const t = useT();
   const [status, setStatus] = useState<ColabStatus | null>(null);
   const [usage, setUsage] = useState<ColabUsage | null>(null);
@@ -506,13 +366,6 @@ export function ColabConnection({
       void act(async () => {
         setSessions(await stopColabSession(name));
       }),
-    onTrain: onTrain
-      ? (launch) => {
-          setOpen(false);
-          onTrain(launch);
-        }
-      : undefined,
-    trainBlocked,
   };
   const leftovers = sessions?.filter((s) => s.ours).length ?? 0;
 
@@ -577,4 +430,9 @@ export function ColabConnection({
       )}
     </div>
   );
+}
+
+/** Absent on a shared server: the Colab account would be the server's, not the person's (ADR-216). */
+export function ColabConnection() {
+  return useRouteOpen(ROUTE.colab) ? <ColabConnectionInner /> : null;
 }

@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException, Response
 from loguru import logger
 
 from visionforge.core.detection_data import resolve_yolo_split
+from visionforge.gui.api.dataset_scope import current_scope, preview_cache
 from visionforge.gui.api.datasets_routes import _IMAGE_EXTS, _remember_dataset_root
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST_TEXT,
@@ -30,6 +31,7 @@ from visionforge.gui.api.http_responses import (
     UNPROCESSABLE_TEXT,
     VALIDATION_ERROR_CONTENT,
 )
+from visionforge.gui.api.own_datasets import router as own_datasets_router
 from visionforge.gui.api.sample_dataset import (
     SampleDatasetExistsError,
     SampleTaskError,
@@ -57,6 +59,8 @@ _SAMPLE_REUSED_TEXT = "The folder was already there and is reused; nothing is wr
 _KIND = "kind"
 
 router = APIRouter()
+# A person's own datasets on a server: listed and deleted (ADR-227).
+router.include_router(own_datasets_router)
 
 
 @router.post(
@@ -119,9 +123,7 @@ async def sample_dataset(
             write.
     """
     try:
-        built = await asyncio.to_thread(
-            create_sample_dataset, _SAMPLE_DATASETS_DIR, req.task
-        )
+        built = await asyncio.to_thread(create_sample_dataset, _sample_root(), req.task)
     except SampleTaskError as exc:
         raise HTTPException(400, str(exc)) from exc
     except SampleDatasetExistsError as exc:
@@ -143,6 +145,15 @@ async def sample_dataset(
         counts=built.counts,
         targets=built.targets,
     )
+
+
+def _sample_root() -> Path:
+    """Where the sample dataset goes: ``datasets/``, or on a server the signed-in
+    person's own dataset folder, the only one they may write (ADR-219)."""
+    scope = current_scope()
+    if scope is not None and scope.own is not None:
+        return scope.own
+    return _SAMPLE_DATASETS_DIR
 
 
 def _empty_preview(message: str) -> PreprocessPreviewResponse:
@@ -202,7 +213,7 @@ def _fresh_cache_dir(name: str) -> Path:
     Deterministic per source class, so repeated previews don't accumulate
     hundreds of files.
     """
-    cache_dir = _PREVIEW_CACHE_DIR / name
+    cache_dir = preview_cache(_PREVIEW_CACHE_DIR) / name
     cache_dir.mkdir(parents=True, exist_ok=True)
     for old in cache_dir.glob("*.png"):
         with contextlib.suppress(OSError):

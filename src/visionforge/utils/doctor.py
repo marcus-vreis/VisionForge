@@ -200,27 +200,23 @@ def missing_package_hint(package: str) -> str:
 
 
 def ultralytics_installed() -> bool:
-    """Whether the optional ``detection`` extra's ``ultralytics`` is importable.
+    """Whether ``ultralytics`` is importable.
 
+    It ships with the package (ADR-243), so False means a damaged install.
     ``find_spec`` instead of an import: importing ultralytics costs ~1.7 s and
-    the GUI asks this when the page loads. A ``None`` in ``sys.modules`` (how
-    tests block an import) reads as absent too.
+    the submit check asks this. A ``None`` in ``sys.modules`` (how tests block
+    an import) reads as absent too.
     """
     return importlib.util.find_spec("ultralytics") is not None
 
 
-def detection_install_command() -> str:
-    """The line that installs the ``detection`` extra (ultralytics, ADR-195)."""
-    if installed_from_source():
-        return 'pip install -e ".[detection]"'
-    return f'pip install "{_DIST_NAME}[detection]"'
-
-
 def ultralytics_missing_message() -> str:
-    """Why an Ultralytics run cannot start, and the install line that fixes it."""
+    """Why an Ultralytics run cannot start, and the reinstall line that fixes it."""
     from visionforge.utils.messages import tr
 
-    return tr("detection.ultralytics_missing", command=detection_install_command())
+    return tr(
+        "detection.ultralytics_missing", command=missing_package_hint("ultralytics")
+    )
 
 
 def build_install_command(tag: str) -> tuple[list[str], str]:
@@ -228,8 +224,8 @@ def build_install_command(tag: str) -> tuple[list[str], str]:
 
     Only torch and torchvision — the package itself is already installed, that
     is how doctor is running. And two steps, because since ADR-106 there is
-    always a torch here already: `timm` (and `ultralytics`, with the `detection`
-    extra of ADR-195) pulls one from PyPI on the first install, and on Windows PyPI only carries CPU builds. Asking pip to install
+    always a torch here already: `ultralytics` and `timm` pull one from PyPI on
+    the first install, and on Windows PyPI only carries CPU builds. Asking pip to install
     `visionforge-studio[cu128]` against the CUDA index then changed nothing —
     the CPU torch already satisfies `torch>=2.3`, so pip printed "Requirement
     already satisfied" and stopped (ADR-107).
@@ -356,6 +352,19 @@ def _report_hidden_gpu(on_cuda: bool) -> None:
         print(f"[WARN] {tr('doctor.gpu_hidden', value=value)}")
 
 
+def _torch_issue(torch_info: TorchProbe, driver_cuda: str | None) -> str | None:
+    """Name the torch problem this machine has, or None when there is none.
+
+    One rule for the human report and ``--json``, so the two cannot disagree
+    about the verdict (and therefore the exit code).
+    """
+    if not torch_info["importable"]:
+        return "torch-missing"
+    if driver_cuda and not torch_info["cuda_available"]:
+        return "torch-cuda-mismatch"
+    return None
+
+
 def _report_torch_issues(
     torch_info: TorchProbe,
     driver_cuda: str | None,
@@ -387,7 +396,7 @@ def _report_torch_issues(
 
         # Flag the silent-failure case: GPU driver present but CPU-only torch wheel.
         # This is exactly the misconfiguration ADR-005/ADR-042 targets.
-        if driver_cuda and not cuda_ok:
+        if _torch_issue(torch_info, driver_cuda) == "torch-cuda-mismatch":
             print(
                 "[FAIL] GPU driver detected but torch.cuda.is_available() is False.\n"
                 "       You have a CPU-only torch on a CUDA machine — training\n"
@@ -505,9 +514,102 @@ def _offer_fix(
         _run_install(tag)
 
 
+def _workspace_facts() -> dict[str, object]:
+    """Resolved custom model/task folders and counts, as the report prints them."""
+    facts: dict[str, object] = {"working_directory": str(Path.cwd())}
+    for key, folder in (
+        ("custom_models", "user_models"),
+        ("custom_tasks", "user_tasks"),
+    ):
+        path = Path(folder)
+        exists = path.is_dir()
+        count = (
+            len(list(path.glob("*.py"))) + len(list(path.glob("*/task.py")))
+            if exists
+            else 0
+        )
+        facts[key] = {"path": str(path.resolve()), "exists": exists, "found": count}
+    return facts
+
+
+def collect_report() -> dict[str, object]:
+    """Gather the facts the human report shows, as one JSON-serialisable dict.
+
+    Makes the same probes and applies the same rules as :func:`run_doctor`, but
+    prints nothing. ``ok`` is the verdict, so ``0 if ok else 1`` is the exit code.
+    """
+    from visionforge import __version__
+
+    py = check_python()
+    torch_info = probe_torch()
+    driver_cuda = detect_driver_cuda()
+    on_cuda = torch_info["importable"] and torch_info["cuda_available"]
+    on_mps = torch_info["importable"] and mps_available()
+    tag = select_wheel_tag(driver_cuda)
+    keep = on_mps or _keep_installed_torch(torch_info, driver_cuda, tag, on_cuda)
+    commands, _index_url = build_install_command(tag)
+
+    hidden = os.environ.get("CUDA_VISIBLE_DEVICES")
+    issues: list[str] = []
+    if not py["ok"]:
+        issues.append("python-version")
+    torch_issue = _torch_issue(torch_info, driver_cuda)
+    if torch_issue:
+        issues.append(torch_issue)
+
+    return {
+        "schema_version": 1,
+        "visionforge_version": __version__,
+        "platform": sys.platform,
+        "python": {
+            "version": py["version"],
+            "ok": py["ok"],
+            "minimum": f"{MIN_PYTHON[0]}.{MIN_PYTHON[1]}",
+        },
+        "torch": {
+            "importable": torch_info["importable"],
+            "version": torch_info["version"] if torch_info["importable"] else None,
+            "cuda_available": torch_info["cuda_available"],
+            "cuda_build": torch_info["cuda_build"],
+            "mps_available": on_mps,
+        },
+        "gpu": {
+            "driver_cuda": driver_cuda,
+            "cuda_visible_devices_hides_gpu": (
+                not on_cuda and hidden is not None and hidden.strip() in {"", "-1"}
+            ),
+        },
+        "recommendation": {
+            "wheel": "keep" if keep else tag,
+            "keep_current_install": keep,
+            "install_commands": [] if keep else commands,
+        },
+        "workspace": _workspace_facts(),
+        "checks": [
+            {"name": "python", "status": "ok" if py["ok"] else "fail"},
+            {"name": "torch", "status": "fail" if torch_issue else "ok"},
+        ],
+        "issues": issues,
+        "ok": not issues,
+    }
+
+
+def _run_doctor_json() -> int:
+    """Print :func:`collect_report` as the only thing on stdout."""
+    import contextlib
+
+    # Anything a probe prints (torch import chatter) goes to stderr, so stdout
+    # stays one JSON document a script or an issue template can parse.
+    with contextlib.redirect_stdout(sys.stderr):
+        report = collect_report()
+    print(json.dumps(report, indent=2))
+    return 0 if report["ok"] else 1
+
+
 def run_doctor(
     fix: bool = False,
     confirm_fn: Callable[[str], bool] = _default_confirm,
+    json_output: bool = False,
 ) -> int:
     """Run the full environment diagnostic, print a report, and optionally install.
 
@@ -515,10 +617,17 @@ def run_doctor(
         fix: When True, prompt the user and run the recommended install on confirmation.
         confirm_fn: Callable that receives a prompt string and returns True for 'yes'.
             Injected so tests can control it without shelling out.
+        json_output: Print one JSON object instead of the report. Never combined
+            with ``fix`` (the install prompts would corrupt stdout).
 
     Returns:
         0 if everything looks good, 1 if any issue was detected.
     """
+    if json_output:
+        if fix:
+            raise ValueError("json_output cannot be combined with fix")
+        return _run_doctor_json()
+
     issues: list[str] = []
 
     _report_python_version(issues)

@@ -9,6 +9,7 @@ import { runPicker } from "../lib/picker-feedback";
 import { PickerNote } from "./PickerNote";
 import { sampleDetectionForm } from "../lib/guides/sample-forms";
 import { SampleDatasetButton } from "./SampleDatasetButton";
+import { ServerFoldersNote } from "./ServerFoldersNote";
 import { useState } from "react";
 import {
   fetchTaskSchema,
@@ -42,15 +43,16 @@ import {
 } from "./controls";
 import { AdvancedFields } from "./AdvancedFields";
 import { DetectionDatasetStats } from "./DetectionDatasetStats";
+import { DatasetAudit } from "./DatasetAudit";
 import { PreprocessingPanel } from "./PreprocessingPanel";
 import { StrategyCard, type PanelStrategy } from "./ExperimentHeader";
 import { Rich } from "./Rich";
-import { missingUltralyticsCommand, useUltralyticsStatus } from "../lib/ultralytics-status";
 import { ReplicatesCard } from "./ReplicatesCard";
 import { ReplicatedComparisonCard } from "./ReplicatedComparisonCard";
 import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-form";
 import { SweepCard, type SweepPayload } from "./SweepCard";
 import type { ReplicatesPayload } from "../lib/replicates-form";
+import { ROUTE, useOpenStrategies, useRouteOpen } from "../lib/session";
 
 const COMPARE_METRICS = [
   { value: "map50_95", label: "mAP@50-95" },
@@ -152,9 +154,6 @@ export function DetectionPanel({
     }));
 
   const isUltralytics = formData.model.backend === "ultralytics";
-  // Ultralytics is the optional `detection` extra (ADR-195).
-  const ultralyticsStatus = useUltralyticsStatus();
-  const installCommand = missingUltralyticsCommand(formData.model.backend, ultralyticsStatus);
 
   const onBackendChange = (raw: string) => {
     const backend = raw as DetectionBackend;
@@ -166,6 +165,7 @@ export function DetectionPanel({
     });
   };
 
+  const canPickFolder = useRouteOpen(ROUTE.pickFolder);
   const onPickFolder = async () => {
     setPicking(true);
     try {
@@ -181,6 +181,7 @@ export function DetectionPanel({
     }
   };
 
+  const canPickYaml = useRouteOpen(ROUTE.pickYaml);
   const onPickYaml = async () => {
     setPicking(true);
     try {
@@ -218,12 +219,12 @@ export function DetectionPanel({
 
   const defaults = makeDefaultDetectionForm();
   const datasetPath = formData.data.source === "yaml" ? formData.data.data_yaml : formData.data.base_dir;
-  const strategies: { value: PanelStrategy; label: string }[] = [
+  const strategies = useOpenStrategies<{ value: PanelStrategy; label: string }>("detection", [
     { value: "simple", label: t.paramPanel.blocks.simple },
     { value: "sweep", label: t.taskPanel.sweep },
     { value: "replicates", label: t.taskPanel.replicates },
     { value: "replicatedComparison", label: t.taskPanel.replicatedComparison },
-  ];
+  ]);
   const strategyLabel = strategies.find((s) => s.value === strategy)!.label;
   const suggestion = suggestExperimentName({
     datasetPath, model: formData.model.name,
@@ -304,14 +305,16 @@ export function DetectionPanel({
                       mono
                     />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void onPickFolder()}
-                    disabled={picking}
-                    style={pickButton}
-                  >
-                    {picking ? "…" : t.detectionPanel.dataset.browseFolder}
-                  </button>
+                  {canPickFolder && (
+                    <button
+                      type="button"
+                      onClick={() => void onPickFolder()}
+                      disabled={picking}
+                      style={pickButton}
+                    >
+                      {picking ? "…" : t.detectionPanel.dataset.browseFolder}
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div
@@ -328,17 +331,20 @@ export function DetectionPanel({
                       mono
                     />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void onPickYaml()}
-                    disabled={picking}
-                    style={pickButton}
-                  >
-                    {picking ? "…" : t.detectionPanel.dataset.browseYaml}
-                  </button>
+                  {canPickYaml && (
+                    <button
+                      type="button"
+                      onClick={() => void onPickYaml()}
+                      disabled={picking}
+                      style={pickButton}
+                    >
+                      {picking ? "…" : t.detectionPanel.dataset.browseYaml}
+                    </button>
+                  )}
                 </div>
               )}
               <PickerNote text={pickNote} />
+              <ServerFoldersNote />
               <SampleDatasetButton
                 task="detection"
                 onApply={(path, setup) => setFormData((p) => sampleDetectionForm(p, path, setup))}
@@ -360,6 +366,13 @@ export function DetectionPanel({
                 <DetectionDatasetStats
                   baseDir={formData.data.base_dir}
                   onApplyClasses={(n) => setModel({ num_classes: n })}
+                />
+                <DatasetAudit
+                  baseDir={formData.data.base_dir}
+                  splits={{ train: "train", val: "val", test: "test" }}
+                  layout="yolo"
+                  optionalSplits={["test"]}
+                  note={t.evidence.notes.yolo}
                 />
               </div>
             ) : (
@@ -466,21 +479,6 @@ export function DetectionPanel({
                 help={paramHelp(t, "freeze")}
               />)}
             </div>
-            {installCommand && (
-              <p
-                role="status"
-                data-testid="ultralytics-missing"
-                style={{
-                  marginTop: 14,
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 11,
-                  lineHeight: 1.6,
-                  color: "var(--vf-text-muted)",
-                }}
-              >
-                <Rich text={t.detectionPanel.model.ultralyticsMissing(installCommand)} />
-              </p>
-            )}
           </div>
 
         </>

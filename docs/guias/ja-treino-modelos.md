@@ -48,7 +48,7 @@ réplicas** com réplicas, e assim por diante) fica na barra de baixo, junto de
 | Grad-CAM | detalhe da execução, **Grad-CAM** | [Depois do treino](../gui/depois-do-treino.md) |
 | MLflow, W&B, Comet | **Perfis**: liga o envio por perfil | [MLflow](../gui/mlflow.md), [W&B](../gui/wandb.md), [Comet](../gui/comet.md) |
 | publicar (Hub, Zenodo, GitHub, DVC) | detalhe da execução, grupo **Publicar** | [Hub](../gui/hugging-face-hub.md), [Zenodo](../gui/zenodo.md), [GitHub](../gui/github.md), [DVC](../gui/dvc.md) |
-| treinar no Colab | botão do Colab, só para classificação | [Colab](../gui/colab.md) |
+| treinar no Colab | seletor de dispositivo (ao lado do Treinar), só para classificação | [Colab](../gui/colab.md) |
 | linha de comando | `visionforge run` com o YAML exportado na etapa Revisão | [Linha de comando](#linha-de-comando), abaixo |
 
 As estratégias disponíveis mudam com a tarefa; a página
@@ -114,9 +114,9 @@ download: [`../DATASETS.md`](../DATASETS.md).
 | --- | --- |
 | `visionforge gui` | abre a interface (`--host`, `--port`, `--no-browser`) |
 | `visionforge run config.yaml` | roda um YAML exportado; com `strategy:` + `config:`, roda réplicas, comparação, sweep ou K-fold |
-| `visionforge doctor` | confere o ambiente e indica o torch certo; `--fix` instala depois de confirmar |
+| `visionforge doctor` | confere o ambiente e indica o torch certo; `--fix` instala depois de confirmar; `--json` imprime o mesmo diagnóstico em JSON (não combina com `--fix`) |
 | `visionforge selftest` | treina cada tarefa com dados gerados; `--quick` só o treino simples |
-| `visionforge audit-data PASTA` | procura duplicatas exatas entre splits, imagens ilegíveis e, com `--groups`, grupos que cruzam splits |
+| `visionforge audit-data PASTA` | procura duplicatas exatas entre splits, imagens ilegíveis, com `--groups` grupos que cruzam splits e, com `--near-duplicates`, quase-duplicatas visuais entre splits |
 | `visionforge bundle RUN destino.zip` | exporta a execução com manifesto de hashes |
 | `visionforge verify-bundle destino.zip` | confere o manifesto sem extrair o ZIP |
 | `visionforge reproduce destino.zip` | retreina uma semente do bundle e confere se ela cai no intervalo de predição de 95% das réplicas (`--data`, `--seed`, `--output`) |

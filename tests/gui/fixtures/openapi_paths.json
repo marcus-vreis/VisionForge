@@ -59,6 +59,28 @@
       "custom-tasks"
     ]
   },
+  "DELETE /api/datasets/own/{name}": {
+    "operationId": "delete_own_dataset_api_datasets_own__name__delete",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:name:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "OwnDatasetDeleted"
+      },
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "500": {}
+    },
+    "tags": [
+      "datasets"
+    ]
+  },
   "DELETE /api/github/token": {
     "operationId": "forget_api_github_token_delete",
     "parameters": [
@@ -438,6 +460,24 @@
       "datasets"
     ]
   },
+  "GET /api/datasets/own": {
+    "operationId": "list_own_datasets_api_datasets_own_get",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "OwnDatasetsResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "datasets"
+    ]
+  },
   "GET /api/detection/schema": {
     "operationId": "get_detection_schema_api_detection_schema_get",
     "parameters": [
@@ -798,6 +838,24 @@
       "integrations"
     ]
   },
+  "GET /api/model/custom": {
+    "operationId": "custom_models_api_model_custom_get",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "CustomModelsResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "experiments"
+    ]
+  },
   "GET /api/profiles": {
     "operationId": "get_profiles_api_profiles_get",
     "parameters": [
@@ -940,6 +998,27 @@
       "runs"
     ]
   },
+  "GET /api/runs/{run_id}/label_suspects": {
+    "operationId": "label_suspects_saved_api_runs__run_id__label_suspects_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "runs"
+    ]
+  },
   "GET /api/schema": {
     "operationId": "get_schema_api_schema_get",
     "parameters": [
@@ -974,6 +1053,19 @@
     },
     "tags": [
       "segmentation"
+    ]
+  },
+  "GET /api/session": {
+    "operationId": "session_api_session_get",
+    "parameters": [],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      }
+    },
+    "tags": [
+      "system"
     ]
   },
   "GET /api/system/info": {
@@ -2123,6 +2215,90 @@
       "experiments"
     ]
   },
+  "POST /api/explorer/anomaly": {
+    "operationId": "explorer_anomaly_start_api_explorer_anomaly_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "AnomalyAnalysisRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/anomaly/saved": {
+    "operationId": "explorer_anomaly_saved_api_explorer_anomaly_saved_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "AnomalyAnalysisRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/classes": {
+    "operationId": "explorer_classes_start_api_explorer_classes_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "ClassSimilarityRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/classes/saved": {
+    "operationId": "explorer_classes_saved_api_explorer_classes_saved_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "ClassSimilarityRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
   "POST /api/explorer/coco/export/preview": {
     "operationId": "coco_export_preview_api_explorer_coco_export_preview_post",
     "parameters": [
@@ -2416,6 +2592,47 @@
       "explorer"
     ]
   },
+  "POST /api/explorer/masks": {
+    "operationId": "explorer_masks_start_api_explorer_masks_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "MaskAnalysisRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/masks/saved": {
+    "operationId": "explorer_masks_saved_api_explorer_masks_saved_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "MaskAnalysisRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
   "POST /api/explorer/merge/preview": {
     "operationId": "merge_preview_api_explorer_merge_preview_post",
     "parameters": [
@@ -2619,6 +2836,26 @@
       "explorer"
     ]
   },
+  "POST /api/explorer/scan/saved": {
+    "operationId": "explorer_scan_saved_api_explorer_scan_saved_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "ExplorerRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
   "POST /api/explorer/scan/{job_id}/cancel": {
     "operationId": "explorer_scan_cancel_api_explorer_scan__job_id__cancel_post",
     "parameters": [
@@ -2646,6 +2883,47 @@
     ],
     "requestBody": {
       "application/json": "ExplorerRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/targets": {
+    "operationId": "explorer_targets_start_api_explorer_targets_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "TargetAnalysisRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "explorer"
+    ]
+  },
+  "POST /api/explorer/targets/saved": {
+    "operationId": "explorer_targets_saved_api_explorer_targets_saved_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "TargetAnalysisRequest"
     },
     "responses": {
       "200": {
@@ -2949,6 +3227,7 @@
       },
       "400": {},
       "404": {},
+      "409": {},
       "422": {
         "application/json": "HTTPValidationError"
       },
@@ -2974,6 +3253,7 @@
       },
       "400": {},
       "404": {},
+      "409": {},
       "422": {
         "application/json": "HTTPValidationError"
       },
@@ -2999,6 +3279,33 @@
       },
       "400": {},
       "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "500": {}
+    },
+    "tags": [
+      "runs"
+    ]
+  },
+  "POST /api/runs/{run_id}/label_suspects": {
+    "operationId": "label_suspects_run_api_runs__run_id__label_suspects_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:run_id:required"
+    ],
+    "requestBody": {
+      "application/json": "LabelSuspectsRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
       "422": {
         "application/json": "HTTPValidationError"
       },
@@ -3096,6 +3403,7 @@
       },
       "400": {},
       "404": {},
+      "409": {},
       "422": {
         "application/json": "HTTPValidationError"
       },

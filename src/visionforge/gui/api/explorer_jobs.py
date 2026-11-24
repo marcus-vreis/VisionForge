@@ -4,6 +4,10 @@ A scan opens and hashes every image, which on a big dataset takes minutes, so it
 runs in a worker thread with a progress counter and a cancellation token instead
 of inside the request. One scan runs at a time: they are disk-bound and a second
 one would only slow the first.
+
+The same registry runs the per-task analyses (the masks of a segmentation
+dataset, ADR-234): any work that takes a token and a progress callback and
+returns a report with a ``cancelled`` flag.
 """
 
 from __future__ import annotations
@@ -11,6 +15,7 @@ from __future__ import annotations
 import threading
 import uuid
 from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -18,8 +23,13 @@ from loguru import logger
 
 from visionforge.core.cancellation import CancellationToken
 from visionforge.core.dataset_explorer import DatasetIndex, scan_integrity
+from visionforge.gui.api.derived_jobs import job_owner
 
 _KEEP = 8
+
+
+Progress = Callable[[int, int], None]
+Work = Callable[[CancellationToken, Progress], dict[str, Any]]
 
 
 class ScanBusyError(RuntimeError):
@@ -29,6 +39,7 @@ class ScanBusyError(RuntimeError):
 @dataclass
 class ScanJob:
     job_id: str
+    owner: str = ""
     state: str = "running"  # running | done | cancelled | failed
     done: int = 0
     total: int = 0
@@ -54,44 +65,90 @@ class ScanJobs:
         self._jobs: OrderedDict[str, ScanJob] = OrderedDict()
         self._lock = threading.Lock()
 
-    def start(self, index: DatasetIndex, max_images: int) -> ScanJob:
-        """Launch a scan.
+    def start(
+        self,
+        index: DatasetIndex,
+        max_images: int,
+        *,
+        near_duplicates: bool = False,
+        on_done: Callable[[dict[str, Any]], None] | None = None,
+    ) -> ScanJob:
+        """Launch a scan; ``on_done`` gets the report of a scan that finished.
 
         Raises:
             ScanBusyError: if another scan is still running.
         """
+
+        def work(token: CancellationToken, progress: Progress) -> dict[str, Any]:
+            return scan_integrity(
+                index,
+                max_images=max_images,
+                token=token,
+                on_progress=progress,
+                near_duplicates=near_duplicates,
+            )
+
+        return self.start_work(work, on_done=on_done)
+
+    def start_work(
+        self,
+        work: Work,
+        *,
+        on_done: Callable[[dict[str, Any]], None] | None = None,
+    ) -> ScanJob:
+        """Launch any analysis in the background, one per owner at a time.
+
+        Raises:
+            ScanBusyError: if another job of this owner is still running.
+        """
+        owner = job_owner()
         with self._lock:
-            if any(j.state == "running" for j in self._jobs.values()):
+            mine = [j for j in self._jobs.values() if j.owner == owner]
+            if any(j.state == "running" for j in mine):
                 raise ScanBusyError("a scan is already running")
-            job = ScanJob(job_id=uuid.uuid4().hex)
+            job = ScanJob(job_id=uuid.uuid4().hex, owner=owner)
             self._jobs[job.job_id] = job
-            while len(self._jobs) > _KEEP:
-                self._jobs.popitem(last=False)
+            for old in mine[: max(0, len(mine) + 1 - _KEEP)]:
+                del self._jobs[old.job_id]
         threading.Thread(
-            target=self._run, args=(job, index, max_images), daemon=True
+            target=self._run,
+            args=(job, work, on_done),
+            daemon=True,
         ).start()
         return job
 
-    def _run(self, job: ScanJob, index: DatasetIndex, max_images: int) -> None:
+    def _run(
+        self,
+        job: ScanJob,
+        work: Work,
+        on_done: Callable[[dict[str, Any]], None] | None,
+    ) -> None:
         def progress(done: int, total: int) -> None:
             job.done, job.total = done, total
 
         try:
-            result = scan_integrity(
-                index, max_images=max_images, token=job.token, on_progress=progress
-            )
+            result = work(job.token, progress)
         # Reported to the client, not raised.
         except Exception as exc:  # noqa: BLE001
-            logger.error("Explorer scan failed: {}", type(exc).__name__)
+            logger.error("Explorer job failed: {}", type(exc).__name__)
             job.error = f"{type(exc).__name__}: {exc}"
             job.state = "failed"
             return
+        if not result["cancelled"] and on_done is not None:
+            # Before the state turns done, so a page that sees "done" and asks
+            # for the kept scan gets this one. A failed save costs the cache only.
+            try:
+                on_done(result)
+            except OSError as exc:
+                logger.warning("Explorer job not kept: {}", exc)
         job.result = result
         job.state = "cancelled" if result["cancelled"] else "done"
 
     def get(self, job_id: str) -> ScanJob | None:
+        """The scan, for whoever started it; ``None`` for anybody else (ADR-220)."""
         with self._lock:
-            return self._jobs.get(job_id)
+            job = self._jobs.get(job_id)
+        return job if job is not None and job.owner == job_owner() else None
 
     def cancel(self, job_id: str) -> bool:
         job = self.get(job_id)

@@ -6,17 +6,20 @@ body:
     attributes:
       value: |
         Thanks for testing VisionForge. The two commands below answer most of
-        the questions a maintainer would otherwise have to ask you.
+        the questions a maintainer would otherwise have to ask you. The doctor
+        output is JSON and prints no secrets or tokens; it does show the
+        working directory and the custom model and task folders it resolved,
+        so edit those paths if they name you.
 
   - type: textarea
     id: environment
     attributes:
       label: Environment
-      description: Paste the output of both commands.
+      description: Paste the output of both commands (the second one is JSON).
       render: shell
       placeholder: |
         $ visionforge --version
-        $ visionforge doctor
+        $ visionforge doctor --json
     validations:
       required: true
 

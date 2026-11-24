@@ -174,6 +174,16 @@ class TestPortuguese:
         assert "not run" not in tex
         _assert_braces_render(tex)
 
+    def test_cv_scored_at_the_last_epoch(self) -> None:
+        report = {**_cv(), "select_on": "last"}
+        with using_lang("pt"):
+            tex = cv_to_latex(report)
+
+        assert "avaliado na última época treinada" in tex
+        assert "estimativa otimista" not in tex
+        assert "last trained epoch" not in tex
+        _assert_braces_render(tex)
+
     def test_comparison(self) -> None:
         with using_lang("pt"):
             tex = comparison_to_latex(_comparisons())

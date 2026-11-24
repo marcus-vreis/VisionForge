@@ -4,6 +4,7 @@ import { runPicker } from "../lib/picker-feedback";
 import { PickerNote } from "./PickerNote";
 import { sampleRegressionForm } from "../lib/guides/sample-forms";
 import { SampleDatasetButton } from "./SampleDatasetButton";
+import { ServerFoldersNote } from "./ServerFoldersNote";
 import { ModelAdvice } from "./ModelAdvice";
 import { AdvancedFields } from "./AdvancedFields";
 import { useState } from "react";
@@ -29,12 +30,15 @@ import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-f
 import { ReviewStep } from "./ReviewStep";
 import { StepShell } from "./StepShell";
 import { RegressionDatasetStats } from "./TaskDatasetStats";
+import { DatasetAudit } from "./DatasetAudit";
+import { TargetAnalysis } from "./TargetAnalysis";
 import { SweepCard, type SweepPayload } from "./SweepCard";
 import { TransformsSection } from "./TransformsSection";
 import { datasetLabel, suggestExperimentName } from "../lib/experiment-name";
 import { useAutoExperimentName } from "../lib/use-auto-experiment-name";
 import { countChanged, errorsUnder } from "../lib/steps";
 import type { ReplicatesPayload } from "../lib/replicates-form";
+import { ROUTE, useOpenStrategies, useRouteOpen } from "../lib/session";
 
 const COMPARE_METRICS = [
   { value: "r2", label: "R²" },
@@ -141,6 +145,7 @@ export function RegressionPanel({
   const setPreprocessing = (steps: RegressionForm["preprocessing"]) =>
     setFormData((p) => ({ ...p, preprocessing: steps }));
 
+  const canPickFolder = useRouteOpen(ROUTE.pickFolder);
   const onPickFolder = async () => {
     setPicking(true);
     try {
@@ -159,13 +164,13 @@ export function RegressionPanel({
   const numTargets = Math.max(parseTargetColumns(formData.data.target_columns).length, 1);
 
   const defaults = makeDefaultRegressionForm();
-  const strategies: { value: PanelStrategy; label: string }[] = [
+  const strategies = useOpenStrategies<{ value: PanelStrategy; label: string }>("regression", [
     { value: "simple", label: t.paramPanel.blocks.simple },
     { value: "cv", label: t.paramPanel.blocks.crossValidation },
     { value: "sweep", label: t.taskPanel.sweep },
     { value: "replicates", label: t.taskPanel.replicates },
     { value: "replicatedComparison", label: t.taskPanel.replicatedComparison },
-  ];
+  ]);
   const strategyLabel = strategies.find((s) => s.value === strategy)?.label ?? "";
 
   const suggestion = suggestExperimentName({
@@ -218,26 +223,29 @@ export function RegressionPanel({
                 mono
               />
             </div>
-            <button
-              type="button"
-              onClick={() => void onPickFolder()}
-              disabled={picking}
-              style={{
-                padding: "12px 16px",
-                background: "var(--accent-soft)",
-                border: `1px solid ${accent}`,
-                borderRadius: 10,
-                color: "var(--vf-text)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 12,
-                cursor: picking ? "default" : "pointer",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {picking ? "…" : t.taskPanel.dataset.browse}
-            </button>
+            {canPickFolder && (
+              <button
+                type="button"
+                onClick={() => void onPickFolder()}
+                disabled={picking}
+                style={{
+                  padding: "12px 16px",
+                  background: "var(--accent-soft)",
+                  border: `1px solid ${accent}`,
+                  borderRadius: 10,
+                  color: "var(--vf-text)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 12,
+                  cursor: picking ? "default" : "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {picking ? "…" : t.taskPanel.dataset.browse}
+              </button>
+            )}
           </div>
           <PickerNote text={pickNote} />
+          <ServerFoldersNote />
           <SampleDatasetButton
             task="regression"
             onApply={(path, setup) => setFormData((p) => sampleRegressionForm(p, path, setup))}
@@ -293,6 +301,26 @@ export function RegressionPanel({
             testCsv={formData.data.test_csv}
             imageColumn={formData.data.image_column}
             targetColumns={formData.data.target_columns}
+          />
+          <DatasetAudit
+            baseDir={formData.data.base_dir}
+            splits={{ train: formData.data.train_csv, val: formData.data.val_csv, test: formData.data.test_csv }}
+            layout="csv"
+            optionalSplits={["test"]}
+            imagesDir={formData.data.images_dir}
+            imageColumn={formData.data.image_column}
+            note={t.evidence.notes.csv}
+          />
+          <TargetAnalysis
+            request={{
+              base_dir: formData.data.base_dir,
+              images_dir: formData.data.images_dir,
+              train_csv: formData.data.train_csv,
+              val_csv: formData.data.val_csv,
+              test_csv: formData.data.test_csv,
+              image_column: formData.data.image_column,
+              target_columns: parseTargetColumns(formData.data.target_columns),
+            }}
           />
         </div>
       </div>

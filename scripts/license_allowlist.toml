@@ -10,8 +10,9 @@
 # What the gate walks: [project].dependencies plus these extras and packages.
 # torch and torchvision come from a hardware extra (ADR-005), so they are named
 # directly. Exporter extras (mlflow, wandb, comet, dvc, hub) stay out: they are
-# separate tools the user installs on purpose.
-extras = ["detection"]
+# separate tools the user installs on purpose. ultralytics is a base dependency
+# again (ADR-243), so no extra is walked.
+extras = []
 extra_packages = ["torch", "torchvision"]
 
 # families: what the package's metadata declares (AGPL, LGPL, GPL, MPL, ...).
@@ -20,7 +21,7 @@ extra_packages = ["torch", "torchvision"]
 [packages.ultralytics]
 families = ["AGPL"]
 license = "AGPL-3.0"
-why = "YOLO / RT-DETR detection backend (`detection` extra)"
+why = "YOLO / RT-DETR detection backend"
 
 [packages.ultralytics-thop]
 families = ["AGPL"]

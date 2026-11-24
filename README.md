@@ -51,6 +51,12 @@ visionforge gui
 It opens on <http://127.0.0.1:8000>. The first screen asks your name and offers
 a short guided tour of the interface.
 
+To check the install without starting the server, run `visionforge gui --check`:
+it prints one `[OK]`/`[FAIL]` line each for the server import, the interface
+build, `/api/health` and the port, and exits 0 only if all pass. Add `--smoke`
+for the full test: it starts the real server on a free loopback port (never
+yours, no browser), asks `/api/health` over HTTP and stops it.
+
 <details>
 <summary>Why PyTorch is installed separately</summary>
 
@@ -85,13 +91,13 @@ project itself are still `visionforge`.
 <details>
 <summary>What comes with it</summary>
 
-Everything the five tasks need is in that one install — the torchvision
-detection backend, the extra `timm` backbones, Optuna-guided sweeps,
+Everything the five tasks need is in that one install — the YOLO and RT-DETR
+detection backends, the extra `timm` backbones, Optuna-guided sweeps,
 TensorBoard scalars, and the Roboflow / Kaggle / Hugging Face dataset
 downloaders. They used to be optional extras; the split cost more than it
 saved, and they add about 83 MB against the gigabytes PyTorch already pulls.
-The one exception is the YOLO / RT-DETR backend, Ultralytics, licensed
-AGPL-3.0: `pip install "visionforge-studio[detection]"` adds it.
+The YOLO / RT-DETR backend, Ultralytics, is licensed AGPL-3.0 (see
+*Third-party licenses* below).
 
 Choose the PyTorch build for your hardware. The optional tracking and
 export integrations below are on `development` (**next release**): for local
@@ -162,8 +168,8 @@ untouched.
 
 While a job runs, the **Results** tab plots loss and task metric curves epoch by
 epoch, shows the learning rate and the best epoch so far, renders the validation
-confusion matrix and optional live Grad-CAM (`training.live_gradcam_every`) for
-classification, and lists completed runs during sweeps, comparisons,
+confusion matrix and optional live Grad-CAM (`training.live_gradcam_every`, with
+`training.live_gradcam_per_class` images of each class) for classification, and lists completed runs during sweeps, comparisons,
 cross-validation and replicates. Beside it, the **Code** tab (**next release**,
 on `development`) reads the real training, validation and evaluation functions
 from the installed package via `inspect` — for classification, regression,
@@ -221,9 +227,11 @@ without touching the package.
 - **Replicates** — the same config over N seeds, reported as
   `mean ± 95% CI` instead of one lucky number.
 - **K-fold cross-validation** — per-fold metrics plus mean ± std, with
-  fold-safe transforms. Each fold keeps the epoch that did best on its own fold,
-  and that same fold scores it: the mean is optimistic (there is no nested
-  split), and the LaTeX caption says so.
+  fold-safe transforms. By default each fold keeps the epoch that did best on
+  its own fold, and that same fold scores it: the mean is optimistic (there is
+  no nested split). `cross_validation.select_on: last` scores each fold at its
+  last epoch instead, with no selection on that fold. The LaTeX caption names
+  the rule used.
 - **Sweeps** — grid, random or Optuna over any config field.
 - **Paired significance tests** — compare configurations over the *same* seeds,
   with a paired t or Wilcoxon test and the interval of the difference that
@@ -298,6 +306,7 @@ downloads and the update check included.
 
 ```bash
 visionforge doctor               # environment: driver, torch, workspace
+visionforge doctor --json        # same facts as one JSON object (for bug reports)
 visionforge selftest --quick     # trains every task on synthetic data, ~15s
 ```
 
@@ -368,8 +377,7 @@ VisionForge is MIT, but some of what it installs is not.
 [`THIRD_PARTY_NOTICES.md`](https://github.com/marcus-vreis/VisionForge/blob/main/THIRD_PARTY_NOTICES.md) lists them; the main one:
 
 - **Ultralytics (AGPL-3.0)** is the YOLO / RT-DETR detection backend, and it
-  is installed only with the `detection` extra
-  (`pip install "visionforge-studio[detection]"`). If you distribute a program
+  is installed with the package. If you distribute a program
   built on it, or let users reach a modified version over a network, the
   AGPL-3.0 asks you to publish that program's source under the same license;
   Ultralytics offers an Enterprise License otherwise. The `torchvision`
@@ -444,6 +452,12 @@ visionforge gui
 Ela abre em <http://127.0.0.1:8000>. A primeira tela pergunta o seu nome e
 oferece um guia rápido da interface.
 
+Para conferir a instalação sem subir o servidor, rode `visionforge gui --check`:
+ele imprime uma linha `[OK]`/`[FAIL]` para o import do servidor, o build da
+interface, o `/api/health` e a porta, e sai com 0 só se tudo passar. Com `--smoke` ele faz
+o teste completo: sobe o servidor de verdade numa porta livre do loopback (nunca
+a sua, sem navegador), consulta o `/api/health` por HTTP e o encerra.
+
 <details>
 <summary>Por que o PyTorch é instalado à parte</summary>
 
@@ -478,13 +492,13 @@ o projeto continuam sendo `visionforge`.
 <details>
 <summary>O que já vem junto</summary>
 
-Tudo que as cinco tarefas precisam está naquela instalação: o backend de
-detecção torchvision, os backbones extras do `timm`, as buscas guiadas por
+Tudo que as cinco tarefas precisam está naquela instalação: os backends de
+detecção YOLO e RT-DETR, os backbones extras do `timm`, as buscas guiadas por
 Optuna, os escalares do TensorBoard e os downloaders de dataset do Roboflow,
 Kaggle e Hugging Face. Eram extras opcionais; a separação custava mais do que
 economizava, e eles somam uns 83 MB contra os gigabytes que o PyTorch já baixa.
-A exceção é o backend YOLO / RT-DETR, o Ultralytics, com licença AGPL-3.0:
-`pip install "visionforge-studio[detection]"` o adiciona.
+O backend YOLO / RT-DETR, o Ultralytics, tem licença AGPL-3.0 (veja
+*Licenças de terceiros* abaixo).
 
 Escolha a versão do PyTorch compatível com o seu hardware. As integrações
 opcionais de acompanhamento e exportação abaixo estão na branch `development`
@@ -559,7 +573,8 @@ entre YOLO e COCO — sempre gravando uma pasta irmã nova com
 Enquanto o treino roda, a aba **Resultados** desenha as curvas de loss e da
 métrica da tarefa época a época, mostra o learning rate e a melhor época até ali,
 exibe a matriz de confusão da validação e o Grad-CAM ao vivo opcional
-(`training.live_gradcam_every`) na classificação, e lista as execuções já
+(`training.live_gradcam_every`, com `training.live_gradcam_per_class` imagens de
+cada classe) na classificação, e lista as execuções já
 concluídas em buscas, comparações, validação cruzada e réplicas. Ao lado dela, a
 aba **Código** (**próxima release**, em `development`) lê do pacote instalado,
 com `inspect`, as funções reais de treino, validação e avaliação — em
@@ -615,9 +630,11 @@ sem tocar no pacote.
 - **Réplicas** — o mesmo config em N sementes, reportado como
   `média ± IC 95%` em vez de um número de sorte.
 - **Validação cruzada K-fold** — métrica por fold mais média ± desvio, com
-  transformações que não vazam entre folds. Cada fold guarda a época que foi
-  melhor no próprio fold, e esse mesmo fold a avalia: a média é otimista (não há
-  divisão aninhada), e a legenda do LaTeX diz isso.
+  transformações que não vazam entre folds. Por padrão cada fold guarda a época
+  que foi melhor no próprio fold, e esse mesmo fold a avalia: a média é otimista
+  (não há divisão aninhada). `cross_validation.select_on: last` avalia cada fold
+  na última época, sem escolha nesse fold. A legenda do LaTeX diz qual regra
+  valeu.
 - **Buscas** — grid, aleatória ou Optuna sobre qualquer campo do config.
 - **Testes de significância pareados** — compare configurações nas *mesmas*
   sementes, com teste t pareado ou Wilcoxon e o IC da diferença que inverte
@@ -766,9 +783,8 @@ DOI lá.
 O VisionForge é MIT, mas parte do que ele instala não é.
 [`THIRD_PARTY_NOTICES.md`](https://github.com/marcus-vreis/VisionForge/blob/main/THIRD_PARTY_NOTICES.md) lista esses pacotes; o principal:
 
-- **Ultralytics (AGPL-3.0)** é o backend de detecção YOLO / RT-DETR, e só é
-  instalado com o extra `detection`
-  (`pip install "visionforge-studio[detection]"`). Quem distribui um programa
+- **Ultralytics (AGPL-3.0)** é o backend de detecção YOLO / RT-DETR, e é
+  instalado com o pacote. Quem distribui um programa
   feito sobre ele, ou deixa usuários acessarem uma versão modificada pela rede,
   precisa publicar o código desse programa sob a mesma licença; fora disso, a
   Ultralytics oferece uma Enterprise License. O backend de detecção

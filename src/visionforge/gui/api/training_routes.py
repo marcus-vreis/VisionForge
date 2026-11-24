@@ -32,6 +32,7 @@ from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.core.detection_images import has_detection_image
 from visionforge.core.run_trackers import TrackerFactory
 from visionforge.gui.api import execution, submission
+from visionforge.gui.api.config_scope import confine_config
 from visionforge.gui.api.datasets_routes import SCAN_BASE_MISSING_KEY, _image_stems
 from visionforge.gui.api.execution import RUN_NO_MESSAGE_KEY, _job_state
 from visionforge.gui.api.http_responses import (
@@ -103,6 +104,7 @@ def build_experiment_run_router(
     ) -> RunResponse:
         """Start a training experiment, or queue it if one is already running."""
         config = profile.scope_model(config)
+        confine_config(config, profile)
         trackers = trackers_of(config, profile)
         await asyncio.to_thread(_check_classification_classes, config)
         run_id = _new_run_id(config.name)
@@ -167,6 +169,7 @@ def build_task_run_router(
         DetectionBlock (ADR-033) rather than the ExperimentConfig path.
         """
         config = profile.scope_model(config)
+        confine_config(config, profile)
         await asyncio.to_thread(_check_detection_dataset, config)
         trackers = trackers_for(profile)
         return _submit_task_run(
@@ -189,6 +192,7 @@ def build_task_run_router(
         RegressionBlock (ADR-036) rather than the ExperimentConfig path.
         """
         config = profile.scope_model(config)
+        confine_config(config, profile)
         await asyncio.to_thread(_check_regression_dataset, config)
         trackers = trackers_for(profile)
         return _submit_task_run(
@@ -211,6 +215,7 @@ def build_task_run_router(
         SegmentationBlock (ADR-037) rather than the ExperimentConfig path.
         """
         config = profile.scope_model(config)
+        confine_config(config, profile)
         await asyncio.to_thread(_check_segmentation_dataset, config)
         trackers = trackers_for(profile)
         return _submit_task_run(
@@ -239,6 +244,7 @@ def build_task_run_router(
         AnomalyBlock (ADR-038) rather than the ExperimentConfig path.
         """
         config = profile.scope_model(config)
+        confine_config(config, profile)
         return _submit_task_run(
             _ANOMALY,
             config,
@@ -265,8 +271,8 @@ def _refuse(message: str) -> NoReturn:
 
 
 def _check_detection_dataset(config: DetectionConfig) -> None:
-    """Refuse an Ultralytics run without its extra (ADR-195), or a YOLO
-    ``base_dir`` with no split or no train images."""
+    """Refuse an Ultralytics run when ultralytics is missing (a damaged install,
+    ADR-243), or a YOLO ``base_dir`` with no split or no train images."""
     if config.model.backend == "ultralytics" and not ultralytics_installed():
         _refuse(ultralytics_missing_message())
     data = config.data

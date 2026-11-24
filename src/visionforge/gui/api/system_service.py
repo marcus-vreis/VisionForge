@@ -10,6 +10,7 @@ from pathlib import Path
 from visionforge import __version__
 from visionforge.gui.api.schemas import (
     CollapseEvidenceResponse,
+    CustomModelsResponse,
     DeviceInfoResponse,
     GPUInfo,
     LearningRatePlanRequest,
@@ -20,7 +21,6 @@ from visionforge.gui.api.schemas import (
     TrialLearningRateResponse,
 )
 from visionforge.utils.cuda import CUDAInfo, mps_available
-from visionforge.utils.doctor import detection_install_command, ultralytics_installed
 from visionforge.utils.messages import tr
 
 
@@ -31,8 +31,6 @@ def system_info(suggested_workers: int) -> SystemInfo:
         suggested_workers=suggested_workers,
         platform=platform.system(),
         version=__version__,
-        ultralytics_installed=ultralytics_installed(),
-        detection_install_command=detection_install_command(),
     )
 
 
@@ -146,3 +144,15 @@ def learning_rate_plan(req: LearningRatePlanRequest) -> LearningRatePlanResponse
             for trial in trials
         ]
     )
+
+
+def custom_models() -> CustomModelsResponse:
+    """The models ``user_models/`` registers, scanned on each call (ADR-048).
+
+    The scan imports the folder's files, so a file dropped in while the GUI is
+    open is listed without a restart. The registry imports torch, so it is
+    loaded here and not with this module (GUI-11).
+    """
+    from visionforge.models.registry import load_user_models
+
+    return CustomModelsResponse(models=load_user_models())

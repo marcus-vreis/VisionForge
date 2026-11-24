@@ -14,7 +14,14 @@ from typing import Annotated, Any
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
-from visionforge.gui.api.execution import _LANES, _run_state, _sse_generator
+from visionforge.gui.api.dataset_scope import current_scope
+from visionforge.gui.api.execution import (
+    _LANES,
+    _run_state,
+    _sse_generator,
+    latest_run_of,
+    profile_of_run,
+)
 from visionforge.gui.api.http_responses import (
     CONFLICT_TEXT,
     NOT_FOUND_TEXT,
@@ -34,6 +41,49 @@ from visionforge.utils.messages import tr
 
 router = APIRouter()
 
+# A run id nobody has: what a person who may not see a run is answered with,
+# so "not yours" and "does not exist" look the same.
+_NO_RUN = "\x00"
+
+
+def _viewer() -> str | None:
+    """The profile of the signed-in person in server mode; None on a local install."""
+    scope = current_scope()
+    return scope.owner if scope is not None and scope.owner else None
+
+
+def _visible_run(run_id: str | None) -> str | None:
+    """``run_id`` as the routes may use it for who asks (ADR-215).
+
+    On a local install it is returned as given. In server mode a run of another
+    person becomes an id nobody has, and no id becomes the person's own latest
+    run rather than the server's.
+    """
+    viewer = _viewer()
+    if viewer is None:
+        return run_id
+    if run_id is None:
+        return latest_run_of(viewer) or _NO_RUN
+    return run_id if profile_of_run(run_id) == viewer else _NO_RUN
+
+
+def _lane_for(viewer: str | None, snap: dict[str, Any]) -> QueueLane:
+    """One lane as ``viewer`` may see it: their own jobs, and a count of the rest."""
+    jobs = [job for job in (snap["active"], *snap["pending"]) if job]
+    if viewer is None:
+        mine, ahead = jobs, 0
+    else:
+        mine = [job for job in jobs if job["profile"] == viewer]
+        first = jobs.index(mine[0]) if mine else len(jobs)
+        ahead = sum(1 for job in jobs[:first] if job["profile"] != viewer)
+    active = snap["active"] if snap["active"] in mine else None
+    return QueueLane(
+        lane=snap["lane"],
+        active=QueuedJobInfo(**active) if active else None,
+        pending=[QueuedJobInfo(**job) for job in mine if job is not active],
+        others_ahead=ahead,
+    )
+
 
 @router.get("/experiment/events", tags=[TAG_EXPERIMENTS])
 async def experiment_events(
@@ -48,7 +98,7 @@ async def experiment_events(
     closes at once rather than serving another job's events as its own.
     """
     return StreamingResponse(
-        _sse_generator(run_id, after),
+        _sse_generator(_visible_run(run_id), after),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -64,6 +114,7 @@ async def get_status(run_id: str | None = None) -> RunStatus:
     ``run_id`` names the run; without it, the job started last (ADR-163, phase 4).
     """
     queued = _LANES.pending_count()
+    run_id = _visible_run(run_id)
     run = _run_state(run_id)
     if run is None and run_id is not None:
         run = _LANES.record(run_id)
@@ -82,18 +133,20 @@ async def get_status(run_id: str | None = None) -> RunStatus:
 async def get_queue() -> QueueSnapshot:
     """Every queue: its running job and what waits behind it, in submission order.
 
+    In server mode a person sees their own jobs, and of the others only
+    ``others_ahead``: how many run or wait before theirs (ADR-215).
+
     ``active`` and ``pending`` stay the local queue's, as before ADR-163 phase 4;
     ``lanes`` lists the local queue first and then one per Google account.
     """
-    lanes = [
-        QueueLane(
-            lane=snap["lane"],
-            active=QueuedJobInfo(**snap["active"]) if snap["active"] else None,
-            pending=[QueuedJobInfo(**job) for job in snap["pending"]],
-        )
-        for snap in _LANES.snapshots()
-    ]
-    return QueueSnapshot(active=lanes[0].active, pending=lanes[0].pending, lanes=lanes)
+    viewer = _viewer()
+    lanes = [_lane_for(viewer, snap) for snap in _LANES.snapshots()]
+    return QueueSnapshot(
+        active=lanes[0].active,
+        pending=lanes[0].pending,
+        lanes=lanes,
+        others_ahead=lanes[0].others_ahead,
+    )
 
 
 @router.delete(
@@ -118,7 +171,7 @@ async def cancel_queued_run(run_id: str) -> dict[str, str]:
             (``stop_at`` is null); nothing is asked of it.
     """
     try:
-        found = _LANES.cancel(run_id)
+        found = _LANES.cancel(_visible_run(run_id) or run_id)
     except NotStoppableError:
         raise HTTPException(409, tr("queue.not_stoppable")) from None
     if not found:
@@ -142,7 +195,8 @@ async def get_result(run_id: str) -> RunResult:
     per-run record: with jobs queued back to back, the next one is already
     running by the time the browser asks for the previous one's report.
     """
-    state = _run_state(run_id) or _LANES.record(run_id)
+    seen = _visible_run(run_id) or run_id
+    state = _run_state(seen) or _LANES.record(seen)
     if state is None:
         raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
 

@@ -83,7 +83,9 @@ class ResplitJobs(DerivedJobs):
         self.spawn(job, run)
         return job
 
-    def start_apply(self, analysis: Analysis, plan: Plan, dest_name: str) -> ResplitJob:
+    def start_apply(
+        self, analysis: Analysis, plan: Plan, dest_name: str, **placed: Any
+    ) -> ResplitJob:
         """Launch the write.
 
         Raises:
@@ -93,7 +95,12 @@ class ResplitJobs(DerivedJobs):
 
         def run() -> None:
             result = build_resplit_dataset(
-                analysis, plan, dest_name, token=job.token, on_progress=job.progress
+                analysis,
+                plan,
+                dest_name,
+                token=job.token,
+                on_progress=job.progress,
+                **placed,
             )
             if result is None:
                 job.state = "cancelled"

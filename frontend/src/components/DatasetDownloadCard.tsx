@@ -7,7 +7,9 @@ import {
 } from "../api/client";
 import {
   buildDatasetDownloadPayload,
+  datasetFolderName,
   makeDefaultDatasetForm,
+  ownDatasetPath,
   TORCHVISION_DATASETS,
   type DatasetDownloadForm,
   type DatasetProvider,
@@ -15,6 +17,7 @@ import {
 import { SelectField, Segmented, TextField } from "./controls";
 import { CredentialField } from "./CredentialField";
 import { useT } from "../i18n/useT";
+import { ROUTE, routeOpen, useSession } from "../lib/session";
 
 const PROVIDERS: { value: DatasetProvider; label: string }[] = [
   { value: "torchvision", label: "torchvision" },
@@ -50,6 +53,15 @@ export function DatasetDownloadCard({
   collapsible?: boolean;
 }) {
   const t = useT();
+  const session = useSession();
+  // On a shared server a dataset is written into the person's own folder and
+  // nowhere else: the form asks for a folder name, not a path, there is no
+  // dialog to browse with, and a key is typed for this download only, since
+  // the keys saved on the machine are the operator's (ADR-219).
+  const ownDir = session.server_mode ? (session.dataset_dirs[0] ?? null) : null;
+  const canPick = routeOpen(session, ROUTE.pickFolder);
+  const keepsKeys = routeOpen(session, ROUTE.credentials);
+  const providers = keepsKeys ? PROVIDERS : PROVIDERS.filter((p) => p.value !== "kaggle");
   const [open, setOpen] = useState(!collapsible);
   const [form, setForm] = useState<DatasetDownloadForm>(makeDefaultDatasetForm());
   const [running, setRunning] = useState(false);
@@ -78,15 +90,18 @@ export function DatasetDownloadCard({
   };
 
   const run = async () => {
-    if (!form.dataset.trim() || !form.out_dir.trim()) {
+    const folder =
+      ownDir === null ? form.out_dir : form.out_dir || datasetFolderName(form.dataset);
+    if (!form.dataset.trim() || !folder.trim()) {
       setOutcome({ kind: "error", text: t.datasetDownload.needDatasetAndFolder });
       return;
     }
+    const out_dir = ownDir === null ? folder : ownDatasetPath(ownDir, folder);
     setRunning(true);
     setResult(null);
     setOutcome(null);
     try {
-      const res = await datasetDownload(buildDatasetDownloadPayload(form));
+      const res = await datasetDownload(buildDatasetDownloadPayload({ ...form, out_dir }));
       setResult(res);
       setOutcome({
         kind: "success",
@@ -156,7 +171,7 @@ export function DatasetDownloadCard({
                   dataset: v === "torchvision" ? "cifar10" : "",
                 })
               }
-              options={PROVIDERS}
+              options={providers}
             />
           </div>
 
@@ -197,11 +212,24 @@ export function DatasetDownloadCard({
                   placeholder="1"
                   mono
                 />
-                <CredentialField
-                  provider="roboflow"
-                  label={t.datasetDownload.roboflow.apiKey}
-                  hint={t.datasetDownload.roboflow.apiKeyHint}
-                />
+                {keepsKeys ? (
+                  <CredentialField
+                    provider="roboflow"
+                    label={t.datasetDownload.roboflow.apiKey}
+                    hint={t.datasetDownload.roboflow.apiKeyHint}
+                  />
+                ) : (
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <TextField
+                      label={t.datasetDownload.roboflow.apiKey}
+                      value={form.api_key}
+                      onChange={(v) => set({ api_key: v })}
+                      hint={t.server.keyOnce}
+                      mono
+                      secret
+                    />
+                  </div>
+                )}
                 <TextField
                   label={t.datasetDownload.roboflow.format}
                   value={form.dataset_format}
@@ -236,27 +264,45 @@ export function DatasetDownloadCard({
                   placeholder={t.datasetDownload.huggingface.datasetPlaceholder}
                   mono
                 />
-                <CredentialField
-                  provider="huggingface"
-                  label={t.datasetDownload.huggingface.token}
-                  hint={t.datasetDownload.huggingface.tokenHint}
-                />
+                {keepsKeys ? (
+                  <CredentialField
+                    provider="huggingface"
+                    label={t.datasetDownload.huggingface.token}
+                    hint={t.datasetDownload.huggingface.tokenHint}
+                  />
+                ) : (
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <TextField
+                      label={t.datasetDownload.huggingface.token}
+                      value={form.token}
+                      onChange={(v) => set({ token: v })}
+                      hint={t.server.keyOnce}
+                      mono
+                      secret
+                    />
+                  </div>
+                )}
               </>
             )}
 
             <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, alignItems: "flex-end" }}>
               <div style={{ flex: 1 }}>
                 <TextField
-                  label={t.datasetDownload.outDir}
+                  label={ownDir === null ? t.datasetDownload.outDir : t.server.downloadFolder}
                   value={form.out_dir}
                   onChange={(v) => set({ out_dir: v })}
-                  placeholder={t.datasetDownload.outDirPlaceholder}
-                  hint={t.datasetDownload.outDirHint}
+                  placeholder={
+                    ownDir === null
+                      ? t.datasetDownload.outDirPlaceholder
+                      : datasetFolderName(form.dataset)
+                  }
+                  hint={ownDir === null ? t.datasetDownload.outDirHint : undefined}
                   mono
                 />
               </div>
               <button
                 type="button"
+                hidden={!canPick}
                 onClick={() => void pick()}
                 style={{
                   padding: "12px 16px",
@@ -273,6 +319,29 @@ export function DatasetDownloadCard({
                 {t.datasetDownload.browse}
               </button>
             </div>
+            {ownDir !== null && (
+              <div
+                role="note"
+                style={{
+                  gridColumn: "1 / -1",
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  color: "var(--vf-text-dim)",
+                }}
+              >
+                {t.server.downloadTarget}{" "}
+                <code
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 12,
+                    color: "var(--vf-text)",
+                    overflowWrap: "anywhere",
+                  }}
+                >
+                  {ownDatasetPath(ownDir, form.out_dir || datasetFolderName(form.dataset))}
+                </code>
+              </div>
+            )}
           </div>
 
           <button

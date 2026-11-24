@@ -27,9 +27,19 @@ from typing import Any, Literal
 
 from PIL import Image, ImageDraw
 
+from visionforge.core.box_stats import BoxTally
 from visionforge.core.cancellation import CancellationToken, is_cancelled
 from visionforge.core.dataset_audit import _verified_image_digest
 from visionforge.core.detection_data import resolve_yolo_split
+from visionforge.core.image_quality import ImageQuality, QualityTally, measure_quality
+from visionforge.core.near_duplicates import (
+    MAX_DISTANCE as NEAR_MAX_DISTANCE,
+)
+from visionforge.core.near_duplicates import (
+    NearImage,
+    difference_hash,
+    near_duplicate_groups,
+)
 
 ExplorerTask = Literal["classification", "detection"]
 
@@ -372,8 +382,8 @@ class _SizeTally:
         default_factory=lambda: [0] * (len(_ASPECT_EDGES) - 1)
     )
 
-    def add(self, path: Path) -> None:
-        """Count the size of ``path``; an image that cannot be opened is skipped."""
+    def add(self, path: Path) -> tuple[int, int] | None:
+        """Count the size of ``path``; None (and not counted) if it cannot be opened."""
         try:
             with Image.open(path) as im:
                 w, h = im.size
@@ -385,6 +395,8 @@ class _SizeTally:
             self.sizes[(w, h)] += 1
             self.side_hist[_bucket(max(w, h), _SIDE_EDGES)] += 1
             self.aspect_hist[_bucket(w / h, _ASPECT_EDGES)] += 1
+            return w, h
+        return None
 
 
 def scan_integrity(
@@ -393,8 +405,14 @@ def scan_integrity(
     max_images: int = DEFAULT_SCAN_LIMIT,
     token: CancellationToken | None = None,
     on_progress: Callable[[int, int], None] | None = None,
+    near_duplicates: bool = False,
 ) -> dict[str, Any]:
-    """Open and hash images: corrupted files, exact duplicates, leakage, sizes.
+    """Open and hash images: corrupted files, duplicates, leakage, sizes, quality.
+
+    ``near_duplicates`` adds a second pass that decodes every readable image of
+    the first and groups visual near-copies across splits (ADR-228, ADR-231).
+    Progress then counts both passes; an image that verifies but fails to decode
+    is reported as corrupted.
 
     At most ``max_images`` are read. Past that limit the scan takes an evenly
     spaced subset (``sampled`` is true), so every split is still represented. A
@@ -407,44 +425,28 @@ def scan_integrity(
     total = len(index.images)
     step = max(1, math.ceil(total / max_images)) if total else 1
     chosen = index.images[::step]
-    if on_progress:
-        on_progress(0, len(chosen))
-
-    corrupted: list[dict[str, str]] = []
-    corrupted_count = 0
-    by_hash: dict[str, list[ExplorerImage]] = defaultdict(list)
-    tally = _SizeTally()
-    scanned = 0
-    cancelled = False
-    current: list[ExplorerImage] = []
-
-    def record(path: Path, reason: str) -> None:
-        nonlocal corrupted_count
-        corrupted_count += 1
-        if len(corrupted) < MAX_REPORTED:
-            corrupted.append(
-                {
-                    "split": current[0].split,
-                    "path": current[0].rel,
-                    "reason": reason,
-                }
-            )
+    passes = 2 if near_duplicates else 1
+    report = _reporter(on_progress, passes * len(chosen))
+    report(0)
 
     root = index.root.resolve()
-    for item in chosen:
-        if is_cancelled(token):
-            cancelled = True
-            break
-        current[:] = [item]
-        digest = _verified_image_digest(root, root / item.rel, record)
-        scanned += 1
-        if digest is not None:
-            by_hash[digest].append(item)
-            tally.add(root / item.rel)
-        if on_progress:
-            on_progress(scanned, len(chosen))
-
-    duplicate_groups, leakage_groups = _group_report(by_hash)
+    found = _Findings()
+    if index.task == "detection":
+        declared = len(read_yolo_class_names(index.root))
+        found.boxes = BoxTally(list(index.class_names), declared)
+    scanned, cancelled = _hash_pass(root, chosen, found, token, report)
+    near: list[dict[str, Any]] | None = None
+    if near_duplicates and not cancelled:
+        hashed, cancelled = _near_hashes(
+            root,
+            found.readable,
+            token,
+            found.current,
+            found.record,
+            lambda done: report(len(chosen) + done),
+        )
+        near = None if cancelled else near_duplicate_groups(hashed)
+    duplicate_groups, leakage_groups = _group_report(found.by_hash)
     sampled = step > 1
     return {
         "task": index.task,
@@ -456,21 +458,130 @@ def scan_integrity(
         "cancelled": cancelled,
         "complete": not sampled and not cancelled,
         "hash_algorithm": "sha256",
-        "corrupted_count": corrupted_count,
-        "corrupted": corrupted,
+        "corrupted_count": found.corrupted_count,
+        "corrupted": found.corrupted,
         "duplicate_group_count": len(duplicate_groups),
         "duplicate_file_count": sum(len(g["files"]) - 1 for g in duplicate_groups),
         "duplicate_groups": duplicate_groups[:MAX_REPORTED],
         "leakage_group_count": len(leakage_groups),
         "leakage_groups": leakage_groups[:MAX_REPORTED],
+        # None when not looked for, or when cancelled before the search ended.
+        "near_checked": near is not None,
+        "near_max_distance": NEAR_MAX_DISTANCE,
+        "near_group_count": len(near or []),
+        "near_groups": (near or [])[:MAX_REPORTED],
         "sizes": _size_report(
-            tally.widths,
-            tally.heights,
-            tally.sizes,
-            tally.side_hist,
-            tally.aspect_hist,
+            found.tally.widths,
+            found.tally.heights,
+            found.tally.sizes,
+            found.tally.side_hist,
+            found.tally.aspect_hist,
         ),
+        # Detection only (ADR-233): what the boxes of the scanned images look like.
+        "boxes": found.boxes.report() if found.boxes is not None else None,
+        # Brightness, contrast and sharpness outliers (ADR-238).
+        "quality": found.quality.report(),
     }
+
+
+@dataclass
+class _Findings:
+    """What the hashing pass gathers; ``current`` is the image being read."""
+
+    corrupted: list[dict[str, str]] = field(default_factory=list)
+    corrupted_count: int = 0
+    by_hash: dict[str, list[ExplorerImage]] = field(
+        default_factory=lambda: defaultdict(list)
+    )
+    tally: _SizeTally = field(default_factory=lambda: _SizeTally())
+    readable: list[tuple[ExplorerImage, str]] = field(default_factory=list)
+    current: list[ExplorerImage] = field(default_factory=list)
+    boxes: BoxTally | None = None
+    quality: QualityTally = field(default_factory=lambda: QualityTally())
+
+    def record(self, path: Path, reason: str) -> None:
+        """Count a file that does not open; keep the first ``MAX_REPORTED``."""
+        self.corrupted_count += 1
+        if len(self.corrupted) < MAX_REPORTED:
+            item = self.current[0]
+            self.corrupted.append(
+                {"split": item.split, "path": item.rel, "reason": reason}
+            )
+
+
+def _reporter(
+    on_progress: Callable[[int, int], None] | None, total: int
+) -> Callable[[int], None]:
+    """Progress as ``done`` of ``total``; a no-op when nobody listens."""
+    if on_progress is None:
+        return lambda done: None
+    return lambda done: on_progress(done, total)
+
+
+def _hash_pass(
+    root: Path,
+    chosen: list[ExplorerImage],
+    found: _Findings,
+    token: CancellationToken | None,
+    report: Callable[[int], None],
+) -> tuple[int, bool]:
+    """Verify and hash each image; how many were read, and whether cancelled."""
+    scanned = 0
+    for item in chosen:
+        if is_cancelled(token):
+            return scanned, True
+        found.current[:] = [item]
+        digest = _verified_image_digest(root, root / item.rel, found.record)
+        scanned += 1
+        quality = None if digest is None else _quality(root / item.rel, found.record)
+        if digest is not None and quality is not None:
+            found.quality.add(item.split, item.rel, quality)
+            found.by_hash[digest].append(item)
+            found.readable.append((item, digest))
+            size = found.tally.add(root / item.rel)
+            if found.boxes is not None:
+                label = root / item.label_rel if item.label_rel else None
+                found.boxes.add(item.split, item.rel, label, size)
+        report(scanned)
+    return scanned, False
+
+
+def _quality(path: Path, record: Callable[[Path, str], None]) -> ImageQuality | None:
+    """Measure an image that verified; one that still fails to decode is corrupted."""
+    try:
+        return measure_quality(path)
+    except (OSError, ValueError, SyntaxError, Image.DecompressionBombError) as error:
+        record(path, type(error).__name__)
+        return None
+
+
+def _near_hashes(
+    root: Path,
+    readable: list[tuple[ExplorerImage, str]],
+    token: CancellationToken | None,
+    current: list[ExplorerImage],
+    record: Callable[[Path, str], None],
+    advance: Callable[[int], None],
+) -> tuple[list[NearImage], bool]:
+    """Decode and dHash the images the first pass could read; True if cancelled."""
+    hashed: list[NearImage] = []
+    for done, (item, digest) in enumerate(readable, start=1):
+        if is_cancelled(token):
+            return hashed, True
+        current[:] = [item]
+        try:
+            value = difference_hash(root / item.rel)
+        except (
+            OSError,
+            ValueError,
+            SyntaxError,
+            Image.DecompressionBombError,
+        ) as error:
+            record(root / item.rel, type(error).__name__)
+        else:
+            hashed.append(NearImage(item.split, item.rel, value, digest))
+        advance(done)
+    return hashed, False
 
 
 def _group_report(

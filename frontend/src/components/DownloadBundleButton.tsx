@@ -3,12 +3,13 @@ import { Package } from "lucide-react";
 import { downloadRunBundle } from "../api/client";
 import { useT } from "../i18n/useT";
 import { ActionButton } from "./ui/ActionButton";
+import { ROUTE, useRouteOpen } from "../lib/session";
 
 /** Download an experiment bundle and keep failures visible beside the action.
  *
  * `label` is a shorter visible text for a row already titled "download"; the
  * button's name stays the full action, which the short text is part of. */
-export function DownloadBundleButton({ runId, label }: { runId: string; label?: string }) {
+function DownloadBundleButtonInner({ runId, label }: { runId: string; label?: string }) {
   const t = useT();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,4 +45,9 @@ export function DownloadBundleButton({ runId, label }: { runId: string; label?: 
       )}
     </div>
   );
+}
+
+/** Absent where the server does not hand out the evidence ZIP yet (a shared server, ADR-216). */
+export function DownloadBundleButton(props: Parameters<typeof DownloadBundleButtonInner>[0]) {
+  return useRouteOpen(ROUTE.runBundle) ? <DownloadBundleButtonInner {...props} /> : null;
 }

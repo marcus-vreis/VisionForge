@@ -7,6 +7,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
+from visionforge.gui.api.dataset_scope import (
+    DatasetDir,
+    DatasetPart,
+    OwnDatasetDir,
+    RunFolderFile,
+)
 from visionforge.gui.api.profiles import (
     ProfileSettings,
     ProfileSettingsUpdate,
@@ -99,6 +105,9 @@ class QueueLane(BaseModel):
     lane: str
     active: QueuedJobInfo | None = None
     pending: list[QueuedJobInfo] = []
+    # Server mode (ADR-215): how many jobs of other people run or wait before
+    # the first of who asks (all of them when who asks has none). 0 locally.
+    others_ahead: int = 0
 
 
 class QueueSnapshot(BaseModel):
@@ -111,6 +120,8 @@ class QueueSnapshot(BaseModel):
     active: QueuedJobInfo | None = None
     pending: list[QueuedJobInfo] = []
     lanes: list[QueueLane] = []
+    # The local queue's ``others_ahead``.
+    others_ahead: int = 0
 
 
 class ComparisonRequest(BaseModel):
@@ -331,7 +342,7 @@ class RunSummary(BaseModel):
 class DatasetDetectRequest(BaseModel):
     """Path to a candidate dataset root for split auto-detection."""
 
-    base_dir: str
+    base_dir: DatasetDir
 
 
 class DatasetDetectResponse(BaseModel):
@@ -498,7 +509,7 @@ class RunTestRequest(BaseModel):
     follow them is not comparable anyway.
     """
 
-    data_dir: str
+    data_dir: DatasetDir
     label: str | None = None
 
 
@@ -513,7 +524,7 @@ class ExportOnnxRequest(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    output_onnx: str | None = None
+    output_onnx: RunFolderFile = None
     opset_version: int = 17
     dynamic_axes: bool = True
     run_validate: bool = Field(default=True, alias="validate")
@@ -538,8 +549,8 @@ class BatchPredictRequest(BaseModel):
     file without clobbering previous ones.
     """
 
-    input_dir: str
-    output_csv: str | None = None
+    input_dir: DatasetDir
+    output_csv: RunFolderFile = None
     recursive: bool = True
     class_names: list[str] | None = None
 
@@ -556,7 +567,7 @@ class BatchPredictResponse(BaseModel):
 class GradCamRequest(BaseModel):
     """Settings for generating Grad-CAM overlays from a run's checkpoint."""
 
-    input_dir: str
+    input_dir: DatasetDir
     num_samples: int = Field(default=8, ge=1, le=64)
     target_class: int | None = None
     alpha: float = Field(default=0.5, ge=0.0, le=1.0)
@@ -612,7 +623,7 @@ class RunTestResponse(BaseModel):
 class DatasetSamplesRequest(BaseModel):
     """Request thumbnail paths for the first N images per class in a split."""
 
-    base_dir: str
+    base_dir: DatasetDir
     split: Literal["train", "val", "test"] = "train"
     per_class: int = 4
 
@@ -629,7 +640,7 @@ class DatasetSamplesResponse(BaseModel):
 class PreprocessPreviewRequest(BaseModel):
     """Request a strip of preview images for a preprocessing pipeline."""
 
-    base_dir: str
+    base_dir: DatasetDir
     split: Literal["train", "val", "test"] = "train"
     class_name: str | None = None  # None → first class found
     steps: list[dict[str, Any]] = []  # each: {kind, ...params}
@@ -657,7 +668,7 @@ class PreprocessPreviewResponse(BaseModel):
 class AugmentPreviewRequest(BaseModel):
     """Request a strip of randomly-augmented variants of one dataset image."""
 
-    base_dir: str
+    base_dir: DatasetDir
     split: Literal["train", "val", "test"] = "train"
     class_name: str | None = None  # None → first class found
     transforms: dict[str, Any] = {}  # validated into TransformConfig
@@ -677,7 +688,7 @@ class AugmentPreviewResponse(BaseModel):
 class DetectionDatasetStatsRequest(BaseModel):
     """Path to a YOLO-layout dataset root for annotation distribution analysis."""
 
-    base_dir: str
+    base_dir: DatasetDir
 
 
 class DetectionSplitStats(BaseModel):
@@ -719,7 +730,7 @@ class DetectionDatasetStatsResponse(BaseModel):
 class DetectionDatasetSamplesRequest(BaseModel):
     """A YOLO dataset root to crop one labelled example per class from."""
 
-    base_dir: str
+    base_dir: DatasetDir
     split: Literal["train", "val", "test"] = "train"
     per_class: int = Field(default=3, ge=1, le=8)
 
@@ -743,12 +754,12 @@ class DetectionDatasetSamplesResponse(BaseModel):
 class SegmentationDatasetStatsRequest(BaseModel):
     """Paired image/mask dataset root + dir names for pre-training inspection."""
 
-    base_dir: str
-    images_subdir: str = "images"
-    masks_subdir: str = "masks"
-    train_dir: str = "train"
-    val_dir: str = "val"
-    test_dir: str = "test"
+    base_dir: DatasetDir
+    images_subdir: DatasetPart = "images"
+    masks_subdir: DatasetPart = "masks"
+    train_dir: DatasetPart = "train"
+    val_dir: DatasetPart = "val"
+    test_dir: DatasetPart = "test"
 
 
 class SegmentationSplitStats(BaseModel):
@@ -778,10 +789,10 @@ class SegmentationDatasetStatsResponse(BaseModel):
 class AnomalyDatasetStatsRequest(BaseModel):
     """MVTec-style dataset root + dir names for pre-training inspection."""
 
-    base_dir: str
-    train_dir: str = "train"
-    test_dir: str = "test"
-    normal_dir: str = "good"
+    base_dir: DatasetDir
+    train_dir: DatasetPart = "train"
+    test_dir: DatasetPart = "test"
+    normal_dir: DatasetPart = "good"
 
 
 class AnomalyDatasetStatsResponse(BaseModel):
@@ -819,11 +830,11 @@ class RegressionSplitStats(BaseModel):
 class RegressionDatasetStatsRequest(BaseModel):
     """CSV-manifest dataset root + column names for pre-training inspection."""
 
-    base_dir: str
-    images_dir: str = "images"
-    train_csv: str = "train.csv"
-    val_csv: str = "val.csv"
-    test_csv: str = "test.csv"
+    base_dir: DatasetDir
+    images_dir: DatasetPart = "images"
+    train_csv: DatasetPart = "train.csv"
+    val_csv: DatasetPart = "val.csv"
+    test_csv: DatasetPart = "test.csv"
     image_column: str = "image"
     target_columns: list[str] = Field(default_factory=lambda: ["target"])
 
@@ -909,6 +920,17 @@ class ModelDefaultsResponse(BaseModel):
     note: str | None = None
 
 
+class CustomModelsResponse(BaseModel):
+    """The models registered with ``@register_model`` in ``user_models/`` (ADR-048).
+
+    ``models`` holds the names ``model.custom_model`` accepts, sorted; it is
+    empty when the folder is missing or registers nothing. A file that fails to
+    import is skipped by the registry, so it is not listed.
+    """
+
+    models: list[str]
+
+
 class SystemInfo(BaseModel):
     """System probe for sensible UI defaults (workers, threads)."""
 
@@ -917,19 +939,15 @@ class SystemInfo(BaseModel):
     platform: str
     # Shown in the header so a screenshot of a bug carries its own version.
     version: str
-    # The `detection` extra (ADR-195): the form shows the install line when the
-    # Ultralytics backend is chosen and this is False.
-    ultralytics_installed: bool
-    detection_install_command: str
 
 
 class DatasetStatsRequest(BaseModel):
     """Path to a dataset root for class distribution analysis."""
 
-    base_dir: str
-    train_dir: str = "train"
-    val_dir: str = "val"
-    test_dir: str = "test"
+    base_dir: DatasetDir
+    train_dir: DatasetPart = "train"
+    val_dir: DatasetPart = "val"
+    test_dir: DatasetPart = "test"
 
 
 class SplitStats(BaseModel):
@@ -968,7 +986,7 @@ class DatasetDownloadRequest(BaseModel):
         "torchvision"
     )
     dataset: str
-    out_dir: str
+    out_dir: OwnDatasetDir
     splits: list[str] = ["train", "test"]
     limit: int | None = Field(default=None, ge=1)
     api_key: SecretStr | None = None

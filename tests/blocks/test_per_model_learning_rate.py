@@ -330,7 +330,7 @@ class TestOldConfigs:
         )
         config = load_config(self._write(tmp_path, raw))
         dumped = config.model_dump(mode="json")
-        assert dumped.pop("schema_version") == CURRENT_SCHEMA_VERSION == 2
+        assert dumped.pop("schema_version") == CURRENT_SCHEMA_VERSION == 3
         assert dumped["model_comparison"] == {
             "model_names": ["vgg16", "resnet50"],
             "metric": "f1",

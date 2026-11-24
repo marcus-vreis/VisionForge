@@ -631,6 +631,7 @@ def build_resplit_dataset(
     token: CancellationToken | None = None,
     on_progress: Callable[[int, int], None] | None = None,
     link: Callable[[Path, Path], None] = os.link,
+    parent: Path | None = None,
 ) -> dict[str, Any] | None:
     """Write the new dataset next to the original. ``None`` if cancelled.
 
@@ -638,13 +639,17 @@ def build_resplit_dataset(
     at the very end; on cancellation or any error it is removed and nothing is
     left at the destination.
 
+    ``parent`` is the folder the result is created in; ``None`` means next to
+    the source, which is where a local install always writes.
+
     Raises:
         ResplitError: bad or existing destination name; the dataset or the group
             file changed since the analysis.
     """
     root = analysis.root
+    parent = parent if parent is not None else root.parent
     dest = prepare_destination(
-        root.parent,
+        parent,
         dest_name,
         error=ResplitError,
         bad_name_code=_BAD_DEST,
@@ -652,7 +657,7 @@ def build_resplit_dataset(
     )
     check_unchanged(analysis)
     result = publish(
-        root.parent,
+        parent,
         dest,
         lambda tmp: _write(analysis, plan, tmp, dest, token, on_progress, link),
         error=ResplitError,

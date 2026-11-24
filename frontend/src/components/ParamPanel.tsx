@@ -20,6 +20,9 @@ import { buildDefaults } from "../lib/schema-defaults";
 import { countChanged, errorsUnder } from "../lib/steps";
 import { useAutoExperimentName } from "../lib/use-auto-experiment-name";
 import { AugmentPreview } from "./AugmentPreview";
+import { ColabDatasetCard } from "./ColabTarget";
+import { colabOriginLabel } from "../lib/colab-target";
+import { ColabTargetContext } from "../lib/colab-target-context";
 import { DatasetPicker } from "./DatasetPicker";
 import { DatasetStats } from "./DatasetStats";
 import { DatasetAudit } from "./DatasetAudit";
@@ -39,7 +42,8 @@ import type { PanelStrategy } from "./ExperimentHeader";
 import type { ReplicatesPayload } from "../lib/replicates-form";
 import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-form";
 import { Rich } from "./Rich";
-import { alternateModel } from "../lib/model-source";
+import { alternateModel, customModelChoice, withCustomModel } from "../lib/model-source";
+import { CustomModelField } from "./CustomModelField";
 import { ActionButton } from "./ui/ActionButton";
 import { StepShell, type StepDef } from "./StepShell";
 import {
@@ -62,6 +66,7 @@ import {
   Toggle,
   WorkersField,
 } from "./controls";
+import { ROUTE, useOpenStrategies, useRouteOpen } from "../lib/session";
 
 interface ParamPanelProps extends PendingImportProps {
   task: TaskDefinition;
@@ -107,6 +112,7 @@ const TRAINING_FIELD_ORDER = [
   "deterministic",
   "mixed_precision",
   "live_gradcam_every",
+  "live_gradcam_per_class",
 ];
 
 function resolveSchema(
@@ -337,6 +343,7 @@ function WeightsPathField({
   const [picking, setPicking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  const canPickCheckpoint = useRouteOpen(ROUTE.pickCheckpoint);
   const handlePick = async () => {
     setPicking(true);
     setMessage(null);
@@ -409,24 +416,26 @@ function WeightsPathField({
             color: "var(--vf-text)",
           }}
         />
-        <button
-          type="button"
-          onClick={() => void handlePick()}
-          disabled={picking}
-          style={{
-            padding: "0 14px",
-            background: "transparent",
-            border: "1px solid var(--vf-panel-stroke)",
-            borderRadius: 8,
-            color: "var(--vf-text-dim)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            cursor: picking ? "wait" : "pointer",
-            whiteSpace: "nowrap",
-          }}
-        >
-          📁 {picking ? "…" : t.paramPanel.weights.browse}
-        </button>
+        {canPickCheckpoint && (
+          <button
+            type="button"
+            onClick={() => void handlePick()}
+            disabled={picking}
+            style={{
+              padding: "0 14px",
+              background: "transparent",
+              border: "1px solid var(--vf-panel-stroke)",
+              borderRadius: 8,
+              color: "var(--vf-text-dim)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              cursor: picking ? "wait" : "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            📁 {picking ? "…" : t.paramPanel.weights.browse}
+          </button>
+        )}
       </div>
       {message && (
         <span
@@ -478,7 +487,9 @@ function BlockSelector({
   // uma superfície. O ModelComparisonBlock continua no backend; configs YAML
   // legadas com block=model_comparison seguem editáveis e executáveis.
   const t = useT();
-  const options = [
+  // Replicates and the paired comparison have a route of their own, which a
+  // shared server may not answer yet (ADR-216); the rest goes inside the run.
+  const options = useOpenStrategies("classification", [
     { value: "classification", label: t.paramPanel.blocks.simple },
     { value: "cross_validation", label: t.paramPanel.blocks.crossValidation },
     { value: "grid_search", label: t.paramPanel.blocks.gridSearch },
@@ -489,7 +500,7 @@ function BlockSelector({
     ...(comparison
       ? [{ value: REPLICATED_COMPARISON, label: t.taskPanel.replicatedComparison }]
       : []),
-  ];
+  ]);
   return (
     <div
       style={{
@@ -606,7 +617,7 @@ function CrossValidationFields({
   if (!resolved.properties) return null;
 
   const setParam = (k: string, v: unknown) => onChange({ ...value, [k]: v });
-  const fields = ["n_folds", "stratified", "shuffle", "fold_seed"];
+  const fields = ["n_folds", "stratified", "shuffle", "fold_seed", "select_on"];
 
   return (
     <div
@@ -1884,6 +1895,7 @@ function withBlock(
       stratified: true,
       shuffle: true,
       fold_seed: 42,
+      select_on: "best",
     };
   }
   if (v === "transfer_learning" && !prev["transfer_learning"]) {
@@ -1964,6 +1976,9 @@ export function ParamPanel({
   const trainingData = (formData["training"] ?? {}) as Record<string, unknown>;
   const dataData = (formData["data"] ?? {}) as Record<string, unknown>;
   const baseDir = String(dataData["base_dir"] ?? "");
+  // While Colab is the place to train, the dataset is the one asked for it
+  // (ADR-211): the step is missing when that origin is, not the local folder.
+  const colabTarget = useContext(ColabTargetContext);
   const gridHyperparameters = (((formData["grid_search"] ??
     {}) as Record<string, unknown>)["hyperparameters"] ?? {}) as Record<
     string,
@@ -2238,6 +2253,15 @@ export function ParamPanel({
       step: "data",
       rows: [
         row(labels.base_dir, baseDir),
+        // Where the VM takes the dataset from, while Colab trains (ADR-211).
+        ...(colabTarget
+          ? [
+              row(
+                t.colab.target.reviewOrigin,
+                colabOriginLabel(colabTarget.setup, colabTarget.formBaseDir),
+              ),
+            ]
+          : []),
         row(labels.task, formData["task"], "task"),
         row(
           labels.num_classes,
@@ -2322,10 +2346,19 @@ export function ParamPanel({
         "task",
         "model.num_classes",
       ]),
-      missing: baseDir.trim() === "",
+      missing: colabTarget ? colabTarget.problem !== null : baseDir.trim() === "",
       errors: errorsIn(["data", "task", "model.num_classes"], dataElsewhere),
       content: (
         <div style={stepStack}>
+          {/* Only while Colab is the place to train (ADR-211). */}
+          <ColabDatasetCard
+            onLocalFolder={(path) =>
+              setFormData((prev) => {
+                const sec = (prev["data"] ?? {}) as Record<string, unknown>;
+                return { ...prev, data: { ...sec, base_dir: path } };
+              })
+            }
+          />
           <div style={card}>
             <div style={sectionLabel}>{t.paramPanel.kickers.dataset}</div>
             <DatasetPicker
@@ -2363,9 +2396,11 @@ export function ParamPanel({
 
             <DatasetAudit
               baseDir={(dataData["base_dir"] as string) ?? ""}
-              trainDir={(dataData["train_dir"] as string) ?? "train"}
-              valDir={(dataData["val_dir"] as string) ?? "val"}
-              testDir={(dataData["test_dir"] as string) ?? "test"}
+              splits={{
+                train: (dataData["train_dir"] as string) ?? "train",
+                val: (dataData["val_dir"] as string) ?? "val",
+                test: (dataData["test_dir"] as string) ?? "test",
+              }}
             />
           </div>
 
@@ -2590,6 +2625,20 @@ export function ParamPanel({
           <div style={card}>
             <div style={sectionLabel}>{t.paramPanel.kickers.model}</div>
             <div style={fieldGrid}>
+              {modelProps["custom_model"] && (
+                <CustomModelField
+                  value={customModelChoice(modelData)}
+                  onChange={(choice) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      model: withCustomModel(
+                        (prev["model"] ?? {}) as Record<string, unknown>,
+                        choice,
+                      ),
+                    }))
+                  }
+                />
+              )}
               {modelProps["name"] && (
                 <SchemaFieldVF
                   name="name"
@@ -2601,7 +2650,8 @@ export function ParamPanel({
                   path={["model", "name"]}
                 />
               )}
-              {modelProps["pretrained"] && (
+              {/* A model of the researcher's own ignores `pretrained`. */}
+              {modelProps["pretrained"] && otherModel?.source !== "custom_model" && (
                 <SchemaFieldVF
                   name="pretrained"
                   schema={modelProps["pretrained"]}

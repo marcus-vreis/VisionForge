@@ -53,6 +53,8 @@ from visionforge.core.task_runner import (
     runner_metric_direction,
 )
 from visionforge.gui.api import submission
+from visionforge.gui.api.config_scope import confine_axes, confine_config
+from visionforge.gui.api.dataset_scope import current_scope
 from visionforge.gui.api.execution import RUN_NO_MESSAGE_KEY, _job_state
 from visionforge.gui.api.profiles import Profile
 from visionforge.gui.api.schemas import (
@@ -130,6 +132,19 @@ def _complete_config(
     return profile.scope_dict(_validated(config_type, raw).model_dump(mode="json"))
 
 
+def _confine(config_type: type[Any], scoped: dict[str, Any], profile: Profile) -> None:
+    """On a server, refuse a base config that names what its owner may not reach.
+
+    ``scoped`` already has its output inside the profile. Every trial of a group
+    starts from it, so it is read like the config of a plain run (ADR-217).
+
+    Raises:
+        HTTPException: 422 naming the field, in server mode only.
+    """
+    if current_scope() is not None:
+        confine_config(_validated(config_type, scoped), profile)
+
+
 def _job_name(config: dict[str, Any], default: str) -> str:
     """The name the request's config gives the job, else ``default``."""
     return str(config.get("name", default))
@@ -199,7 +214,8 @@ def _start_comparison(
     # base config (ADR-114).
     req = req.model_copy(update={"config": profile.scope_dict(req.config)})
     # Fail fast on a bad base config; each trial re-validates with its override.
-    _validated(config_type, req.config)
+    confine_config(_validated(config_type, req.config), profile)
+    confine_axes(config_type, {"model.name": req.model_names})
 
     metric = req.metric or runner.primary_metric()
     name = _job_name(req.config, _COMPARISON)
@@ -246,6 +262,8 @@ def _start_sweep(
         raise RequestValidationError(exc.errors()) from exc
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
+    _confine(config_type, complete, profile)
+    confine_axes(config_type, req.search_space)
 
     metric = req.metric or runner.primary_metric()
     name = _job_name(req.config, "sweep")
@@ -281,6 +299,7 @@ def _start_task_cv(
     # from live under the profile (ADR-114).
     req = req.model_copy(update={"config": profile.scope_dict(req.config)})
     config = _validated(config_type, req.config)
+    confine_config(config, profile)
 
     run_id = _new_run_id(f"{config.name}_cv")
     return _submit_group(
@@ -311,6 +330,9 @@ def _start_replicated_comparison(
     for overrides in req.variants.values():
         _refuse_output_paths(overrides, "profile.where_comparison")
     complete = _complete_config(config_type, req.config, profile)
+    _confine(config_type, complete, profile)
+    for overrides in req.variants.values():
+        confine_axes(config_type, overrides)
     seeds = _seeds_or_422(complete, req.seeds, req.n_replicates, "compare.seeds_unique")
 
     # Fail on a bad override path before spending len(variants)*len(seeds)
@@ -353,6 +375,7 @@ def _start_replicates(
     # Validate the base config (fills defaults) so the seed derivation below can
     # trust `training.seed` to exist.
     complete = _complete_config(config_type, req.config, profile)
+    _confine(config_type, complete, profile)
     seeds = _seeds_or_422(
         complete, req.seeds, req.n_replicates, "replicates.seeds_unique"
     )

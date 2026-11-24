@@ -222,6 +222,17 @@ def _sweep_stop_note(report: dict[str, Any]) -> str:
     return " " + tr_artifact(key, ran=ran, planned=planned, cut=cut)
 
 
+def _cv_selection_key(report: dict[str, Any]) -> str:
+    """The caption sentence of the rule that picked each fold's epoch.
+
+    A report without ``select_on`` predates ADR-242 (or comes from a task whose
+    K-fold has no choice): its folds kept their best epoch.
+    """
+    if report.get("select_on") == "last":
+        return "latex.cv_selection_last"
+    return "latex.cv_selection_best"
+
+
 def cv_to_latex(report: dict[str, Any], *, experiment: str = "") -> str:
     """Per-fold metrics plus the mean ± SD aggregate.
 
@@ -274,6 +285,7 @@ def cv_to_latex(report: dict[str, Any], *, experiment: str = "") -> str:
         )
     else:
         caption = tr_artifact("latex.cv_caption", experiment=shown, n_folds=n_folds)
+    caption += " " + tr_artifact(_cv_selection_key(report))
     return _table(
         caption=caption,
         label="tab:cv",

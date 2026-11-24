@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   DEFAULT_PROFILE_INFO,
+  accountProfile,
   activeProfileSlug,
   canCreateProfile,
   clearProfile,
@@ -10,6 +11,7 @@ import {
   isProfileStorageKey,
   isValidProfileSlug,
   legacyDefaultName,
+  namedAfterAccount,
   offersProfileChoice,
   profileHasName,
   profileLabel,
@@ -291,6 +293,26 @@ describe("the queue", () => {
     );
     expect(jobProfileLabel({}, "Sem nome")).toBe("Sem nome");
     expect(jobProfileLabel({ profile: "ana" }, "Sem nome")).toBe("ana");
+  });
+});
+
+describe("the profile of an account on a shared server (ADR-223)", () => {
+  const ana = { slug: "ana-lab-org-0123456789", name: "ana@lab.org", is_default: false };
+
+  it("is the one profile the server lists, and only on a server", () => {
+    expect(accountProfile(true, [ana])).toBe(ana);
+    expect(accountProfile(false, [ana])).toBeNull();
+    // A list that could not be read falls back to the local default: not an account.
+    expect(accountProfile(true, [DEFAULT_PROFILE_INFO])).toBeNull();
+    expect(accountProfile(true, [])).toBeNull();
+    expect(accountProfile(true, [ana, { ...ana, slug: "bia" }])).toBeNull();
+  });
+
+  it("still carries the login until the person says their name", () => {
+    expect(namedAfterAccount(ana, "ana@lab.org")).toBe(true);
+    expect(namedAfterAccount(ana, " Ana@Lab.org ")).toBe(true);
+    expect(namedAfterAccount({ ...ana, name: "Ana Lima" }, "ana@lab.org")).toBe(false);
+    expect(namedAfterAccount(ana, null)).toBe(false);
   });
 });
 

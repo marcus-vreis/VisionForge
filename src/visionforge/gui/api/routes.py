@@ -24,8 +24,10 @@ from visionforge.gui.api.colab_run_routes import (
     build_colab_run_router,
 )
 from visionforge.gui.api.comet_routes import build_comet_router
+from visionforge.gui.api.config_scope import confine_config
 from visionforge.gui.api.custom_task_routes import build_custom_task_run_router
 from visionforge.gui.api.custom_task_routes import router as custom_tasks_router
+from visionforge.gui.api.dataset_scope import current_scope
 from visionforge.gui.api.dataset_tools_routes import router as dataset_tools_router
 from visionforge.gui.api.datasets_routes import router as datasets_router
 from visionforge.gui.api.dvc_routes import build_dvc_router
@@ -425,6 +427,9 @@ async def resume_run(run_id: str, profile: ProfileDep) -> RunResponse:
         ) from exc
 
     config = profile.scope_model(config)
+    # The stored config is read again like a new one: the folders a server
+    # shares may have changed since the run started (ADR-218).
+    confine_config(config, profile)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     job_id = f"{config.name}_{timestamp}"
     return submission._submit_job(
@@ -546,6 +551,14 @@ async def serve_artifact(file_path: str) -> FileResponse:
 
     if not resolved.is_relative_to(outputs_dir):
         raise HTTPException(403, tr("file.access_denied"))
+
+    # In server mode ``outputs/`` holds everybody's runs: a person is served
+    # only what sits under their own profile folder (ADR-215).
+    scope = current_scope()
+    if scope is not None and scope.owner:
+        own = (_PROFILES_DIR / scope.owner).resolve()
+        if not resolved.is_relative_to(own):
+            raise HTTPException(403, tr("file.access_denied"))
 
     if not resolved.is_file():
         raise HTTPException(404, tr("file.not_found"))

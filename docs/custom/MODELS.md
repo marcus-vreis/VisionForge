@@ -35,11 +35,21 @@ model:
   # weights_path: path/to/checkpoint.pth   # optional, loaded non-strictly
 ```
 
-The interface has no selector for it: `custom_model` is set in the YAML config
-file. Run that file with `visionforge run <file>.yaml`, or import it in the
-interface (**↑ Importar YAML**, in the Revisão step of the Classification tab):
-the Modelo and Revisão steps then name your model instead of the builtin
-architecture, and the History lists the run under its name.
+In the interface, the Modelo step of the Classification tab has a
+**Modelo próprio** field (*Your own model* in English) that lists every name
+`user_models/` registers. Picking one sets `custom_model` and hides Pesos
+pré-treinados, which a custom model ignores; **Nenhum** (*None*) clears it,
+and the Arquitetura field trains again. With nothing registered, the field
+says how to add a model instead. The list comes from
+`GET /api/model/custom`, which scans the folder each time the step opens.
+
+In a YAML config file, set `custom_model` as above and run the file with
+`visionforge run <file>.yaml`, or import it in the interface (**↑ Importar
+YAML**, in the Revisão step of the Classification tab). Either way the Modelo
+and Revisão steps name your model instead of the builtin architecture, and the
+History lists the run under its name. On a shared server (`visionforge gui
+--server`) the field is not shown and a run that sets `custom_model` is
+refused, because a custom model is code a user brings.
 
 VisionForge imports every `.py` file in the folder on demand to discover the
 registered builders, so a new file is picked up without restarting the server.
@@ -109,12 +119,18 @@ O passo a passo é o mesmo dos três blocos acima, e vale repetir o essencial:
 1. Um arquivo `.py` em `user_models/`, com nome que não comece por `_`.
 2. Uma função registrada com `@register_model("seu_nome")` que recebe um `int`
    — quantos números o modelo precisa emitir — e devolve um `nn.Module`.
-3. No config (YAML), `model.custom_model: seu_nome`; a interface não tem campo
-   para isso. Os campos `name` e `pretrained` do modelo embutido passam a ser
-   ignorados. Rode o arquivo com `visionforge run arquivo.yaml` ou importe-o na
-   interface (**↑ Importar YAML**, na etapa Revisão da aba Classificação): as
-   etapas Modelo e Revisão passam a mostrar o seu modelo, e o Histórico lista a
-   execução com o nome dele.
+3. No config (YAML), `model.custom_model: seu_nome`. Na interface, a etapa
+   Modelo da aba Classificação tem o campo **Modelo próprio**, que lista os
+   nomes registrados em `user_models/`: escolher um preenche `custom_model` e
+   esconde Pesos pré-treinados; **Nenhum** limpa o valor, e a Arquitetura volta
+   a treinar. Sem nada registrado, o campo diz como adicionar um modelo. Os campos
+   `name` e `pretrained` do modelo embutido passam a ser ignorados. Um YAML
+   roda com `visionforge run arquivo.yaml` ou entra na interface por
+   **↑ Importar YAML**, na etapa Revisão da aba Classificação. Nos dois casos as
+   etapas Modelo e Revisão mostram o seu modelo, e o Histórico lista a execução
+   com o nome dele. Num servidor compartilhado (`visionforge gui --server`) o
+   campo não aparece e um treino com `custom_model` é recusado, porque um modelo
+   próprio é código trazido pelo usuário.
 
 O mesmo modelo serve para classificação, segmentação e regressão, porque o
 argumento é sempre a dimensão de saída da tarefa: `num_classes` nas duas

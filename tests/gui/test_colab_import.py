@@ -14,6 +14,7 @@ import visionforge.gui.api.execution as execution_mod
 from visionforge.core.experiment_bundle import export_experiment_bundle
 from visionforge.gui.api import colab_jobs as cj
 from visionforge.gui.api import colab_remote_runner as runner
+from visionforge.gui.api.colab_connection import profile_home
 from visionforge.gui.api.run_events import RunEventLog
 from visionforge.gui.api.run_history import load_runs
 
@@ -21,6 +22,13 @@ from .conftest import job_run, release_queue, start_job
 from .test_colab_jobs import PAYLOAD, FakeCli, event_line, run
 
 REMOTE = "/content/vf/run-bundle.zip"
+
+
+@pytest.fixture(autouse=True)
+def vf_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    # Importing FakeCli and run does not bring test_colab_jobs' autouse fixture.
+    monkeypatch.setenv("VISIONFORGE_HOME", str(tmp_path))
+    return tmp_path
 
 
 def _bundle_bytes(tmp_path: Path) -> bytes:
@@ -41,7 +49,8 @@ def _bundle_bytes(tmp_path: Path) -> bytes:
         "artifacts": {"model": str(source / "best_model.pth"), "graphics": []},
     }
     (source / "run.json").write_text(json.dumps(record), encoding="utf-8")
-    return export_experiment_bundle(source, tmp_path / "vm.zip").read_bytes()
+    bundle: Path = export_experiment_bundle(source, tmp_path / "vm.zip")
+    return bundle.read_bytes()
 
 
 def _ok_lines(bundle: dict[str, Any] | None) -> list[str]:
@@ -51,6 +60,12 @@ def _ok_lines(bundle: dict[str, Any] | None) -> list[str]:
             {"event": "job_end", "status": "ok", "report": {}, "bundle": bundle}
         ),
     ]
+
+
+def test_these_jobs_write_under_the_test_folder(tmp_path: Path) -> None:
+    # Issue 345: without VISIONFORGE_HOME the jobs wrote to ~/.visionforge,
+    # where two runs in the same second share the bundle's path.
+    assert profile_home("ana").is_relative_to(tmp_path)
 
 
 # ── the download, before the VM stops ────────────────────────────────────────
@@ -70,7 +85,9 @@ def test_the_bundle_is_downloaded_before_the_vm_stops(tmp_path: Path) -> None:
     assert commands.index("download") < commands.index("stop")
     download = cli.calls[commands.index("download")]
     assert download[:4] == ["download", "-s", download[2], REMOTE]
-    assert {"event": "remote", "stage": "download", "session": download[2]} in events
+    # elapsed_s varies with the machine; the stage and the session do not.
+    unstamped = [{k: v for k, v in e.items() if k != "elapsed_s"} for e in events]
+    assert {"event": "remote", "stage": "download", "session": download[2]} in unstamped
 
 
 def test_the_downloaded_result_keeps_the_report_and_the_remote_bundle(

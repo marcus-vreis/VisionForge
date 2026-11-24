@@ -1,8 +1,31 @@
 import type { ReactNode } from "react";
 import { Check, Search } from "lucide-react";
 import { useT } from "../i18n/useT";
+import type { Bar } from "../lib/dataset-explorer";
 import { ActionButton } from "./ui/ActionButton";
 import { mono, stepTitle, text } from "./datasetExplorerStyles";
+
+/** The empty part of a bar. */
+export const track = "rgb(var(--lt-ink, 255 255 255) / 0.06)";
+
+/** Horizontal bars, the exact count at the end of each. */
+export function BarList({ bars }: { bars: Bar[] }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {bars.map((b) => (
+        <div key={b.label} className="vf-lab-bar">
+          <span className="vf-lab-bar__label" title={b.label}>
+            {b.label}
+          </span>
+          <span className="vf-lab-bar__track" style={{ background: track }}>
+            <span style={{ display: "block", height: "100%", width: `${b.pct}%`, background: "var(--accent-vf)" }} />
+          </span>
+          <span className="vf-lab-bar__value">{b.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /** The frame every lab tool shares: its name, one sentence on what it does and
  *  what it creates, the long explanation closed behind "saiba mais", then the

@@ -10,7 +10,8 @@ Na GUI de classificação, abra a seção de dados e use **Auditar imagens**. A
 auditoria usa as pastas de treino, validação e teste configuradas no formulário.
 Ela só começa quando solicitada; editar os caminhos invalida o resultado exibido.
 O painel mostra duplicatas exatas, imagens ilegíveis e splits ausentes/vazios.
-O CSV de grupos e a opção de grupos estritos são opcionais.
+O CSV de grupos, a opção de grupos estritos e a busca por quase-duplicatas são
+opcionais.
 
 ```bash
 visionforge audit-data datasets/meu_dataset
@@ -31,8 +32,26 @@ O relatório JSON vai para stdout. `--json` grava também um arquivo novo e recu
 sobrescrever um existente. Os códigos de saída são `0` (nenhum achado), `1`
 (achados) e `2` (pedido inválido ou erro de leitura da entrada).
 
-**Limites:** hashes iguais detectam duplicatas exatas, não imagens visualmente
-parecidas, recortes ou outra compressão da mesma foto. Um relatório limpo não
+### Quase-duplicatas
+
+```bash
+visionforge audit-data datasets/meu_dataset --near-duplicates
+```
+
+`--near-duplicates` (no painel, "Procurar quase-duplicatas entre splits") abre
+cada imagem e calcula um hash visual de 64 bits (dHash: a imagem em cinza a
+9x8 pixels, um bit por par de vizinhos). Duas imagens em splits diferentes cujos
+hashes diferem em até 6 bits entram no mesmo grupo, em `near_duplicate_groups`:
+é a mesma foto reencodada (PNG e JPEG), redimensionada ou com o brilho mudado,
+que vaza o teste para o treino. Pares no mesmo split não são achados; cópias
+byte a byte ficam só em `duplicate_groups`. Imagens de uma cor só não têm
+estrutura para comparar e ficam de fora. Uma imagem que não decodifica conta
+como ilegível. Demora mais que a busca exata, porque decodifica todas as
+imagens (ADR-228).
+
+**Limites:** o hash exato só acha os mesmos bytes; o visual não acha recortes,
+rotações, espelhamentos nem fotos diferentes do mesmo objeto, e pode juntar
+imagens distintas muito parecidas (confira os caminhos). Um relatório limpo não
 comprova ausência de toda forma de vazamento. Links de diretório não são seguidos;
 links que escapam da raiz são reportados.
 

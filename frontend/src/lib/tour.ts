@@ -19,9 +19,9 @@ export interface TourStep {
 /** Os sete passos, com os textos no idioma do dicionário recebido.
  *
  * Só as âncoras moram aqui; títulos e corpos estão em `tour` (src/i18n). */
-export function tourSteps(t: Dict): TourStep[] {
+export function tourSteps(t: Dict, datasets = true): TourStep[] {
   const s = t.tour;
-  return [
+  const steps: TourStep[] = [
     { anchor: "tabs", title: s.tabs.title, body: s.tabs.body },
     { anchor: "dataset", title: s.dataset.title, body: s.dataset.body },
     { title: s.parameters.title, body: s.parameters.body },
@@ -30,6 +30,8 @@ export function tourSteps(t: Dict): TourStep[] {
     { anchor: "history", title: s.history.title, body: s.history.body },
     { anchor: "datasets", title: s.datasets.title, body: s.datasets.body },
   ];
+  // A shared server may have no datasets sheet yet (ADR-216): no stop on it.
+  return datasets ? steps : steps.filter((step) => step.anchor !== "datasets");
 }
 
 const KEY = "vf.tour.seen";

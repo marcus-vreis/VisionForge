@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
 from visionforge.core.loader_lifecycle import LoaderCache
+from visionforge.core.pin_memory import pin_memory_for
 from visionforge.core.preprocessing import apply_pipeline
 from visionforge.utils.config import (
     ExperimentConfig,
@@ -224,7 +225,7 @@ class DataModule:
 
         self._batch_size = config.training.batch_size
         self._num_workers = cfg.num_workers
-        self._pin_memory = cfg.pin_memory
+        self._pin_memory = pin_memory_for(cfg.pin_memory, config.device)
         self._cache = LoaderCache()
 
         self._train = ImageFolder(
@@ -332,7 +333,7 @@ def class_folder_test_loader(
         batch_size=config.training.batch_size,
         shuffle=False,
         num_workers=resolve_num_workers(cfg.num_workers, len(dataset)),
-        pin_memory=cfg.pin_memory,
+        pin_memory=pin_memory_for(cfg.pin_memory, config.device),
     )
 
 

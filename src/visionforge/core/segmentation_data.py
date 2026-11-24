@@ -34,6 +34,7 @@ from visionforge.core.data import (
     resolve_num_workers,
 )
 from visionforge.core.loader_lifecycle import LoaderCache
+from visionforge.core.pin_memory import pin_memory_for
 from visionforge.utils.config import PreprocessingConfig, TransformConfig
 from visionforge.utils.segmentation_config import SegmentationConfig
 
@@ -177,7 +178,7 @@ class SegmentationDataModule:
         self._batch_size = config.training.batch_size
         self._num_workers = cfg.num_workers
         self._cache = LoaderCache()
-        self._pin_memory = cfg.pin_memory
+        self._pin_memory = pin_memory_for(cfg.pin_memory, config.device)
 
         def _dataset(split: str, *, is_train: bool) -> SegmentationDataset:
             split_dir = base / split

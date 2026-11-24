@@ -99,5 +99,5 @@ class TestDetectionOnnxExport:
         data = _make_run(run_dir, checkpoint=str(ckpt))
         request = ExportOnnxRequest()
         with patch("visionforge.core.detection_trainer.YOLO", None):
-            with pytest.raises(RuntimeError, match=r"\[detection\]"):
+            with pytest.raises(RuntimeError, match="force-reinstall"):
                 export_detection_run(run_dir, request, data)

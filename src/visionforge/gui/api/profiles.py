@@ -419,7 +419,39 @@ def create_profile(
         raise ProfileNameError(tr("profile.name_empty"))
     if slug in _RESERVED:
         raise ProfileNameError(tr("profile.name_reserved", slug=slug))
+    return _make_profile(slug, display, pronoun, profiles_dir)
 
+
+def ensure_profile(slug: str, name: str, profiles_dir: Path) -> Profile:
+    """The profile ``slug``, made with the display ``name`` when it has no folder.
+
+    Server mode calls it with the slug of the signed-in user (ADR-213): the
+    first request of a person makes their folders, the next ones find them.
+
+    Raises:
+        InvalidProfileError: ``slug`` is not a safe slug.
+        ProfileCreateError: the OS refused to make the folders.
+    """
+    if not is_valid_slug(slug):
+        raise InvalidProfileError(
+            tr("profile.invalid", slug=slug[:60], max_len=MAX_SLUG_LEN)
+        )
+    folder = _profile_folder(slug, profiles_dir)
+    if folder is not None:
+        return _build(slug, folder, profiles_dir)
+    try:
+        return _make_profile(
+            slug, normalize_display_name(name) or slug, None, profiles_dir
+        )
+    except ProfileExistsError:
+        # Two first requests of the same person at once: the other one made it.
+        return _build(slug, profiles_dir / slug, profiles_dir)
+
+
+def _make_profile(
+    slug: str, display: str, pronoun: Pronoun | None, profiles_dir: Path
+) -> Profile:
+    """Make ``profiles_dir/<slug>`` and its sub-folders; see ``create_profile``."""
     folder = profiles_dir / slug
     made = False
     try:
@@ -541,6 +573,7 @@ __all__ = [
     "ProfileNameError",
     "UnknownProfileError",
     "create_profile",
+    "ensure_profile",
     "default_profile",
     "is_valid_slug",
     "list_profiles",

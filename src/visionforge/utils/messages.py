@@ -701,14 +701,14 @@ CATALOG: dict[str, dict[Lang, str]] = {
     },
     "detection.ultralytics_missing": {
         "pt": (
-            "O backend Ultralytics (YOLO / RT-DETR) não está instalado: ele é "
-            "opcional porque tem licença AGPL-3.0. Instale com {command} e reinicie "
-            "o VisionForge, ou escolha o backend torchvision."
+            "O backend Ultralytics (YOLO / RT-DETR) vem com o VisionForge e não "
+            "foi encontrado: a instalação parece danificada. Reinstale com "
+            "{command} e reinicie o VisionForge, ou escolha o backend torchvision."
         ),
         "en": (
-            "The Ultralytics backend (YOLO / RT-DETR) is not installed: it is "
-            "optional because it is licensed AGPL-3.0. Install it with {command} "
-            "and restart VisionForge, or pick the torchvision backend."
+            "The Ultralytics backend (YOLO / RT-DETR) ships with VisionForge and "
+            "is missing: the install looks damaged. Reinstall with {command} and "
+            "restart VisionForge, or pick the torchvision backend."
         ),
     },
     "export.torchvision_detection": {
@@ -1435,8 +1435,8 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "en": "Switched on, the values of your config go as they are.",
     },
     "code.yolo.fit.missing": {
-        "pt": "Sem o extra detection (o Ultralytics, AGPL-3.0) o treino para aqui, com a linha que o instala.",
-        "en": "Without the detection extra (Ultralytics, AGPL-3.0) training stops here, with the line that installs it.",
+        "pt": "Se o Ultralytics faltar (instalação danificada), o treino para aqui, com a linha que o reinstala.",
+        "en": "If Ultralytics is missing (a damaged install), training stops here, with the line that reinstalls it.",
     },
     "code.yolo.fit.weights": {
         "pt": "O modelo nasce dos pesos escolhidos: pré-treinados no COCO ou só a arquitetura.",
@@ -1798,6 +1798,191 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Pedido recusado: ele veio de uma página que não é do VisionForge.",
         "en": "Request refused: it came from a page that is not VisionForge's.",
     },
+    # ── Server mode (gui/server_mode.py) ─────────────────────────────────────
+    "server.untrusted_client": {
+        "pt": (
+            "Pedido recusado: em modo servidor o VisionForge só responde ao proxy "
+            "que faz o login. Abra o endereço do proxy, não o desta porta."
+        ),
+        "en": (
+            "Request refused: in server mode VisionForge only answers the proxy "
+            "that signs people in. Open the proxy's address, not this port's."
+        ),
+    },
+    "server.no_user": {
+        "pt": (
+            "Pedido recusado: o proxy não disse quem é você (cabeçalho {header} "
+            "ausente ou inválido). Entre de novo ou avise quem cuida do servidor."
+        ),
+        "en": (
+            "Request refused: the proxy did not say who you are (header {header} "
+            "missing or invalid). Sign in again or tell whoever runs the server."
+        ),
+    },
+    "server.dataset_outside": {
+        "pt": (
+            "Neste servidor o dataset precisa estar na sua pasta de datasets ou "
+            "numa pasta compartilhada, com o caminho completo."
+        ),
+        "en": (
+            "On this server the dataset must be in your dataset folder or in a "
+            "shared one, given by its full path."
+        ),
+    },
+    "server.dataset_part": {
+        "pt": (
+            "Neste servidor um nome de subpasta ou de arquivo do dataset não pode "
+            "sair da pasta do dataset: {value}"
+        ),
+        "en": (
+            "On this server a sub-folder or file name of the dataset cannot leave "
+            "the dataset folder: {value}"
+        ),
+    },
+    "server.config_path": {
+        "pt": (
+            "Neste servidor o campo {field} precisa apontar para a sua pasta ou, "
+            "se for só leitura, para uma pasta compartilhada."
+        ),
+        "en": (
+            "On this server the field {field} must point into your folder or, "
+            "when it is only read, into a shared one."
+        ),
+    },
+    "server.config_name": {
+        "pt": (
+            "Neste servidor o campo {field} precisa ser o nome de um modelo, não "
+            "um caminho nem um endereço: {value}"
+        ),
+        "en": (
+            "On this server the field {field} must be the name of a model, not a "
+            "path or an address: {value}"
+        ),
+    },
+    "server.config_forbidden": {
+        "pt": "O campo {field} não pode ser usado quando o VisionForge roda como servidor.",
+        "en": "The field {field} cannot be used when VisionForge runs as a server.",
+    },
+    "server.dataset_write_outside": {
+        "pt": (
+            "Neste servidor um dataset só pode ser gravado numa subpasta da sua "
+            "pasta de datasets, com o caminho completo."
+        ),
+        "en": (
+            "On this server a dataset can only be written into a sub-folder of "
+            "your dataset folder, given by its full path."
+        ),
+    },
+    "server.kaggle_closed": {
+        "pt": (
+            "O download do Kaggle não está disponível neste servidor: o cliente do "
+            "Kaggle lê a chave de uma variável do processo, que seria de todos. "
+            "Baixe no seu computador e peça ao operador para compartilhar a pasta."
+        ),
+        "en": (
+            "Kaggle downloads are not available on this server: the Kaggle client "
+            "reads its key from a variable of the process, which would be "
+            "everyone's. Download on your computer and ask the operator to share "
+            "the folder."
+        ),
+    },
+    "server.mlflow_closed": {
+        "pt": (
+            "O MLflow local não está disponível neste servidor: ele grava num "
+            "arquivo do disco do servidor, que você não teria como abrir. Use "
+            "o Weights & Biases ou o Comet, com o seu token."
+        ),
+        "en": (
+            "Local MLflow is not available on this server: it writes to a file "
+            "on the server's disk, which you could not open. Use Weights & "
+            "Biases or Comet, with your own token."
+        ),
+    },
+    "server.output_fixed": {
+        "pt": (
+            "Neste servidor o arquivo é gravado na pasta do próprio run; deixe o "
+            "caminho de saída vazio."
+        ),
+        "en": (
+            "On this server the file is written into the run's own folder; leave "
+            "the output path empty."
+        ),
+    },
+    "server.checkpoint_outside": {
+        "pt": (
+            "O checkpoint registrado no run {run} está fora da sua pasta e não "
+            "pode ser usado neste servidor."
+        ),
+        "en": (
+            "The checkpoint recorded in run {run} is outside your folder and "
+            "cannot be used on this server."
+        ),
+    },
+    "server.config_axis": {
+        "pt": (
+            "Neste servidor uma busca, comparação ou variante não pode alterar o "
+            "campo {field}: só campos de número, de escolha e o nome do modelo."
+        ),
+        "en": (
+            "On this server a search, a comparison or a variant cannot change the "
+            "field {field}: only number and choice fields, and the model name."
+        ),
+    },
+    "server.config_block": {
+        "pt": (
+            "O bloco {block} ainda não está disponível quando o VisionForge "
+            "roda como servidor."
+        ),
+        "en": (
+            "The {block} block is not available yet when VisionForge runs as a server."
+        ),
+    },
+    "own_dataset.not_found": {
+        "pt": "Não há um dataset chamado '{name}' na sua pasta.",
+        "en": "There is no dataset named '{name}' in your folder.",
+    },
+    "own_dataset.jobs_running": {
+        "pt": (
+            "Você tem um treino rodando ou na fila, e ele pode estar lendo este "
+            "dataset. Espere terminar (ou cancele na fila) e apague depois."
+        ),
+        "en": (
+            "You have a training running or waiting, and it may be reading this "
+            "dataset. Wait for it to end (or cancel it in the queue) and delete "
+            "afterwards."
+        ),
+    },
+    "own_dataset.delete_failed": {
+        "pt": "Não foi possível apagar o dataset '{name}': {reason}.",
+        "en": "The dataset '{name}' could not be deleted: {reason}.",
+    },
+    "server.busy": {
+        "pt": (
+            "O servidor está ocupado com ações de outras pessoas. Espere um "
+            "pouco e tente de novo; nada foi perdido."
+        ),
+        "en": (
+            "The server is busy with other people's actions. Wait a moment and "
+            "try again; nothing was lost."
+        ),
+    },
+    "server.quota_full": {
+        "pt": (
+            "Sua pasta neste servidor está cheia: {used} de {limit}. Apague "
+            "treinos no Histórico para liberar espaço e tente de novo. Os "
+            "datasets da sua pasta também contam; quem os apaga é quem opera "
+            "o servidor."
+        ),
+        "en": (
+            "Your folder on this server is full: {used} of {limit}. Delete runs "
+            "in the History to free space and try again. The datasets in your "
+            "folder count too; the server's operator is who deletes them."
+        ),
+    },
+    "server.route_off": {
+        "pt": "Esta função não está disponível quando o VisionForge roda como servidor.",
+        "en": "This feature is not available when VisionForge runs as a server.",
+    },
     # ── "Open folder" ────────────────────────────────────────────────────────
     "reveal.foreign_origin": {
         "pt": "A pasta só pode ser aberta pela página do próprio VisionForge.",
@@ -2009,6 +2194,27 @@ CATALOG: dict[str, dict[Lang, str]] = {
     "explorer.scan_missing": {
         "pt": "Varredura não encontrada.",
         "en": "Scan not found.",
+    },
+    # ── suspicious labels of a run (gui/api/label_suspects_run.py, ADR-237) ──
+    "suspects.classification_only": {
+        "pt": "Rótulos suspeitos só existem para runs de classificação.",
+        "en": "Suspicious labels exist for classification runs only.",
+    },
+    "suspects.unknown_split": {
+        "pt": "Divisão desconhecida: {splits}. Use train, val ou test.",
+        "en": "Unknown split: {splits}. Use train, val or test.",
+    },
+    "suspects.no_classes": {
+        "pt": "Este run não guardou os nomes das classes ou o checkpoint; treine de novo para usar os rótulos suspeitos.",
+        "en": "This run did not keep its class names or checkpoint; train again to use suspicious labels.",
+    },
+    "explorer.classes_classification_only": {
+        "pt": "A comparação de classes é só para datasets de classificação.",
+        "en": "Comparing classes is for classification datasets only.",
+    },
+    "explorer.outside_dataset": {
+        "pt": "{path} fica fora da pasta do dataset.",
+        "en": "{path} is outside the dataset folder.",
     },
     "explorer.unreadable_image": {
         "pt": "Não foi possível abrir esta imagem.",
@@ -3010,30 +3216,40 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "({cut} stopped before finishing)."
         ),
     },
+    # The caption ends with the sentence of the rule that picked each fold's
+    # epoch (cross_validation.select_on, ADR-242).
     "latex.cv_caption": {
-        "pt": (
-            "{experiment}: validação cruzada com {n_folds} folds. A época de cada "
-            "fold é escolhida no próprio fold de validação, que também a avalia: "
-            "estimativa otimista, sem divisão aninhada."
-        ),
-        "en": (
-            "{experiment}: {n_folds}-fold cross-validation. Each fold's epoch is "
-            "selected on its own fold's validation split, which also scores it: "
-            "an optimistic estimate, with no nested split."
-        ),
+        "pt": "{experiment}: validação cruzada com {n_folds} folds.",
+        "en": "{experiment}: {n_folds}-fold cross-validation.",
     },
     "latex.cv_caption_partial": {
         "pt": (
             "{experiment}: validação cruzada com {n_folds} folds, {finished} de "
-            "{n_folds} folds concluídos ({detail}). A época de cada fold é "
-            "escolhida no próprio fold de validação, que também a avalia: "
-            "estimativa otimista, sem divisão aninhada."
+            "{n_folds} folds concluídos ({detail})."
         ),
         "en": (
             "{experiment}: {n_folds}-fold cross-validation, {finished} of "
-            "{n_folds} folds finished ({detail}). Each fold's epoch is selected "
-            "on its own fold's validation split, which also scores it: an "
-            "optimistic estimate, with no nested split."
+            "{n_folds} folds finished ({detail})."
+        ),
+    },
+    "latex.cv_selection_best": {
+        "pt": (
+            "A época de cada fold é escolhida no próprio fold de validação, que "
+            "também a avalia: estimativa otimista, sem divisão aninhada."
+        ),
+        "en": (
+            "Each fold's epoch is selected on its own fold's validation split, "
+            "which also scores it: an optimistic estimate, with no nested split."
+        ),
+    },
+    "latex.cv_selection_last": {
+        "pt": (
+            "Cada fold é avaliado na última época treinada, sem escolher a época "
+            "no próprio fold de validação."
+        ),
+        "en": (
+            "Each fold is scored at its last trained epoch, with no epoch "
+            "selected on its own fold's validation split."
         ),
     },
     "latex.cv_mean_sd": {

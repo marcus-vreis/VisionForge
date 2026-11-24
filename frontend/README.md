@@ -44,6 +44,12 @@ the dev server: run `npm run build` first or it exercises a stale bundle. Instal
 the browser once with `npx playwright install chromium`. `VF_E2E_PORT` and
 `VF_E2E_EXECUTABLE` override the port (8765) and the executable.
 
+The suite starts two servers. The second runs in shared-server mode
+(`visionforge gui --server`, port 8766 or `VF_E2E_SERVER_MODE_PORT`) from
+`e2e/.work-server`, for `e2e/server-mode.e2e.ts`: there the browser plays the
+login proxy and each test names its account in `X-Forwarded-User`.
+`npx playwright test --project=server-mode` runs only that file.
+
 ## Rebuild the SPA
 
 ```bash

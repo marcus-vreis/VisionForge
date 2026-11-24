@@ -32,6 +32,7 @@ from sklearn.metrics import f1_score, roc_auc_score
 
 from visionforge.core import resume, training_loop
 from visionforge.core.cancellation import CancellationToken, is_cancelled
+from visionforge.core.history_keys import upgrade_anomaly_epoch
 from visionforge.core.resume_provenance import validate_resume_dataset
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything, resolve_device
@@ -84,8 +85,10 @@ class AnomalyEpochResult:
     epoch: int
     # None for PatchCore: it fits a memory bank, with no gradient loss to report.
     train_loss: float | None
+    # Scored on the test split every epoch, never used to pick the checkpoint
+    # (train_loss does); named for its split since ADR-241.
     # None when the test split holds a single class: nothing to rank (#170).
-    val_auroc: float | None
+    test_auroc: float | None
     val_threshold: float
     # None when the test split has no anomalous image: recall is 0/0.
     val_image_f1: float | None
@@ -275,7 +278,10 @@ class AnomalyTrainer(training_loop.TrainingOutput):
             best_loss = resumed.best_metric
             best_epoch = resumed.best_epoch
             patience = resumed.patience_counter
-            history = [AnomalyEpochResult(**h) for h in resumed.history]
+            # A snapshot taken before ADR-241 has the AUROC under its old name.
+            history = [
+                AnomalyEpochResult(**upgrade_anomaly_epoch(h)) for h in resumed.history
+            ]
             start_epoch = resumed.epoch + 1
             logger.info(
                 "Resuming {} at epoch {} of {}.",
@@ -385,14 +391,14 @@ class AnomalyTrainer(training_loop.TrainingOutput):
         """Log reconstruction metrics and emit the completed epoch event."""
         epoch = result.epoch
         train_loss = result.train_loss
-        auroc = result.val_auroc
+        auroc = result.test_auroc
         threshold = result.val_threshold
         f1 = result.val_image_f1
         tb.log_scalars(
             epoch,
             {
                 "loss/recon_train": train_loss,
-                "auroc/val": auroc,
+                "auroc/test": auroc,
                 "image_f1/val": f1,
                 "threshold/val": threshold,
             },
@@ -413,7 +419,7 @@ class AnomalyTrainer(training_loop.TrainingOutput):
                     "epoch": epoch,
                     "total_epochs": self._config.training.epochs,
                     "train_loss": train_loss,
-                    "val_auroc": auroc,
+                    "test_auroc": auroc,
                     "val_image_f1": f1,
                     "val_threshold": threshold,
                     **({} if lr is None else {"lr": lr}),
@@ -458,7 +464,7 @@ class AnomalyTrainer(training_loop.TrainingOutput):
         best = next((r for r in history if r.epoch == best_epoch), None)
         failed = AnomalyTrainResult(
             best_epoch=best_epoch,
-            best_auroc=best.val_auroc if best else None,
+            best_auroc=best.test_auroc if best else None,
             total_epochs=len(history),
             device_used=self._device_label,
             history=history,
@@ -502,7 +508,7 @@ class AnomalyTrainer(training_loop.TrainingOutput):
             stopped=stopped,
             warnings=health,
             best_epoch=best_epoch,
-            best_auroc=best.val_auroc,
+            best_auroc=best.test_auroc,
             total_epochs=len(history),
             device_used=self._device_label,
             history=history,
@@ -600,7 +606,7 @@ class AnomalyTrainer(training_loop.TrainingOutput):
         torch.save(model.state_dict(), model_path)
         tb.log_scalars(
             1,
-            {"auroc/val": auroc, "image_f1/val": f1, "threshold/val": threshold},
+            {"auroc/test": auroc, "image_f1/val": f1, "threshold/val": threshold},
         )
 
         logger.info("PatchCore fit | auroc={} f1={}", _fmt(auroc), _fmt(f1))
@@ -611,7 +617,7 @@ class AnomalyTrainer(training_loop.TrainingOutput):
                     "epoch": 1,
                     "total_epochs": 1,
                     "train_loss": None,
-                    "val_auroc": auroc,
+                    "test_auroc": auroc,
                     "val_image_f1": f1,
                     "val_threshold": threshold,
                     "elapsed_s": round(time.monotonic() - t0, 3),
@@ -683,14 +689,14 @@ class AnomalyTrainer(training_loop.TrainingOutput):
             getattr(self, "_loader_workers", {}),
             best_metric="best_auroc",
             epoch_metrics={
-                "auroc": "val_auroc",
+                "auroc": "test_auroc",
                 "threshold": "val_threshold",
                 "image_f1": "val_image_f1",
             },
             history_fields=(
                 "epoch",
                 "train_loss",
-                "val_auroc",
+                "test_auroc",
                 "val_image_f1",
                 "val_threshold",
             ),

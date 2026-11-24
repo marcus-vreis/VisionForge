@@ -4,7 +4,7 @@
  * run.json `history` is one record per epoch, and each trainer writes its own
  * names into it: a classification epoch has `val_loss` and `val_accuracy`, a
  * detection epoch `map50_95` and `val_box_loss`, a regression epoch `val_r2`, a
- * segmentation epoch `val_miou`, an anomaly epoch `val_auroc` (which trainer
+ * segmentation epoch `val_miou`, an anomaly epoch `test_auroc` (which trainer
  * writes which is listed beside each task below). Charting two fixed names drew
  * nothing for every task but classification, so the series come from the task
  * of the runs being compared and from what their histories actually measured.
@@ -83,7 +83,7 @@ const CURVES: Record<string, TaskCurves> = {
   // PatchCore fits in one epoch and writes a train loss of zero: the score is
   // the curve that says something, so it is the one charted first.
   anomaly: {
-    initial: [["val_auroc"]],
+    initial: [["test_auroc"]],
     more: ["val_image_f1", "train_loss", "val_threshold"],
   },
 };

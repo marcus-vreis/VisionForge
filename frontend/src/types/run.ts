@@ -373,6 +373,9 @@ export type TrainingEvent =
       val_box_loss?: number | null;
       val_cls_loss?: number | null;
       val_dfl_loss?: number | null;
+      // Anomaly only: each epoch's AUROC on the test split (ADR-241); null when
+      // the test split holds a single class.
+      test_auroc?: number | null;
     }
   // Progresso dentro de uma época longa: só chega quando a época passa de alguns
   // segundos sem terminar. Sem ele o overlay ficava parado a época inteira.

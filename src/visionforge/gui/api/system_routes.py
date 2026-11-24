@@ -9,6 +9,7 @@ from fastapi import APIRouter
 from visionforge.gui.api import system_service
 from visionforge.gui.api.http_responses import TAG_EXPERIMENTS, TAG_SYSTEM
 from visionforge.gui.api.schemas import (
+    CustomModelsResponse,
     DeviceInfoResponse,
     LearningRatePlanRequest,
     LearningRatePlanResponse,
@@ -46,5 +47,12 @@ def build_system_router(
     ) -> LearningRatePlanResponse:
         """The rate each trial of this job will train at (ADR-158)."""
         return system_service.learning_rate_plan(req)
+
+    # Plain ``def``: the scan imports the user's files, and FastAPI runs a sync
+    # handler in a worker thread instead of on the event loop.
+    @router.get("/model/custom", tags=[TAG_EXPERIMENTS])
+    def custom_models() -> CustomModelsResponse:
+        """The models of ``user_models/`` that ``model.custom_model`` can name."""
+        return system_service.custom_models()
 
     return router

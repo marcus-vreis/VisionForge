@@ -2,19 +2,23 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from loguru import logger
 
 from visionforge import __version__
+from visionforge.gui.api.config_scope import closed_blocks
+from visionforge.gui.api.dataset_scope import current_scope
 from visionforge.gui.api.error_messages import validation_error_handler
 from visionforge.gui.api.http_responses import (
     NOT_FOUND_TEXT,
@@ -22,6 +26,7 @@ from visionforge.gui.api.http_responses import (
     TAG_SPA,
     TAG_SYSTEM,
 )
+from visionforge.gui.api.profiles import PROFILE_HEADER
 from visionforge.gui.api.routes import router as api_router
 from visionforge.gui.security import (
     HostOriginGuard,
@@ -29,6 +34,13 @@ from visionforge.gui.security import (
     SecurityHeaders,
     SpaContentSecurityPolicy,
     is_wildcard,
+)
+from visionforge.gui.server_mode import (
+    USAGE,
+    ServerMode,
+    ServerModeGate,
+    closed_routes,
+    mode_of,
 )
 from visionforge.utils.third_party_privacy import apply_env_opt_outs
 
@@ -82,20 +94,8 @@ _REDOC_URL = "/redoc"
 _DOCS_PATHS = frozenset({_DOCS_URL, f"{_DOCS_URL}/oauth2-redirect", _REDOC_URL})
 DOCS_ENABLED = _docs_enabled()
 
-app = FastAPI(
-    title="VisionForge",
-    openapi_tags=OPENAPI_TAGS,
-    version=__version__,
-    docs_url=_DOCS_URL if DOCS_ENABLED else None,
-    redoc_url=_REDOC_URL if DOCS_ENABLED else None,
-)
 
-# A 422 speaks the page's language like every other message (#208, ADR-191).
-app.add_exception_handler(RequestValidationError, validation_error_handler)
-
-
-@app.on_event("startup")
-async def _sweep_filtered_datasets() -> None:
+def _sweep_filtered_datasets() -> None:
     """Remove filtered dataset copies a killed process left behind (ADR-084, ADR-130).
 
     The context manager cleans up after itself, including on exception, but
@@ -111,6 +111,26 @@ async def _sweep_filtered_datasets() -> None:
         sweep_orphans(cache)
 
 
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Startup work before the first request; nothing to undo at shutdown."""
+    _sweep_filtered_datasets()
+    yield
+
+
+app = FastAPI(
+    title="VisionForge",
+    openapi_tags=OPENAPI_TAGS,
+    version=__version__,
+    docs_url=_DOCS_URL if DOCS_ENABLED else None,
+    redoc_url=_REDOC_URL if DOCS_ENABLED else None,
+    lifespan=_lifespan,
+)
+
+# A 422 speaks the page's language like every other message (#208, ADR-191).
+app.add_exception_handler(RequestValidationError, validation_error_handler)
+
+
 @app.get("/api/health", tags=[TAG_SYSTEM])
 async def health() -> dict[str, str]:
     """Version and the SPA build this process booted against.
@@ -120,6 +140,48 @@ async def health() -> dict[str, str]:
     feature is broken.
     """
     return {"version": __version__, "spa_bundle": _BOOT_SPA_BUNDLE}
+
+
+@app.get("/api/session", tags=[TAG_SYSTEM])
+async def session(request: Request) -> dict[str, Any]:
+    """Whether this is a server for several people, and who the proxy says is asking.
+
+    ``user`` and ``profile`` are null on a local install, where the browser
+    still picks the profile (ADR-114).
+    """
+    mode = mode_of(request.app)
+    user = getattr(request.state, "vf_user", None) if mode.enabled else None
+    profile = request.headers.get(PROFILE_HEADER) if user is not None else None
+    scope = current_scope() if user is not None else None
+    root = getattr(request.state, "vf_root", None) if user is not None else None
+    quota = None
+    if mode.quota_bytes is not None and root is not None:
+        used = await asyncio.to_thread(USAGE.of, root)
+        quota = {"used_bytes": used, "limit_bytes": mode.quota_bytes}
+    return {
+        "server_mode": mode.enabled,
+        "user": user,
+        "profile": profile,
+        # Where this person's datasets may live: their own folder first, then
+        # the ones the operator shares (ADR-214). Empty on a local install.
+        "dataset_dirs": [str(p) for p in scope.readable] if scope else [],
+        # The routes that answer 404 here, as "METHOD /template": what the
+        # screen hides (ADR-216). Empty on a local install, where all answer.
+        "closed": closed_routes() if mode.enabled else [],
+        # Classification sends its strategies inside the run, as ``block``:
+        # the values this server refuses (ADR-216).
+        "closed_blocks": closed_blocks() if mode.enabled else [],
+        # What this person's folder holds against the server's ceiling
+        # (``--quota-gb``, ADR-225); null when the operator set none.
+        "quota": quota,
+    }
+
+
+def _profiles_dir() -> Path:
+    """Where profiles live, read per request as the routes do (ADR-114)."""
+    from visionforge.gui.api import routes
+
+    return routes._PROFILES_DIR
 
 
 # CORS sits inside HostOriginGuard on purpose (Sonar S8414 wants it outermost):
@@ -132,6 +194,10 @@ app.add_middleware(  # NOSONAR python:S8414
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Inside the Host and Origin guard: in server mode only the login proxy is
+# answered, the user it names becomes the profile, and a route that is not
+# ready for several people is 404 (ADR-213). Off, it passes everything through.
+app.add_middleware(ServerModeGate, profiles_dir=_profiles_dir)
 # Added last so it runs first: a request for another name, or a state change
 # from another site's page, never reaches CORS or a route (DNS rebinding, CSRF).
 app.add_middleware(HostOriginGuard)
@@ -193,13 +259,15 @@ def start_server(
     port: int = 8000,
     open_browser: bool = True,
     allowed_hosts: Sequence[str] = (),
+    server_mode: ServerMode | None = None,
 ) -> None:
     """Start the VisionForge GUI server.
 
     ``open_browser`` is False when the updater restarts the server: the page the
     researcher had open reloads itself, and a second tab would only confuse.
     ``allowed_hosts`` are the extra names the server answers to (``--allowed-host``):
-    a lab server's DNS alias, or a reverse proxy's public name.
+    a lab server's DNS alias, or a reverse proxy's public name. ``server_mode``
+    are the options of ``--server`` (ADR-213); ``None`` is the local tool.
     """
     import webbrowser
 
@@ -209,6 +277,23 @@ def start_server(
     app.state.bind_host = host
     policy = HostPolicy.for_bind(host, allowed_hosts)
     app.state.host_policy = policy
+    app.state.server_mode = server_mode or ServerMode()
+    if app.state.server_mode.enabled:
+        logger.info(
+            "Server mode: answering only the login proxy at {}; user from {}",
+            ", ".join(str(n) for n in app.state.server_mode.trusted),
+            app.state.server_mode.user_header,
+        )
+        logger.info(
+            "Server mode: at most {} heavy actions at once outside the queue",
+            app.state.server_mode.max_actions,
+        )
+        if app.state.server_mode.quota_bytes is not None:
+            logger.info(
+                "Server mode: each person's folder may hold {} bytes",
+                app.state.server_mode.quota_bytes,
+            )
+        open_browser = False
     logger.info(
         "Starting VisionForge GUI at http://{}:{}", host, port
     )  # NOSONAR python:S5332 - local server URL

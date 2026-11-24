@@ -10,6 +10,8 @@ import { pickerCancelText } from "../lib/picker-feedback";
 import { useT } from "../i18n/useT";
 import { TextField } from "./controls/TextField";
 import { SampleDatasetButton } from "./SampleDatasetButton";
+import { ServerFoldersNote } from "./ServerFoldersNote";
+import { ROUTE, useRouteOpen } from "../lib/session";
 
 interface DatasetPickerProps {
   baseDir: string;
@@ -142,6 +144,7 @@ export function DatasetPicker({
     };
   }, [baseDir]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const canPickFolder = useRouteOpen(ROUTE.pickFolder);
   const handlePickFolder = async () => {
     setFeedback({ kind: "info", message: t.datasetPicker.opening });
     try {
@@ -236,21 +239,24 @@ export function DatasetPicker({
               help={paramHelp(t, "base_dir")}
             />
           </div>
-          <button
-            type="button"
-            onClick={() => void handlePickFolder()}
-            style={{
-              ...buttonStyle,
-              background: "transparent",
-              border: "1px solid var(--vf-panel-stroke)",
-              color: "var(--vf-text-dim)",
-            }}
-            title={t.datasetPicker.browseTitle}
-          >
-            {t.datasetPicker.browse}
-          </button>
+          {canPickFolder && (
+            <button
+              type="button"
+              onClick={() => void handlePickFolder()}
+              style={{
+                ...buttonStyle,
+                background: "transparent",
+                border: "1px solid var(--vf-panel-stroke)",
+                color: "var(--vf-text-dim)",
+              }}
+              title={t.datasetPicker.browseTitle}
+            >
+              {t.datasetPicker.browse}
+            </button>
+          )}
         </div>
 
+        <ServerFoldersNote />
         <SampleDatasetButton
           task="classification"
           onApply={(path) => onChange({ base_dir: path })}

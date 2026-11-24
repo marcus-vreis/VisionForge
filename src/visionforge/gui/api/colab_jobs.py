@@ -166,6 +166,8 @@ class ColabJobs:
     ) -> RemoteResult:
         name = session_name()
         script = profile_home(slug) / "jobs" / f"{name}.py"
+        on_event = _stamped(on_event, time.monotonic())
+        allocated = False
         try:
             new = self._cli(
                 slug, ALLOCATE_TIMEOUT_S, "new", "-s", name, "--gpu", accelerator
@@ -179,6 +181,7 @@ class ColabJobs:
                         detail=_tail(new),
                     ),
                 )
+            allocated = True
             on_event(
                 {
                     "event": "remote",
@@ -213,6 +216,8 @@ class ColabJobs:
             stop = self._cli(slug, CLI_TIMEOUT_S, "stop", "-s", name)
             if stop.returncode != 0:
                 logger.warning("colab stop -s {} failed: {}", name, _tail(stop))
+            elif allocated:
+                on_event({"event": "remote", "stage": "released", "session": name})
             script.unlink(missing_ok=True)
             script.with_suffix(".warmup.py").unlink(missing_ok=True)
 
@@ -620,6 +625,23 @@ def _result(
     if end.get("detail"):
         error = f"{error} ({end['detail']})"
     return RemoteResult("failed", error=error or tr("colab.run_no_end", detail=""))
+
+
+def _stamped(
+    on_event: Callable[[dict[str, Any]], None], started: float
+) -> Callable[[dict[str, Any]], None]:
+    """``on_event`` with each VM stage stamped with the seconds since the job began.
+
+    Stamped here rather than in the browser: a sheet opened mid-run replays the
+    events at once, and only the server knows when each one happened (issue 355).
+    """
+
+    def forward(event: dict[str, Any]) -> None:
+        if event.get("event") == "remote":
+            event = {**event, "elapsed_s": round(time.monotonic() - started, 1)}
+        on_event(event)
+
+    return forward
 
 
 def _tail(proc: subprocess.CompletedProcess[str]) -> str:

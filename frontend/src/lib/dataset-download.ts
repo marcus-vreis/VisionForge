@@ -43,6 +43,22 @@ export function makeDefaultDatasetForm(): DatasetDownloadForm {
   };
 }
 
+/** Where a download lands on a shared server: a folder named `name` inside the
+ *  person's own dataset folder, the only place they may write. The separator is
+ *  the one the server's own path uses. */
+export function ownDatasetPath(ownDir: string, name: string): string {
+  const sep = ownDir.includes("\\") ? "\\" : "/";
+  return `${ownDir.replace(/[\\/]+$/, "")}${sep}${name.trim()}`;
+}
+
+/** A folder name for a dataset id: `owner/project` becomes `owner-project`. */
+export function datasetFolderName(dataset: string): string {
+  return dataset
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^[-.]+|[-.]+$/g, "");
+}
+
 function _posInt(raw: string): number | null {
   const n = Number.parseInt(raw, 10);
   return Number.isFinite(n) && n > 0 ? n : null;

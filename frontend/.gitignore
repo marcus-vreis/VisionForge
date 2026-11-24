@@ -28,3 +28,4 @@ dist-ssr
 /test-results/
 /blob-report/
 /e2e/.work/
+/e2e/.work-server/
