@@ -88,6 +88,22 @@ def _split_pool(
     return cast(Iterator[tuple[NDArray[np.int64], NDArray[np.int64]]], split_iter)
 
 
+def _load_selected_weights(
+    model: torch.nn.Module, result: TrainResult, select_on: str
+) -> None:
+    """Put the weights that score the fold into ``model`` (ADR-242).
+
+    "last" scores the weights the model holds after its final epoch; only
+    "best" reloads the checkpoint the fold's own validation split chose.
+    """
+    if select_on != "best":
+        return
+    state_dict = torch.load(
+        str(result.model_path), map_location="cpu", weights_only=True
+    )
+    model.load_state_dict(state_dict)
+
+
 def _selected_epoch(result: TrainResult, select_on: str) -> int:
     """The epoch whose weights score the fold (ADR-242).
 
@@ -368,17 +384,7 @@ class CrossValidationBlock(ExperimentBlock):
                 cut = train_result.stopped
                 # 0 epochs only when stopped before the first: nothing to score.
                 if train_result.total_epochs:
-                    # "last" scores the weights the model holds after its
-                    # final epoch; only "best" reloads the checkpoint the
-                    # fold's own validation split chose (ADR-242).
-                    if cv.select_on == "best":
-                        state_dict = torch.load(
-                            str(train_result.model_path),
-                            map_location="cpu",
-                            weights_only=True,
-                        )
-                        model.load_state_dict(state_dict)  # type: ignore[arg-type]
-
+                    _load_selected_weights(model, train_result, cv.select_on)
                     eval_result = Evaluator(fold_config).evaluate(
                         model, fold_data.val_loader()
                     )
