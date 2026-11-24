@@ -189,17 +189,20 @@ class TaskCvRequest(BaseModel):
     select_on: Literal["best", "last"] = "best"
 
     @model_validator(mode="after")
-    def _last_needs_no_early_stopping(self) -> TaskCvRequest:
-        from visionforge.utils.config import check_select_on_early_stopping
+    def _last_needs_no_fold_validation(self) -> TaskCvRequest:
+        from visionforge.utils.config import check_select_on_last
 
         training = self.config.get("training")
-        patience = (
-            training.get("early_stopping_patience", 0)
-            if isinstance(training, dict)
-            else 0
+        if not isinstance(training, dict):
+            return self
+        patience = training.get("early_stopping_patience", 0)
+        scheduler = training.get("scheduler")
+        kind = scheduler.get("kind", "none") if isinstance(scheduler, dict) else "none"
+        check_select_on_last(
+            self.select_on,
+            patience=patience if isinstance(patience, int) else 0,
+            scheduler_kind=kind if isinstance(kind, str) else "none",
         )
-        if isinstance(patience, int):
-            check_select_on_early_stopping(self.select_on, patience)
         return self
 
 

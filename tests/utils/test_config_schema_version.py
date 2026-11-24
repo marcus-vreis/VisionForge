@@ -181,3 +181,46 @@ class TestSelectOnLastWithEarlyStopping:
         )
         cfg = ExperimentConfig.model_validate(raw)
         assert cfg.training.early_stopping_patience == 3
+
+
+class TestSelectOnLastWithPlateau:
+    """`select_on: last` with the plateau scheduler is refused (ADR-242 addendum).
+
+    ReduceLROnPlateau lowers the learning rate from the fold's own validation
+    loss, so the weights of the last epoch would still depend on that split.
+    """
+
+    def test_last_with_plateau_is_refused(self, tmp_path: Path) -> None:
+        raw = _raw(
+            tmp_path,
+            {
+                "block": "cross_validation",
+                "cross_validation": {"n_folds": 3, "select_on": "last"},
+                "training": {
+                    "early_stopping_patience": 0,
+                    "scheduler": {"kind": "plateau"},
+                },
+            },
+        )
+        with pytest.raises(ValidationError, match="plateau"):
+            ExperimentConfig.model_validate(raw)
+
+    @pytest.mark.parametrize(
+        ("rule", "kind"), [("last", "cosine"), ("last", "step"), ("best", "plateau")]
+    )
+    def test_other_combinations_are_accepted(
+        self, tmp_path: Path, rule: str, kind: str
+    ) -> None:
+        raw = _raw(
+            tmp_path,
+            {
+                "block": "cross_validation",
+                "cross_validation": {"n_folds": 3, "select_on": rule},
+                "training": {
+                    "early_stopping_patience": 0,
+                    "scheduler": {"kind": kind},
+                },
+            },
+        )
+        cfg = ExperimentConfig.model_validate(raw)
+        assert cfg.training.scheduler.kind == kind

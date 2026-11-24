@@ -47,3 +47,29 @@ class TestLastWithEarlyStopping:
         )
 
         assert req.select_on == rule
+
+
+class TestLastWithPlateau:
+    """`last` is refused when the task config uses the plateau scheduler."""
+
+    def test_last_with_plateau_is_refused(self) -> None:
+        with pytest.raises(ValidationError, match="plateau"):
+            TaskCvRequest.model_validate(
+                {
+                    "config": {"training": {"scheduler": {"kind": "plateau"}}},
+                    "select_on": "last",
+                }
+            )
+
+    @pytest.mark.parametrize(
+        ("rule", "kind"), [("last", "cosine"), ("last", "none"), ("best", "plateau")]
+    )
+    def test_other_combinations_are_accepted(self, rule: str, kind: str) -> None:
+        req = TaskCvRequest.model_validate(
+            {
+                "config": {"training": {"scheduler": {"kind": kind}}},
+                "select_on": rule,
+            }
+        )
+
+        assert req.select_on == rule

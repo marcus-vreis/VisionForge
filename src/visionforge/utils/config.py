@@ -566,21 +566,27 @@ class ExperimentConfig(BaseModel):
         if self.grid_search is not None:
             _check_grid_lr_mode(self.grid_search)
         if self.cross_validation is not None:
-            check_select_on_early_stopping(
+            check_select_on_last(
                 self.cross_validation.select_on,
-                self.training.early_stopping_patience,
+                patience=self.training.early_stopping_patience,
+                scheduler_kind=self.training.scheduler.kind,
             )
         return self
 
 
-def check_select_on_early_stopping(select_on: str, patience: int) -> None:
-    """Refuse ``select_on: last`` with early stopping (ADR-242 addendum).
+def check_select_on_last(select_on: str, *, patience: int, scheduler_kind: str) -> None:
+    """Refuse ``select_on: last`` when the fold's validation shapes the run.
 
-    Early stopping decides the final epoch from the fold's own validation
-    split, so "last" would still be chosen by that split.
+    ADR-242 addenda: early stopping decides the final epoch and the plateau
+    scheduler lowers the learning rate from the fold's own validation split,
+    so "the last epoch" would still depend on that split.
     """
-    if select_on == "last" and patience > 0:
+    if select_on != "last":
+        return
+    if patience > 0:
         raise ValueError(tr("config.select_on_last_early_stopping", patience=patience))
+    if scheduler_kind == "plateau":
+        raise ValueError(tr("config.select_on_last_plateau"))
 
 
 def _check_grid_lr_mode(grid: GridSearchConfig) -> None:
