@@ -136,3 +136,48 @@ class TestCrossValidationSelectOn:
 
         assert cfg.cross_validation is not None
         assert cfg.cross_validation.select_on == "best"
+
+
+class TestSelectOnLastWithEarlyStopping:
+    """`select_on: last` with early stopping is refused (ADR-242 addendum).
+
+    Early stopping reads the fold's own validation split to decide when to
+    stop, so "the last epoch" would still be chosen by that split.
+    """
+
+    def test_last_with_patience_is_refused(self, tmp_path: Path) -> None:
+        raw = _raw(
+            tmp_path,
+            {
+                "block": "cross_validation",
+                "cross_validation": {"n_folds": 3, "select_on": "last"},
+                "training": {"early_stopping_patience": 3},
+            },
+        )
+        with pytest.raises(ValidationError, match="early_stopping_patience"):
+            ExperimentConfig.model_validate(raw)
+
+    def test_last_without_patience_is_accepted(self, tmp_path: Path) -> None:
+        raw = _raw(
+            tmp_path,
+            {
+                "block": "cross_validation",
+                "cross_validation": {"n_folds": 3, "select_on": "last"},
+                "training": {"early_stopping_patience": 0},
+            },
+        )
+        cfg = ExperimentConfig.model_validate(raw)
+        assert cfg.cross_validation is not None
+        assert cfg.cross_validation.select_on == "last"
+
+    def test_best_with_patience_is_accepted(self, tmp_path: Path) -> None:
+        raw = _raw(
+            tmp_path,
+            {
+                "block": "cross_validation",
+                "cross_validation": {"n_folds": 3, "select_on": "best"},
+                "training": {"early_stopping_patience": 3},
+            },
+        )
+        cfg = ExperimentConfig.model_validate(raw)
+        assert cfg.training.early_stopping_patience == 3

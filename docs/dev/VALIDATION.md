@@ -103,9 +103,10 @@ As médias da coluna k-fold carregam ainda um viés otimista: a época de cada f
 avalia (`blocks/cross_validation.py` e `_cv_common._score_fold`). Não há divisão
 aninhada; a legenda LaTeX do K-fold declara isso em PT e EN.
 
-Na classificação, `cross_validation.select_on: last` tira esse viés de escolha:
-cada fold é avaliado na última época treinada, e o registro de cada fold no
-`run.json` guarda a regra (`select_on`) e a época avaliada (`selected_epoch`).
-O padrão continua `best`. Com `early_stopping_patience` acima de 0, o ponto de
-parada ainda lê a validação do fold (ADR-242). Regressão e segmentação não têm
-a opção e seguem escolhendo a melhor época.
+`select_on: last` tira esse viés de escolha: cada fold é avaliado na última
+época treinada, e o registro de cada fold no `run.json` guarda a regra
+(`select_on`) e a época avaliada (`selected_epoch`). Na classificação a opção
+fica em `cross_validation.select_on`; na regressão e na segmentação, no pedido
+do K-fold. O padrão continua `best`. `last` com `early_stopping_patience` acima
+de 0 é recusado, porque o ponto de parada leria a validação do fold (ADR-242).
+O scheduler `plateau` também lê essa validação e ainda é aceito com `last`.

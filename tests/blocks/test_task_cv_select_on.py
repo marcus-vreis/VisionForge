@@ -174,3 +174,26 @@ def test_a_fold_that_scored_nothing_has_no_selected_epoch(tmp_path: Path) -> Non
     assert [f.status for f in report.folds] == ["failed", "failed"]
     assert [f.selected_epoch for f in report.folds] == [None, None]
     assert report.select_on == "last"
+
+
+@pytest.mark.parametrize(("runner", "module", "factory", "make", "primary"), _TASKS)
+def test_the_runner_refuses_last_with_early_stopping(
+    tmp_path: Path,
+    runner: Callable[..., Any],
+    module: str,
+    factory: str,
+    make: Callable[[Path], Any],
+    primary: str,
+) -> None:
+    """A direct call (no request validation) is refused before any fold trains."""
+    config = make(tmp_path)
+    config = config.model_copy(
+        update={
+            "training": config.training.model_copy(
+                update={"early_stopping_patience": 2}
+            )
+        }
+    )
+
+    with pytest.raises(ValueError, match="early_stopping_patience"):
+        runner(config, n_folds=2, select_on="last")

@@ -2945,6 +2945,20 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "or 'f1' instead."
         ),
     },
+    "config.select_on_last_early_stopping": {
+        "pt": (
+            "select_on: 'last' não combina com early_stopping_patience={patience}: "
+            "a parada antecipada lê a validação do próprio fold, então a última "
+            "época ainda seria escolhida por ela. Use early_stopping_patience: 0 "
+            "ou select_on: 'best'."
+        ),
+        "en": (
+            "select_on: 'last' cannot be combined with "
+            "early_stopping_patience={patience}: early stopping reads the fold's "
+            "own validation split, so the last epoch would still be chosen by it. "
+            "Use early_stopping_patience: 0 or select_on: 'best'."
+        ),
+    },
     "config.unsafe_path_component": {
         "pt": "'{value}' não é um nome de pasta válido: use um único componente, sem separadores ou caracteres reservados.",
         "en": "'{value}' is not a valid directory name: use a single component without separators or reserved characters.",
