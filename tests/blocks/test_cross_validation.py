@@ -144,6 +144,7 @@ class TestFoldSplitting:
             mock_train_result = MagicMock()
             mock_train_result.stopped = False  # ran to its end (ADR-111)
             mock_train_result.total_epochs = 1
+            mock_train_result.best_epoch = 1
             mock_train_result.best_val_loss = 0.4
             mock_train_result.model_path = cv_config.output.models_dir / "dummy.pth"
             mock_trainer_cls.return_value.fit.return_value = mock_train_result
@@ -230,6 +231,7 @@ class TestNormalization:
             mock_train_result = MagicMock()
             mock_train_result.stopped = False  # ran to its end (ADR-111)
             mock_train_result.total_epochs = 1
+            mock_train_result.best_epoch = 1
             mock_train_result.best_val_loss = 0.4
             mock_train_result.model_path = cv_config.output.models_dir / "dummy.pth"
             mock_trainer_cls.return_value.fit.return_value = mock_train_result
@@ -293,6 +295,7 @@ class TestReportAndArtifacts:
             mock_train_result = MagicMock()
             mock_train_result.stopped = False  # ran to its end (ADR-111)
             mock_train_result.total_epochs = 1
+            mock_train_result.best_epoch = 1
             mock_train_result.best_val_loss = 0.4
             mock_train_result.model_path = cv_config.output.models_dir / "dummy.pth"
             mock_trainer_cls.return_value.fit.return_value = mock_train_result
@@ -390,6 +393,7 @@ class TestReportAndArtifacts:
             result = MagicMock()
             result.stopped = False
             result.total_epochs = 1
+            result.best_epoch = 1
             result.best_val_loss = 0.4
             result.model_path = run_dir / "best_model.pth"
             return result
@@ -449,6 +453,7 @@ class TestFailureHandling:
             mock_train_result = MagicMock()
             mock_train_result.stopped = False  # ran to its end (ADR-111)
             mock_train_result.total_epochs = 1
+            mock_train_result.best_epoch = 1
             mock_train_result.best_val_loss = 0.4
             mock_train_result.model_path = cv_config.output.models_dir / "dummy.pth"
 
@@ -519,6 +524,7 @@ class TestVramHygiene:
             mock_train_result = MagicMock()
             mock_train_result.stopped = False  # ran to its end (ADR-111)
             mock_train_result.total_epochs = 1
+            mock_train_result.best_epoch = 1
             mock_train_result.best_val_loss = 0.4
             mock_train_result.model_path = cv_config.output.models_dir / "dummy.pth"
             mock_trainer_cls.return_value.fit.return_value = mock_train_result
@@ -612,6 +618,7 @@ class TestKFoldVariants:
             mock_train_result = MagicMock()
             mock_train_result.stopped = False  # ran to its end (ADR-111)
             mock_train_result.total_epochs = 1
+            mock_train_result.best_epoch = 1
             mock_train_result.best_val_loss = 0.4
             mock_train_result.model_path = config.output.models_dir / "dummy.pth"
             mock_trainer_cls.return_value.fit.return_value = mock_train_result

@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from visionforge.utils.config import (
     CURRENT_SCHEMA_VERSION,
+    CrossValidationConfig,
     ExperimentConfig,
     load_config,
     migrate_config_dict,
@@ -100,3 +101,38 @@ class TestLoadConfigMigration:
         )
         with pytest.raises(ValidationError, match="newer version"):
             load_config(cfg_path)
+
+
+class TestCrossValidationSelectOn:
+    """`cross_validation.select_on` (ADR-242): v3, and old K-folds stay "best"."""
+
+    def test_the_default_is_best(self) -> None:
+        assert CrossValidationConfig().select_on == "best"
+
+    def test_last_is_accepted(self) -> None:
+        assert CrossValidationConfig(select_on="last").select_on == "last"
+
+    def test_another_rule_is_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            CrossValidationConfig.model_validate({"select_on": "median"})
+
+    def test_a_v2_config_migrates_to_v3(self) -> None:
+        out = migrate_config_dict({"name": "x", "schema_version": 2})
+        assert out["schema_version"] == 3
+
+    def test_a_v2_kfold_without_the_field_loads_as_best(self, tmp_path: Path) -> None:
+        raw = _raw(
+            tmp_path,
+            {
+                "schema_version": 2,
+                "block": "cross_validation",
+                "cross_validation": {"n_folds": 3},
+            },
+        )
+        cfg_path = tmp_path / "v2_kfold.yaml"
+        cfg_path.write_text(yaml.safe_dump(raw), encoding="utf-8")
+
+        cfg = load_config(cfg_path)
+
+        assert cfg.cross_validation is not None
+        assert cfg.cross_validation.select_on == "best"

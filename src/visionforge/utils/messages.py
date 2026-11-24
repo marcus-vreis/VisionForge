@@ -3216,30 +3216,40 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "({cut} stopped before finishing)."
         ),
     },
+    # The caption ends with the sentence of the rule that picked each fold's
+    # epoch (cross_validation.select_on, ADR-242).
     "latex.cv_caption": {
-        "pt": (
-            "{experiment}: validação cruzada com {n_folds} folds. A época de cada "
-            "fold é escolhida no próprio fold de validação, que também a avalia: "
-            "estimativa otimista, sem divisão aninhada."
-        ),
-        "en": (
-            "{experiment}: {n_folds}-fold cross-validation. Each fold's epoch is "
-            "selected on its own fold's validation split, which also scores it: "
-            "an optimistic estimate, with no nested split."
-        ),
+        "pt": "{experiment}: validação cruzada com {n_folds} folds.",
+        "en": "{experiment}: {n_folds}-fold cross-validation.",
     },
     "latex.cv_caption_partial": {
         "pt": (
             "{experiment}: validação cruzada com {n_folds} folds, {finished} de "
-            "{n_folds} folds concluídos ({detail}). A época de cada fold é "
-            "escolhida no próprio fold de validação, que também a avalia: "
-            "estimativa otimista, sem divisão aninhada."
+            "{n_folds} folds concluídos ({detail})."
         ),
         "en": (
             "{experiment}: {n_folds}-fold cross-validation, {finished} of "
-            "{n_folds} folds finished ({detail}). Each fold's epoch is selected "
-            "on its own fold's validation split, which also scores it: an "
-            "optimistic estimate, with no nested split."
+            "{n_folds} folds finished ({detail})."
+        ),
+    },
+    "latex.cv_selection_best": {
+        "pt": (
+            "A época de cada fold é escolhida no próprio fold de validação, que "
+            "também a avalia: estimativa otimista, sem divisão aninhada."
+        ),
+        "en": (
+            "Each fold's epoch is selected on its own fold's validation split, "
+            "which also scores it: an optimistic estimate, with no nested split."
+        ),
+    },
+    "latex.cv_selection_last": {
+        "pt": (
+            "Cada fold é avaliado na última época treinada, sem escolher a época "
+            "no próprio fold de validação."
+        ),
+        "en": (
+            "Each fold is scored at its last trained epoch, with no epoch "
+            "selected on its own fold's validation split."
         ),
     },
     "latex.cv_mean_sd": {
