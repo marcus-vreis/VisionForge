@@ -26,6 +26,7 @@ from visionforge.core.replicates import sample_std
 from visionforge.core.resume import discard_resume_state
 from visionforge.core.segmentation_data import SegmentationDataset
 from visionforge.core.trainer import seed_before_building
+from visionforge.utils.config import check_select_on_early_stopping
 from visionforge.utils.regression_config import RegressionConfig
 from visionforge.utils.segmentation_config import SegmentationConfig
 
@@ -320,6 +321,9 @@ def _run_fold(
 
 def run_folds(context: FoldContext, task: FoldTask) -> CrossValidationReport:
     """Execute K folds with shared failure, progress and cancellation handling."""
+    check_select_on_early_stopping(
+        context.select_on, context.config.training.early_stopping_patience
+    )
     n_folds = context.split.n_folds
     progress_callback = context.progress_callback
     cancel_token = context.cancel_token

@@ -565,7 +565,22 @@ class ExperimentConfig(BaseModel):
             raise ValueError(tr("config.auc_multiclass"))
         if self.grid_search is not None:
             _check_grid_lr_mode(self.grid_search)
+        if self.cross_validation is not None:
+            check_select_on_early_stopping(
+                self.cross_validation.select_on,
+                self.training.early_stopping_patience,
+            )
         return self
+
+
+def check_select_on_early_stopping(select_on: str, patience: int) -> None:
+    """Refuse ``select_on: last`` with early stopping (ADR-242 addendum).
+
+    Early stopping decides the final epoch from the fold's own validation
+    split, so "last" would still be chosen by that split.
+    """
+    if select_on == "last" and patience > 0:
+        raise ValueError(tr("config.select_on_last_early_stopping", patience=patience))
 
 
 def _check_grid_lr_mode(grid: GridSearchConfig) -> None:

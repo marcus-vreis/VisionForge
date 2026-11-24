@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
 from visionforge.gui.api.dataset_scope import (
     DatasetDir,
@@ -187,6 +187,20 @@ class TaskCvRequest(BaseModel):
     # Which epoch scores each fold (ADR-242): "best" reloads the checkpoint the
     # fold's own validation split chose, "last" scores the final epoch.
     select_on: Literal["best", "last"] = "best"
+
+    @model_validator(mode="after")
+    def _last_needs_no_early_stopping(self) -> TaskCvRequest:
+        from visionforge.utils.config import check_select_on_early_stopping
+
+        training = self.config.get("training")
+        patience = (
+            training.get("early_stopping_patience", 0)
+            if isinstance(training, dict)
+            else 0
+        )
+        if isinstance(patience, int):
+            check_select_on_early_stopping(self.select_on, patience)
+        return self
 
 
 class ReplicatesRequest(BaseModel):

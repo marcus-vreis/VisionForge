@@ -230,7 +230,8 @@ without touching the package.
   fold-safe transforms. By default each fold keeps the epoch that did best on
   its own fold, and that same fold scores it: the mean is optimistic (there is
   no nested split). `cross_validation.select_on: last` scores each fold at its
-  last epoch instead, with no selection on that fold. The LaTeX caption names
+  last epoch instead, with no selection on that fold (refused with early
+  stopping, which would pick the stop on that fold). The LaTeX caption names
   the rule used.
 - **Sweeps** — grid, random or Optuna over any config field.
 - **Paired significance tests** — compare configurations over the *same* seeds,
@@ -633,8 +634,8 @@ sem tocar no pacote.
   transformações que não vazam entre folds. Por padrão cada fold guarda a época
   que foi melhor no próprio fold, e esse mesmo fold a avalia: a média é otimista
   (não há divisão aninhada). `cross_validation.select_on: last` avalia cada fold
-  na última época, sem escolha nesse fold. A legenda do LaTeX diz qual regra
-  valeu.
+  na última época, sem escolha nesse fold (recusado com parada antecipada, que
+  escolheria a parada nesse fold). A legenda do LaTeX diz qual regra valeu.
 - **Buscas** — grid, aleatória ou Optuna sobre qualquer campo do config.
 - **Testes de significância pareados** — compare configurações nas *mesmas*
   sementes, com teste t pareado ou Wilcoxon e o IC da diferença que inverte

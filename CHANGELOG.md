@@ -17,6 +17,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 - Regressão e segmentação, K-fold: `select_on` (`best` ou `last`, padrão `best`) escolhe a época que avalia cada fold, como na classificação. Entra no corpo de `POST /api/{regression,segmentation}/cv`, nas opções `strategy` do YAML da CLI e no cartão **Cross-validation** da GUI (**Época por fold**). `last` avalia os pesos da última época treinada, sem escolher a época no fold. O relatório do K-fold (`run.json`, `cv_summary.json`) grava `select_on` no topo e `select_on` e `selected_epoch` em cada fold. Sem mudança de `schema_version`: o campo é do pedido, não do config (ADR-242).
 
+### Changed
+
+- K-fold, todas as tarefas com a opção: `select_on: last` com `early_stopping_patience` acima de 0 passa a ser recusado com uma mensagem que explica o motivo. Na classificação o erro vem ao carregar o config; na regressão e na segmentação, como 422 no pedido do K-fold, também pela CLI. A parada antecipada lê a validação do próprio fold, então a última época ainda seria escolhida por ela (ADR-242). O scheduler `plateau` continua aceito.
+
 ## [0.23.0] — 2026-11-24
 
 ### Added
