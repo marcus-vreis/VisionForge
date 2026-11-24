@@ -84,9 +84,6 @@ Num servidor compartilhado a página é a mesma, com menos botões:
   dataset de exemplo. *Não verificado:* o guia do primeiro treino percorrido
   até o fim num servidor.
 
-Na primeira visita a página pergunta o seu nome. Ele serve só para a saudação
-e fica no seu navegador; a conta continua sendo a do login.
-
 ## Como ligar
 
 ```powershell
@@ -125,8 +122,9 @@ feita ainda; o comportamento acima foi testado com pedidos simulados.
 No modo servidor uma pessoa só consegue apontar para duas áreas do disco:
 
 - **A pasta dela:** `outputs/profiles/<perfil>/datasets/`, criada no primeiro
-  acesso. Ainda não há envio de dataset pela tela, então hoje quem põe arquivos
-  ali é quem administra o servidor.
+  acesso. A tela não envia arquivos do seu computador: o que entra ali vem de
+  um download pela tela, do dataset de exemplo, do Laboratório ou de quem
+  administra o servidor (veja "Pôr um dataset no servidor").
 - **As pastas compartilhadas:** as que o servidor recebeu em `--datasets-dir`.
   Servem para os datasets que o grupo todo usa.
 
@@ -473,9 +471,10 @@ Regras do download num servidor:
   processo, e pôr a sua ali a entregaria aos downloads das outras pessoas.
   Baixe no seu computador e peça ao operador para compartilhar a pasta.
 
-Limites que o operador precisa conhecer: não há cota de disco por pessoa nem
-limite de downloads ao mesmo tempo, e o download roda na hora, fora da fila.
-O cache do Hugging Face fica na conta com que o servidor roda.
+Limites que o operador precisa conhecer: o download roda na hora, fora da
+fila, e conta em `--max-actions` (veja "Ações que rodam na hora"); o que ele
+grava conta na cota de disco, quando o servidor tem uma (veja "Cota de
+disco"). O cache do Hugging Face fica na conta com que o servidor roda.
 
 ## O Laboratório num servidor
 
