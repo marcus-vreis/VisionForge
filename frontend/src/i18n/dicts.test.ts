@@ -161,6 +161,8 @@ describe("English terminology", () => {
   it("gives a field one name wherever it is asked for", () => {
     expect(en.cvCard.foldSeed).toBe(en.paramPanel.fieldLabels.fold_seed);
     expect(en.cvCard.folds).toBe(en.paramPanel.fieldLabels.n_folds);
+    expect(en.cvCard.epochRule).toBe(en.paramPanel.fieldLabels.select_on);
+    expect(en.cvCard.epochRuleHelp).toBe(en.paramHelp.select_on);
     expect(en.taskPanel.dataset.trainSplit).toBe(en.datasetPicker.trainSubdir);
     expect(en.taskPanel.dataset.valSplit).toBe(en.datasetPicker.valSubdir);
     expect(en.taskPanel.dataset.testSplit).toBe(en.datasetPicker.testSubdir);

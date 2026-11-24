@@ -59,9 +59,17 @@ class TestRegressionCv:
         captured: dict[str, object] = {}
 
         def fake_cv(  # type: ignore[no-untyped-def]
-            config, *, n_folds, shuffle, seed, progress_callback=None, cancel_token=None
+            config,
+            *,
+            n_folds,
+            shuffle,
+            seed,
+            select_on="best",
+            progress_callback=None,
+            cancel_token=None,
         ):
             captured["n_folds"] = n_folds
+            captured["select_on"] = select_on
             captured["shuffle"] = shuffle
             captured["seed"] = seed
             folds = [
@@ -73,6 +81,7 @@ class TestRegressionCv:
                 metric="r2",
                 folds=folds,
                 aggregate={"r2": {"mean": 0.85, "std": 0.05}},
+                select_on=select_on,
             )
 
         monkeypatch.setattr(strategies_mod, "run_regression_cross_validation", fake_cv)
@@ -85,6 +94,7 @@ class TestRegressionCv:
                     "n_folds": 2,
                     "shuffle": True,
                     "fold_seed": 7,
+                    "select_on": "last",
                 },
             )
             assert resp.status_code == 200, resp.text
@@ -93,11 +103,17 @@ class TestRegressionCv:
             status = wait_experiment_done(client)
             assert status["status"] == "completed", status
 
-            assert captured == {"n_folds": 2, "shuffle": True, "seed": 7}
+            assert captured == {
+                "n_folds": 2,
+                "shuffle": True,
+                "seed": 7,
+                "select_on": "last",
+            }
 
             report = client.get(f"/api/experiment/result/{run_id}").json()["report"]
             assert report["n_folds"] == 2
             assert report["metric"] == "r2"
+            assert report["select_on"] == "last"
             assert report["successful_folds"] == 2
             assert [f["fold"] for f in report["fold_results"]] == [0, 1]
             assert report["aggregate"]["r2"]["mean"] == 0.85

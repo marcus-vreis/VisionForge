@@ -58,9 +58,17 @@ class TestSegmentationCv:
         captured: dict[str, object] = {}
 
         def fake_cv(  # type: ignore[no-untyped-def]
-            config, *, n_folds, shuffle, seed, progress_callback=None, cancel_token=None
+            config,
+            *,
+            n_folds,
+            shuffle,
+            seed,
+            select_on="best",
+            progress_callback=None,
+            cancel_token=None,
         ):
             captured["n_folds"] = n_folds
+            captured["select_on"] = select_on
             captured["config_type"] = type(config).__name__
             folds = [
                 FoldResult(0, "success", 4, 2, {"miou": 0.6, "dice": 0.7}),
@@ -71,6 +79,7 @@ class TestSegmentationCv:
                 metric="miou",
                 folds=folds,
                 aggregate={"miou": {"mean": 0.7, "std": 0.1}},
+                select_on=select_on,
             )
 
         monkeypatch.setattr(
@@ -80,7 +89,11 @@ class TestSegmentationCv:
             client = live_client
             resp = client.post(
                 "/api/segmentation/cv",
-                json={"config": _payload(tmp_path), "n_folds": 2},
+                json={
+                    "config": _payload(tmp_path),
+                    "n_folds": 2,
+                    "select_on": "last",
+                },
             )
             assert resp.status_code == 200, resp.text
             run_id = resp.json()["run_id"]
@@ -89,10 +102,12 @@ class TestSegmentationCv:
             assert status["status"] == "completed", status
 
             assert captured["n_folds"] == 2
+            assert captured["select_on"] == "last"
             assert captured["config_type"] == "SegmentationConfig"
 
             report = client.get(f"/api/experiment/result/{run_id}").json()["report"]
             assert report["metric"] == "miou"
+            assert report["select_on"] == "last"
             assert report["successful_folds"] == 2
             assert report["aggregate"]["miou"]["mean"] == 0.7
             assert (Path(report["report_dir"]) / "cv_summary.json").exists()

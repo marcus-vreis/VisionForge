@@ -256,7 +256,13 @@ def _run_cv(
     config_type, cv_fn = _cv_function(_task_of(config))
     req = TaskCvRequest.model_validate({**options, "config": config})
     validated = config_type.model_validate(req.config)
-    cv = cv_fn(validated, n_folds=req.n_folds, shuffle=req.shuffle, seed=req.fold_seed)
+    cv = cv_fn(
+        validated,
+        n_folds=req.n_folds,
+        shuffle=req.shuffle,
+        seed=req.fold_seed,
+        select_on=req.select_on,
+    )
     return finish_kfold(
         cv,
         n_folds=req.n_folds,

@@ -15,7 +15,7 @@ eval transform. A failed fold is recorded and skipped, not fatal.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 
 from visionforge.blocks import _cv_common
 from visionforge.core.cancellation import CancellationToken
@@ -43,6 +43,7 @@ def run_regression_cross_validation(
     n_folds: int,
     shuffle: bool = True,
     seed: int = 42,
+    select_on: Literal["best", "last"] = "best",
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
     cancel_token: CancellationToken | None = None,
 ) -> CrossValidationReport:
@@ -86,6 +87,7 @@ def run_regression_cross_validation(
             split=_cv_common.FoldSplit(n_folds, shuffle, seed),
             progress_callback=progress_callback,
             cancel_token=cancel_token,
+            select_on=select_on,
         ),
         _cv_common.FoldTask(
             create_model=RegressionModelFactory.create,

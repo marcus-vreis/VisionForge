@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 import numpy as np
 import torch
@@ -42,6 +42,10 @@ class FoldResult:
     error: str = ""
     # The fold's own run folder; None when it failed before training.
     run_dir: str | None = None
+    # The rule that picked the fold's epoch (ADR-242) and the epoch it picked;
+    # None when the fold scored nothing.
+    select_on: str = "best"
+    selected_epoch: int | None = None
 
 
 @dataclass
@@ -53,6 +57,8 @@ class CrossValidationReport:
     folds: list[FoldResult]
     # metric -> {"mean": …, "std": …, "n": …}; std is None for a single fold.
     aggregate: dict[str, dict[str, float | int | None]]
+    # The rule that picked each fold's epoch (ADR-242).
+    select_on: str = "best"
 
 
 class _FoldDataModule:
@@ -91,6 +97,7 @@ class FoldTrainingResult(Protocol):
     """Expose the training outcome required to score and stop a fold."""
 
     model_path: Path
+    best_epoch: int
     total_epochs: int
     stopped: bool
 
@@ -133,6 +140,7 @@ class FoldContext:
     split: FoldSplit
     progress_callback: Callable[[dict[str, Any]], None] | None
     cancel_token: CancellationToken | None
+    select_on: Literal["best", "last"] = "best"
 
 
 @dataclass(frozen=True)
@@ -220,12 +228,24 @@ def _score_fold(
     n_folds: int,
     log_format: str,
     log_fields: tuple[str, ...],
+    select_on: str = "best",
 ) -> None:
-    """Score completed folds with their best weights and original metric order."""
+    """Score completed folds at the epoch ``select_on`` names (ADR-242).
+
+    "best" reloads the checkpoint the fold's own validation split chose; "last"
+    scores the weights the model holds after its final epoch. A fold trains
+    from epoch 1 and never resumes, so its last epoch is the epochs it ran.
+    """
     if not result.total_epochs:
         return
-    state = torch.load(str(result.model_path), map_location="cpu", weights_only=True)
-    model.load_state_dict(state)
+    if select_on == "best":
+        state = torch.load(
+            str(result.model_path), map_location="cpu", weights_only=True
+        )
+        model.load_state_dict(state)
+    record.selected_epoch = (
+        result.best_epoch if select_on == "best" else result.total_epochs
+    )
     values = trainer.evaluate(model, fold_data.val_loader())
     record.status = "success"
     record.metrics = {
@@ -285,6 +305,7 @@ def _run_fold(
             n_folds,
             task.metrics.log_format,
             task.metrics.log_fields,
+            context.select_on,
         )
     except Exception as exc:  # noqa: BLE001
         record.error = str(exc)
@@ -315,6 +336,7 @@ def run_folds(context: FoldContext, task: FoldTask) -> CrossValidationReport:
         record = FoldResult(
             fold=fold_idx,
             status="failed",
+            select_on=context.select_on,
             train_size=len(train_idx),
             val_size=len(val_idx),
         )
@@ -335,6 +357,7 @@ def run_folds(context: FoldContext, task: FoldTask) -> CrossValidationReport:
         metric=task.metrics.primary,
         folds=folds,
         aggregate=aggregate_folds(folds, task.metrics.aggregate_names),
+        select_on=context.select_on,
     )
 
 

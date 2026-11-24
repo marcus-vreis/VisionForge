@@ -362,7 +362,11 @@ class TestCrossValidation:
                 R2: {"mean": 1.0, "std": 0.5, "n": 3}
             }
             return CrossValidationReport(
-                n_folds=kwargs["n_folds"], metric=R2, folds=folds, aggregate=aggregate
+                n_folds=kwargs["n_folds"],
+                metric=R2,
+                folds=folds,
+                aggregate=aggregate,
+                select_on=kwargs["select_on"],
             )
 
         monkeypatch.setattr(regression_cv, "run_regression_cross_validation", fake_cv)
@@ -370,10 +374,60 @@ class TestCrossValidation:
             {"kind": "cv", "n_folds": 3, "fold_seed": 11}, _task_config(tmp_path)
         )
 
-        assert calls == [{"n_folds": 3, "shuffle": True, "seed": 11}]
+        assert calls == [
+            {"n_folds": 3, "shuffle": True, "seed": 11, "select_on": "best"}
+        ]
         assert report["successful_folds"] == 3
+        assert report["select_on"] == "best"
         group = _group_json(tmp_path / "models", "reg_cv")
         assert group["group"]["kind"] == "kfold"
+
+    def test_select_on_last_reaches_the_runner_and_the_report(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import visionforge.blocks.regression_cv as regression_cv
+        from visionforge.blocks._cv_common import CrossValidationReport, FoldResult
+
+        calls: list[dict[str, Any]] = []
+
+        def fake_cv(config: RegressionConfig, **kwargs: Any) -> CrossValidationReport:
+            calls.append(kwargs)
+            folds = [
+                FoldResult(
+                    fold=i,
+                    status="success",
+                    train_size=8,
+                    val_size=4,
+                    metrics={R2: 0.5},
+                    select_on=kwargs["select_on"],
+                    selected_epoch=7,
+                )
+                for i in range(kwargs["n_folds"])
+            ]
+            return CrossValidationReport(
+                n_folds=kwargs["n_folds"],
+                metric=R2,
+                folds=folds,
+                aggregate={R2: {"mean": 0.5, "std": 0.0, "n": 2}},
+                select_on=kwargs["select_on"],
+            )
+
+        monkeypatch.setattr(regression_cv, "run_regression_cross_validation", fake_cv)
+        report = cli.run_strategy(
+            {"kind": "cv", "n_folds": 2, "select_on": "last"}, _task_config(tmp_path)
+        )
+
+        assert calls[0]["select_on"] == "last"
+        assert report["select_on"] == "last"
+        assert [f["selected_epoch"] for f in report["fold_results"]] == [7, 7]
+        assert {f["select_on"] for f in report["fold_results"]} == {"last"}
+
+    def test_an_unknown_select_on_is_refused(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="select_on"):
+            cli.run_strategy(
+                {"kind": "cv", "n_folds": 2, "select_on": "middle"},
+                _task_config(tmp_path),
+            )
 
 
 class TestEnvelope:
