@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { RunSummary } from "./RunSummary";
 import { useT } from "../i18n/useT";
-import { NumberField, Toggle } from "./controls";
+import { NumberField, SelectField, Toggle } from "./controls";
 
 export interface CvPayload {
   n_folds: number;
   shuffle: boolean;
   fold_seed: number;
+  /** Which epoch scores each fold (ADR-242). */
+  select_on: "best" | "last";
 }
 
 interface CvCardProps {
@@ -43,10 +45,11 @@ export function CvCard({ accent, disabled, onCv, runSignal }: CvCardProps) {
   const [nFolds, setNFolds] = useState(5);
   const [shuffle, setShuffle] = useState(true);
   const [foldSeed, setFoldSeed] = useState(42);
+  const [epochRule, setEpochRule] = useState<CvPayload["select_on"]>("best");
 
   const canRun = !disabled && nFolds >= 2;
 
-  const run = () => onCv({ n_folds: nFolds, shuffle, fold_seed: foldSeed });
+  const run = () => onCv({ n_folds: nFolds, shuffle, fold_seed: foldSeed, select_on: epochRule });
 
   // Fire on a new signal only — see ReplicatesCard for the rationale.
   // Set when the bottom bar asked to run and this card could not: local state,
@@ -98,6 +101,15 @@ export function CvCard({ accent, disabled, onCv, runSignal }: CvCardProps) {
             onChange={(v) => setFoldSeed(Math.max(0, Math.round(v)))}
             min={0}
             step={1}
+          />
+        </div>
+        <div style={{ width: 150 }}>
+          <SelectField
+            label={t.cvCard.epochRule}
+            value={epochRule}
+            onChange={(v) => setEpochRule(v === "last" ? "last" : "best")}
+            options={["best", "last"]}
+            help={t.cvCard.epochRuleHelp}
           />
         </div>
         <RunSummary

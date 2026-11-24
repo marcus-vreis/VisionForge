@@ -184,6 +184,9 @@ class TaskCvRequest(BaseModel):
     n_folds: int = Field(default=5, ge=2, le=20)
     shuffle: bool = True
     fold_seed: int = 42
+    # Which epoch scores each fold (ADR-242): "best" reloads the checkpoint the
+    # fold's own validation split chose, "last" scores the final epoch.
+    select_on: Literal["best", "last"] = "best"
 
 
 class ReplicatesRequest(BaseModel):

@@ -242,7 +242,7 @@ Itens das fontes que ficaram de fora desta rodada, para a próxima triagem.
 - Médias macro divergentes: refutado. `_confusion_metrics` em `core/metric_ci.py` já tira a média só das classes presentes, como o sklearn sem `labels` usado em `core/evaluator.py`. O teste `test_macro_point_matches_the_evaluator_when_a_declared_class_is_absent` (`tests/core/test_metric_ci.py`) fixa isso de ponta a ponta, com 4 classes declaradas e 3 presentes.
 - `gui --check` (#401) não sobe o servidor: confere import, build da SPA, `/api/health` chamado direto e porta livre. Resolvido por `--smoke`: uvicorn numa porta efêmera de 127.0.0.1, GET em `/api/health` e encerramento limpo.
 - `cross_validation.select_on: last` (ADR-242): com `early_stopping_patience > 0` ou o scheduler `plateau`, o fold ainda lê a própria validação. Recusar essa combinação no config é decisão do mantenedor.
-- `select_on` só existe no K-fold de classificação: regressão e segmentação usam `TaskCvRequest` e não têm a opção.
+- ~~`select_on` só existe no K-fold de classificação: regressão e segmentação usam `TaskCvRequest` e não têm a opção.~~ Resolvido: `TaskCvRequest.select_on` (padrão `best`) chega ao K-fold de regressão e de segmentação pela API, pela CLI e pelo cartão Cross-validation da GUI (adendo ao ADR-242).
 
 ## Fusões e ajustes do crítico
 

@@ -2904,6 +2904,9 @@ export const en: Dict = {
     shuffle: "Shuffle",
     shuffleHint: "before splitting",
     foldSeed: "Fold seed",
+    epochRule: "Epoch per fold",
+    epochRuleHelp:
+      "Which epoch scores each fold. best keeps the epoch with the lowest validation loss on the fold itself, which then scores it: an optimistic estimate. last scores the final epoch, with no choice made on the fold.",
     summary: (folds: number) => `${folds} folds · run it with the button below`,
   },
   compareModelsCard: {

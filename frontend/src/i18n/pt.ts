@@ -3103,6 +3103,9 @@ export const pt = {
     shuffle: "Shuffle",
     shuffleHint: "antes do split",
     foldSeed: "Seed do split",
+    epochRule: "Época por fold",
+    epochRuleHelp:
+      "Qual época avalia cada fold. best fica com a de menor loss de validação no próprio fold, que depois a avalia: estimativa otimista. last avalia a última época, sem escolha feita no fold.",
     // K is at least 2 (the field's minimum), so "folds" is plural only.
     summary: (folds: number) => `${folds} folds · roda pelo botão abaixo`,
   },

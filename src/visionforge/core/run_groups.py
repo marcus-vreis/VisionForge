@@ -861,6 +861,8 @@ def finish_kfold(
     report: dict[str, Any] = {
         "n_folds": cv.n_folds,
         "metric": cv.metric,
+        # The rule that picked each fold's epoch (ADR-242).
+        "select_on": cv.select_on,
         "fold_results": [asdict(f) for f in cv.folds],
         "aggregate": cv.aggregate,
         "successful_folds": sum(1 for f in cv.folds if f.status == _SUCCESS),

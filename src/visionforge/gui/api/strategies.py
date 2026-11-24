@@ -600,6 +600,7 @@ async def _execute_task_cv(
             n_folds=req.n_folds,
             shuffle=req.shuffle,
             seed=req.fold_seed,
+            select_on=req.select_on,
             progress_callback=progress,
             cancel_token=token,
         )
