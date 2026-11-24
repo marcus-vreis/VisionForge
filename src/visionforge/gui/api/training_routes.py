@@ -271,8 +271,8 @@ def _refuse(message: str) -> NoReturn:
 
 
 def _check_detection_dataset(config: DetectionConfig) -> None:
-    """Refuse an Ultralytics run without its extra (ADR-195), or a YOLO
-    ``base_dir`` with no split or no train images."""
+    """Refuse an Ultralytics run when ultralytics is missing (a damaged install,
+    ADR-243), or a YOLO ``base_dir`` with no split or no train images."""
     if config.model.backend == "ultralytics" and not ultralytics_installed():
         _refuse(ultralytics_missing_message())
     data = config.data

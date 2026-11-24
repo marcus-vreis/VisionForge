@@ -65,13 +65,6 @@ describe("DetectionPanel steps", () => {
     const model = section(render(), "model");
     expect(model).toContain(`Torchvision · ${pt.detectionPanel.model.noAgplBadge}`);
     expect(model).toContain(`>${pt.detectionPanel.model.noAgplBadge}</span>`);
-    // Before the server answers nothing is claimed about the install.
-    expect(model).not.toContain("ultralytics-missing");
-  });
-  it("words the missing-extra note with the install line as code", () => {
-    const text = pt.detectionPanel.model.ultralyticsMissing('pip install "visionforge-studio[detection]"');
-    expect(text).toContain('`pip install "visionforge-studio[detection]"`');
-    expect(text).toContain("AGPL-3.0");
   });
   it("uses the selected YAML path for dataset readiness", () => {
     const form = makeDefaultDetectionForm();

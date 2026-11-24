@@ -26,7 +26,7 @@ def export_detection_run(
     Raises:
         FileNotFoundError: if the run has no usable checkpoint.
         ValueError: for the (unsupported) torchvision backend.
-        RuntimeError: if the ultralytics extra is not installed.
+        RuntimeError: if ultralytics is missing (a damaged install).
     """
     config: dict[str, Any] = data.get("config", {})
     backend = (config.get("model") or {}).get("backend", "ultralytics")

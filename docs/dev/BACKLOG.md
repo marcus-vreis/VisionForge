@@ -218,7 +218,7 @@ Onde há um default proposto, ele está na issue.
 - SEC-2: /docs desligado por padrão com VISIONFORGE_DOCS=1 (proposto) ou ligado com exceção de CSP para cdn.jsdelivr.net.
 - SEC-8: pesos (weights/*.pt) fora do bundle público (proposto) ou publicados com train_args reescritos; o paper precisa dos pesos?
 - SEC-10: revisar o texto legal sobre AGPL antes do merge.
-- SEC-11: ultralytics obrigatório e só avisar (A), extra 'detection' (B) ou B + selo 'sem AGPL' no backend torchvision (C). Bloqueia GUI-8.
+- SEC-11: resolvido no ADR-243 (2026-11-24). O mantenedor reverteu o extra 'detection' do ADR-195 (opção B+C): o ultralytics volta a ser dependência obrigatória e `[detection]` fica como extra vazio; o selo 'sem AGPL' no backend torchvision continua.
 - SEC-12: assumir publicamente o modo offline garantido (flag nova, citação no paper).
 - GUI-2: variantes em um eixo (proposto) ou livres; teto de seeds na GUI.
 - GUI-8: mostrar código AGPL do Ultralytics na aba Código (a, b com notas tolerantes, ou c com teto de versão).

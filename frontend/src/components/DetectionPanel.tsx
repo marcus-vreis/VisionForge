@@ -47,7 +47,6 @@ import { DatasetAudit } from "./DatasetAudit";
 import { PreprocessingPanel } from "./PreprocessingPanel";
 import { StrategyCard, type PanelStrategy } from "./ExperimentHeader";
 import { Rich } from "./Rich";
-import { missingUltralyticsCommand, useUltralyticsStatus } from "../lib/ultralytics-status";
 import { ReplicatesCard } from "./ReplicatesCard";
 import { ReplicatedComparisonCard } from "./ReplicatedComparisonCard";
 import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-form";
@@ -155,9 +154,6 @@ export function DetectionPanel({
     }));
 
   const isUltralytics = formData.model.backend === "ultralytics";
-  // Ultralytics is the optional `detection` extra (ADR-195).
-  const ultralyticsStatus = useUltralyticsStatus();
-  const installCommand = missingUltralyticsCommand(formData.model.backend, ultralyticsStatus);
 
   const onBackendChange = (raw: string) => {
     const backend = raw as DetectionBackend;
@@ -483,21 +479,6 @@ export function DetectionPanel({
                 help={paramHelp(t, "freeze")}
               />)}
             </div>
-            {installCommand && (
-              <p
-                role="status"
-                data-testid="ultralytics-missing"
-                style={{
-                  marginTop: 14,
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 11,
-                  lineHeight: 1.6,
-                  color: "var(--vf-text-muted)",
-                }}
-              >
-                <Rich text={t.detectionPanel.model.ultralyticsMissing(installCommand)} />
-              </p>
-            )}
           </div>
 
         </>

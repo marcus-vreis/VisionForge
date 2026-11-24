@@ -3708,7 +3708,7 @@ implying the backbone is untouched — the distinction matters in a paper, where
 **Status:** Accepted
 **Supersedes:** the per-feature extras of ADR-005 (the hardware extras stay)
 **Amended by:** ADR-170/171/172/176 (`mlflow`, `hub`, `wandb` and `dvc` are optional extras that install something; the seven extras named here stay empty)
-**Superseded in part by:** ADR-195 (`ultralytics`, AGPL-3.0, is again the `detection` extra; the other six stay in `dependencies`)
+**Superseded in part by:** ADR-195 (`ultralytics`, AGPL-3.0, is again the `detection` extra; the other six stay in `dependencies`), itself reverted by ADR-243 (`ultralytics` is back in `dependencies`)
 
 **Context:** seven capabilities were optional extras — `detection`, `timm`,
 `optuna`, `tensorboard`, `roboflow`, `kaggle`, `huggingface`. The reasoning was
@@ -7811,7 +7811,7 @@ differently now. Each fix has a test that failed before it
 ## ADR-195 — Ultralytics (AGPL-3.0) is the optional `detection` extra
 
 **Date:** 2026-11-11
-**Status:** Accepted
+**Status:** Amended by ADR-243 (`ultralytics` is a required dependency again; `detection` is an empty extra)
 **Supersedes in part:** ADR-106 (for `ultralytics` only; the other six stay in `dependencies`)
 
 **Context:** ADR-106 made `ultralytics` a base dependency of an MIT package. It
@@ -9295,3 +9295,53 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Save `last_model.pth` and reload it.* Same score, one more file per fold, and a second checkpoint path to keep in step with the trainer. The weights are already in memory when the fold is scored.
 - *Turn off early stopping under `last`.* It would change a training setting the config states; documenting it leaves the choice to the researcher.
 - *Add the field without a version bump.* An older build would ignore it and score the best epoch while the config says `last`.
+## ADR-243 — Ultralytics is a required dependency again (amends ADR-195)
+
+**Date:** 2026-11-24
+**Status:** Accepted
+**Amends:** ADR-195 (reverts its `detection` extra), ADR-106 (`ultralytics` is back in its list)
+
+**Context:** ADR-195 made `ultralytics` (AGPL-3.0) the optional `detection`
+extra (SEC-11, #223), so a plain `pip install visionforge-studio` trained
+detection only with the `torchvision` backend, and YOLO / RT-DETR needed a
+second install line. On 2026-11-24 the maintainer decided to revert it, after
+being reminded of ADR-195: the default detection backend should work from the
+one install, and the install stays simpler without a second line to know
+about. ADR-243 skips 242 on purpose: another change in flight reserved it.
+
+**Decision:**
+
+- `ultralytics>=8.3` is back in `[project].dependencies`. The `detection` extra
+  stays, empty, like the six ADR-106 kept: an install line saved with
+  `[detection]` keeps resolving instead of failing.
+- A missing `ultralytics` now means a damaged install, as it did before
+  ADR-195. Training, testing, ONNX export and the submit of a
+  `backend: ultralytics` config still fail with `detection.ultralytics_missing`
+  (pt/en), which now names the reinstall line of `missing_package_hint`
+  instead of the extra.
+- `GET /api/system/info` no longer reports `ultralytics_installed` or
+  `detection_install_command`, and the detection form drops the install line
+  that used them. The "sem AGPL" / "no AGPL" badge on the `torchvision` backend
+  stays: it is still true, and still the backend to pick to avoid AGPL code.
+- The install smoke installs one variant again, the CI jobs install `[dev]`
+  instead of `[dev,detection]`, the wheel smoke no longer checks that
+  `ultralytics` is absent, and the license gate walks `[project].dependencies`
+  without extras.
+- `THIRD_PARTY_NOTICES.md`, the README and `docs/INSTALL.md` say that
+  `pip install visionforge-studio` installs `ultralytics`, `ultralytics-thop`
+  and `ultralytics-platform`; their description of what the AGPL-3.0 asks is
+  the text ADR-195 left there, unchanged.
+
+**Consequences:** every install carries AGPL-3.0 code again, the situation
+ADR-195 described: an organisation that does not accept the AGPL cannot adopt
+VisionForge, even for classification, without Ultralytics' Enterprise License
+(#223). The packages already published (0.22.x) keep the extra; the change
+ships with the next release.
+
+**Alternatives considered:**
+
+- *Keep ADR-195.* The maintainer's call was that the simpler install is worth
+  more than a plain install without AGPL code.
+- *Drop the `detection` extra.* The empty names exist so an install line saved
+  in a requirements file or a README elsewhere keeps resolving (ADR-106); the
+  same holds for `[detection]`.
