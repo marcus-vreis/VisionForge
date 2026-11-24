@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.23.0] — 2026-11-24
+
 ### Added
 
 - Classificação, K-fold: `cross_validation.select_on` escolhe a época que avalia cada fold. `best` (padrão, o comportamento de antes) fica com a de menor `val_loss` no próprio fold de validação, que também a avalia; `last` avalia a última época treinada, sem escolher a época nesse fold, e a média deixa de ter esse viés otimista. Cada fold do `run.json` e do `cv_summary.json` registra `select_on` e `selected_epoch`, a legenda LaTeX do K-fold diz qual regra valeu e o cartão K-fold da GUI ganha o campo **Época por fold**. `schema_version` passa a 3: configs e `run.json` antigos carregam como `best`, e versões anteriores recusam uma config v3 em vez de ignorar o campo (ADR-242, STAT-7).
