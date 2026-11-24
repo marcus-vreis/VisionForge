@@ -270,7 +270,7 @@ def _anomaly_payload(base: Path, workdir: Path) -> dict[str, Any]:
 
 
 def _detection_payload(base: Path, workdir: Path) -> dict[str, Any]:
-    # torchvision backend with pretrained=False: no Ultralytics extra, no
+    # torchvision backend with pretrained=False: no Ultralytics, no
     # weight download, so the self-test runs offline on a bare install.
     return {
         "name": "selftest_det",

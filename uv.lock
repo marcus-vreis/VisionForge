@@ -7376,6 +7376,7 @@ dependencies = [
     { name = "seaborn" },
     { name = "tensorboard" },
     { name = "timm" },
+    { name = "ultralytics" },
     { name = "uvicorn" },
 ]
 
@@ -7406,9 +7407,6 @@ cu130 = [
     { name = "torch", version = "2.15.0", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-18-visionforge-studio-cu130') or (sys_platform == 'linux' and extra == 'extra-18-visionforge-studio-cu128' and extra == 'extra-18-visionforge-studio-cu130') or (sys_platform == 'win32' and extra == 'extra-18-visionforge-studio-cu128' and extra == 'extra-18-visionforge-studio-cu130') or (extra == 'extra-18-visionforge-studio-cpu' and extra == 'extra-18-visionforge-studio-cu126') or (extra == 'extra-18-visionforge-studio-cpu' and extra == 'extra-18-visionforge-studio-cu128') or (extra == 'extra-18-visionforge-studio-cpu' and extra == 'extra-18-visionforge-studio-cu130') or (extra == 'extra-18-visionforge-studio-cu126' and extra == 'extra-18-visionforge-studio-cu128') or (extra == 'extra-18-visionforge-studio-cu126' and extra == 'extra-18-visionforge-studio-cu130')" },
     { name = "torchvision", version = "0.29.1+cu130", source = { registry = "https://download.pytorch.org/whl/cu130" }, marker = "(sys_platform == 'linux' and extra == 'extra-18-visionforge-studio-cu130') or (sys_platform == 'win32' and extra == 'extra-18-visionforge-studio-cu130') or (extra == 'extra-18-visionforge-studio-cu128' and extra == 'extra-18-visionforge-studio-cu130') or (extra == 'extra-18-visionforge-studio-cpu' and extra == 'extra-18-visionforge-studio-cu126') or (extra == 'extra-18-visionforge-studio-cpu' and extra == 'extra-18-visionforge-studio-cu128') or (extra == 'extra-18-visionforge-studio-cpu' and extra == 'extra-18-visionforge-studio-cu130') or (extra == 'extra-18-visionforge-studio-cu126' and extra == 'extra-18-visionforge-studio-cu128') or (extra == 'extra-18-visionforge-studio-cu126' and extra == 'extra-18-visionforge-studio-cu130')" },
     { name = "torchvision", version = "0.29.2", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-18-visionforge-studio-cu130') or (sys_platform == 'linux' and extra == 'extra-18-visionforge-studio-cu128' and extra == 'extra-18-visionforge-studio-cu130') or (sys_platform == 'win32' and extra == 'extra-18-visionforge-studio-cu128' and extra == 'extra-18-visionforge-studio-cu130') or (extra == 'extra-18-visionforge-studio-cpu' and extra == 'extra-18-visionforge-studio-cu126') or (extra == 'extra-18-visionforge-studio-cpu' and extra == 'extra-18-visionforge-studio-cu128') or (extra == 'extra-18-visionforge-studio-cpu' and extra == 'extra-18-visionforge-studio-cu130') or (extra == 'extra-18-visionforge-studio-cu126' and extra == 'extra-18-visionforge-studio-cu128') or (extra == 'extra-18-visionforge-studio-cu126' and extra == 'extra-18-visionforge-studio-cu130')" },
-]
-detection = [
-    { name = "ultralytics" },
 ]
 dev = [
     { name = "bump-my-version" },
@@ -7479,7 +7477,7 @@ requires-dist = [
     { name = "torchvision", marker = "sys_platform != 'linux' and sys_platform != 'win32' and extra == 'cu130'", specifier = ">=0.28" },
     { name = "torchvision", marker = "extra == 'cpu'", specifier = ">=0.28", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "visionforge-studio", extra = "cpu" } },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0" },
-    { name = "ultralytics", marker = "extra == 'detection'", specifier = ">=8.3" },
+    { name = "ultralytics", specifier = ">=8.3" },
     { name = "uvicorn", specifier = ">=0.30" },
     { name = "wandb", marker = "extra == 'wandb'", specifier = "==0.31.0" },
 ]

@@ -1,9 +1,10 @@
-"""Whether a detection split has an image the trainer would read (ADR-195).
+"""Whether a detection split has an image the trainer would read.
 
 The submit check asks this before a run enters the queue. Ultralytics walks
 subfolders and reads formats (``.tif``, ``.avif``...) the stats probe does not
-count, so its own list decides when it is installed. Without the ``detection``
-extra only the torchvision backend can train, and its reader's extensions do.
+count, so its own list decides. It ships with the package (ADR-243); if it is
+missing (a damaged install) only the torchvision backend can train, and its
+reader's extensions do.
 """
 
 from __future__ import annotations

@@ -15,6 +15,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Changed
 
+- O Ultralytics (AGPL-3.0) volta a ser dependência obrigatória: `pip install visionforge-studio` já traz YOLO e RT-DETR, sem a segunda linha `[detection]`. O extra `detection` continua, vazio, para que linhas de instalação salvas sigam funcionando. Sem o Ultralytics (instalação danificada), treinar, testar ou exportar YOLO/RT-DETR e o submit com backend `ultralytics` param com a linha que reinstala o pacote; `/api/system/info` deixa de informar `ultralytics_installed` e `detection_install_command`, e o formulário de detecção deixa de mostrar a linha do extra. O selo "sem AGPL" no backend torchvision continua. `THIRD_PARTY_NOTICES.md`, README e `docs/INSTALL.md` dizem que o Ultralytics vem com o pacote (ADR-243, revertendo o extra do ADR-195).
 - `data.pin_memory` só tem efeito quando o treino roda em CUDA; em CPU ou MPS o DataLoader recebe `False`. O padrão `true` continua o mesmo e o schema não muda, mas um treino em CPU não avisa mais "'pin_memory' argument is set as true but no accelerator is found" a cada execução.
 
 ### Fixed

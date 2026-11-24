@@ -701,14 +701,14 @@ CATALOG: dict[str, dict[Lang, str]] = {
     },
     "detection.ultralytics_missing": {
         "pt": (
-            "O backend Ultralytics (YOLO / RT-DETR) não está instalado: ele é "
-            "opcional porque tem licença AGPL-3.0. Instale com {command} e reinicie "
-            "o VisionForge, ou escolha o backend torchvision."
+            "O backend Ultralytics (YOLO / RT-DETR) vem com o VisionForge e não "
+            "foi encontrado: a instalação parece danificada. Reinstale com "
+            "{command} e reinicie o VisionForge, ou escolha o backend torchvision."
         ),
         "en": (
-            "The Ultralytics backend (YOLO / RT-DETR) is not installed: it is "
-            "optional because it is licensed AGPL-3.0. Install it with {command} "
-            "and restart VisionForge, or pick the torchvision backend."
+            "The Ultralytics backend (YOLO / RT-DETR) ships with VisionForge and "
+            "is missing: the install looks damaged. Reinstall with {command} and "
+            "restart VisionForge, or pick the torchvision backend."
         ),
     },
     "export.torchvision_detection": {
@@ -1435,8 +1435,8 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "en": "Switched on, the values of your config go as they are.",
     },
     "code.yolo.fit.missing": {
-        "pt": "Sem o extra detection (o Ultralytics, AGPL-3.0) o treino para aqui, com a linha que o instala.",
-        "en": "Without the detection extra (Ultralytics, AGPL-3.0) training stops here, with the line that installs it.",
+        "pt": "Se o Ultralytics faltar (instalação danificada), o treino para aqui, com a linha que o reinstala.",
+        "en": "If Ultralytics is missing (a damaged install), training stops here, with the line that reinstalls it.",
     },
     "code.yolo.fit.weights": {
         "pt": "O modelo nasce dos pesos escolhidos: pré-treinados no COCO ou só a arquitetura.",

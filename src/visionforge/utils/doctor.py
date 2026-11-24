@@ -200,27 +200,23 @@ def missing_package_hint(package: str) -> str:
 
 
 def ultralytics_installed() -> bool:
-    """Whether the optional ``detection`` extra's ``ultralytics`` is importable.
+    """Whether ``ultralytics`` is importable.
 
+    It ships with the package (ADR-243), so False means a damaged install.
     ``find_spec`` instead of an import: importing ultralytics costs ~1.7 s and
-    the GUI asks this when the page loads. A ``None`` in ``sys.modules`` (how
-    tests block an import) reads as absent too.
+    the submit check asks this. A ``None`` in ``sys.modules`` (how tests block
+    an import) reads as absent too.
     """
     return importlib.util.find_spec("ultralytics") is not None
 
 
-def detection_install_command() -> str:
-    """The line that installs the ``detection`` extra (ultralytics, ADR-195)."""
-    if installed_from_source():
-        return 'pip install -e ".[detection]"'
-    return f'pip install "{_DIST_NAME}[detection]"'
-
-
 def ultralytics_missing_message() -> str:
-    """Why an Ultralytics run cannot start, and the install line that fixes it."""
+    """Why an Ultralytics run cannot start, and the reinstall line that fixes it."""
     from visionforge.utils.messages import tr
 
-    return tr("detection.ultralytics_missing", command=detection_install_command())
+    return tr(
+        "detection.ultralytics_missing", command=missing_package_hint("ultralytics")
+    )
 
 
 def build_install_command(tag: str) -> tuple[list[str], str]:
@@ -228,8 +224,8 @@ def build_install_command(tag: str) -> tuple[list[str], str]:
 
     Only torch and torchvision — the package itself is already installed, that
     is how doctor is running. And two steps, because since ADR-106 there is
-    always a torch here already: `timm` (and `ultralytics`, with the `detection`
-    extra of ADR-195) pulls one from PyPI on the first install, and on Windows PyPI only carries CPU builds. Asking pip to install
+    always a torch here already: `ultralytics` and `timm` pull one from PyPI on
+    the first install, and on Windows PyPI only carries CPU builds. Asking pip to install
     `visionforge-studio[cu128]` against the CUDA index then changed nothing —
     the CPU torch already satisfies `torch>=2.3`, so pip printed "Requirement
     already satisfied" and stopped (ADR-107).

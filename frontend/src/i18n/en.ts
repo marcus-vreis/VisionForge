@@ -1889,8 +1889,6 @@ export const en: Dict = {
       backend: "Backend",
       backendHint: "where the model comes from",
       noAgplBadge: "no AGPL",
-      ultralyticsMissing: (command: string) =>
-        `Ultralytics (AGPL-3.0) is not installed, so a run with it will be refused. Install it with \`${command}\` and restart VisionForge, or pick Torchvision.`,
       architecture: "Architecture",
       architectureHint: "detector",
       pretrained: "Pretrained weights",
@@ -3528,7 +3526,7 @@ export const en: Dict = {
           pytorch: "The neural network library every model here is trained with.",
           torchvision: "Ready-made architectures, pretrained weights and image transforms.",
           timm: "Hundreds of extra architectures, picked by name.",
-          ultralytics: "YOLO and RT-DETR for object detection. Optional, installed separately.",
+          ultralytics: "YOLO and RT-DETR for object detection. Installed with VisionForge (AGPL-3.0).",
           sklearn: "The metrics of the result and the K-fold division.",
           optuna: "The guided search for hyperparameters.",
           onnx: "Runs the model exported to ONNX, outside PyTorch.",
