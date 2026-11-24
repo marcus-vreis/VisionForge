@@ -112,6 +112,7 @@ class TestKFoldEpochs:
         cut = MagicMock()
         cut.stopped = True
         cut.total_epochs = 2
+        cut.best_epoch = 1
         cut.best_val_loss = 0.5
         cut.model_path = config.output.models_dir / "cut_fold" / "missing.pth"
         with (

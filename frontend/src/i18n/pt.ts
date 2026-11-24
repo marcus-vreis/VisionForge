@@ -1528,6 +1528,8 @@ export const pt = {
     box: "Peso da perda de localização das caixas.",
     cls: "Peso da perda de classificação.",
     dfl: "Peso da perda de distribuição das bordas da caixa.",
+    select_on:
+      "Qual época avalia cada fold. best fica com a de menor loss de validação no próprio fold, que depois a avalia: estimativa otimista. last avalia a última época, sem escolha feita no fold.",
   } satisfies Record<string, string>,
   // The hyperparameter form (components/ParamPanel.tsx). Sentences with inline
   // emphasis are written whole, with `code`, **strong** and __emphasis__ marks
@@ -1605,6 +1607,7 @@ export const pt = {
       stratified: "Stratified",
       shuffle: "Shuffle",
       fold_seed: "Fold seed",
+      select_on: "Época por fold",
       mode: "Modo",
       unfreeze_from_layer: "Descongelar a partir de",
       backbone_lr_multiplier: "LR do backbone (×)",

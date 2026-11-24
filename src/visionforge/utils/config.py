@@ -15,7 +15,7 @@ CONFIG_NOT_A_FILE_KEY = "config.not_a_file"
 # config carries the version it was written with so old YAML/run.json files can
 # be migrated forward (see ``migrate_config_dict``) without losing traceability —
 # the reproducibility guarantee depends on this (ADR-039).
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 
 
 # Shared by every task's data config, so each schema describes the field alike.
@@ -61,6 +61,17 @@ class CrossValidationConfig(BaseModel):
             "Optional path,group CSV; image paths are relative to data.base_dir. "
             "Relative manifest paths are also resolved against data.base_dir. "
             "All training images require a group; folds keep groups disjoint."
+        ),
+    )
+    # Which epoch scores each fold (ADR-242). A field an older build would
+    # ignore, so it bumped the schema to v3 (the ADR-158 rule).
+    select_on: Literal["best", "last"] = Field(
+        default="best",
+        description=(
+            "Época que pontua cada fold. 'best' (padrão) fica com a de menor "
+            "val_loss no próprio fold de validação, que também a avalia: "
+            "estimativa otimista. 'last' avalia a última época treinada, sem "
+            "escolher a época na validação do fold."
         ),
     )
 
@@ -602,6 +613,10 @@ def migrate_config_dict(raw: dict[str, Any]) -> dict[str, Any]:
     # Their defaults keep a v1 config training as written, so no shape changes.
     if version < 2:
         version = 2
+    # v2 -> v3 (ADR-242): cross_validation.select_on. Its default "best" keeps
+    # a v2 K-fold scoring each fold on its best epoch, as before.
+    if version < 3:
+        version = 3
     out["schema_version"] = version
     return out
 

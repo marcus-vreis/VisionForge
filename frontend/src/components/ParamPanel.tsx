@@ -617,7 +617,7 @@ function CrossValidationFields({
   if (!resolved.properties) return null;
 
   const setParam = (k: string, v: unknown) => onChange({ ...value, [k]: v });
-  const fields = ["n_folds", "stratified", "shuffle", "fold_seed"];
+  const fields = ["n_folds", "stratified", "shuffle", "fold_seed", "select_on"];
 
   return (
     <div
@@ -1895,6 +1895,7 @@ function withBlock(
       stratified: true,
       shuffle: true,
       fold_seed: 42,
+      select_on: "best",
     };
   }
   if (v === "transfer_learning" && !prev["transfer_learning"]) {

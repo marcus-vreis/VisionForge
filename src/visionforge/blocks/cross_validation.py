@@ -39,7 +39,7 @@ from visionforge.core.evaluator import Evaluator
 from visionforge.core.pin_memory import pin_memory_for
 from visionforge.core.replicates import sample_std
 from visionforge.core.run_groups import write_run_group
-from visionforge.core.trainer import Trainer, seed_before_building
+from visionforge.core.trainer import Trainer, TrainResult, seed_before_building
 from visionforge.models.factory import ModelFactory
 from visionforge.utils.config import CrossValidationConfig, DataConfig, ExperimentConfig
 
@@ -86,6 +86,31 @@ def _split_pool(
     else:
         split_iter = KFold(**options).split(indices)
     return cast(Iterator[tuple[NDArray[np.int64], NDArray[np.int64]]], split_iter)
+
+
+def _load_selected_weights(
+    model: torch.nn.Module, result: TrainResult, select_on: str
+) -> None:
+    """Put the weights that score the fold into ``model`` (ADR-242).
+
+    "last" scores the weights the model holds after its final epoch; only
+    "best" reloads the checkpoint the fold's own validation split chose.
+    """
+    if select_on != "best":
+        return
+    state_dict = torch.load(
+        str(result.model_path), map_location="cpu", weights_only=True
+    )
+    model.load_state_dict(state_dict)
+
+
+def _selected_epoch(result: TrainResult, select_on: str) -> int:
+    """The epoch whose weights score the fold (ADR-242).
+
+    A fold trains from epoch 1 and never resumes, so its last epoch is the
+    number of epochs it ran.
+    """
+    return result.best_epoch if select_on == "best" else result.total_epochs
 
 
 class _FoldDataModule:
@@ -288,6 +313,10 @@ class CrossValidationBlock(ExperimentBlock):
                 # Epochs the fold's trainer ran (early stopping and a user stop
                 # both cut it short); 0 for a fold that died before training.
                 "epochs_completed": 0,
+                # The rule that picked the scored epoch, and that epoch
+                # (ADR-242); None for a fold that scored nothing.
+                "select_on": cv.select_on,
+                "selected_epoch": None,
                 "best_val_loss": None,
                 "accuracy": None,
                 "f1": None,
@@ -355,18 +384,15 @@ class CrossValidationBlock(ExperimentBlock):
                 cut = train_result.stopped
                 # 0 epochs only when stopped before the first: nothing to score.
                 if train_result.total_epochs:
-                    state_dict = torch.load(
-                        str(train_result.model_path),
-                        map_location="cpu",
-                        weights_only=True,
-                    )
-                    model.load_state_dict(state_dict)  # type: ignore[arg-type]
-
+                    _load_selected_weights(model, train_result, cv.select_on)
                     eval_result = Evaluator(fold_config).evaluate(
                         model, fold_data.val_loader()
                     )
 
                     fold_record["status"] = "success"
+                    fold_record["selected_epoch"] = _selected_epoch(
+                        train_result, cv.select_on
+                    )
                     fold_record["best_val_loss"] = train_result.best_val_loss
                     fold_record["accuracy"] = eval_result.accuracy
                     fold_record["f1"] = eval_result.f1
@@ -491,6 +517,7 @@ class CrossValidationBlock(ExperimentBlock):
         summary: dict[str, Any] = {
             "experiment": base_name,
             "n_folds": cv.n_folds,
+            "select_on": cv.select_on,
             "folds": self._fold_results,
             "aggregate": {
                 "n": len(accuracies),
@@ -542,12 +569,17 @@ class CrossValidationBlock(ExperimentBlock):
         report: dict[str, Any] = {
             "metric": "accuracy",
             "n_folds": cv.n_folds,
+            # Read by the LaTeX caption; a report without it predates ADR-242
+            # and selected each fold's best epoch.
+            "select_on": cv.select_on,
             "fold_results": [
                 {
                     "fold": r["fold"],
                     "status": r["status"],
                     "run_dir": r.get("run_dir"),
                     "error": r.get("error") or "",
+                    "select_on": r["select_on"],
+                    "selected_epoch": r["selected_epoch"],
                     "metrics": {
                         k: r[k]
                         for k in ("accuracy", "f1", "best_val_loss")

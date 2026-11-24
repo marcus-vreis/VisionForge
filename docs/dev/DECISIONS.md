@@ -9264,6 +9264,37 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Rewrite the saved `run.json` files on read.* It edits a research record behind the researcher's back, and a run folder may be read-only or copied elsewhere.
 - *Rename `val_image_f1` and `val_threshold` in the same change.* Same reasoning, a larger surface; left for a separate decision.
 
+## ADR-242 — A K-fold can score each fold at its last epoch
+
+**Date:** 2026-11-24
+**Status:** Accepted
+**Relates to:** ADR-039 (`schema_version`), ADR-158 (an ignored field bumps the version), ADR-111 (stopped folds), ADR-123 (K-fold `run.json`)
+
+**Context:** the classification K-fold reloads each fold's `best_model.pth`, the epoch with the lowest `val_loss` on the fold's validation split, and scores it on that same split. The choice and the score read the same data, so the fold mean is optimistic. Issue #212 made the LaTeX caption, the README and `docs/dev/VALIDATION.md` say so. The maintainer (STAT-7) asked for a way to get a fold score with no selection on the fold.
+
+**Decision:**
+
+- `cross_validation.select_on: Literal["best", "last"] = "best"`. `best` is the behaviour before this ADR. `last` scores the weights the fold's model holds after its final epoch and does not load `best_model.pth`. Classification only: the regression and segmentation K-folds (`_cv_common`) take no `CrossValidationConfig` and keep scoring the best epoch.
+- Every fold record carries `select_on` and `selected_epoch` (the epoch scored: `best_epoch` for `best`, the last epoch run for `last`; `null` for a fold that scored nothing), in `metrics.fold_results` of the K-fold `run.json` and in `cv_summary.json`. The group report and `cv_summary.json` also carry `select_on` at the top.
+- The LaTeX K-fold caption ends with the sentence of the rule: the #212 sentence for `best`, "Each fold is scored at its last trained epoch, with no epoch selected on its own fold's validation split" for `last`. A report without `select_on` gets the `best` sentence, which is what it did.
+- `CURRENT_SCHEMA_VERSION` goes to 3. The v2 → v3 step changes no shape: the default keeps a v2 K-fold scoring as written. An older build refuses a v3 config instead of reading `select_on: last` and scoring the best epoch without saying so, the reasoning of ADR-158.
+- The GUI K-fold card gains the field (pt "Época por fold", en "Epoch per fold") with its explanation.
+
+**Consequences:**
+
+- A v2 config or a saved `run.json` loads as before and scores the best epoch. Configs and `run.json` files written from now on carry `schema_version: 3`, and builds before this one refuse them, as with ADR-158. Every task config shares the number.
+- `last` removes the epoch selection, not every use of the fold's validation split. With `training.early_stopping_patience` above 0 (the default is 0), the epoch where training stops is still decided by that split, and a `plateau` scheduler still reads it. The caption says "last trained epoch", which stays true in both cases.
+- The `best_model.pth` in each fold folder is still the best epoch. The weights `last` scores are not saved apart; rerunning the same config reproduces them.
+- `best_val_loss` in each fold record, and its mean in the K-fold `run.json`, remain the best validation loss of the fold, under either rule.
+- The classification K-fold writes no LaTeX table today (only the task K-folds go through `write_group_summary`); the caption rule applies wherever a K-fold report is turned into one.
+- Tests that mock a fold's `TrainResult` now set `best_epoch`, as the real one does.
+
+**Alternatives considered:**
+
+- *Nested cross-validation.* Removes the bias and keeps the selection, at K times the training. Larger than the problem asked for; still open.
+- *Save `last_model.pth` and reload it.* Same score, one more file per fold, and a second checkpoint path to keep in step with the trainer. The weights are already in memory when the fold is scored.
+- *Turn off early stopping under `last`.* It would change a training setting the config states; documenting it leaves the choice to the researcher.
+- *Add the field without a version bump.* An older build would ignore it and score the best epoch while the config says `last`.
 ## ADR-243 — Ultralytics is a required dependency again (amends ADR-195)
 
 **Date:** 2026-11-24

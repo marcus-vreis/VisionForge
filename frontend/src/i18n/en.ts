@@ -1485,6 +1485,8 @@ export const en: Dict = {
     box: "Weight of the box localization loss.",
     cls: "Weight of the classification loss.",
     dfl: "Weight of the distribution focal loss (DFL), which refines the box edges.",
+    select_on:
+      "Which epoch scores each fold. best keeps the epoch with the lowest validation loss on the fold itself, which then scores it: an optimistic estimate. last scores the final epoch, with no choice made on the fold.",
   },
   paramPanel: {
     // A model of the researcher's own comes from the Model step's selector or an
@@ -1557,6 +1559,7 @@ export const en: Dict = {
       stratified: "Stratified",
       shuffle: "Shuffle",
       fold_seed: "Fold seed",
+      select_on: "Epoch per fold",
       mode: "Mode",
       unfreeze_from_layer: "Unfreeze from layer",
       backbone_lr_multiplier: "Backbone LR (×)",

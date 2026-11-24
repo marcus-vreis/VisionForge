@@ -213,7 +213,7 @@ Onde há um default proposto, ele está na issue.
 
 - STAT-3: método do IC da diferença pareada (dual do teste t/Hodges-Lehmann, recomendado, ou BCa para todos); muda números já exibidos na GUI e no LaTeX.
 - STAT-6: AUROC com uma só classe vira null + aviso (recomendado) ou o dataset é recusado no carregamento.
-- STAT-7: oferecer cross_validation.select_on: last (schema novo + ADR) além da nota nas legendas.
+- ~~STAT-7: oferecer cross_validation.select_on: last (schema novo + ADR) além da nota nas legendas.~~ Resolvida pelo ADR-242: `cross_validation.select_on` (`best` padrão, `last`), schema v3.
 - SEC-1: com --host 0.0.0.0, exigir --allowed-host (proposto) ou aceitar qualquer Host nesse modo.
 - SEC-2: /docs desligado por padrão com VISIONFORGE_DOCS=1 (proposto) ou ligado com exceção de CSP para cdn.jsdelivr.net.
 - SEC-8: pesos (weights/*.pt) fora do bundle público (proposto) ou publicados com train_args reescritos; o paper precisa dos pesos?
