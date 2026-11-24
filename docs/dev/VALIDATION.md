@@ -108,5 +108,6 @@ aninhada; a legenda LaTeX do K-fold declara isso em PT e EN.
 (`select_on`) e a época avaliada (`selected_epoch`). Na classificação a opção
 fica em `cross_validation.select_on`; na regressão e na segmentação, no pedido
 do K-fold. O padrão continua `best`. `last` com `early_stopping_patience` acima
-de 0 é recusado, porque o ponto de parada leria a validação do fold (ADR-242).
-O scheduler `plateau` também lê essa validação e ainda é aceito com `last`.
+de 0 é recusado, porque o ponto de parada leria a validação do fold, e o mesmo
+vale para o scheduler `plateau`, que reduz a taxa de aprendizado lendo essa
+validação (ADR-242).

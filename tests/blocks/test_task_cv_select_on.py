@@ -197,3 +197,32 @@ def test_the_runner_refuses_last_with_early_stopping(
 
     with pytest.raises(ValueError, match="early_stopping_patience"):
         runner(config, n_folds=2, select_on="last")
+
+
+@pytest.mark.parametrize(("runner", "module", "factory", "make", "primary"), _TASKS)
+def test_the_runner_refuses_last_with_plateau(
+    tmp_path: Path,
+    runner: Callable[..., Any],
+    module: str,
+    factory: str,
+    make: Callable[[Path], Any],
+    primary: str,
+) -> None:
+    """A direct call with the plateau scheduler is refused before any fold trains."""
+    config = make(tmp_path)
+    training = config.training
+    config = config.model_copy(
+        update={
+            "training": training.model_copy(
+                update={
+                    "early_stopping_patience": 0,
+                    "scheduler": training.scheduler.model_copy(
+                        update={"kind": "plateau"}
+                    ),
+                }
+            )
+        }
+    )
+
+    with pytest.raises(ValueError, match="plateau"):
+        runner(config, n_folds=2, select_on="last")

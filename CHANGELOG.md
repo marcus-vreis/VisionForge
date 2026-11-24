@@ -19,7 +19,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Changed
 
-- K-fold, todas as tarefas com a opção: `select_on: last` com `early_stopping_patience` acima de 0 passa a ser recusado com uma mensagem que explica o motivo. Na classificação o erro vem ao carregar o config; na regressão e na segmentação, como 422 no pedido do K-fold, também pela CLI. A parada antecipada lê a validação do próprio fold, então a última época ainda seria escolhida por ela (ADR-242). O scheduler `plateau` continua aceito.
+- K-fold, todas as tarefas com a opção: `select_on: last` com `early_stopping_patience` acima de 0 passa a ser recusado com uma mensagem que explica o motivo. Na classificação o erro vem ao carregar o config; na regressão e na segmentação, como 422 no pedido do K-fold, também pela CLI. A parada antecipada lê a validação do próprio fold, então a última época ainda seria escolhida por ela (ADR-242). O mesmo vale para `scheduler.kind: plateau`, que reduz a taxa de aprendizado lendo essa validação: `select_on: last` com ele também é recusado nos mesmos três pontos.
 
 ## [0.23.0] — 2026-11-24
 

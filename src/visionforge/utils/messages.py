@@ -2959,6 +2959,20 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "Use early_stopping_patience: 0 or select_on: 'best'."
         ),
     },
+    "config.select_on_last_plateau": {
+        "pt": (
+            "select_on: 'last' não combina com scheduler.kind: 'plateau': o "
+            "ReduceLROnPlateau reduz a taxa de aprendizado lendo a validação do "
+            "próprio fold, então os pesos da última época ainda dependeriam dela. "
+            "Use outro scheduler (none, cosine, step) ou select_on: 'best'."
+        ),
+        "en": (
+            "select_on: 'last' cannot be combined with scheduler.kind: 'plateau': "
+            "ReduceLROnPlateau lowers the learning rate from the fold's own "
+            "validation split, so the last epoch's weights would still depend on "
+            "it. Use another scheduler (none, cosine, step) or select_on: 'best'."
+        ),
+    },
     "config.unsafe_path_component": {
         "pt": "'{value}' não é um nome de pasta válido: use um único componente, sem separadores ou caracteres reservados.",
         "en": "'{value}' is not a valid directory name: use a single component without separators or reserved characters.",
