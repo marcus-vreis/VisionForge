@@ -56,7 +56,7 @@ from visionforge.utils.workers import suggested_workers
 
 apply_opt_outs()  # importing the module is enough to reach ultralytics
 
-try:  # the optional `detection` extra (ADR-195): absent in a plain install.
+try:  # ultralytics ships with the package (ADR-243); still bound lazily.
     from ultralytics import YOLO as _YOLO  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover - exercised via monkeypatch in tests
     # The ignore matters only when ultralytics IS installed, where mypy binds
@@ -374,7 +374,7 @@ class DetectionTrainer:
         """Drive Ultralytics YOLO/RT-DETR training.
 
         Raises:
-            RuntimeError: if the ultralytics extra is not installed.
+            RuntimeError: if ultralytics is missing (a damaged install).
         """
         if YOLO is None:
             raise RuntimeError(ultralytics_missing_message())

@@ -1959,8 +1959,6 @@ export const pt = {
       backend: "Backend",
       backendHint: "origem do modelo",
       noAgplBadge: "sem AGPL",
-      ultralyticsMissing: (command: string) =>
-        `O Ultralytics (AGPL-3.0) não está instalado, e um treino com ele será recusado. Instale com \`${command}\` e reinicie o VisionForge, ou escolha Torchvision.`,
       architecture: "Arquitetura",
       architectureHint: "detector",
       pretrained: "Pesos pré-treinados",
@@ -3818,7 +3816,7 @@ export const pt = {
           pytorch: "A biblioteca de redes neurais em que todo modelo aqui é treinado.",
           torchvision: "Arquiteturas prontas, pesos pré-treinados e transformações de imagem.",
           timm: "Centenas de arquiteturas a mais, escolhidas pelo nome.",
-          ultralytics: "YOLO e RT-DETR para detecção de objetos. É opcional e se instala à parte.",
+          ultralytics: "YOLO e RT-DETR para detecção de objetos. Vem instalado com o VisionForge (AGPL-3.0).",
           sklearn: "As métricas do resultado e a divisão do K-fold.",
           optuna: "A busca guiada de hiperparâmetros.",
           onnx: "Roda o modelo exportado em ONNX, fora do PyTorch.",

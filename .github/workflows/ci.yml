@@ -67,7 +67,7 @@ jobs:
         run: |
           uv venv
           source .venv/bin/activate
-          uv pip install -e ".[dev,detection]"
+          uv pip install -e ".[dev]"
           uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
       - name: Spell check (codespell)
@@ -138,7 +138,7 @@ jobs:
           uv venv --python ${{ matrix.python-version }}
           # bin/ on Linux, Scripts/ on Windows.
           if [ "$RUNNER_OS" = "Windows" ]; then source .venv/Scripts/activate; else source .venv/bin/activate; fi
-          uv pip install -e ".[dev,detection]"
+          uv pip install -e ".[dev]"
           uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
       - name: Run tests
@@ -192,7 +192,7 @@ jobs:
         run: |
           uv venv
           source .venv/bin/activate
-          uv pip install -e ".[dev,detection]"
+          uv pip install -e ".[dev]"
           uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
       - name: Train one epoch for real
@@ -223,7 +223,7 @@ jobs:
         run: |
           uv venv
           source .venv/bin/activate
-          uv pip install -e ".[dev,detection]"
+          uv pip install -e ".[dev]"
           uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
       - name: Run every task through a live server
@@ -294,7 +294,7 @@ jobs:
         run: |
           uv venv
           source .venv/bin/activate
-          uv pip install -e ".[dev,detection]"
+          uv pip install -e ".[dev]"
           uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
       - uses: actions/setup-node@v7.1.0
@@ -341,9 +341,9 @@ jobs:
     # package missing from scripts/license_allowlist.toml, or a table in
     # THIRD_PARTY_NOTICES.md that no longer matches it, fails here (#225).
     # The install is deliberately unpinned (newest PyPI releases, not uv.lock):
-    # the notices describe what `pip install "visionforge-studio[detection]"`
-    # brings today, so a new copyleft dependency upstream (ultralytics 8.4.x
-    # added ultralytics-platform, AGPL) must turn this job red even when no
+    # the notices describe what `pip install visionforge-studio` brings today,
+    # so a new copyleft dependency upstream (ultralytics 8.4.x added
+    # ultralytics-platform, AGPL) must turn this job red even when no
     # VisionForge file changed. Read the package's license, then allowlist it.
     steps:
       - uses: actions/checkout@v7.0.1
@@ -354,11 +354,11 @@ jobs:
 
       - uses: astral-sh/setup-uv@v10.3.3
 
-      - name: Install the package with the detection extra
+      - name: Install the package
         run: |
           uv venv
           source .venv/bin/activate
-          uv pip install -e ".[detection]"
+          uv pip install -e "."
           uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
       - name: Check the licenses
@@ -390,10 +390,6 @@ jobs:
           python -m venv "$RUNNER_TEMP/visionforge-wheel"
           "$RUNNER_TEMP/visionforge-wheel/bin/python" -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           "$RUNNER_TEMP/visionforge-wheel/bin/python" -m pip install dist/*.whl
-      # ultralytics (AGPL-3.0) comes only with the `detection` extra (ADR-195).
-      - name: The plain wheel installs no ultralytics
-        run: |
-          "$RUNNER_TEMP/visionforge-wheel/bin/python" -c "import importlib.util, sys; sys.exit('ultralytics installed without the detection extra' if importlib.util.find_spec('ultralytics') else 0)"
       - name: Exercise the installed package outside the checkout
         run: |
           cp scripts/verify_distribution.py "$RUNNER_TEMP/verify_distribution.py"

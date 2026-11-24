@@ -172,7 +172,7 @@ class TestDetectionSubmit:
 
 
 def _without_ultralytics(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Every ``import ultralytics...`` raises ImportError, as in a plain install."""
+    """Every ``import ultralytics...`` raises ImportError, as in a damaged install."""
     for name in [m for m in sys.modules if m.split(".")[0] == "ultralytics"]:
         monkeypatch.setitem(sys.modules, name, None)
     monkeypatch.setitem(sys.modules, "ultralytics", None)
@@ -180,9 +180,9 @@ def _without_ultralytics(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.usefixtures("busy_queue")
 class TestDetectionSubmitWithoutUltralytics:
-    """A plain install has no `detection` extra (ADR-195)."""
+    """ultralytics ships with the package (ADR-243); a damaged install lacks it."""
 
-    def test_ultralytics_backend_is_refused_with_the_install_line(
+    def test_ultralytics_backend_is_refused_with_the_reinstall_line(
         self,
         client_and_routes: tuple,
         tmp_path: Path,
@@ -193,7 +193,7 @@ class TestDetectionSubmitWithoutUltralytics:
         base = build_detection_dataset(tmp_path / "ds")
         resp = client.post("/api/detection/run", json=_detection(tmp_path, base))
         assert resp.status_code == 422
-        assert "[detection]" in resp.json()["detail"]
+        assert "force-reinstall" in resp.json()["detail"]
 
     def test_torchvision_backend_is_accepted(
         self,

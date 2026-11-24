@@ -166,7 +166,7 @@ nome.
 | [PyTorch](https://pytorch.org/) | a biblioteca de redes neurais em que todo modelo é treinado |
 | [torchvision](https://docs.pytorch.org/vision/stable/) | arquiteturas prontas, pesos pré-treinados e transformações de imagem |
 | [timm](https://huggingface.co/docs/timm) | centenas de arquiteturas a mais, escolhidas pelo nome |
-| [Ultralytics](https://docs.ultralytics.com/) | YOLO e RT-DETR para detecção de objetos; é opcional e se instala à parte |
+| [Ultralytics](https://docs.ultralytics.com/) | YOLO e RT-DETR para detecção de objetos; vem instalado com o VisionForge (AGPL-3.0) |
 | [scikit-learn](https://scikit-learn.org/stable/) | as métricas do resultado e a divisão do K-fold |
 | [Optuna](https://optuna.org/) | a busca guiada de hiperparâmetros |
 | [ONNX Runtime](https://onnxruntime.ai/) | roda o modelo exportado em ONNX, fora do PyTorch |

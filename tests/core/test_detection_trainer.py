@@ -142,7 +142,7 @@ class TestBackendGuards:
     ) -> None:
         monkeypatch.setattr(dt_mod, "YOLO", None)
         trainer = DetectionTrainer(_config(tmp_path))
-        with pytest.raises(RuntimeError, match=r"\[detection\]"):
+        with pytest.raises(RuntimeError, match="force-reinstall"):
             trainer.fit()
 
 

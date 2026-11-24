@@ -1,4 +1,4 @@
-"""Ultralytics is the optional `detection` extra (ADR-195): absent must be clear."""
+"""Ultralytics ships with the package (ADR-243): a damaged install must be clear."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import sys
 import textwrap
 import tomllib
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -17,18 +18,26 @@ from visionforge.utils.messages import using_lang
 _SRC = Path(__file__).resolve().parents[2] / "src"
 
 
+def _project() -> dict[str, Any]:
+    pyproject = tomllib.loads((_SRC.parent / "pyproject.toml").read_text("utf-8"))
+    project: dict[str, Any] = pyproject["project"]
+    return project
+
+
 def _block_ultralytics(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Make every ``import ultralytics...`` raise ImportError, as without the extra."""
+    """Make every ``import ultralytics...`` raise ImportError, as a damaged install."""
     for name in [m for m in sys.modules if m.split(".")[0] == "ultralytics"]:
         monkeypatch.setitem(sys.modules, name, None)
     monkeypatch.setitem(sys.modules, "ultralytics", None)
 
 
-def test_ultralytics_is_only_in_the_detection_extra() -> None:
-    project = tomllib.loads((_SRC.parent / "pyproject.toml").read_text("utf-8"))
-    project = project["project"]
-    assert not [d for d in project["dependencies"] if d.startswith("ultralytics")]
-    assert project["optional-dependencies"]["detection"] == ["ultralytics>=8.3"]
+def test_ultralytics_is_a_base_dependency() -> None:
+    assert "ultralytics>=8.3" in _project()["dependencies"]
+
+
+def test_detection_extra_stays_as_an_empty_alias() -> None:
+    # A saved `[detection]` install line keeps resolving (ADR-106, ADR-243).
+    assert _project()["optional-dependencies"]["detection"] == []
 
 
 def test_missing_ultralytics_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -44,30 +53,27 @@ def test_installed_ultralytics_is_reported(monkeypatch: pytest.MonkeyPatch) -> N
 @pytest.mark.parametrize(
     "from_source, command",
     [
-        (True, 'pip install -e ".[detection]"'),
-        (False, 'pip install "visionforge-studio[detection]"'),
+        (True, 'pip install -e "." --force-reinstall'),
+        (False, 'pip install --force-reinstall "visionforge-studio"'),
     ],
 )
-def test_install_command_matches_the_install_kind(
+def test_message_names_the_reinstall_line(
     monkeypatch: pytest.MonkeyPatch, from_source: bool, command: str
 ) -> None:
     monkeypatch.setattr(doctor, "installed_from_source", lambda: from_source)
-    assert doctor.detection_install_command() == command
-
-
-def test_message_names_the_extra_and_the_agpl_free_backend(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(doctor, "installed_from_source", lambda: False)
     with using_lang("en"):
         message = doctor.ultralytics_missing_message()
-    assert 'pip install "visionforge-studio[detection]"' in message
-    assert "AGPL-3.0" in message
+    assert command in message
+
+
+def test_message_offers_the_torchvision_backend() -> None:
+    with using_lang("en"):
+        message = doctor.ultralytics_missing_message()
     assert "torchvision" in message
 
 
 def test_package_imports_and_reports_without_ultralytics(tmp_path: Path) -> None:
-    """A fresh interpreter where ``import ultralytics`` fails, as a plain install."""
+    """A fresh interpreter where ``import ultralytics`` fails, as a damaged install."""
     script = textwrap.dedent(
         """
         import sys
