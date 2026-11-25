@@ -1,0 +1,131 @@
+# VisionForge server mode behind a real login proxy (ADR-213, ADR-247).
+#
+# Three services on one private network:
+#
+#   browser ──> oauth2-proxy :4180 ──> visionforge :8000 (not published)
+#                    │
+#                    └── mock-oauth2 :9080 (login page; any user name signs in)
+#
+# The mock provider stands in for GitHub, Google or the institution's login.
+# For a real deployment replace it, and the URLs that name it, with the real
+# provider, and put HTTPS in front of the proxy. CI runs this file as is
+# (.github/workflows/server-proxy.yml, scripts/check_server_proxy.py).
+#
+#   export OAUTH2_PROXY_COOKIE_SECRET="$(python3 -c 'import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())')"
+#   export OAUTH2_PROXY_CLIENT_SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
+#   docker compose -f deploy/server/docker-compose.yml up --build
+#   # then open http://localhost:4180 and sign in with any name
+#
+# Neither secret is written anywhere in the repository: both come from the
+# environment, and compose refuses to start without them.
+
+name: visionforge-server
+
+services:
+  mock-oauth2:
+    image: ghcr.io/navikt/mock-oauth2-server:6.1.5
+    hostname: mock-oauth2
+    environment:
+      SERVER_PORT: "8080"
+      # A login form on /authorize: the user name becomes the token's `sub`.
+      JSON_CONFIG: '{"interactiveLogin": true}'
+    ports:
+      # The browser reaches the login page here (oauth2-proxy's --login-url).
+      - "127.0.0.1:9080:8080"
+    networks:
+      - auth
+
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.6
+    command:
+      - --http-address=0.0.0.0:4180
+      - --upstream=http://visionforge:8000/
+      - --provider=oidc
+      - --client-id=visionforge
+      # The browser and the proxy reach the provider by different names
+      # (localhost from the host, mock-oauth2 inside the network), so discovery
+      # is skipped and each endpoint is named where it is used. The issuer is
+      # the name the proxy calls the token endpoint by: the mock writes that
+      # host into the token's `iss`.
+      - --skip-oidc-discovery=true
+      - --oidc-issuer-url=http://mock-oauth2:8080/default
+      - --login-url=http://localhost:9080/default/authorize
+      - --redeem-url=http://mock-oauth2:8080/default/token
+      - --oidc-jwks-url=http://mock-oauth2:8080/default/jwks
+      - --redirect-url=http://localhost:4180/oauth2/callback
+      - --email-domain=*
+      # Plain HTTP on localhost. Behind HTTPS, drop this line.
+      - --cookie-secure=false
+      # Straight to the provider, no "Sign in with..." page in between.
+      - --skip-provider-button=true
+      # X-Forwarded-User carries the OIDC `sub` claim. A value the client sent
+      # is deleted first (`--skip-auth-strip-headers`, the default, also on the
+      # route below), so nobody can name another account.
+      - --pass-user-headers=true
+      - --skip-auth-strip-headers=true
+      # The only route without a login: VisionForge's health check. `$$` is a
+      # literal `$` for compose.
+      - --skip-auth-route=GET=^/api/health$$
+    environment:
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?see docs/gui/servidor.md, Exemplo com oauth2-proxy}
+      OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_PROXY_CLIENT_SECRET:?see docs/gui/servidor.md, Exemplo com oauth2-proxy}
+    ports:
+      - "127.0.0.1:4180:4180"
+    networks:
+      auth:
+        # Fixed, because VisionForge answers only this address (--trusted-proxy).
+        ipv4_address: 172.30.42.10
+    depends_on:
+      mock-oauth2:
+        condition: service_started
+      visionforge:
+        condition: service_healthy
+
+  visionforge:
+    build:
+      context: ../..
+      args:
+        CUDA_TAG: cpu
+        BASE_IMAGE: ubuntu:22.04
+        VARIANT: cpu
+    image: visionforge:cpu
+    command:
+      - visionforge
+      - gui
+      - --server
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --trusted-proxy
+      - 172.30.42.10
+      - --datasets-dir
+      - /work/datasets
+    # No `ports:` on purpose: only the proxy's network reaches VisionForge, and
+    # inside it any address other than the proxy's gets 403.
+    volumes:
+      # Each person's profile, datasets and runs (outputs/profiles/<user>).
+      - visionforge-outputs:/work/outputs
+    environment:
+      VISIONFORGE_CONTAINER: "1"
+    healthcheck:
+      # Any HTTP answer means the server is up. From inside its own container
+      # the answer is 403 (this address is not the proxy), so no `--fail`.
+      test: ["CMD", "curl", "-s", "-o", "/dev/null", "http://127.0.0.1:8000/api/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 5s
+    networks:
+      - auth
+
+networks:
+  auth:
+    ipam:
+      config:
+        # Change it if it collides with a network of this machine; keep
+        # ipv4_address and --trusted-proxy inside it.
+        - subnet: 172.30.42.0/24
+
+volumes:
+  visionforge-outputs:
