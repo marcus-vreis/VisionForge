@@ -174,6 +174,9 @@ async def session(request: Request) -> dict[str, Any]:
         # What this person's folder holds against the server's ceiling
         # (``--quota-gb``, ADR-225); null when the operator set none.
         "quota": quota,
+        # How many jobs each person may have waiting or running
+        # (``--max-queued``, ADR-245); null on a local install.
+        "max_queued": mode.max_queued if mode.enabled else None,
     }
 
 
@@ -287,6 +290,11 @@ def start_server(
         logger.info(
             "Server mode: at most {} heavy actions at once outside the queue",
             app.state.server_mode.max_actions,
+        )
+        logger.info(
+            "Server mode: at most {} jobs per person waiting or running; the "
+            "queue takes turns between people",
+            app.state.server_mode.max_queued,
         )
         if app.state.server_mode.quota_bytes is not None:
             logger.info(

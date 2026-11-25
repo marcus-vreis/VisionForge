@@ -1,8 +1,10 @@
 """Handing a training job to the run queue (#204, ADR-196).
 
 Every endpoint that starts a run goes through ``_submit_job``: it refuses at
-once when the GPU context is broken, binds the page's language to the job, and
-loads the training stack off the event loop before a local job starts. The
+once when the GPU context is broken, and on a server when the person already
+has ``--max-queued`` jobs waiting or running (ADR-245); it binds the page's
+language to the job, and loads the training stack off the event loop before a
+local job starts. The
 queue itself and every started job's state belong to ``execution.py``
 (ADR-185); nothing here holds state.
 
@@ -25,6 +27,7 @@ from typing import Annotated, Any, Literal
 from fastapi import Header, HTTPException
 from loguru import logger
 
+from visionforge.gui.api.dataset_scope import current_scope
 from visionforge.gui.api.execution import _LANES, _stop_point
 from visionforge.gui.api.gpu_health import cuda_context_broken
 from visionforge.gui.api.profiles import DEFAULT_SLUG, PROFILE_HEADER, Profile
@@ -108,6 +111,21 @@ def _task_label_from_config(config_type: type[Any]) -> str:
     return config_type.__name__.removesuffix("Config").lower() or "experiment"
 
 
+def _refuse_past_queue_limit() -> bool:
+    """Refuse (429) a person who already has their share of the queue (ADR-245).
+
+    Returns whether the job is a server's, queued in fair order; on a local
+    install (no owner bound) nothing is counted and the lane stays FIFO.
+    """
+    scope = current_scope()
+    if scope is None or not scope.owner:
+        return False
+    limit = scope.max_queued
+    if limit is not None and _LANES.count_of(scope.owner) >= limit:
+        raise HTTPException(429, tr("server.queue_full", limit=limit))
+    return True
+
+
 def _submit_job(
     run_id: str,
     label: str,
@@ -130,6 +148,7 @@ def _submit_job(
     if cuda_context_broken():
         # Every job would fail within a second, CPU ones included; say so now.
         raise HTTPException(503, tr("gpu.context_broken"))
+    fair = _refuse_past_queue_limit()
     slug, name = (
         (profile.slug, profile.name) if profile else (DEFAULT_SLUG, DEFAULT_SLUG)
     )
@@ -159,5 +178,6 @@ def _submit_job(
             profile_name=name,
         ),
         lane,
+        fair=fair,
     )
     return RunResponse(run_id=run_id, status=status)  # type: ignore[arg-type]
