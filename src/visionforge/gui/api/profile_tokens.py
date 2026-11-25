@@ -27,6 +27,7 @@ from visionforge.gui.api.http_responses import (
     VALIDATION_ERROR_CONTENT,
 )
 from visionforge.gui.api.profiles import PROFILE_HEADER, Profile
+from visionforge.gui.server_mode import mode_of
 from visionforge.utils.credentials import config_dir
 from visionforge.utils.messages import tr
 
@@ -111,9 +112,9 @@ def add_token_routes(
     def token_state(request: Request, header: str | None) -> dict[str, bool]:
         return {
             "configured": token_file(service, resolve(header)).is_file(),
-            "shared": not is_loopback_host(
-                getattr(request.app.state, "bind_host", None)
-            ),
+            # Server mode is shared even when its login proxy binds to loopback.
+            "shared": mode_of(request.app).enabled
+            or not is_loopback_host(getattr(request.app.state, "bind_host", None)),
         }
 
     @router.get("/token")
