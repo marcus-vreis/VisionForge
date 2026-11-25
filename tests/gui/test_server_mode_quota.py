@@ -68,11 +68,12 @@ def test_which_routes_write_new_data() -> None:
         "POST /api/runs/{run_id}/gradcam",
         "POST /api/runs/{run_id}/batch_predict",
         "POST /api/runs/{run_id}/export_onnx",
+        "POST /api/runs/{run_id}/label_suspects",
     ):
         assert key in growing
     # A new route that answers on a server changes this number: decide whether
     # it writes new data before changing it.
-    assert len(growing) == 37
+    assert len(growing) == 38
     # Reading, planning, cancelling, sending elsewhere and deleting never count.
     for key in (
         "GET /api/runs",

@@ -699,6 +699,21 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "{train_dir}/{normal_dir}/ and the test folder under the same parent)."
         ),
     },
+    "testrun.anomaly_train_outside": {
+        "pt": (
+            "A detecção de anomalias calibra o limiar com as imagens normais de "
+            "treino, que ficam ao lado da pasta de teste escolhida, e neste "
+            "servidor essa pasta de treino está fora das suas pastas de datasets. "
+            "Escolha a pasta de teste dentro de um dataset que tenha a pasta de "
+            "treino junto."
+        ),
+        "en": (
+            "Anomaly detection calibrates its threshold on the normal training "
+            "images, found next to the chosen test folder, and on this server "
+            "that training folder is outside your dataset folders. Choose the "
+            "test folder inside a dataset that holds its training folder too."
+        ),
+    },
     "detection.ultralytics_missing": {
         "pt": (
             "O backend Ultralytics (YOLO / RT-DETR) vem com o VisionForge e não "
@@ -2207,6 +2222,14 @@ CATALOG: dict[str, dict[Lang, str]] = {
     "suspects.no_classes": {
         "pt": "Este run não guardou os nomes das classes ou o checkpoint; treine de novo para usar os rótulos suspeitos.",
         "en": "This run did not keep its class names or checkpoint; train again to use suspicious labels.",
+    },
+    "suspects.no_base_dir": {
+        "pt": "Este run não guardou a pasta do dataset (data.base_dir); não há o que prever.",
+        "en": "This run did not keep its dataset folder (data.base_dir); there is nothing to predict.",
+    },
+    "suspects.report_unreadable": {
+        "pt": "O relatório de rótulos suspeitos de '{run_id}' está danificado; calcule de novo.",
+        "en": "The suspicious-label report of '{run_id}' is damaged; compute it again.",
     },
     "explorer.classes_classification_only": {
         "pt": "A comparação de classes é só para datasets de classificação.",

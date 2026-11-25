@@ -13,13 +13,17 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
 from visionforge.core.label_suspects import find_suspects, read_folder_predictions
+from visionforge.gui.api.config_scope import confine_config
+from visionforge.gui.api.dataset_scope import current_scope
 from visionforge.gui.api.datasets_routes import (
     SCAN_BASE_MISSING_KEY,
     _remember_dataset_root,
 )
+from visionforge.gui.api.profiles import Profile
 from visionforge.gui.api.run_history import RUN_FILENAME
 from visionforge.gui.api.run_history import run_task as _run_task
 from visionforge.utils.config import ExperimentConfig
@@ -37,12 +41,45 @@ class LabelSuspectsRequest(BaseModel):
 
 
 def saved_report(run_dir: Path) -> dict[str, Any] | None:
-    """The last report of this run, or None if it was never computed."""
+    """The last report of this run, or None if it was never computed.
+
+    Raises:
+        ValueError: the report is there but cannot be read (cut short while
+            it was written, or edited by hand).
+    """
     path = run_dir / OUTPUT_DIR / REPORT_FILE
     if not path.is_file():
         return None
-    report: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError(tr("suspects.report_unreadable", run_id=run_dir.name)) from exc
+    if not isinstance(report, dict):
+        raise ValueError(tr("suspects.report_unreadable", run_id=run_dir.name))
     return report
+
+
+def confine_stored_config(run_dir: Path, profile: Profile) -> None:
+    """On a server, read the run's stored config again like a new one.
+
+    The folders a server shares may have changed since the run trained, as
+    ``/resume`` assumes (ADR-218): the dataset is predicted only while it is
+    still in the person's scope. On a local install this does nothing.
+
+    Raises:
+        HTTPException: 400 when the stored config no longer validates; 422
+            when it names something outside the scope.
+    """
+    if current_scope() is None:
+        return
+    try:
+        data = json.loads((run_dir / RUN_FILENAME).read_text(encoding="utf-8"))
+        config = ExperimentConfig.model_validate(data["config"])
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            400, tr("run.stored_config_invalid", run_id=run_dir.name, error=exc)
+        ) from exc
+    confine_config(profile.scope_model(config), profile)
 
 
 def execute_label_suspects(run_dir: Path, req: LabelSuspectsRequest) -> dict[str, Any]:
@@ -65,8 +102,11 @@ def execute_label_suspects(run_dir: Path, req: LabelSuspectsRequest) -> dict[str
     checkpoint = data.get("artifacts", {}).get("model")
     if len(class_names) < 2 or not checkpoint:
         raise ValueError(tr("suspects.no_classes"))
-    config: dict[str, Any] = data["config"]
-    base = Path(config["data"]["base_dir"])
+    config: dict[str, Any] = data.get("config") or {}
+    base_dir = (config.get("data") or {}).get("base_dir")
+    if not base_dir:
+        raise ValueError(tr("suspects.no_base_dir"))
+    base = Path(base_dir)
     if not base.is_dir():
         raise FileNotFoundError(tr(SCAN_BASE_MISSING_KEY, path=base))
     _remember_dataset_root(base)

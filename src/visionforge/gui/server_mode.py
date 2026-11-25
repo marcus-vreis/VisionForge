@@ -211,7 +211,7 @@ ROUTE_CLASSES: dict[str, RouteClass] = {
     "PUT /api/hub/token": "owner",
     # Lists the models of user_models/ by importing them: code a user brings.
     "GET /api/model/custom": "off",
-    "POST /api/model/defaults": "open",
+    "POST /api/model/defaults": "confined",
     "POST /api/model/learning-rate-plan": "open",
     "GET /api/profiles": "owner",
     "POST /api/profiles": "off",
@@ -379,6 +379,8 @@ READY: frozenset[str] = frozenset(
         "POST /api/detection/dataset/stats",
         "POST /api/regression/dataset/stats",
         "POST /api/segmentation/dataset/stats",
+        # Samples images of ``base_dir`` for the suggested size (ADR-213).
+        "POST /api/model/defaults",
         "DELETE /api/comet/token",
         "GET /api/comet/token",
         "PUT /api/comet/token",

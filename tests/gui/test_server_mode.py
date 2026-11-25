@@ -340,8 +340,9 @@ def test_every_path_of_an_open_dataset_route_is_typed() -> None:
         return found[0]
 
     # Text fields that name a column, not a place on the disk.
-    # A dataset id at its provider and a task key are not places either.
-    not_paths = {"image_column", "dataset", "task"}
+    # A dataset id at its provider and a task key are not places either, nor is
+    # the architecture a suggestion is asked for (a name looked up in tables).
+    not_paths = {"image_column", "dataset", "task", "architecture"}
     paths = app.openapi()["paths"]
     checked = 0
     for key in sorted(READY):
@@ -356,7 +357,7 @@ def test_every_path_of_an_open_dataset_route_is_typed() -> None:
             if field.annotation is str and name not in not_paths:
                 assert field.metadata, f"{model.__name__}.{name} is a plain str"
         checked += 1
-    assert checked == 43
+    assert checked == 44
 
 
 def test_the_session_says_where_the_datasets_may_live(

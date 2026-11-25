@@ -868,10 +868,14 @@ class RegressionDatasetStatsResponse(BaseModel):
 
 
 class ModelDefaultsRequest(BaseModel):
-    """Ask what settings suit an architecture, before training with it."""
+    """Ask what settings suit an architecture, before training with it.
+
+    ``base_dir`` is sampled for the image size; on a server it is a dataset
+    path like any other and must sit in the person's scope (ADR-214).
+    """
 
     architecture: str
-    base_dir: str | None = None
+    base_dir: DatasetDir | None = None
     pretrained: bool = True
 
 

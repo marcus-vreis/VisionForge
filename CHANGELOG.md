@@ -21,6 +21,12 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 - K-fold, todas as tarefas com a opção: `select_on: last` com `early_stopping_patience` acima de 0 passa a ser recusado com uma mensagem que explica o motivo. Na classificação o erro vem ao carregar o config; na regressão e na segmentação, como 422 no pedido do K-fold, também pela CLI. A parada antecipada lê a validação do próprio fold, então a última época ainda seria escolhida por ela (ADR-242). O mesmo vale para `scheduler.kind: plateau`, que reduz a taxa de aprendizado lendo essa validação: `select_on: last` com ele também é recusado nos mesmos três pontos.
 
+### Fixed
+
+- Modo servidor: `POST /api/model/defaults` amostrava imagens de qualquer pasta do servidor em `base_dir` (a rota era `open`) e varria a pasta dentro do event loop, travando as outras requisições; uma pasta ilegível respondia 500. Agora `base_dir` é um caminho de dataset como nas outras rotas `confined` (fora do escopo, 422), a varredura roda numa thread e uma pasta que não pode ser lida deixa o tamanho sem sugestão (ADR-213).
+- Modo servidor: testar um run de anomalia numa pasta calibra o limiar com `train_dir/normal_dir` ao lado da pasta escolhida, e escolher a própria pasta compartilhada fazia esse treino ser lido um nível acima dela, fora do escopo. Agora o treino precisa estar no escopo, e a recusa vem antes de olhar o disco (ADR-218).
+- Rótulos suspeitos: num servidor o config guardado do run passa pela mesma conferência do `/resume` (um dataset que saiu das pastas compartilhadas é recusado com 422), e a ação entra na cota de disco (`--quota-gb`) e no limite de ações (`--max-actions`). Um run sem `data.base_dir` ou um `report.json` danificado respondem 400 com a explicação, em vez de 500 (ADR-237).
+
 ## [0.23.0] — 2026-11-24
 
 ### Added
