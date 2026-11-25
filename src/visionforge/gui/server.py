@@ -317,8 +317,19 @@ def start_server(
             f"http://{page_host}:{port}"  # NOSONAR python:S5332 - local server URL
         )
         webbrowser.open(page_url)
+    # uvicorn would replace the client address with ``X-Forwarded-For`` when the
+    # peer is 127.0.0.1. The server-mode gate knows the login proxy by the peer
+    # that connected, so a forwarded address must never stand in for it: a
+    # proxy on this machine would be refused, and any local process could
+    # claim to be a remote proxy (ADR-213, amended 2026-11-25).
     _SERVER = uvicorn.Server(
-        uvicorn.Config(app, host=host, port=port, log_level="warning")
+        uvicorn.Config(
+            app,
+            host=host,
+            port=port,
+            log_level="warning",
+            proxy_headers=not app.state.server_mode.enabled,
+        )
     )
     _SERVER.run()
 
