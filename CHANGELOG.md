@@ -22,6 +22,11 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 - K-fold, todas as tarefas com a opção: `select_on: last` com `early_stopping_patience` acima de 0 passa a ser recusado com uma mensagem que explica o motivo. Na classificação o erro vem ao carregar o config; na regressão e na segmentação, como 422 no pedido do K-fold, também pela CLI. A parada antecipada lê a validação do próprio fold, então a última época ainda seria escolhida por ela (ADR-242). O mesmo vale para `scheduler.kind: plateau`, que reduz a taxa de aprendizado lendo essa validação: `select_on: last` com ele também é recusado nos mesmos três pontos.
 
+### Fixed
+
+- Excluir um run no Histórico (`DELETE /api/runs/{run_id}`) apagava a pasta de um run que estava na fila para retomar ou retomando (o job tem outro id, mas escreve na pasta antiga) e a de um run sendo exportado em `/bundle`. Agora responde 409 nos dois casos e segura a exportação enquanto apaga. Uma pasta que o sistema não deixa apagar (arquivo aberto no Windows) responde 409 com o motivo, em vez de 500.
+- Modo servidor atrás de um proxy na mesma máquina (`--host 127.0.0.1 --trusted-proxy 127.0.0.1`): as rotas de token diziam `shared: false` e o detalhe do run `can_reveal: true`. Agora, com o modo ligado, o token é sempre compartilhado e a pasta nunca pode ser aberta pelo navegador.
+
 ## [0.23.0] — 2026-11-24
 
 ### Added

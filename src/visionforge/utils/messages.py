@@ -1792,6 +1792,14 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Não é possível excluir um run que está em execução.",
         "en": "Cannot delete a run that is currently executing.",
     },
+    "run.delete_busy": {
+        "pt": "Este run está em execução, na fila para retomar ou sendo exportado. Exclua após o término.",
+        "en": "This run is executing, queued for continuation or being exported. Delete it after it finishes.",
+    },
+    "run.delete_failed": {
+        "pt": "Não foi possível excluir a pasta do run: {error}. Feche o que estiver usando os arquivos e tente de novo.",
+        "en": "Could not delete the run folder: {error}. Close whatever is using its files and try again.",
+    },
     "run.group_action": {
         "pt": (
             "Esta execução é um conjunto de réplicas: abra uma das seeds para "
