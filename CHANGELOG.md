@@ -21,6 +21,11 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 - K-fold, todas as tarefas com a opção: `select_on: last` com `early_stopping_patience` acima de 0 passa a ser recusado com uma mensagem que explica o motivo. Na classificação o erro vem ao carregar o config; na regressão e na segmentação, como 422 no pedido do K-fold, também pela CLI. A parada antecipada lê a validação do próprio fold, então a última época ainda seria escolhida por ela (ADR-242). O mesmo vale para `scheduler.kind: plateau`, que reduz a taxa de aprendizado lendo essa validação: `select_on: last` com ele também é recusado nos mesmos três pontos.
 
+### Fixed
+
+- Modo servidor: o download de dataset escrevia fora da pasta pedida quando um nome de split do pedido tinha `..` ou era um caminho absoluto, inclusive na pasta de datasets de outra pessoa. Agora `splits` só aceita nomes que descem (422 antes de baixar), e cada split e cada classe precisa ficar dentro da pasta de destino em qualquer modo, também quando o nome vem do Hugging Face (um split ou rótulo com `..` ou `\` para o download com uma mensagem) (ADR-219).
+- Modo servidor: `GET /api/dataset/file`, `GET /api/explorer/thumb` e `POST /api/dataset/audit` respondiam diferente para um caminho fora das pastas da pessoa conforme ele existisse ou não, o que deixava descobrir arquivos de outros perfis. Agora o escopo é conferido antes de ler o disco: fora dele a resposta é sempre 403 (arquivo e miniatura) ou 422 (um split da auditoria que sobe de pasta) (ADR-214).
+
 ## [0.23.0] — 2026-11-24
 
 ### Added

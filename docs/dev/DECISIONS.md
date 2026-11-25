@@ -8529,6 +8529,8 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Inspect the JSON body in the gate.* The gate would have to know which strings are paths, and it would check a path the handler then reads again in another spelling.
 - *A fixed list of dataset names instead of paths.* Cleaner for a server, and it would fork the request models and the forms from the local tool, which names folders.
 
+**Addendum (2026-11-24): outside the scope, one answer whether the path exists or not.** `/api/dataset/file` and `/api/explorer/thumb` resolved the path strictly (404 when missing), and `/api/dataset/file` checked the extension (400) before asking the scope (403), so the status told whether a file of another profile existed. Both now resolve without `strict`, ask the scope first, and only then check the extension and that the file or folder exists. `DatasetAuditRequest.splits` became `dict[str, DatasetPart]`: with `layout: yolo` a climbing split was looked up on the disk and the error named the folder found or not found.
+
 ## ADR-215 — In server mode a run, its progress and the queue belong to who started it, and a config names only what its owner may reach
 
 **Date:** 2026-11-18
@@ -8686,6 +8688,8 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Let a download go anywhere in the scope.* The shared folders are the operator's; a person writing there changes what everyone trains on.
 - *Per-person saved keys.* The right end state for convenience, and it needs the credential store moved under the profile (it is one file per machine today); typing the key per download is safe now.
 - *Set and unset `KAGGLE_API_TOKEN` around a Kaggle download.* The client authenticates at import, once per process, and two downloads at once would race on the variable; a lock would serialize every Kaggle download and still leave the first key authenticated.
+
+**Addendum (2026-11-24): split and class names stay inside the target.** `DatasetDownloadRequest.splits` was `list[str]`, so a split with `..` or an absolute path wrote outside `out_dir`, into another person's folder among others. It is now `list[DatasetPart]` (422 before anything is fetched), and `dataset_download._child` refuses, in any mode, a split or class folder that does not resolve strictly below its parent (message `download.name_outside`): a Hugging Face dataset names its own splits and labels, and a `..` or, on Windows, a `\` in one of them climbed the same way. The Hub's split names are all checked before the first image is written. The test that every path of a confined route is typed now also fails on a `list` or `dict` of plain `str`.
 
 ## ADR-220 — In server mode the dataset Laboratory reads the scope, its jobs have an owner, and what it writes lands in the person's folder
 
