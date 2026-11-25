@@ -18,7 +18,7 @@ import {
 } from "../lib/anomaly-models";
 import { exportConfigToYaml, importIntoForm } from "../lib/yaml-config";
 import { usePendingImport, type PendingImportProps } from "../hooks/usePendingImport";
-import type { ValidationError } from "../hooks/useExperiment";
+import { validationLine, type ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
 import { AdvancedFields } from "./AdvancedFields";
 import { StrategyCard, type PanelStrategy } from "./ExperimentHeader";
@@ -581,7 +581,7 @@ export function AnomalyPanel({
           ],
         },
       ]}
-      errors={validationErrors.map((e) => `${e.field.join(" › ")}: ${e.message}`)}
+      errors={validationErrors.map((e) => validationLine(e.field.join(" › "), e.message, ": "))}
       ready={f.data.base_dir.trim() !== ""}
     />
   );

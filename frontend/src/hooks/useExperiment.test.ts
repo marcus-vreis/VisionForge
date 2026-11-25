@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { en } from "../i18n/en";
 import { pt } from "../i18n/pt";
-import { humanizeFieldPath } from "./useExperiment";
+import { humanizeFieldPath, validationLine, validationMessage } from "./useExperiment";
 
 describe("humanizeFieldPath", () => {
   it("humanizes top-level fields", () => {
@@ -112,5 +112,35 @@ describe("run messages", () => {
     expect(en.experiment.validationFailed(3)).toBe(
       "3 fields have validation errors. Check the highlighted fields in the form.",
     );
+  });
+});
+
+describe("validationMessage", () => {
+  it("drops the Pydantic prefix of a model-level check", () => {
+    expect(validationMessage("Value error, model_comparison builds each model")).toBe(
+      "model_comparison builds each model",
+    );
+  });
+
+  it("keeps a message without the prefix as it is", () => {
+    expect(validationMessage("Field required")).toBe("Field required");
+  });
+});
+
+describe("validationLine", () => {
+  it("names the field before the message", () => {
+    expect(validationLine("Dataset › Pasta base", "não existe")).toBe(
+      "Dataset › Pasta base — não existe",
+    );
+  });
+
+  it("is the message alone when the error is on the whole config", () => {
+    expect(validationLine(humanizeFieldPath(pt, ["body"]), "Remova model.timm_model")).toBe(
+      "Remova model.timm_model",
+    );
+  });
+
+  it("uses the separator it is given", () => {
+    expect(validationLine("a › b", "bad", ": ")).toBe("a › b: bad");
   });
 });

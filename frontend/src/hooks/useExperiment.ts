@@ -112,6 +112,23 @@ export function humanizeFieldPath(t: Dict, loc: (string | number)[]): string {
     .join(" › ");
 }
 
+/**
+ * Pydantic words a model-level check as "Value error, <message>"; the prefix is
+ * the library's, not the server's message, and means nothing to the user.
+ */
+export function validationMessage(msg: string): string {
+  return msg.replace(/^Value error, /, "");
+}
+
+/**
+ * One validation error as a line. A check on the whole config (``loc`` is just
+ * ``["body"]``) has no field to name, so the line is the message alone rather
+ * than an orphan separator in front of it.
+ */
+export function validationLine(field: string, message: string, separator = " — "): string {
+  return field ? `${field}${separator}${message}` : message;
+}
+
 export function useExperiment(): ExperimentState {
   const t = useT();
   // The polling timer and the submit callback outlive the render that made them,
@@ -294,7 +311,7 @@ export function useExperiment(): ExperimentState {
         setValidationErrors(
           e.validationErrors.map((err) => ({
             field: err.loc.filter((l) => l !== "body").map((l) => String(l)),
-            message: err.msg,
+            message: validationMessage(err.msg),
           })),
         );
         setError(

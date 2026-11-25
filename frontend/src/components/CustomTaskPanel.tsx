@@ -12,7 +12,7 @@ import { suggestCustomTaskName } from "../lib/experiment-name";
 import { resolveSchema, visibleChildren } from "../lib/schema-form";
 import { countChanged, errorsUnder, type StepId } from "../lib/steps";
 import { useAutoExperimentName } from "../lib/use-auto-experiment-name";
-import type { ValidationError } from "../hooks/useExperiment";
+import { validationLine, type ValidationError } from "../hooks/useExperiment";
 import { usePendingImport, type PendingImportProps } from "../hooks/usePendingImport";
 import type { JsonSchema } from "../types/schema";
 import { StrategyCard, type PanelStrategy } from "./ExperimentHeader";
@@ -385,7 +385,7 @@ export function CustomTaskSteps({
             { step: "model", rows: reviewRows("model") },
             { step: "training", rows: reviewRows("training") },
           ]}
-          errors={validationErrors.map((e) => `${e.field.join(" › ")}: ${e.message}`)}
+          errors={validationErrors.map((e) => validationLine(e.field.join(" › "), e.message, ": "))}
           ready
         />
         {/* Last in the Revisão on purpose: you reach it by scrolling past the
