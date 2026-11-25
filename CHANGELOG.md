@@ -15,6 +15,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- CLI: `visionforge export` roda exportadores de terceiros declarados no grupo de entry-points `visionforge.exporters` de pacotes instalados. `visionforge export --list` mostra nome e descrição; `visionforge export RUN_DIR --to NOME --option chave=valor` imprime o destino e sai com código 2 para nome desconhecido, opção inválida ou pasta sem `run.json`. Um plugin que falha ao carregar, não segue o protocolo `RunExporter` ou repete um nome é ignorado com aviso. Os exportadores embutidos não mudam. Guia em `docs/custom/EXPORTERS.md` (ADR-244).
 - Regressão e segmentação, K-fold: `select_on` (`best` ou `last`, padrão `best`) escolhe a época que avalia cada fold, como na classificação. Entra no corpo de `POST /api/{regression,segmentation}/cv`, nas opções `strategy` do YAML da CLI e no cartão **Cross-validation** da GUI (**Época por fold**). `last` avalia os pesos da última época treinada, sem escolher a época no fold. O relatório do K-fold (`run.json`, `cv_summary.json`) grava `select_on` no topo e `select_on` e `selected_epoch` em cada fold. Sem mudança de `schema_version`: o campo é do pedido, não do config (ADR-242).
 
 ### Changed

@@ -9351,3 +9351,33 @@ ships with the next release.
 - *Drop the `detection` extra.* The empty names exist so an install line saved
   in a requirements file or a README elsewhere keeps resolving (ADR-106); the
   same holds for `[detection]`.
+
+## ADR-244 — Third-party run exporters through the `visionforge.exporters` entry-point
+
+**Date:** 2026-11-24
+**Status:** Accepted
+**Relates to:** ADR-005 (trust boundary is the user's filesystem), ADR-058 (researcher tasks), ADR-170 (MLflow export)
+
+**Context:** the AUDIT-2026-11-09 section 6 listed an entry-point for third-party exporters as a larger bet without a task. The seven built-in exporters (MLflow, W&B, Comet, Zenodo, GitHub, DVC, Hugging Face Hub) each have a GUI route and a page in `docs/gui/`; a lab that wants an internal registry or a format of its own has to fork the package. The review `product-competitive` also warned that each integration inside the package adds maintenance against a third party's API, so the way out for the next ones is to live outside it.
+
+**Decision:**
+
+- A package declares an object under `[project.entry-points."visionforge.exporters"]`: a class (instantiated with no arguments) or an instance with `name: str`, `description: str` and `export(run_dir, options) -> ExportResult`. `ExportResult` is a frozen dataclass with `destination` (URL or path) and `notes`. Both live in `core/exporter_plugins.py`, with `discover_exporters()` and `run_exporter()`.
+- An entry-point that fails to load or instantiate, or does not follow the protocol (empty `name`, no `description`, no callable `export`), is logged as a warning and skipped. On a duplicate `name` the first one found stays. Discovery never raises, so a broken plugin cannot stop the CLI.
+- `run_exporter` refuses a `run_dir` without `run.json` with a `ValueError` before calling the plugin.
+- `visionforge export --list` prints name and description; `visionforge export RUN_DIR --to NAME [--option key=value ...]` prints the destination on stdout and the notes on stderr. An unknown name, a bad option or an error the plugin raises as `ValueError`/`OSError` exits with code 2. The handler is in `cli_export.py`, not in `__main__.py`.
+- The built-in exporters are not migrated and keep their routes. The GUI does not list plugins. Messages go through `tr()` (`exporters.*`, pt/en). `docs/custom/EXPORTERS.md` is the guide.
+
+**Consequences:**
+
+- Installing a package that declares the group is enough to run its code under `visionforge export`; the trust is the one of any installed package (ADR-005). VisionForge passes no credential and the guide says to read tokens from the environment, not from `--option`.
+- `RunExporter`, `ExportResult` and the group name become public API: they change only in a minor release below 1.0, with a CHANGELOG note. The shape of `run.json` is not promised to plugins.
+- The options are strings only, so a plugin that wants a typed option parses it itself.
+- A plugin raising any other exception from `export` shows a traceback; only `ValueError` and `OSError` are treated as errors the user can fix.
+- Discovery runs on every `export` call and loads every declared entry-point, including ones for other names than `--to`. Acceptable for a CLI that runs once per export.
+
+**Alternatives considered:**
+
+- *Migrate the built-in exporters to the protocol.* Out of scope: their routes carry GUI state (credentials, progress) the protocol does not model.
+- *A GUI listing for plugins.* Would need a form schema for the options; the CLI is enough for the first version.
+- *Load plugins from an `user_exporters/` folder, like models and tasks.* The entry-point lets a plugin be versioned and installed with `pip`; the folder remains possible later.

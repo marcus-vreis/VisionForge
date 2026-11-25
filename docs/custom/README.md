@@ -10,6 +10,7 @@ sua pesquisa está das cinco tarefas embutidas.
 |---|---|
 | use **your own architecture** in classification, regression or segmentation · usar a **sua arquitetura** em classificação, regressão ou segmentação | [`MODELS.md`](MODELS.md) |
 | define **a whole new task family** — your own data, loss and metrics · definir **uma tarefa inteira** — dados, loss e métricas seus | [`TASKS.md`](TASKS.md) |
+| send finished runs to **a destination of your own** (a plugin package) · enviar runs concluídos para **um destino seu** (um pacote plugin) | [`EXPORTERS.md`](EXPORTERS.md) |
 
 Both work **without touching the package**: VisionForge loads your code from
 `user_models/` and `user_tasks/`, folders it looks for next to wherever you run
