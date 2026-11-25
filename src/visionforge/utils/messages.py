@@ -958,6 +958,14 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "O envio ao GitHub falhou. Confira a conexão e tente de novo.",
         "en": "The GitHub upload failed. Check the connection and try again.",
     },
+    "github.oauth_off": {
+        "pt": "A conexão com o GitHub não está configurada neste servidor. Cole um token do GitHub.",
+        "en": "Connecting with GitHub is not set up on this server. Paste a GitHub token instead.",
+    },
+    "github.oauth_state_invalid": {
+        "pt": "Este pedido de conexão com o GitHub não vale mais: expirou, já foi usado ou é de outra conta. Comece de novo pelo botão Conectar com GitHub.",
+        "en": "This GitHub connection request is no longer valid: it expired, was already used or belongs to another account. Start again from the Connect with GitHub button.",
+    },
     "dvc.request_invalid": {
         "pt": "Pedido inválido para o DVC.",
         "en": "Invalid DVC request.",

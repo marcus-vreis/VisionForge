@@ -2344,6 +2344,12 @@ export async function deleteGitHubToken(): Promise<HubTokenStatus> {
   return request<HubTokenStatus>("/github/token", { method: "DELETE" });
 }
 
+/** Open a "Conectar com GitHub" request for this profile: the GitHub page
+ *  where the person authorizes the operator's OAuth App (ADR-250). */
+export async function startGitHubOAuth(): Promise<{ url: string }> {
+  return request<{ url: string }>("/github/oauth/start", { method: "POST" });
+}
+
 /** The folder, files and README a commit would hold, built offline (ADR-175). */
 export async function fetchGitHubPreview(runId: string): Promise<GitHubPreview> {
   return request<GitHubPreview>(`/github/preview?run_id=${encodeURIComponent(runId)}`);

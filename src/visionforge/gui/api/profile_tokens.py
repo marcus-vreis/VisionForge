@@ -94,6 +94,31 @@ def token_file(service: Service, profile: Profile) -> Path:
     return config_dir() / f"{service}-tokens" / key
 
 
+def valid_token(value: str) -> bool:
+    """True for a token the server keeps: not empty, short, without spaces."""
+    return (
+        bool(value) and len(value) <= _MAX_TOKEN and not any(c.isspace() for c in value)
+    )
+
+
+def write_token(service: Service, profile: Profile, value: str) -> None:
+    """Replace ``service``'s token for ``profile`` atomically, in a private folder.
+
+    The caller checks ``value`` with :func:`valid_token` first.
+    """
+    target = token_file(service, profile)
+    target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with NamedTemporaryFile(dir=target.parent, delete=False) as tmp:
+        path = Path(tmp.name)
+    try:
+        # The file name is a SHA-256 hex digest under a fixed folder, and the
+        # temporary file sits beside it: no request text reaches the path.
+        path.write_text(value, encoding="utf-8")  # NOSONAR pythonsecurity:S2083
+        path.replace(target)
+    finally:
+        path.unlink(missing_ok=True)
+
+
 def read_token(service: Service, profile: Profile) -> str | None:
     """The saved token, or ``None`` when the profile has none."""
     try:
@@ -135,20 +160,11 @@ def add_token_routes(
         body: ProfileToken, request: Request, header: ProfileHeader = None
     ) -> dict[str, bool]:
         """Replace the profile credential atomically with private file permissions."""
-        target = token_file(service, resolve(header))
+        profile = resolve(header)
         value = body.token.get_secret_value().strip()
-        if not value or len(value) > _MAX_TOKEN or any(c.isspace() for c in value):
+        if not valid_token(value):
             raise HTTPException(422, tr(_INVALID[service]))
-        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        with NamedTemporaryFile(dir=target.parent, delete=False) as tmp:
-            path = Path(tmp.name)
-        try:
-            # The file name is a SHA-256 hex digest under a fixed folder, and the
-            # temporary file sits beside it: no request text reaches the path.
-            path.write_text(value, encoding="utf-8")  # NOSONAR pythonsecurity:S2083
-            path.replace(target)
-        finally:
-            path.unlink(missing_ok=True)
+        write_token(service, profile, value)
         return token_state(request, header)
 
     @router.delete("/token")

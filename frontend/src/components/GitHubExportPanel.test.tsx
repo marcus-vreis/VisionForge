@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { LanguageContext } from "../i18n/context";
 import { en } from "../i18n/en";
 import { pt } from "../i18n/pt";
-import { GitHubExportPanel } from "./GitHubExportPanel";
+import { GitHubConnect, GitHubExportPanel } from "./GitHubExportPanel";
 
 describe("GitHubExportPanel", () => {
   it.each([pt, en])("starts closed and performs no request", (t) => {
@@ -23,6 +23,18 @@ describe("GitHubExportPanel", () => {
   it("asks for a token limited to the experiments repository", () => {
     expect(pt.github.tokenHint).toContain("Contents");
     expect(en.github.tokenHint).toContain("Fine-grained");
+  });
+
+  it.each([pt, en])("offers \"Conectar com GitHub\" only when the server does", (t) => {
+    const render = (offered: boolean, busy = false) => renderToStaticMarkup(
+      <LanguageContext.Provider value={{ lang: "pt", t, locale: "pt-BR", setLang: () => {} }}>
+        <GitHubConnect offered={offered} busy={busy} onConnect={() => {}} />
+      </LanguageContext.Provider>);
+    expect(render(false)).toBe("");
+    const html = render(true);
+    expect(html).toContain(t.github.oauthConnect);
+    expect(html).toContain("repo");
+    expect(render(true, true)).toContain("disabled");
   });
 
   it("names the folder in the repository", () => {

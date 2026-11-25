@@ -35,6 +35,9 @@ export interface Session {
   /** The disk ceiling of this person's folder; absent or null when the server
    *  sets none. */
   quota?: Quota | null;
+  /** Whether "Conectar com GitHub" works here: the operator gave the server a
+   *  GitHub OAuth App (ADR-250). Absent from an older server: no button. */
+  github_oauth?: boolean;
 }
 
 export const LOCAL_SESSION: Session = {
@@ -84,6 +87,7 @@ export const ROUTE = {
   runMarkdown: "GET /api/runs/{run_id}/export_md",
   hubExport: "GET /api/hub/preview",
   githubExport: "GET /api/github/preview",
+  githubOAuth: "POST /api/github/oauth/start",
   zenodoExport: "GET /api/zenodo/preview",
   dvcExport: "GET /api/dvc/preview",
   mlflowRetry: "POST /api/runs/{run_id}/mlflow/retry",
@@ -117,7 +121,11 @@ function strings(value: unknown): string[] {
 export function parseSession(raw: unknown): Session {
   if (typeof raw !== "object" || raw === null) return LOCAL_SESSION;
   const body = raw as Record<string, unknown>;
-  if (body.server_mode !== true) return LOCAL_SESSION;
+  // A local install can offer the GitHub connection too, when its operator
+  // set it up; nothing else of the session applies there.
+  if (body.server_mode !== true) {
+    return body.github_oauth === true ? { ...LOCAL_SESSION, github_oauth: true } : LOCAL_SESSION;
+  }
   return {
     server_mode: true,
     user: typeof body.user === "string" ? body.user : null,
@@ -126,6 +134,7 @@ export function parseSession(raw: unknown): Session {
     closed: strings(body.closed),
     closed_blocks: strings(body.closed_blocks),
     quota: parseQuota(body.quota),
+    github_oauth: body.github_oauth === true,
   };
 }
 

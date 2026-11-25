@@ -206,6 +206,8 @@ ROUTE_CLASSES: dict[str, RouteClass] = {
     "GET /api/explorer/thumb": "confined",
     "POST /api/github/export": "owner",
     "GET /api/github/preview": "owner",
+    "GET /api/github/oauth/callback": "owner",
+    "POST /api/github/oauth/start": "owner",
     "DELETE /api/github/token": "owner",
     "GET /api/github/token": "owner",
     "PUT /api/github/token": "owner",
@@ -412,6 +414,10 @@ READY: frozenset[str] = frozenset(
         "DELETE /api/github/token",
         "GET /api/github/token",
         "PUT /api/github/token",
+        # The same token through the operator's GitHub OAuth App; the callback
+        # saves it only for the signed-in person who opened the request (ADR-250).
+        "POST /api/github/oauth/start",
+        "GET /api/github/oauth/callback",
         "DELETE /api/hub/token",
         "GET /api/hub/token",
         "PUT /api/hub/token",

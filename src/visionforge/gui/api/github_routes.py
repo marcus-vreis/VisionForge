@@ -20,6 +20,7 @@ from visionforge.core.hub_export import (
     PreviewMismatchError,
     PrivateRepositoryRequiredError,
 )
+from visionforge.gui.api.github_oauth import add_oauth_routes
 from visionforge.gui.api.http_responses import (
     CONFLICT_TEXT,
     NOT_FOUND_TEXT,
@@ -56,13 +57,15 @@ def build_github_router(
     resolve: Callable[[str | None], Profile],
     find: Callable[[str, Profile], Path | None],
 ) -> APIRouter:
-    """Mount the profile token, the preview and the commit."""
+    """Mount the profile token, its OAuth connection, the preview and the commit."""
     router = APIRouter(
         prefix="/github",
         tags=[TAG_INTEGRATIONS],
         route_class=quiet_validation_route("github.request_invalid"),
     )
     add_token_routes(router, "github", resolve)
+    # "Conectar com GitHub": the same token, through the operator's OAuth App (ADR-250).
+    add_oauth_routes(router, resolve)
 
     def locate(run_id: str, profile: Profile) -> Path:
         directory = find(run_id, profile)
