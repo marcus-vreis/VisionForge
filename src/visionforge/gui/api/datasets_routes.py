@@ -9,7 +9,7 @@ import io
 import os
 import traceback
 import uuid
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from pathlib import Path
 from typing import Any
 
@@ -514,12 +514,45 @@ def _pick_preview_image(
     return _first_image_recursive(base)
 
 
+def _active_augments(tc: Any) -> list[str]:
+    """Names of the augmentations the preview applies, in a fixed order."""
+    active: list[str] = []
+    if tc.horizontal_flip:
+        active.append("flip")
+    if tc.rotation_degrees > 0:
+        active.append("rotation")
+    if tc.color_jitter:
+        active.append("jitter")
+    return active
+
+
+def _augment_transform(tc: Any, rng: Any) -> Callable[[Any], Any]:
+    """One random augmentation draw for a PIL image, from ``rng``."""
+    import torchvision.transforms as T
+    import torchvision.transforms.functional as TF
+
+    resize = T.Compose([T.Resize(tc.image_size), T.CenterCrop(tc.image_size)])
+
+    def transform(img: Any) -> Any:
+        img = resize(img)
+        if tc.horizontal_flip and rng.random() < 0.5:
+            img = TF.hflip(img)
+        if tc.rotation_degrees > 0:
+            img = TF.rotate(img, rng.uniform(-tc.rotation_degrees, tc.rotation_degrees))
+        if tc.color_jitter:  # the same ranges as the training transform's ColorJitter
+            img = TF.adjust_brightness(img, rng.uniform(0.8, 1.2))
+            img = TF.adjust_contrast(img, rng.uniform(0.8, 1.2))
+            img = TF.adjust_saturation(img, rng.uniform(0.8, 1.2))
+        return img
+
+    return transform
+
+
 def _render_augment_preview(req: AugmentPreviewRequest) -> AugmentPreviewResponse:
     """Save N randomly-augmented variants of one dataset image and return paths."""
     import random
 
     import torchvision.transforms as T
-    import torchvision.transforms.functional as TF
 
     from visionforge.utils.config import TransformConfig
 
@@ -541,31 +574,13 @@ def _render_augment_preview(req: AugmentPreviewRequest) -> AugmentPreviewRespons
         )
         raise HTTPException(422, tr("preview.bad_transforms", fields=fields)) from exc
     size = tc.image_size
-    active: list[str] = []
-    if tc.horizontal_flip:
-        active.append("flip")
-    if tc.rotation_degrees > 0:
-        active.append("rotation")
-    if tc.color_jitter:
-        active.append("jitter")
+    active = _active_augments(tc)
     # Drawn from a generator of its own, never torch's or Python's global one:
     # this runs in a thread while a job may be training in another, and the job's
     # augmentation and shuffling draw from the global generator, so a preview
     # that drew from it too would change a seeded run's result (ADR-121).
     rng = random.Random()
-    resize = T.Compose([T.Resize(size), T.CenterCrop(size)])
-
-    def transform(img: Any) -> Any:
-        img = resize(img)
-        if tc.horizontal_flip and rng.random() < 0.5:
-            img = TF.hflip(img)
-        if tc.rotation_degrees > 0:
-            img = TF.rotate(img, rng.uniform(-tc.rotation_degrees, tc.rotation_degrees))
-        if tc.color_jitter:  # the same ranges as the training transform's ColorJitter
-            img = TF.adjust_brightness(img, rng.uniform(0.8, 1.2))
-            img = TF.adjust_contrast(img, rng.uniform(0.8, 1.2))
-            img = TF.adjust_saturation(img, rng.uniform(0.8, 1.2))
-        return img
+    transform = _augment_transform(tc, rng)
 
     cache_dir = preview_cache(_AUGMENT_CACHE_DIR.parent) / _AUGMENT_CACHE_DIR.name
     cache_dir.mkdir(parents=True, exist_ok=True)

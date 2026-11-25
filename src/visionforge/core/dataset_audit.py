@@ -6,7 +6,8 @@ import csv
 import hashlib
 import os
 from collections import defaultdict
-from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
@@ -119,6 +120,71 @@ def _allowed_manifest_image(
     )
 
 
+@dataclass
+class _AuditScan:
+    """What the per-split pass of ``audit_dataset`` collects."""
+
+    root: Path
+    max_issues: int
+    counts: dict[str, int]
+    missing: list[str] = field(default_factory=list)
+    absent_optional: list[str] = field(default_factory=list)
+    present: list[str] = field(default_factory=list)
+    issues: list[dict[str, str]] = field(default_factory=list)
+    unreadable_count: int = 0
+    hashes: dict[str, list[tuple[str, str]]] = field(
+        default_factory=lambda: defaultdict(list)
+    )
+    images: list[Path] = field(default_factory=list)
+    memberships: list[str] = field(default_factory=list)
+    digests: list[str] = field(default_factory=list)
+
+    def record_issue(self, path: Path, reason: str) -> None:
+        """Count every unreadable image while bounding the reported details."""
+        self.unreadable_count += 1
+        if len(self.issues) < self.max_issues:
+            self.issues.append({"path": _shown_path(self.root, path), "reason": reason})
+
+    def add_split(self, split: str, found: Iterable[tuple[Path, str]]) -> None:
+        """Record the images of one present split."""
+        self.present.append(split)
+        for path, digest in found:
+            relative = path.relative_to(self.root).as_posix()
+            self.counts[split] += 1
+            self.hashes[digest].append((split, relative))
+            self.images.append(path)
+            self.memberships.append(split)
+            self.digests.append(digest)
+
+
+def _scan_splits(
+    root: Path,
+    names: list[str],
+    split_images: Mapping[str, Sequence[Path] | None] | None,
+    split_paths: Mapping[str, str],
+    optional_splits: Collection[str],
+    max_issues: int,
+) -> _AuditScan:
+    """Hash the images of every split into an ``_AuditScan``."""
+    scan = _AuditScan(root, max_issues, dict.fromkeys(names, 0))
+    for split in names:
+        found = (
+            _listed_split_images(root, split_images[split], scan.record_issue)
+            if split_images is not None
+            else _folder_split_images(root, split_paths[split], scan.record_issue)
+        )
+        if found is _ESCAPED:
+            continue
+        if found is not None:
+            scan.add_split(split, found)
+        elif split in optional_splits:
+            scan.absent_optional.append(split)
+            del scan.counts[split]
+        else:
+            scan.missing.append(split)
+    return scan
+
+
 def audit_dataset(
     root: Path,
     splits: Mapping[str, str] | None = None,
@@ -153,49 +219,13 @@ def audit_dataset(
     names = list(split_images if split_images is not None else split_paths)
     if not names:
         raise ValueError("At least one split is required")
-    counts = dict.fromkeys(names, 0)
-    missing: list[str] = []
-    absent_optional: list[str] = []
-    present: list[str] = []
-    issues: list[dict[str, str]] = []
-    unreadable_count = 0
-    hashes: dict[str, list[tuple[str, str]]] = defaultdict(list)
-    images: list[Path] = []
-    memberships: list[str] = []
-    digests: list[str] = []
-
-    def record_issue(path: Path, reason: str) -> None:
-        """Count every unreadable image while bounding the reported details."""
-        nonlocal unreadable_count
-        unreadable_count += 1
-        if len(issues) < max_issues:
-            issues.append({"path": _shown_path(root, path), "reason": reason})
-
-    for split in names:
-        found = (
-            _listed_split_images(root, split_images[split], record_issue)
-            if split_images is not None
-            else _folder_split_images(root, split_paths[split], record_issue)
-        )
-        if found is _ESCAPED:
-            continue
-        if found is None:
-            if split in optional_splits:
-                absent_optional.append(split)
-                del counts[split]
-            else:
-                missing.append(split)
-            continue
-        present.append(split)
-
-        for path, digest in found:
-            relative = path.relative_to(root).as_posix()
-            counts[split] += 1
-            hashes[digest].append((split, relative))
-            images.append(path)
-            memberships.append(split)
-            digests.append(digest)
-    duplicates = _cross_split_groups(hashes, "sha256")
+    scan = _scan_splits(
+        root, names, split_images, split_paths, optional_splits, max_issues
+    )
+    counts, missing, present = scan.counts, scan.missing, scan.present
+    images, memberships, digests = scan.images, scan.memberships, scan.digests
+    record_issue = scan.record_issue
+    duplicates = _cross_split_groups(scan.hashes, "sha256")
     near = (
         _near_groups(root, images, memberships, digests, record_issue)
         if near_duplicates
@@ -209,7 +239,7 @@ def audit_dataset(
         "ok": not _has_findings(
             duplicates,
             near,
-            unreadable_count,
+            scan.unreadable_count,
             missing,
             empty,
             strict_groups and overlaps,
@@ -222,10 +252,10 @@ def audit_dataset(
         "image_counts": counts,
         "duplicate_groups": duplicates,
         "missing_splits": missing,
-        "absent_optional_splits": absent_optional,
+        "absent_optional_splits": scan.absent_optional,
         "empty_splits": empty,
-        "unreadable_count": unreadable_count,
-        "unreadable": issues,
+        "unreadable_count": scan.unreadable_count,
+        "unreadable": scan.issues,
         "group_manifest": str(group_manifest) if group_manifest is not None else None,
         "strict_groups": strict_groups,
         "group_overlaps": overlaps,

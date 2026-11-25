@@ -437,6 +437,30 @@ class ServerModeError(ValueError):
     """The server-mode options cannot be used as given."""
 
 
+def _reject_options_without_server(
+    proxies: list[str],
+    shared: list[Path],
+    header: str,
+    quota_gb: float | None,
+    max_actions: int | None,
+) -> None:
+    """Raise when a server-only option was given without ``--server``."""
+    given = proxies or shared or header != DEFAULT_USER_HEADER or quota_gb
+    if given or max_actions is not None:
+        raise ServerModeError(
+            "--trusted-proxy, --user-header, --datasets-dir, --quota-gb and "
+            "--max-actions need --server."
+        )
+
+
+def _check_limits(quota_gb: float | None, max_actions: int | None) -> None:
+    """Raise when ``--max-actions`` or ``--quota-gb`` is out of range."""
+    if max_actions is not None and max_actions < 1:
+        raise ServerModeError(f"--max-actions {max_actions!r} must be 1 or more.")
+    if quota_gb is not None and (math.isnan(quota_gb) or quota_gb <= 0):
+        raise ServerModeError(f"--quota-gb {quota_gb!r} must be above zero.")
+
+
 @dataclass(frozen=True)
 class ServerMode:
     """The options of ``--server``; the default is the mode off."""
@@ -476,17 +500,11 @@ class ServerMode:
         header = user_header.strip()
         shared = [Path(d) for d in datasets_dirs]
         if not enabled:
-            given = proxies or shared or header != DEFAULT_USER_HEADER or quota_gb
-            if given or max_actions is not None:
-                raise ServerModeError(
-                    "--trusted-proxy, --user-header, --datasets-dir, --quota-gb and "
-                    "--max-actions need --server."
-                )
+            _reject_options_without_server(
+                proxies, shared, header, quota_gb, max_actions
+            )
             return cls()
-        if max_actions is not None and max_actions < 1:
-            raise ServerModeError(f"--max-actions {max_actions!r} must be 1 or more.")
-        if quota_gb is not None and (math.isnan(quota_gb) or quota_gb <= 0):
-            raise ServerModeError(f"--quota-gb {quota_gb!r} must be above zero.")
+        _check_limits(quota_gb, max_actions)
         if not proxies:
             raise ServerModeError(
                 "--server needs --trusted-proxy <address>: the address of the "
