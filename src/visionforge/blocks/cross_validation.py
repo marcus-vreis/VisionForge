@@ -20,7 +20,7 @@ from sklearn.model_selection import (
 from torch.utils.data import DataLoader, Subset
 from torchvision.datasets import ImageFolder
 
-from visionforge.blocks._cv_common import fold_drop_last
+from visionforge.blocks._cv_common import fold_drop_last, fold_metric_stats
 from visionforge.blocks._search_utils import make_trial_progress_wrapper
 from visionforge.blocks.base import ExperimentBlock
 from visionforge.core.cancellation import (
@@ -37,7 +37,6 @@ from visionforge.core.data import (
 from visionforge.core.dataset_audit import load_group_manifest
 from visionforge.core.evaluator import Evaluator
 from visionforge.core.pin_memory import pin_memory_for
-from visionforge.core.replicates import sample_std
 from visionforge.core.run_groups import write_run_group
 from visionforge.core.strict_json import dumps_strict
 from visionforge.core.trainer import Trainer, TrainResult, seed_before_building
@@ -482,16 +481,18 @@ class CrossValidationBlock(ExperimentBlock):
                 "CrossValidationBlock: all folds failed — no metrics available."
             )
 
-        accuracies = [r["accuracy"] for r in successful]
-        f1s = [r["f1"] for r in successful]
+        acc = fold_metric_stats([r["accuracy"] for r in successful])
+        f1 = fold_metric_stats([r["f1"] for r in successful])
 
         return {
             "fold_results": self._fold_results,
             "n_folds_ok": len(successful),
-            "mean_accuracy": float(np.mean(accuracies)) if accuracies else None,
-            "std_accuracy": sample_std(accuracies),
-            "mean_f1": float(np.mean(f1s)) if f1s else None,
-            "std_f1": sample_std(f1s),
+            "mean_accuracy": acc["mean"],
+            "std_accuracy": acc["std"],
+            "n_non_finite_accuracy": acc["n_non_finite"],
+            "mean_f1": f1["mean"],
+            "std_f1": f1["std"],
+            "n_non_finite_f1": f1["n_non_finite"],
             "std_ddof": 1,
             # The stop cut this job (ADR-111): a unit was cut, or units were
             # left unrun -- all of them, if it landed in the first.
@@ -514,8 +515,8 @@ class CrossValidationBlock(ExperimentBlock):
         out_dir.mkdir(parents=True, exist_ok=True)
 
         successful = [r for r in self._fold_results if r["status"] == "success"]
-        accuracies = [r["accuracy"] for r in successful] if successful else []
-        f1s = [r["f1"] for r in successful] if successful else []
+        acc = fold_metric_stats([r["accuracy"] for r in successful])
+        f1 = fold_metric_stats([r["f1"] for r in successful])
 
         cv = self._config.cross_validation
         assert cv is not None
@@ -526,13 +527,15 @@ class CrossValidationBlock(ExperimentBlock):
             "select_on": cv.select_on,
             "folds": self._fold_results,
             "aggregate": {
-                "n": len(accuracies),
+                "n": acc["n"],
                 # Runs before ADR-111 wrote the population std (ddof=0).
                 "std_ddof": 1,
-                "mean_accuracy": float(np.mean(accuracies)) if accuracies else None,
-                "std_accuracy": sample_std(accuracies),
-                "mean_f1": float(np.mean(f1s)) if f1s else None,
-                "std_f1": sample_std(f1s),
+                "mean_accuracy": acc["mean"],
+                "std_accuracy": acc["std"],
+                "n_non_finite_accuracy": acc["n_non_finite"],
+                "mean_f1": f1["mean"],
+                "std_f1": f1["std"],
+                "n_non_finite_f1": f1["n_non_finite"],
             },
         }
 
@@ -549,8 +552,8 @@ class CrossValidationBlock(ExperimentBlock):
         ``metrics.cv_aggregate``, ``best_val_loss``) are kept beside the group.
         """
         successful = [r for r in self._fold_results if r["status"] == "success"]
-        accuracies = [r["accuracy"] for r in successful] if successful else []
-        f1s = [r["f1"] for r in successful] if successful else []
+        acc = fold_metric_stats([r["accuracy"] for r in successful])
+        f1 = fold_metric_stats([r["f1"] for r in successful])
         val_losses = [
             r["best_val_loss"] for r in successful if r["best_val_loss"] is not None
         ]
@@ -558,19 +561,7 @@ class CrossValidationBlock(ExperimentBlock):
         cv = self._config.cross_validation
         assert cv is not None
 
-        mean_acc = float(np.mean(accuracies)) if accuracies else None
-        mean_f1 = float(np.mean(f1s)) if f1s else None
-        std_acc = sample_std(accuracies)
-        std_f1 = sample_std(f1s)
         stopped = self._stopped()
-
-        def aggregate(values: list[float]) -> dict[str, Any]:
-            return {
-                "mean": float(np.mean(values)),
-                "std": sample_std(values),
-                "n": len(values),
-                "std_ddof": 1,
-            }
 
         report: dict[str, Any] = {
             "metric": "accuracy",
@@ -594,11 +585,7 @@ class CrossValidationBlock(ExperimentBlock):
                 }
                 for r in self._fold_results
             ],
-            "aggregate": (
-                {"accuracy": aggregate(accuracies), "f1": aggregate(f1s)}
-                if successful
-                else {}
-            ),
+            "aggregate": ({"accuracy": acc, "f1": f1} if successful else {}),
             "stopped": stopped,
             "report_dir": str(self._config.output.reports_dir / base_name),
         }
@@ -630,10 +617,12 @@ class CrossValidationBlock(ExperimentBlock):
                     ),
                     # Runs before ADR-111 wrote the population std (ddof=0).
                     "std_ddof": 1,
-                    "mean_accuracy": mean_acc,
-                    "std_accuracy": std_acc,
-                    "mean_f1": mean_f1,
-                    "std_f1": std_f1,
+                    "mean_accuracy": acc["mean"],
+                    "std_accuracy": acc["std"],
+                    "n_non_finite_accuracy": acc["n_non_finite"],
+                    "mean_f1": f1["mean"],
+                    "std_f1": f1["std"],
+                    "n_non_finite_f1": f1["n_non_finite"],
                 },
             },
         )

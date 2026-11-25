@@ -210,6 +210,24 @@ def _emit_untrained_fold_end(
         )
 
 
+def fold_metric_stats(reported: list[float]) -> dict[str, float | int | None]:
+    """Mean, sample std, finite count and excluded count of one fold metric.
+
+    A NaN or infinite value is not a measurement (ADR-061): it stays out of the
+    mean and std, and ``n_non_finite`` counts it. No finite value gives ``n = 0``
+    and null statistics.
+    """
+    values = [v for v in reported if math.isfinite(v)]
+    return {
+        "mean": float(np.mean(values)) if values else None,
+        "std": sample_std(values),
+        "n": len(values),
+        "n_non_finite": len(reported) - len(values),
+        # Runs before ADR-111 wrote the population std (ddof=0).
+        "std_ddof": 1,
+    }
+
+
 def aggregate_folds(
     folds: list[FoldResult], names: tuple[str, ...]
 ) -> dict[str, dict[str, float | int | None]]:
@@ -224,17 +242,8 @@ def aggregate_folds(
     aggregate: dict[str, dict[str, float | int | None]] = {}
     for name in names:
         reported = [f.metrics[name] for f in successful if name in f.metrics]
-        if not reported:
-            continue
-        values = [v for v in reported if math.isfinite(v)]
-        aggregate[name] = {
-            "mean": float(np.mean(values)) if values else None,
-            "std": sample_std(values),
-            "n": len(values),
-            "n_non_finite": len(reported) - len(values),
-            # Runs before ADR-111 wrote the population std (ddof=0).
-            "std_ddof": 1,
-        }
+        if reported:
+            aggregate[name] = fold_metric_stats(reported)
     return aggregate
 
 
