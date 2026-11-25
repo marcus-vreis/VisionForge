@@ -781,3 +781,67 @@ class TestFoldStatisticsOnMixedSizes:
         assert len(mean) == 3
         assert all(0.0 < m < 1.0 for m in mean)
         assert all(s > 0.0 for s in std)
+
+
+_FOLD_EXTRA: dict[str, Any] = {
+    "best_val_loss": None,
+    "select_on": "best",
+    "selected_epoch": 1,
+}
+
+
+class TestNonFiniteFoldMetric:
+    """A NaN fold metric stays out of the mean and std, as in aggregate_folds."""
+
+    @staticmethod
+    def _block(cv_config: ExperimentConfig) -> Any:
+        from visionforge.blocks.cross_validation import CrossValidationBlock
+
+        cv = cv_config.model_copy(deep=True)
+        assert cv.cross_validation is not None
+        cv.cross_validation.n_folds = 3
+        block = CrossValidationBlock()
+        block.setup(cv)
+        nan = float("nan")
+        block._fold_results = [
+            {**_FOLD_EXTRA, "fold": 0, "status": "success", "accuracy": 0.5, "f1": 0.4},
+            {**_FOLD_EXTRA, "fold": 1, "status": "success", "accuracy": 0.7, "f1": nan},
+            {**_FOLD_EXTRA, "fold": 2, "status": "success", "accuracy": nan, "f1": nan},
+        ]
+        return block
+
+    def test_report_means_and_stds_use_finite_values_only(
+        self, cv_config: ExperimentConfig
+    ) -> None:
+        report = self._block(cv_config).report()
+        assert report["mean_accuracy"] == pytest.approx(0.6)
+        assert report["std_accuracy"] == pytest.approx(np.std([0.5, 0.7], ddof=1))
+        assert report["mean_f1"] == pytest.approx(0.4)
+        assert report["std_f1"] is None
+        assert report["n_non_finite_accuracy"] == 1
+        assert report["n_non_finite_f1"] == 2
+
+    def test_summary_aggregate_counts_finite_and_excluded(
+        self, cv_config: ExperimentConfig
+    ) -> None:
+        block = self._block(cv_config)
+        block._write_summary("nf")
+        path = cv_config.output.reports_dir / "nf" / "cv_summary.json"
+        agg = json.loads(path.read_text(encoding="utf-8"))["aggregate"]
+        assert agg["mean_accuracy"] == pytest.approx(0.6)
+        assert agg["n"] == 2
+        assert agg["n_non_finite_accuracy"] == 1
+        assert agg["mean_f1"] == pytest.approx(0.4)
+        assert agg["n_non_finite_f1"] == 2
+
+    def test_run_json_aggregate_matches(self, cv_config: ExperimentConfig) -> None:
+        block = self._block(cv_config)
+        block._write_top_level_run_json("nf")
+        run = json.loads(
+            _kfold_run_json(cv_config.output.models_dir, "nf").read_text("utf-8")
+        )
+        agg = run["metrics"]["cv_aggregate"]
+        assert agg["mean_accuracy"] == pytest.approx(0.6)
+        assert agg["mean_f1"] == pytest.approx(0.4)
+        assert agg["n_non_finite_accuracy"] == 1
+        assert agg["n_non_finite_f1"] == 2
