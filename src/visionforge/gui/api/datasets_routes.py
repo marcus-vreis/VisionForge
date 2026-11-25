@@ -1129,6 +1129,24 @@ def _regression_split_stats(
         return RegressionSplitStats(rows=0, missing=True, missing_columns=[str(exc)])
 
 
+def _image_is_present(images_root: Path, name: str) -> bool:
+    """Whether a manifest row's image exists; never looks outside the scope.
+
+    On a server, a row whose path leaves the request's scope (absolute or
+    ``..``) is counted as absent without touching the disk, so the count does
+    not tell whether someone else's file exists (ADR-214).
+    """
+    path = images_root / name
+    scope = current_scope()
+    if scope is not None:
+        try:
+            if not scope.holds(path.resolve()):
+                return False
+        except (OSError, RuntimeError):
+            return False
+    return path.is_file()
+
+
 def _scan_regression_rows(
     reader: csv.DictReader[str], images_root: Path, req: RegressionDatasetStatsRequest
 ) -> RegressionSplitStats:
@@ -1148,7 +1166,7 @@ def _scan_regression_rows(
         image_name = row.get(req.image_column)
         if checked_images < 500 and image_name is not None:
             checked_images += 1
-            if not (images_root / str(image_name)).is_file():
+            if not _image_is_present(images_root, str(image_name)):
                 missing_images += 1
         _accumulate_target_sums(row, req.target_columns, sums)
 
