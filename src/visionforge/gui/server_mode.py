@@ -69,6 +69,9 @@ _DIGEST_LEN = 10
 
 Network = ipaddress.IPv4Network | ipaddress.IPv6Network
 
+# The largest .zip a person may send at once when the operator says nothing.
+DEFAULT_MAX_UPLOAD_GB = 5.0
+
 # What each person's folder holds, for the quota (ADR-225).
 USAGE = DiskUsage()
 
@@ -258,6 +261,12 @@ ROUTE_CLASSES: dict[str, RouteClass] = {
     "GET /api/tasks": "open",
     "GET /api/update": "open",
     "POST /api/update/apply": "off",
+    # A person sends a dataset of their own as a .zip, in parts (ADR-246).
+    "POST /api/uploads": "owner",
+    "GET /api/uploads/{upload_id}": "owner",
+    "DELETE /api/uploads/{upload_id}": "owner",
+    "POST /api/uploads/{upload_id}/complete": "owner",
+    "PUT /api/uploads/{upload_id}/parts/{part}": "owner",
     "POST /api/wandb/runs/{run_id}/retry": "owner",
     "DELETE /api/wandb/token": "owner",
     "GET /api/wandb/token": "owner",
@@ -374,6 +383,13 @@ READY: frozenset[str] = frozenset(
         # a full folder gets under the quota again (ADR-227).
         "GET /api/datasets/own",
         "DELETE /api/datasets/own/{name}",
+        # A .zip sent in parts, staged in the person's profile and unpacked
+        # into their own folder only (ADR-246).
+        "POST /api/uploads",
+        "GET /api/uploads/{upload_id}",
+        "DELETE /api/uploads/{upload_id}",
+        "POST /api/uploads/{upload_id}/complete",
+        "PUT /api/uploads/{upload_id}/parts/{part}",
         "GET /api/dataset/file",
         "POST /api/dataset/samples",
         "POST /api/dataset/stats",
@@ -443,22 +459,31 @@ def _reject_options_without_server(
     header: str,
     quota_gb: float | None,
     max_actions: int | None,
+    max_upload_gb: float | None,
 ) -> None:
     """Raise when a server-only option was given without ``--server``."""
     given = proxies or shared or header != DEFAULT_USER_HEADER or quota_gb
-    if given or max_actions is not None:
+    if given or max_actions is not None or max_upload_gb is not None:
         raise ServerModeError(
-            "--trusted-proxy, --user-header, --datasets-dir, --quota-gb and "
-            "--max-actions need --server."
+            "--trusted-proxy, --user-header, --datasets-dir, --quota-gb, "
+            "--max-actions and --max-upload-gb need --server."
         )
 
 
-def _check_limits(quota_gb: float | None, max_actions: int | None) -> None:
-    """Raise when ``--max-actions`` or ``--quota-gb`` is out of range."""
+def _above_zero(option: str, value: float | None) -> None:
+    if value is not None and (math.isnan(value) or value <= 0):
+        raise ServerModeError(f"{option} {value!r} must be above zero.")
+
+
+def _check_limits(
+    quota_gb: float | None, max_actions: int | None, max_upload_gb: float | None
+) -> None:
+    """Raise when ``--max-actions``, ``--quota-gb`` or ``--max-upload-gb`` is
+    out of range."""
     if max_actions is not None and max_actions < 1:
         raise ServerModeError(f"--max-actions {max_actions!r} must be 1 or more.")
-    if quota_gb is not None and (math.isnan(quota_gb) or quota_gb <= 0):
-        raise ServerModeError(f"--quota-gb {quota_gb!r} must be above zero.")
+    _above_zero("--quota-gb", quota_gb)
+    _above_zero("--max-upload-gb", max_upload_gb)
 
 
 @dataclass(frozen=True)
@@ -474,6 +499,8 @@ class ServerMode:
     quota_bytes: int | None = None
     # How many heavy actions run at once outside the queue (``--max-actions``).
     max_actions: int = DEFAULT_MAX_ACTIONS
+    # The largest .zip one upload may declare (``--max-upload-gb``, ADR-246).
+    max_upload_bytes: int = int(DEFAULT_MAX_UPLOAD_GB * GIB)
 
     @classmethod
     def from_options(
@@ -485,6 +512,7 @@ class ServerMode:
         datasets_dirs: Iterable[str | Path] = (),
         quota_gb: float | None = None,
         max_actions: int | None = None,
+        max_upload_gb: float | None = None,
     ) -> ServerMode:
         """Validate what the command line gave.
 
@@ -494,17 +522,18 @@ class ServerMode:
                 is not an IP or a CIDR block; an empty header name; a
                 ``--datasets-dir`` that is not a folder; ``--quota-gb`` without
                 ``--server`` or not above zero; ``--max-actions`` without
-                ``--server`` or below one.
+                ``--server`` or below one; ``--max-upload-gb`` without
+                ``--server`` or not above zero.
         """
         proxies = [p.strip() for p in trusted_proxies if p.strip()]
         header = user_header.strip()
         shared = [Path(d) for d in datasets_dirs]
         if not enabled:
             _reject_options_without_server(
-                proxies, shared, header, quota_gb, max_actions
+                proxies, shared, header, quota_gb, max_actions, max_upload_gb
             )
             return cls()
-        _check_limits(quota_gb, max_actions)
+        _check_limits(quota_gb, max_actions, max_upload_gb)
         if not proxies:
             raise ServerModeError(
                 "--server needs --trusted-proxy <address>: the address of the "
@@ -526,6 +555,10 @@ class ServerMode:
             datasets=tuple(folder.resolve() for folder in shared),
             quota_bytes=None if quota_gb is None else int(quota_gb * GIB),
             max_actions=DEFAULT_MAX_ACTIONS if max_actions is None else max_actions,
+            max_upload_bytes=int(
+                (DEFAULT_MAX_UPLOAD_GB if max_upload_gb is None else max_upload_gb)
+                * GIB
+            ),
         )
 
     def trusts(self, client_host: str | None) -> bool:

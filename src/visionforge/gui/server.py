@@ -288,6 +288,10 @@ def start_server(
             "Server mode: at most {} heavy actions at once outside the queue",
             app.state.server_mode.max_actions,
         )
+        logger.info(
+            "Server mode: a dataset upload may be at most {} bytes",
+            app.state.server_mode.max_upload_bytes,
+        )
         if app.state.server_mode.quota_bytes is not None:
             logger.info(
                 "Server mode: each person's folder may hold {} bytes",

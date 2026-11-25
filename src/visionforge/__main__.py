@@ -459,6 +459,16 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     gui_parser.add_argument(
+        "--max-upload-gb",
+        type=float,
+        default=None,
+        metavar="GB",
+        help=(
+            "in --server mode, the largest .zip a person may send as a dataset "
+            "in one upload. Default: 5"
+        ),
+    )
+    gui_parser.add_argument(
         "--user-header",
         default="X-Forwarded-User",
         metavar="NAME",
@@ -660,6 +670,7 @@ def _run_gui_command(args: argparse.Namespace, parser: argparse.ArgumentParser) 
             datasets_dirs=args.datasets_dir,
             quota_gb=args.quota_gb,
             max_actions=args.max_actions,
+            max_upload_gb=args.max_upload_gb,
         )
     except ServerModeError as exc:
         parser.error(str(exc))

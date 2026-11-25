@@ -8,6 +8,7 @@ import {
 import { pt, type Dict } from "../i18n/pt";
 import type { TaskDescriptor } from "../lib/custom-tasks";
 import type { AnomalyAnalysisJob, AnomalyRequest, SavedAnomalyAnalysis } from "../lib/anomaly-analysis";
+import type { DatasetUpload, UploadedDataset } from "../lib/dataset-upload";
 import type { LabelSuspectsReport, SuspectSplit } from "../lib/label-suspects";
 import type { MaskAnalysisJob, MaskRequest, SavedMaskAnalysis } from "../lib/mask-analysis";
 import type {
@@ -1471,6 +1472,50 @@ export async function fetchOwnDatasets(): Promise<OwnDataset[]> {
 /** Delete one of them for good. 409 while a training of theirs runs or waits. */
 export async function deleteOwnDataset(name: string): Promise<{ name: string; status: string }> {
   return request(`/datasets/own/${encodeURIComponent(name)}`, { method: "DELETE" });
+}
+
+/** Open the upload of a .zip that becomes `name` in the person's folder
+ *  (ADR-246). The same name, file and size answer the upload already open. */
+export async function startDatasetUpload(body: {
+  name: string;
+  filename: string;
+  size: number;
+}): Promise<DatasetUpload> {
+  return request<DatasetUpload>("/uploads", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+/** Which parts of an upload arrived, to resume it. */
+export async function fetchDatasetUpload(id: string): Promise<DatasetUpload> {
+  return request<DatasetUpload>(`/uploads/${encodeURIComponent(id)}`);
+}
+
+/** Send one part; sending it again rewrites the same bytes. */
+export async function sendDatasetUploadPart(
+  id: string,
+  part: number,
+  data: Blob,
+): Promise<{ part: number; size: number }> {
+  return request(`/uploads/${encodeURIComponent(id)}/parts/${part}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/octet-stream" },
+    body: data,
+  });
+}
+
+/** Unpack a finished upload into the person's folder. */
+export async function completeDatasetUpload(id: string): Promise<UploadedDataset> {
+  return request<UploadedDataset>(`/uploads/${encodeURIComponent(id)}/complete`, {
+    method: "POST",
+  });
+}
+
+/** Drop an upload and its parts. */
+export async function cancelDatasetUpload(id: string): Promise<{ id: string; status: string }> {
+  return request(`/uploads/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 export async function deleteRun(runId: string): Promise<{ run_id: string; status: string }> {
