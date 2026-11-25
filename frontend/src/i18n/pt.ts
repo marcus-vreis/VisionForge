@@ -2467,6 +2467,7 @@ export const pt = {
         small: "pequeno",
         medium: "médio",
         large: "grande",
+        undefined: "indefinido",
       },
       ciMethods: {
         t: "t de Student",
@@ -2475,6 +2476,14 @@ export const pt = {
       ciTitle: (method: string, coverage: string, estimate: string) =>
         `Intervalo de ${method} da diferença a−b, centrado em ${estimate}; cobertura real ${coverage}. Um extremo "aberto" é um que os dados não conseguem limitar (com menos de 6 pares, o de Hodges-Lehmann não chega a 95%).`,
       ciOpen: "aberto",
+      pairsTested: (tested: number, pairs: number, tied: number) =>
+        `${tested} de ${pairs} pares testados (${tied} ${tied === 1 ? "empatado" : "empatados"})`,
+      nonFiniteSeeds: (variant: string, seeds: string) =>
+        `${variant}: ${seeds.includes(",") ? "seeds" : "seed"} ${seeds}`,
+      nonFiniteCount: (variant: string, n: number) =>
+        `${variant}: ${n} ${n === 1 ? "seed" : "seeds"}`,
+      nonFiniteWarning: (entries: string) =>
+        `Fora das médias, do ranking e dos testes por métrica não finita (NaN ou infinita): ${entries}.`,
       underpowered: "poucas seeds",
       underpoweredTitle: (pairs: number, floor: string) =>
         `Com ${pairs} pares o menor p possível é ${floor}, acima de alfa: nenhum resultado, por mais consistente, poderia ser significativo.`,

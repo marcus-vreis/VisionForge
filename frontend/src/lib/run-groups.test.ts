@@ -23,6 +23,8 @@ import {
   hasFewSeeds,
   holmVerdict,
   isGroupRun,
+  nonFiniteEntries,
+  testedPairs,
 } from "./run-groups";
 
 function run(id: string, extra: Partial<RunSummary> = {}): RunSummary {
@@ -345,5 +347,44 @@ describe("formatDifferenceInterval (ADR-187)", () => {
 
   it("returns null for a report written before the interval existed", () => {
     expect(formatDifferenceInterval({}, "open")).toBeNull();
+  });
+});
+
+describe("testedPairs (n_tested)", () => {
+  it("reports the ties when the test used fewer pairs than were shared", () => {
+    expect(testedPairs({ n_pairs: 8, n_tested: 4 })).toEqual({ tested: 4, pairs: 8, tied: 4 });
+  });
+
+  it("says nothing when every pair was tested or the report predates the field", () => {
+    expect(testedPairs({ n_pairs: 5, n_tested: 5 })).toBeNull();
+    expect(testedPairs({ n_pairs: 5 })).toBeNull();
+    expect(testedPairs({ n_pairs: 5, n_tested: null })).toBeNull();
+  });
+});
+
+describe("nonFiniteEntries", () => {
+  const agg = (n_non_finite?: number): MetricAggregate => ({
+    n: 3, mean: 0.8, std: 0.1, min: 0.7, max: 0.9, ci95_low: 0.6, ci95_high: 1, n_non_finite,
+  });
+  const variants = {
+    a: { overrides: {}, aggregates: { acc: agg(2) }, successful: 3, seeds_finished: [], children: [] },
+    b: { overrides: {}, aggregates: { acc: agg(0) }, successful: 3, seeds_finished: [], children: [] },
+  } as Record<string, GroupVariant>;
+
+  it("names the seeds when the report carries them", () => {
+    expect(
+      nonFiniteEntries({ metric: "acc", variants, non_finite_seeds: { a: [3, 7] } }),
+    ).toEqual([{ variant: "a", seeds: [3, 7], count: 2 }]);
+  });
+
+  it("falls back to the aggregates' count of the group metric", () => {
+    expect(nonFiniteEntries({ metric: "acc", variants })).toEqual([
+      { variant: "a", seeds: [], count: 2 },
+    ]);
+  });
+
+  it("is empty for old runs and for none left out", () => {
+    expect(nonFiniteEntries({ metric: "acc", variants: {}, non_finite_seeds: {} })).toEqual([]);
+    expect(nonFiniteEntries({ metric: null, variants })).toEqual([]);
   });
 });

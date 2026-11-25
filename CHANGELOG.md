@@ -21,6 +21,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Changed
 
+- GUI, comparação replicada: o rótulo de efeito `undefined` (tamanho de efeito NaN) aparece como "indefinido" em vez da chave crua; quando o teste usou menos pares que os compartilhados, a coluna de pares mostra "N de M pares testados (K empatados)" (`n_tested`); e um aviso nomeia as seeds de cada variante que saíram das médias, do ranking e dos testes por métrica não finita (`non_finite_seeds`, ou a contagem `n_non_finite` quando só ela existe). Relatórios antigos, sem esses campos, aparecem como antes (ADR-061, ADR-177, ADR-187).
+
 - K-fold, todas as tarefas com a opção: `select_on: last` com `early_stopping_patience` acima de 0 passa a ser recusado com uma mensagem que explica o motivo. Na classificação o erro vem ao carregar o config; na regressão e na segmentação, como 422 no pedido do K-fold, também pela CLI. A parada antecipada lê a validação do próprio fold, então a última época ainda seria escolhida por ela (ADR-242). O mesmo vale para `scheduler.kind: plateau`, que reduz a taxa de aprendizado lendo essa validação: `select_on: last` com ele também é recusado nos mesmos três pontos.
 
 ### Fixed

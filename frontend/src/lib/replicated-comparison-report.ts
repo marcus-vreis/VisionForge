@@ -40,6 +40,17 @@ function childOf(row: unknown, variant: string): GroupChild {
   };
 }
 
+/** `non_finite_seeds` as `{variante: [seeds]}`; absent (undefined) in old reports. */
+function nonFiniteSeedsOf(value: unknown): Record<string, number[]> | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const out: Record<string, number[]> = {};
+  for (const [label, seeds] of Object.entries(asDict(value))) {
+    const list = asNumbers(seeds);
+    if (list.length > 0) out[label] = list;
+  }
+  return out;
+}
+
 /** The report as the `group` section its History entry carries. */
 export function comparisonGroupFromReport(report: Dict): RunGroup {
   const seeds = asNumbers(report["seeds"]);
@@ -83,5 +94,6 @@ export function comparisonGroupFromReport(report: Dict): RunGroup {
     skipped_variants: asStrings(report["skipped_variants"]),
     not_run: notRun,
     underpowered: report["underpowered"] === true,
+    non_finite_seeds: nonFiniteSeedsOf(report["non_finite_seeds"]),
   };
 }

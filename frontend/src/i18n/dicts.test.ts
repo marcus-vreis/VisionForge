@@ -146,6 +146,24 @@ describe("dictionaries", () => {
   });
 });
 
+describe("replicated comparison exclusions", () => {
+  it("translates the undefined effect label instead of showing the key", () => {
+    expect(en.runGroup.detail.effects.undefined).toBe("undefined");
+    expect(pt.runGroup.detail.effects.undefined).toBe("indefinido");
+  });
+
+  it("words the tested pairs and the non-finite seeds in both languages", () => {
+    expect(en.runGroup.detail.pairsTested(4, 8, 4)).toBe("4 of 8 pairs tested (4 tied)");
+    expect(pt.runGroup.detail.pairsTested(4, 8, 4)).toBe("4 de 8 pares testados (4 empatados)");
+    expect(pt.runGroup.detail.pairsTested(1, 2, 1)).toContain("1 empatado)");
+    expect(pt.runGroup.detail.nonFiniteSeeds("a", "3")).toBe("a: seed 3");
+    expect(pt.runGroup.detail.nonFiniteSeeds("a", "3, 7")).toBe("a: seeds 3, 7");
+    expect(en.runGroup.detail.nonFiniteSeeds("a", "3, 7")).toBe("a: seeds 3, 7");
+    expect(en.runGroup.detail.nonFiniteCount("a", 1)).toBe("a: 1 seed");
+    expect(pt.runGroup.detail.nonFiniteCount("a", 2)).toBe("a: 2 seeds");
+  });
+});
+
 describe("English terminology", () => {
   const texts = [...leaves(en)]
     .filter((entry): entry is [string, string] => typeof entry[1] === "string");
