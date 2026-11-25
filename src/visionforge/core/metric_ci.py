@@ -104,13 +104,7 @@ def bootstrap_classification_cis(
 
     proba = _classification_probabilities(y_proba_full, n)
 
-    n_classes = (
-        proba.shape[1] if proba is not None else int(max(true.max(), pred.max())) + 1
-    )
-    if task == "binary":
-        # The positive class is 1 even when no label in the split is 1, as in
-        # the Evaluator (sklearn average="binary"); n_classes = 1 would score 0.
-        n_classes = max(n_classes, 2)
+    n_classes = _class_count(true, pred, proba, task)
     average: Literal["binary", "macro"] = "binary" if task == "binary" else "macro"
 
     rng = np.random.default_rng(seed)
@@ -145,12 +139,41 @@ def bootstrap_classification_cis(
     for name, parts in collected.items():
         out[name] = _interval(name, point[name], np.concatenate(parts), confidence, n)
     if auc_values and auc_point is not None:
-        merged = np.concatenate(auc_values)
-        # Every resample that lost a class was dropped, so a split with a
-        # one-image class can leave too few to quantile.
-        if merged.size >= 2:
-            out["auc_roc"] = _interval("auc_roc", auc_point, merged, confidence, n)
+        _add_auc_interval(out, auc_point, auc_values, confidence, n)
     return out
+
+
+def _class_count(
+    true: np.ndarray,
+    pred: np.ndarray,
+    proba: np.ndarray | None,
+    task: Literal["binary", "multiclass"],
+) -> int:
+    """Number of classes the resampled metrics are scored over."""
+    if proba is not None:
+        n_classes = int(proba.shape[1])
+    else:
+        n_classes = int(max(true.max(), pred.max())) + 1
+    if task == "binary":
+        # The positive class is 1 even when no label in the split is 1, as in
+        # the Evaluator (sklearn average="binary"); n_classes = 1 would score 0.
+        n_classes = max(n_classes, 2)
+    return n_classes
+
+
+def _add_auc_interval(
+    out: dict[str, MetricCI],
+    auc_point: float,
+    auc_values: list[np.ndarray],
+    confidence: float,
+    n: int,
+) -> None:
+    """Add ``auc_roc`` to ``out`` when enough resamples kept both classes."""
+    merged = np.concatenate(auc_values)
+    # Every resample that lost a class was dropped, so a split with a
+    # one-image class can leave too few to quantile.
+    if merged.size >= 2:
+        out["auc_roc"] = _interval("auc_roc", auc_point, merged, confidence, n)
 
 
 def _classification_probabilities(

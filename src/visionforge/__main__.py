@@ -363,20 +363,8 @@ def _add_offline_flag(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def main() -> None:
-    """Run a VisionForge experiment or start the GUI from the command line."""
-    _use_utf8_console()
-    from visionforge.utils.logger import setup_logger
-    from visionforge.utils.third_party_privacy import (
-        apply_env_opt_outs,
-        apply_opt_outs,
-        enable_offline_mode,
-        offline_requested,
-    )
-
-    # Before any SDK is imported: they read their switches at import time.
-    apply_env_opt_outs()
-
+def _build_parser() -> argparse.ArgumentParser:
+    """Build the ``visionforge`` command-line parser with every subcommand."""
     parser = argparse.ArgumentParser(
         prog="visionforge",
         description="VisionForge — Computer Vision experimentation platform.",
@@ -618,7 +606,113 @@ def main() -> None:
     )
     _add_offline_flag(reproduce_parser)
     add_export_parser(subparsers)
+    return parser
 
+
+def _run_new_task_command(args: argparse.Namespace) -> None:
+    from visionforge.tasks.scaffold import scaffold_task
+    from visionforge.utils.logger import logger
+
+    try:
+        target = scaffold_task(args.key, package=args.package, force=args.force)
+    except (ValueError, FileExistsError) as exc:
+        logger.error("{}", exc)
+        sys.exit(1)
+    logger.success("Task template created: {}", target)
+    logger.info(
+        "Next: edit the TODOs in {}, then `visionforge gui` — the "
+        "'{}' tab appears automatically. Guide: {}",
+        target,
+        args.key,
+        _TASK_GUIDE_URL,
+    )
+
+
+def _run_doctor_command(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> None:
+    from visionforge.utils.doctor import _default_confirm, run_doctor
+
+    if args.json and args.fix:
+        parser.error("doctor: --json cannot be combined with --fix")
+    sys.exit(
+        run_doctor(fix=args.fix, confirm_fn=_default_confirm, json_output=args.json)
+    )
+
+
+def _run_gui_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    if args.smoke and not args.check:
+        parser.error("gui: --smoke only works together with --check")
+
+    if args.check:
+        from visionforge.gui.preflight import run_gui_check
+
+        sys.exit(run_gui_check(args.host, args.port, smoke=args.smoke))
+
+    from visionforge.gui.server import start_server
+    from visionforge.gui.server_mode import ServerMode, ServerModeError
+
+    try:
+        server_mode = ServerMode.from_options(
+            enabled=args.server,
+            trusted_proxies=args.trusted_proxy,
+            user_header=args.user_header,
+            datasets_dirs=args.datasets_dir,
+            quota_gb=args.quota_gb,
+            max_actions=args.max_actions,
+        )
+    except ServerModeError as exc:
+        parser.error(str(exc))
+
+    # The updater relaunches with VISIONFORGE_NO_BROWSER rather than the flag:
+    # the relaunch runs the *new* version, and an environment variable it does
+    # not know is ignored where an unknown flag would stop it (ADR-120).
+    quiet = args.no_browser or bool(os.environ.get("VISIONFORGE_NO_BROWSER"))
+    start_server(
+        host=args.host,
+        port=args.port,
+        open_browser=not quiet,
+        allowed_hosts=args.allowed_host,
+        server_mode=server_mode,
+    )
+
+
+def _run_run_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    from visionforge.utils.logger import logger
+
+    logger.info("Loading config: {}", args.config)
+    if _run_strategy_command(args.config, parser):
+        return
+    config, block = build_task_block(args.config)
+
+    logger.info(
+        "Experiment: {} | task: {} | block: {}",
+        config.name,
+        config.task,
+        type(block).__name__,
+    )
+    logger.info("Running {}...", type(block).__name__)
+    block.run()
+
+    report = block.report()
+    logger.success("Done. Report: {}", report)
+
+
+def main() -> None:
+    """Run a VisionForge experiment or start the GUI from the command line."""
+    _use_utf8_console()
+    from visionforge.utils.logger import setup_logger
+    from visionforge.utils.third_party_privacy import (
+        apply_env_opt_outs,
+        apply_opt_outs,
+        enable_offline_mode,
+        offline_requested,
+    )
+
+    # Before any SDK is imported: they read their switches at import time.
+    apply_env_opt_outs()
+
+    parser = _build_parser()
     args = parser.parse_args()
     _bind_language_from_env()
     if getattr(args, "offline", False) or offline_requested():
@@ -645,99 +739,16 @@ def main() -> None:
     setup_logger()
 
     if args.command == "selftest":
-        _run_selftest_command(args)
+        _run_selftest_command(args)  # always exits
 
     if args.command == "new-task":
-        import sys as _sys
-
-        from visionforge.tasks.scaffold import scaffold_task
-        from visionforge.utils.logger import logger
-
-        try:
-            target = scaffold_task(args.key, package=args.package, force=args.force)
-        except (ValueError, FileExistsError) as exc:
-            logger.error("{}", exc)
-            _sys.exit(1)
-        logger.success("Task template created: {}", target)
-        logger.info(
-            "Next: edit the TODOs in {}, then `visionforge gui` — the "
-            "'{}' tab appears automatically. Guide: {}",
-            target,
-            args.key,
-            _TASK_GUIDE_URL,
-        )
-        return
-
-    if args.command == "doctor":
-        import sys as _sys
-
-        from visionforge.utils.doctor import _default_confirm, run_doctor
-
-        if args.json and args.fix:
-            parser.error("doctor: --json cannot be combined with --fix")
-        _sys.exit(
-            run_doctor(fix=args.fix, confirm_fn=_default_confirm, json_output=args.json)
-        )
-
-    if args.command == "gui" and args.smoke and not args.check:
-        parser.error("gui: --smoke only works together with --check")
-
-    if args.command == "gui" and args.check:
-        import sys as _sys
-
-        from visionforge.gui.preflight import run_gui_check
-
-        _sys.exit(run_gui_check(args.host, args.port, smoke=args.smoke))
-
-    if args.command == "gui":
-        from visionforge.gui.server import start_server
-        from visionforge.gui.server_mode import ServerMode, ServerModeError
-
-        try:
-            server_mode = ServerMode.from_options(
-                enabled=args.server,
-                trusted_proxies=args.trusted_proxy,
-                user_header=args.user_header,
-                datasets_dirs=args.datasets_dir,
-                quota_gb=args.quota_gb,
-                max_actions=args.max_actions,
-            )
-        except ServerModeError as exc:
-            parser.error(str(exc))
-
-        # The updater relaunches with VISIONFORGE_NO_BROWSER rather than the flag:
-        # the relaunch runs the *new* version, and an environment variable it does
-        # not know is ignored where an unknown flag would stop it (ADR-120).
-        quiet = args.no_browser or bool(os.environ.get("VISIONFORGE_NO_BROWSER"))
-        start_server(
-            host=args.host,
-            port=args.port,
-            open_browser=not quiet,
-            allowed_hosts=args.allowed_host,
-            server_mode=server_mode,
-        )
-        return
-
-    if args.command == "run":
-        from visionforge.utils.logger import logger
-
-        logger.info("Loading config: {}", args.config)
-        if _run_strategy_command(args.config, parser):
-            return
-        config, block = build_task_block(args.config)
-
-        logger.info(
-            "Experiment: {} | task: {} | block: {}",
-            config.name,
-            config.task,
-            type(block).__name__,
-        )
-        logger.info("Running {}...", type(block).__name__)
-        block.run()
-
-        report = block.report()
-        logger.success("Done. Report: {}", report)
-
+        _run_new_task_command(args)
+    elif args.command == "doctor":
+        _run_doctor_command(args, parser)
+    elif args.command == "gui":
+        _run_gui_command(args, parser)
+    elif args.command == "run":
+        _run_run_command(args, parser)
     else:
         parser.print_help()
 
