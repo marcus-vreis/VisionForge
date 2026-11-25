@@ -182,6 +182,53 @@ export function holmVerdict(test: Pick<PairedTest, "significant">): "yes" | "no"
   return test.significant ? "yes" : "no";
 }
 
+/**
+ * "N of M pairs tested (K tied)" figures when the paired test used fewer pairs
+ * than the variants share; null when none were left out or the report predates
+ * `n_tested`. Ties drop out of the Wilcoxon test and the t test alike.
+ */
+export function testedPairs(
+  test: Pick<PairedTest, "n_pairs" | "n_tested">,
+): { tested: number; pairs: number; tied: number } | null {
+  const { n_pairs: pairs, n_tested: tested } = test;
+  if (typeof tested !== "number" || !Number.isFinite(tested)) return null;
+  if (tested >= pairs) return null;
+  return { tested, pairs, tied: pairs - tested };
+}
+
+/** A variant and the seeds a non-finite metric took out of its numbers. */
+export interface NonFiniteEntry {
+  variant: string;
+  /** The seeds; empty when only the count is known (`n_non_finite` alone). */
+  seeds: number[];
+  count: number;
+}
+
+/**
+ * The variants that lost seeds to a non-finite metric, in the report's order.
+ *
+ * `non_finite_seeds` names the seeds; when a run carries only the aggregates'
+ * `n_non_finite` (the History copy), the count of the group metric stands in.
+ * Empty for runs written before the field existed.
+ */
+export function nonFiniteEntries(
+  group: Pick<RunGroup, "metric" | "variants" | "non_finite_seeds">,
+): NonFiniteEntry[] {
+  const named = group.non_finite_seeds;
+  if (named && Object.keys(named).length > 0) {
+    return Object.entries(named)
+      .filter(([, seeds]) => seeds.length > 0)
+      .map(([variant, seeds]) => ({ variant, seeds, count: seeds.length }));
+  }
+  if (!group.metric) return [];
+  const out: NonFiniteEntry[] = [];
+  for (const [variant, v] of Object.entries(group.variants ?? {})) {
+    const count = v.aggregates[group.metric]?.n_non_finite ?? 0;
+    if (count > 0) out.push({ variant, seeds: [], count });
+  }
+  return out;
+}
+
 /** The run to open for a seed, or null when it has none or it is gone.
  *  `known` is the ids History lists: a seed deleted since the group was
  *  written would otherwise be a link to a 404. */

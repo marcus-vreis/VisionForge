@@ -168,6 +168,9 @@ export interface MetricAggregate {
   ci95_high: number | null;
   boot95_low?: number | null;
   boot95_high?: number | null;
+  /** Seeds that reported the metric but not a finite value, left out of this
+   *  aggregate (ADR-061). Absent in runs written before 2026-11-25. */
+  n_non_finite?: number;
 }
 
 /** The list view of a group (backend `RunGroupBrief`). */
@@ -218,6 +221,9 @@ export interface PairedTest {
   label_b: string;
   metric: string;
   n_pairs: number;
+  /** Pairs the test actually used: `n_pairs` minus the tied ones. Absent in
+   *  reports written before 2026-11-25. */
+  n_tested?: number | null;
   mean_a: number | null;
   mean_b: number | null;
   /** a − b */
@@ -228,6 +234,7 @@ export interface PairedTest {
   p_value: number | null;
   /** Paired Cohen's d. */
   effect_size: number | null;
+  /** `negligible`, `small`, `medium`, `large` or `undefined` (effect size NaN). */
   effect_label: string;
   /** Smallest p this test could return with this many pairs. */
   min_achievable_p: number;
@@ -289,6 +296,9 @@ export interface RunGroup {
   /** Variants a stop kept from starting. */
   not_run?: string[];
   underpowered?: boolean;
+  /** Variant -> seeds whose metric was not finite and so left the ranking and
+   *  the tests (ADR-061). Absent in runs written before 2026-11-25. */
+  non_finite_seeds?: Record<string, number[]>;
   // Sweep or model comparison (ADR-124).
   mode?: string | null;
   best_index?: number | null;

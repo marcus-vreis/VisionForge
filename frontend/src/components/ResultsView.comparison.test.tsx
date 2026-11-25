@@ -155,6 +155,12 @@ describe("comparisonGroupFromReport", () => {
     expect(lr?.children[1].run_id).toBeNull();
   });
 
+  it("carries the seeds a non-finite metric took out, and nothing for an old report", () => {
+    const group = comparisonGroupFromReport({ ...report, non_finite_seeds: { baseline: [43], x: [] } });
+    expect(group.non_finite_seeds).toEqual({ baseline: [43] });
+    expect(comparisonGroupFromReport(report).non_finite_seeds).toBeUndefined();
+  });
+
   it("counts the variants a stop kept from starting among the trainings asked for", () => {
     const group = comparisonGroupFromReport({ ...report, not_run: ["extra"] });
 

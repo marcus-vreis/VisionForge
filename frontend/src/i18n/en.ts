@@ -2344,6 +2344,7 @@ export const en: Dict = {
         small: "small",
         medium: "medium",
         large: "large",
+        undefined: "undefined",
       },
       ciMethods: {
         t: "Student t",
@@ -2352,6 +2353,14 @@ export const en: Dict = {
       ciTitle: (method: string, coverage: string, estimate: string) =>
         `${method} interval of the a−b difference, around ${estimate}; actual coverage ${coverage}. An "open" end is one the data cannot bound (below 6 pairs the Hodges-Lehmann interval cannot reach 95%).`,
       ciOpen: "open",
+      pairsTested: (tested: number, pairs: number, tied: number) =>
+        `${tested} of ${pairs} pairs tested (${tied} tied)`,
+      nonFiniteSeeds: (variant: string, seeds: string) =>
+        `${variant}: ${seeds.includes(",") ? "seeds" : "seed"} ${seeds}`,
+      nonFiniteCount: (variant: string, n: number) =>
+        `${variant}: ${n} ${n === 1 ? "seed" : "seeds"}`,
+      nonFiniteWarning: (entries: string) =>
+        `Left out for a non-finite metric (NaN or infinite), from the means, the ranking and the tests: ${entries}.`,
       underpowered: "few seeds",
       underpoweredTitle: (pairs: number, floor: string) =>
         `With ${pairs} pairs the smallest possible p is ${floor}, above alpha: no result, however consistent, could be significant.`,

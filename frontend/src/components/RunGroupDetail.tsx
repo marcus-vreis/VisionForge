@@ -10,6 +10,8 @@ import {
   formatOverrides,
   formatP,
   hasFewSeeds,
+  nonFiniteEntries,
+  testedPairs,
   holmVerdict,
 } from "../lib/run-groups";
 import { STOPPED_COLOR, unitState } from "../lib/unit-status";
@@ -391,12 +393,20 @@ function TestsTable({ group }: { group: RunGroup }) {
           <tbody>
             {tests.map((test) => {
               const verdict = holmVerdict(test);
+              const tested = testedPairs(test);
               return (
                 <tr key={`${test.label_a}:${test.label_b}`}>
                   <td style={tdLabelStyle}>
                     {test.label_a} · {test.label_b}
                   </td>
-                  <td style={tdStyle}>{test.n_pairs}</td>
+                  <td style={tdStyle}>
+                    {test.n_pairs}
+                    {tested && (
+                      <div style={{ color: "var(--vf-text-muted)", fontSize: 11 }}>
+                        {t.runGroup.detail.pairsTested(tested.tested, tested.pairs, tested.tied)}
+                      </div>
+                    )}
+                  </td>
                   <td style={tdStyle}>{formatNumber(test.mean_difference)}</td>
                   <DifferenceIntervalCell test={test} />
                   <td style={tdStyle} title={test.test_reason}>
@@ -471,6 +481,7 @@ function ComparisonBody({ group, accent, knownRunIds, onOpenRun }: RunGroupDetai
   const best = bestByMean(group);
   const notRun = group.not_run ?? [];
   const skipped = group.skipped_variants ?? [];
+  const nonFinite = nonFiniteEntries(group);
   const allChildren = Object.values(variants).flatMap((v) => v.children);
   // Every variant has its own interval, so the caution is about the weakest one.
   const fewest = fewestSeeds(group);
@@ -545,6 +556,20 @@ function ComparisonBody({ group, accent, knownRunIds, onOpenRun }: RunGroupDetai
         {notRun.length > 0 && (
           <div style={{ ...noteStyle, color: STOPPED_COLOR }}>
             ■ {t.runGroup.detail.notRun(notRun.join(", "))}
+          </div>
+        )}
+        {nonFinite.length > 0 && (
+          <div style={{ ...noteStyle, color: STOPPED_COLOR }}>
+            ⚠{" "}
+            {t.runGroup.detail.nonFiniteWarning(
+              nonFinite
+                .map((e) =>
+                  e.seeds.length > 0
+                    ? t.runGroup.detail.nonFiniteSeeds(e.variant, e.seeds.join(", "))
+                    : t.runGroup.detail.nonFiniteCount(e.variant, e.count),
+                )
+                .join("; "),
+            )}
           </div>
         )}
         {skipped.length > 0 && (
