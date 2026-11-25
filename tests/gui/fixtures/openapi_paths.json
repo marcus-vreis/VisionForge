@@ -1030,6 +1030,7 @@
       "200": {
         "application/json": "object"
       },
+      "400": {},
       "404": {},
       "422": {
         "application/json": "HTTPValidationError"

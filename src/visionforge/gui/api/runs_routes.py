@@ -15,6 +15,8 @@ from loguru import logger
 
 from visionforge.core.dataset_fingerprint import dataset_identity
 from visionforge.core.history_keys import upgrade_run_history
+from visionforge.gui.api.evidence_routes import EvidenceExports
+from visionforge.gui.api.execution import _LANES, _run_state
 from visionforge.gui.api.folder_opener import can_reveal
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST,
@@ -44,19 +46,20 @@ from visionforge.gui.api.schemas import (
     RunSummary,
     WandbStatus,
 )
+from visionforge.gui.server_mode import mode_of
 from visionforge.utils.messages import tr
 
 
 def build_runs_router(
     find_run_dir: Callable[[str, Profile], Path | None],
     resolve_profile: Callable[[str | None], Profile],
-    run_state: Callable[[str], dict[str, Any] | None],
     client_host: Callable[[Request], str | None],
+    exports: EvidenceExports,
 ) -> APIRouter:
     """Build the history endpoints; routes.py owns the lookups, read per request.
 
-    ``run_state`` returns the state of the job with that run id, if one started,
-    so a delete can refuse a running one without this module holding a copy.
+    A delete asks the queue (``execution.py``, ADR-185) and ``exports`` whether
+    the folder is still in use, so it refuses a run being written or exported.
     """
     router = APIRouter(tags=[TAG_RUNS])
 
@@ -87,7 +90,9 @@ def build_runs_router(
         run_dir = find_run_dir(run_id, profile)
         if run_dir is None:
             raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
-        return _build_run_detail(run_dir, _read_run_json(run_dir), client_host(request))
+        # In server mode the client is the login proxy, never the person's machine.
+        host = None if mode_of(request.app).enabled else client_host(request)
+        return _build_run_detail(run_dir, _read_run_json(run_dir), host)
 
     @router.delete(
         "/runs/{run_id}",
@@ -103,13 +108,20 @@ def build_runs_router(
         Safety:
         - Must resolve to a directory under the profile's models folder (no path
           traversal), which is ``_MODELS_DIR`` for the default profile (ADR-114).
-        - Refuses to delete the run that is currently executing.
+        - Refuses a run that is executing, queued (a resume writes into the old
+          folder) or being exported, and holds exports off while it deletes.
         """
         run_dir = find_run_dir(run_id, profile)
         if run_dir is None:
             raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
-
-        _delete_run_directory(run_id, run_dir, profile, run_state(run_id))
+        if not exports.reserve(run_dir):
+            raise HTTPException(409, tr("run.delete_busy"))
+        try:
+            if _LANES.is_writing(run_id, run_dir, profile.slug):
+                raise HTTPException(409, tr("run.delete_busy"))
+            _delete_run_directory(run_id, run_dir, profile, _run_state(run_id))
+        finally:
+            exports.release(run_dir)
         return {"run_id": run_id, "status": "deleted"}
 
     return router
@@ -240,5 +252,11 @@ def _delete_run_directory(
     if not resolved.is_dir():
         raise HTTPException(404, tr("run.dir_missing", path=resolved))
 
-    shutil.rmtree(resolved)
+    try:
+        shutil.rmtree(resolved)
+    except OSError as exc:
+        # A file still open elsewhere (Windows) must not become a 500.
+        raise HTTPException(
+            409, tr("run.delete_failed", error=exc.strerror or exc)
+        ) from exc
     logger.info("GUI: deleted run {} at {}", run_id, resolved)

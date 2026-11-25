@@ -1024,6 +1024,8 @@ the shared `ReplicatesCard`, headline metric `accuracy`. Colab (ADR-163) trains
 one `config.block`, so its train button is off, with the reason shown, while
 Replicates is picked.
 
+**Amended 2026-11-25: repeated seeds are refused in the core.** The GUI and the CLI already refused `[42, 42, 7]`, but `run_replicates` and `run_replicated_comparison` did not: the aggregate counted one sample twice (n=3, a narrower interval by pseudo-replication) while `VariantResult.per_seed` kept one value per seed, so the same variant showed mean 0.84 in its aggregate and 0.86 in its paired test. Both now raise `ValueError` (`replicates.seeds_unique`, `compare.seeds_unique`, pt/en) before any training.
+
 ## ADR-057 — CUDA/cuDNN/GPU recorded in run.json environment
 
 **Date:** 2026-07
@@ -1278,6 +1280,11 @@ reason, because provenance must not be what fails a training run.
 **Phase D is complete.**
 
 **Amended 2026-10-16: the t interval is clipped to the metric's domain.** The n=2 example above (`[-0.70, 3.76]` for a strictly non-negative MAE) was documented but still shipped: with 3 seeds a mean-squared error showed a negative low end and an accuracy a high end above 1. `aggregate_replicates` now clips `ci95_low`/`ci95_high` to `metric_domain(name)` (errors and losses >= 0; accuracy, precision, recall, F1, IoU, Dice, AUC and mAP within [0, 1]; R2 <= 1; any other name unbounded) and reports `ci95_clipped`. Clipping was chosen over swapping in the bootstrap because `ci95` keeps one meaning (the t interval) and the bootstrap stays beside it unchanged; the domain is matched on the metric's name, so a custom metric with an unknown name is never cut on a guess.
+
+**Amended 2026-11-25: the name's domain yields to the values, and a non-finite value is not a measurement.**
+
+- *Domain.* The name is a guess. A custom task reporting accuracy in percent (84, 85, 86) had its interval cut to `[82.52, 1.0]`, inverted and excluding its own mean; a negative `delta_f1` was cut the same way. When any observed value lies outside `metric_domain(name)`, nothing is clipped (`_observed_domain`). With every value inside, the mean is inside too, so a clipped interval still holds it and is never inverted. `reproduce.py` still clips its prediction interval on the name alone (backlog).
+- *NaN and inf.* A test split with a NaN target gives a finished run with `rmse = nan`. That crashed `aggregate_replicates` (`statistics.stdev`) after every seed had trained, and in the helpers a NaN led the ranking (`sorted` leaves it where it is) and stopped the Holm step-down. **Decision: the seed leaves that metric, it does not fail the job.** `aggregate_replicates` leaves it out like a null and counts it in `n_non_finite` (a metric with no finite value keeps an entry with `n = 0` and null statistics); `VariantResult.per_seed` leaves it out of the variant's tests and of the ranking, the report names it in `non_finite_seeds` (`{variant: [seeds]}`, empty when clean) and the log warns; `paired_comparison` treats a non-finite value as a missing seed on that side; `holm_correct` orders a NaN p last, never flags it and keeps it in the family size; `_effect_label` returns `undefined` for a NaN `d_z`. Failing the whole comparison was rejected because one bad secondary metric would discard every other measured number, which is the same outcome the crash had; dropping the seed silently was rejected because a diverged seed is evidence about the variant, so the count stays in the artifact. A seed lost this way is like a failed one (ADR-182 already fails a run whose validation goes non-finite): the comparison is paired on the seeds that remain.
 
 ---
 
@@ -7660,6 +7667,8 @@ differently now. Each fix has a test that failed before it
 `TestFoldStatisticsOnMixedSizes`, `test_the_full_rate_group_is_exactly_the_final_linear`,
 `TestFloorWithTiedPairs`).
 
+**Amended 2026-11-25: the power note says the same thing as the floor.** `_power_note` quoted `n_pairs` (ties included) and always asked for "6+ for alpha=0.05": eight seeds with four ties read "with 8 paired seeds ... increase to 6+", and seven untied seeds at alpha=0.01 were told 6 suffice. `PairedComparison` now records `n_tested` (the pairs the test used); the note, through `tr("replicated.power_note")` in pt/en, quotes it, the tied count and the minimum `ceil(1 - log2(alpha))` untied pairs for the configured alpha (6 at 0.05, 8 at 0.01).
+
 ---
 
 ## ADR-178 — The GUI answers only to its own names (Host and Origin guard)
@@ -8012,6 +8021,8 @@ Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS
 
 - *BCa or bootstrap-t for every test.* Better coverage than the percentile bootstrap, but still not the dual of the test: the disagreement shrinks without disappearing, and it remains stochastic.
 - *Keep the bootstrap with an under-coverage warning below 20 pairs.* Leaves the contradiction on screen for every realistic seed count.
+
+**Amended 2026-11-25: the interval follows the comparison's alpha.** "At 95% (the comparison's alpha = 0.05)" was implemented as a fixed 95%, so with `alpha=0.01` a paired t of `[2, 3, 4]` vs zeros gave p = 0.035 (not significant) beside `[0.52, 5.48]`, which excludes zero. `paired_comparison` (and so `comparison_matrix` and the replicated comparison) now builds the interval at `1 - alpha` (`[-2.73, 8.73]` there) and `ci_confidence` records that coverage (at least `1 - alpha` for Hodges-Lehmann). `underpowered` already compared the floor with the same alpha; with six pairs at alpha = 0.01 both the test and the 99% Hodges-Lehmann interval are out of reach, so the ends are `null`.
 ## ADR-188 — A public bundle leaves out `weights/*.pt` and rewrites `config.*`
 
 **Date:** 2026-11-11
@@ -8505,6 +8516,8 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Open every `owner` route now, since each already resolves a profile.* The training routes take dataset paths in their body, and a route that resolves a profile can still read outside it. Reading first is the point.
 - *The readable slug alone as the folder.* Two accounts that fold to the same slug would share runs and tokens.
 
+**Addendum (2026-11-24): `POST /api/model/defaults` is `confined`.** It was `open` because it suggests settings for an architecture, but its optional `base_dir` is walked and up to 200 images of it are opened for the suggested size: on a server that read any folder the server account could. `ModelDefaultsRequest.base_dir` is now `DatasetDir | None` and the route is listed in `READY`; without `base_dir` it answers as before. The walk runs in a worker thread (`asyncio.to_thread`), and an `OSError` from it leaves the size unsuggested instead of answering 500.
+
 ## ADR-214 — In server mode a request reads datasets only from the person's own folder and the folders the operator shares
 
 **Date:** 2026-11-18
@@ -8666,6 +8679,8 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Let the output path be anywhere in the person's folder.* A second rule and a second type for a need nobody has on a server: the file is downloaded from the run, not picked up from a path.
 - *Open the two classification blocks instead.* They name a checkpoint and an output file as config paths; confining them would repeat what the run routes already guarantee by taking a run id.
 - *Put the evaluation actions in the queue.* It would settle the shared-GPU limit, and it changes how the page waits for their result (a request today, a job then); it belongs with a decision about fairness, not with opening the routes.
+
+**Addendum (2026-11-24): an anomaly test calibrates inside the scope.** Testing an anomaly run on a folder sets `base_dir` to that folder's parent and keeps the run's `train_dir/normal_dir`, the split the threshold is calibrated on. Choosing a shared folder itself put that parent, and the split, one level above it. `_evaluate_anomaly_checkpoint` now refuses (400, `testrun.anomaly_train_outside`) a training split the scope does not hold, before checking whether it exists, so the answer says nothing about the disk outside.
 
 ## ADR-219 — In server mode a person writes a dataset into their own folder only, with their own key
 
@@ -9179,6 +9194,8 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 
 - *Depend on cleanlab.* A new dependency for twenty lines of arithmetic that are tested here by hand.
 - *List every misclassification.* That is the confusion matrix already in the run; the thresholds keep only the images the model is confidently sure about.
+
+**Addendum (2026-11-24): on a server.** `POST /api/runs/{id}/label_suspects` reads the run's stored dataset like `/resume` (ADR-218): `confine_stored_config` validates the stored config, scopes its outputs and calls `confine_config`, so a dataset that left the shared folders is refused with 422 before any prediction. The action writes CSVs and `report.json` into the run and runs inference in the request, so it counts for the quota (`disk_quota._GROWING`, 507) and for the action limit (`HEAVY_ROUTES`, 429). A run without `data.base_dir` and a damaged `report.json` answer 400 with a message (`suspects.no_base_dir`, `suspects.report_unreadable`) instead of 500.
 
 ## ADR-238 — The integrity scan measures brightness, contrast and sharpness
 

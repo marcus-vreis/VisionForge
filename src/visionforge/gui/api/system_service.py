@@ -74,8 +74,13 @@ def model_defaults(req: ModelDefaultsRequest) -> ModelDefaultsResponse:
     size: int | None = None
     if req.base_dir:
         root = Path(req.base_dir)
-        median = median_image_side(root)
-        size = suggested_image_size(root, arch, pretrained=req.pretrained)
+        # A folder that cannot be walked is a measurement that failed: the
+        # suggestion keeps its defaults instead of failing the whole form.
+        try:
+            median = median_image_side(root)
+            size = suggested_image_size(root, arch, pretrained=req.pretrained)
+        except OSError:
+            median = size = None
 
     note: str | None = None
     prone = is_collapse_prone(arch, "adam", 1e-3)

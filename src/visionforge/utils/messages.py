@@ -709,6 +709,21 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "{train_dir}/{normal_dir}/ and the test folder under the same parent)."
         ),
     },
+    "testrun.anomaly_train_outside": {
+        "pt": (
+            "A detecção de anomalias calibra o limiar com as imagens normais de "
+            "treino, que ficam ao lado da pasta de teste escolhida, e neste "
+            "servidor essa pasta de treino está fora das suas pastas de datasets. "
+            "Escolha a pasta de teste dentro de um dataset que tenha a pasta de "
+            "treino junto."
+        ),
+        "en": (
+            "Anomaly detection calibrates its threshold on the normal training "
+            "images, found next to the chosen test folder, and on this server "
+            "that training folder is outside your dataset folders. Choose the "
+            "test folder inside a dataset that holds its training folder too."
+        ),
+    },
     "detection.ultralytics_missing": {
         "pt": (
             "O backend Ultralytics (YOLO / RT-DETR) vem com o VisionForge e não "
@@ -1846,6 +1861,14 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Não é possível excluir um run que está em execução.",
         "en": "Cannot delete a run that is currently executing.",
     },
+    "run.delete_busy": {
+        "pt": "Este run está em execução, na fila para retomar ou sendo exportado. Exclua após o término.",
+        "en": "This run is executing, queued for continuation or being exported. Delete it after it finishes.",
+    },
+    "run.delete_failed": {
+        "pt": "Não foi possível excluir a pasta do run: {error}. Feche o que estiver usando os arquivos e tente de novo.",
+        "en": "Could not delete the run folder: {error}. Close whatever is using its files and try again.",
+    },
     "run.group_action": {
         "pt": (
             "Esta execução é um conjunto de réplicas: abra uma das seeds para "
@@ -2208,6 +2231,26 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "As seeds das réplicas precisam ser distintas.",
         "en": "Replicate seeds must be unique.",
     },
+    # ── Power note of a replicated comparison (core/replicated_comparison.py) ─
+    "replicated.power_note": {
+        "pt": (
+            "O teste de postos usou {tested} das {n_pairs} seeds pareadas "
+            "({ties} empataram e foram descartadas), então não consegue retornar "
+            "um p-valor abaixo de {floor:.4f}, que está acima de alpha={alpha}: "
+            "nenhuma diferença, por maior e mais consistente que seja, pode ser "
+            "marcada como significativa. Com alpha={alpha} são necessárias ao "
+            "menos {needed} seeds pareadas que difiram; adicione seeds antes de "
+            "concluir algo de um resultado não significativo."
+        ),
+        "en": (
+            "The rank test used {tested} of the {n_pairs} paired seeds "
+            "({ties} tied and were dropped), so it cannot return a p-value below "
+            "{floor:.4f}, which is above alpha={alpha}: no difference, however "
+            "large and consistent, can be flagged significant. At alpha={alpha} "
+            "it needs at least {needed} paired seeds that differ; add seeds "
+            "before concluding anything from a non-significant result."
+        ),
+    },
     # ── visionforge run with a strategy envelope (ADR-184) ───────────────────
     "cli.strategy_shape": {
         "pt": (
@@ -2298,6 +2341,14 @@ CATALOG: dict[str, dict[Lang, str]] = {
     "suspects.no_classes": {
         "pt": "Este run não guardou os nomes das classes ou o checkpoint; treine de novo para usar os rótulos suspeitos.",
         "en": "This run did not keep its class names or checkpoint; train again to use suspicious labels.",
+    },
+    "suspects.no_base_dir": {
+        "pt": "Este run não guardou a pasta do dataset (data.base_dir); não há o que prever.",
+        "en": "This run did not keep its dataset folder (data.base_dir); there is nothing to predict.",
+    },
+    "suspects.report_unreadable": {
+        "pt": "O relatório de rótulos suspeitos de '{run_id}' está danificado; calcule de novo.",
+        "en": "The suspicious-label report of '{run_id}' is damaged; compute it again.",
     },
     "explorer.classes_classification_only": {
         "pt": "A comparação de classes é só para datasets de classificação.",

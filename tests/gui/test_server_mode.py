@@ -341,11 +341,13 @@ def test_every_path_of_an_open_dataset_route_is_typed() -> None:
 
     # Text fields that name a column, not a place on the disk.
     # A dataset id at its provider and a task key are not places either, nor
-    # the names of splits, classes and columns a request picks among those found.
+    # the names of splits, classes and columns a request picks among those found,
+    # nor the architecture a suggestion is asked for (a name looked up in tables).
     not_paths = {
         "image_column",
         "dataset",
         "task",
+        "architecture",
         "optional_splits",
         "accept_classes",
         "target_columns",
@@ -376,7 +378,7 @@ def test_every_path_of_an_open_dataset_route_is_typed() -> None:
                 if get_origin(inner) in (list, dict) and get_args(inner)[-1] is str:
                     plain.append(qualified)
         checked += 1
-    assert checked == 43
+    assert checked == 44
     assert plain == [], f"lists or maps of plain str: {plain}"
 
 

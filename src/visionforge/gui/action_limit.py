@@ -23,6 +23,7 @@ HEAVY_ROUTES = frozenset(
         "POST /api/runs/{run_id}/gradcam",
         "POST /api/runs/{run_id}/batch_predict",
         "POST /api/runs/{run_id}/export_onnx",
+        "POST /api/runs/{run_id}/label_suspects",
         # A whole dataset is fetched, or every image of one is hashed.
         "POST /api/dataset/download",
         "POST /api/dataset/audit",
