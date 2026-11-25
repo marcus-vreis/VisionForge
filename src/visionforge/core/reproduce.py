@@ -430,6 +430,11 @@ def recorded_intervals(record: Mapping[str, Any]) -> dict[str, tuple[float, floa
     return intervals
 
 
+def _in_domain(value: float, domain: tuple[float | None, float | None]) -> bool:
+    floor, ceiling = domain
+    return (floor is None or value >= floor) and (ceiling is None or value <= ceiling)
+
+
 def prediction_intervals(
     record: Mapping[str, Any],
 ) -> dict[str, tuple[float, float]]:
@@ -437,7 +442,7 @@ def prediction_intervals(
 
     ``mean ± t(0.975, n-1) · std · sqrt(1 + 1/n)`` from the recorded ``n``,
     ``mean`` and ``std`` (sample, ddof=1, as ``aggregate_replicates`` writes
-    it), clipped to the metric's domain as the recorded ``ci95`` is. A metric
+    it), clipped to the metric's domain (only when every observed value is inside it). A metric
     without ``n >= 2`` and a finite mean and std gets none.
     """
     aggregates = (record.get("group") or {}).get("aggregates") or {}
@@ -452,10 +457,19 @@ def prediction_intervals(
         if mean is None or std is None:
             continue
         half = _t_critical_95(n - 1) * std * math.sqrt(1 + 1 / n)
-        low, high, _ = _clip_to_domain(
-            mean - half, mean + half, metric_domain(str(name))
-        )
-        intervals[str(name)] = (low, high)
+        low, high = mean - half, mean + half
+        domain = metric_domain(str(name))
+        observed = [mean] + [
+            v
+            for v in (_finite(agg.get("min")), _finite(agg.get("max")))
+            if v is not None
+        ]
+        # The name only guesses the scale: clip only when every observed value
+        # sits inside the guessed domain, else (accuracy in 0-100) the cut
+        # would invert the interval or leave out the values it summarises.
+        if all(_in_domain(v, domain) for v in observed):
+            low, high, _ = _clip_to_domain(low, high, domain)
+        intervals[str(name)] = (min(low, high), max(low, high))
     return intervals
 
 
