@@ -142,3 +142,33 @@ def test_a_regression_test_reads_no_image_outside_the_scope(
     assert saved["tests"] == []
     # The local tool reads the manifest it is given, as before.
     assert _execute_run_test(run_dir, RunTestRequest(data_dir=str(manifest))).metrics
+
+
+def test_regression_stats_tell_no_outside_image_from_a_missing_one(
+    client: TestClient, world: dict[str, Path]
+) -> None:
+    base = build_regression_dataset(world["shared"] / "reg", size=32, rows=4)
+    planted = world["secret"] / "planted.png"
+    answers: list[dict[str, Any]] = []
+    for exists in (True, False):
+        if exists:
+            Image.new("RGB", (32, 32)).save(planted)
+        else:
+            planted.unlink()
+        names = [str(planted), "../../../secret/planted.png"]
+        (base / "train.csv").write_text(
+            "image,target\n" + "".join(f"{name},0.5\n" for name in names),
+            encoding="utf-8",
+        )
+        resp = client.post(
+            "/api/regression/dataset/stats",
+            json={"base_dir": str(base), "target_columns": ["target"]},
+            headers=ANA,
+        )
+        assert resp.status_code == 200
+        answers.append(resp.json()["splits"]["train"])
+    # Both rows leave the dataset: neither is looked up on disk, so the count
+    # is the same whether the planted file exists or not (ADR-214).
+    assert answers[0] == answers[1]
+    assert answers[0]["missing_images"] == 2
+    assert answers[0]["checked_images"] == 2
