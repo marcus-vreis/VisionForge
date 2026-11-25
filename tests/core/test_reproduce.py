@@ -538,7 +538,8 @@ def test_prediction_interval_of_a_percent_scale_metric_is_not_inverted() -> None
     record = {"group": {"aggregates": {"accuracy": aggregate}}}
     (low, high) = prediction_intervals(record)["accuracy"]
     assert low <= high
-    assert low <= 84.0 and high >= 86.0
+    assert low <= 84.0
+    assert high >= 86.0
     assert low < 85.0 < high
 
 

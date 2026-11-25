@@ -479,15 +479,17 @@ class TestDuplicateSeeds:
     """A seed listed twice is one sample counted twice (pseudo-replication)."""
 
     def test_run_replicates_refuses_a_repeated_seed(self) -> None:
-        runner = _FakeRunner()
+        runner, base = _FakeRunner(), _base()
 
         with pytest.raises(ValueError, match="distintas"):
-            run_replicates(runner, _base(), [42, 42, 7], metric="score")
+            run_replicates(runner, base, [42, 42, 7], metric="score")
 
         assert runner.seen == []
 
     def test_the_message_follows_the_language(self) -> None:
         from visionforge.utils.messages import using_lang
 
+        runner, base = _FakeRunner(), _base()
+
         with using_lang("en"), pytest.raises(ValueError, match="must be unique"):
-            run_replicates(_FakeRunner(), _base(), [1, 1], metric="score")
+            run_replicates(runner, base, [1, 1], metric="score")

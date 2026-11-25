@@ -15,9 +15,8 @@ Scalar = str | bool | int | float | None
 
 # Keys never exported: secrets, and anything holding a local path (*_dir too,
 # e.g. data.base_dir carries the user's folder and name).
-_PRIVATE_PARAMETER = re.compile(
-    r"token|password|secret|credential|path|uri|url|(?:(?:^|_)dirs?$)", re.I
-)
+_PRIVATE_PARAMETER = re.compile(r"token|password|secret|credential|path|uri|url", re.I)
+_DIR_PARAMETER = re.compile(r"(?:^|_)dirs?$", re.I)
 _PARAMETER_NAME = re.compile(r"[\w-]+", re.ASCII)
 _METRIC_NAMES = {
     "accuracy",
@@ -78,7 +77,11 @@ def public_parameters(config: dict[str, Any]) -> dict[str, Scalar]:
 
 def _collect(data: dict[str, Any], prefix: str, result: dict[str, Scalar]) -> None:
     for name, value in sorted(data.items()):
-        if not isinstance(name, str) or _PRIVATE_PARAMETER.search(name):
+        if (
+            not isinstance(name, str)
+            or _PRIVATE_PARAMETER.search(name)
+            or _DIR_PARAMETER.search(name)
+        ):
             continue
         if not _PARAMETER_NAME.fullmatch(name):
             raise ValueError(f"Ambiguous parameter name: {name!r}")

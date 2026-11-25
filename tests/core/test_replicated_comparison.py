@@ -496,19 +496,20 @@ class TestDuplicateSeeds:
 
     def test_a_repeated_seed_is_refused_before_any_training(self) -> None:
         runner = _FakeRunner()
+        variants: dict[str, dict[str, Any]] = {"a": {}, "b": {}}
+        base, seeds = _base(), [42, 42, 7]
 
         with using_lang("en"), pytest.raises(ValueError, match="must be unique"):
-            run_replicated_comparison(
-                runner, _base(), {"a": {}, "b": {}}, [42, 42, 7], "accuracy"
-            )
+            run_replicated_comparison(runner, base, variants, seeds, "accuracy")
 
         assert runner.seen == []
 
     def test_two_copies_of_one_seed_are_not_two_seeds(self) -> None:
+        variants: dict[str, dict[str, Any]] = {"a": {}, "b": {}}
+        runner, base = _FakeRunner(), _base()
+
         with pytest.raises(ValueError, match="distintas"):
-            run_replicated_comparison(
-                _FakeRunner(), _base(), {"a": {}, "b": {}}, [3, 3], "accuracy"
-            )
+            run_replicated_comparison(runner, base, variants, [3, 3], "accuracy")
 
 
 class TestNonFiniteMetric:
