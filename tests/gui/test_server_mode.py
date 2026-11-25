@@ -11,7 +11,7 @@ import re
 import sys
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args, get_origin
 from unittest.mock import patch
 
 import pytest
@@ -340,8 +340,21 @@ def test_every_path_of_an_open_dataset_route_is_typed() -> None:
         return found[0]
 
     # Text fields that name a column, not a place on the disk.
-    # A dataset id at its provider and a task key are not places either.
-    not_paths = {"image_column", "dataset", "task"}
+    # A dataset id at its provider and a task key are not places either, nor
+    # the names of splits, classes and columns a request picks among those found.
+    not_paths = {
+        "image_column",
+        "dataset",
+        "task",
+        "optional_splits",
+        "accept_classes",
+        "target_columns",
+        "class_names",
+    }
+    # A COCO import maps each JSON it found to train/val/test/skip, checked
+    # against that list; neither side is a place on the disk.
+    not_path_maps = {"CocoImportApplyRequest.splits", "CocoImportPlanRequest.splits"}
+    plain: list[str] = []
     paths = app.openapi()["paths"]
     checked = 0
     for key in sorted(READY):
@@ -355,8 +368,16 @@ def test_every_path_of_an_open_dataset_route_is_typed() -> None:
         for name, field in model.model_fields.items():
             if field.annotation is str and name not in not_paths:
                 assert field.metadata, f"{model.__name__}.{name} is a plain str"
+            # A list or a map of names is a path too: each item must be typed.
+            qualified = f"{model.__name__}.{name}"
+            if name in not_paths or qualified in not_path_maps:
+                continue
+            for inner in (field.annotation, *get_args(field.annotation)):
+                if get_origin(inner) in (list, dict) and get_args(inner)[-1] is str:
+                    plain.append(qualified)
         checked += 1
     assert checked == 43
+    assert plain == [], f"lists or maps of plain str: {plain}"
 
 
 def test_the_session_says_where_the_datasets_may_live(

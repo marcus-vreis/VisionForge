@@ -708,9 +708,16 @@ class TestFilesServedToThePage:
         assert pt.json()["detail"] == pt_text
 
     def test_the_image_preview_refusals(
-        self, client: TestClient, tmp_path: Path
+        self, client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        text_file = tmp_path / "notes.txt"
+        from visionforge.gui.api import datasets_routes
+
+        # The allow-list is asked first: a missing file or a text file is only
+        # reported as such inside a probed dataset.
+        probed = (tmp_path / "probed").resolve()
+        probed.mkdir()
+        monkeypatch.setattr(datasets_routes, "_ALLOWED_DATASET_ROOTS", {probed})
+        text_file = probed / "notes.txt"
         text_file.write_text("x", encoding="utf-8")
         image = tmp_path / "a.png"
         image.write_bytes(b"x")
@@ -732,7 +739,7 @@ class TestFilesServedToThePage:
         )
         self._check(
             client,
-            base + str(tmp_path / "missing.png"),
+            base + str(probed / "missing.png"),
             404,
             "File not found.",
             "Arquivo não encontrado.",

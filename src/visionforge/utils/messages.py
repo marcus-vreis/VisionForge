@@ -2730,6 +2730,16 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "materialize into an ImageFolder."
         ),
     },
+    "download.name_outside": {
+        "pt": (
+            "O nome de split ou de classe '{name}' sairia da pasta de destino. "
+            "O download parou."
+        ),
+        "en": (
+            "The split or class name '{name}' would leave the target folder. "
+            "The download stopped."
+        ),
+    },
     "download.hf_revision_failed": {
         "pt": (
             "Não foi possível fixar a revisão do dataset '{dataset}' no Hugging "
