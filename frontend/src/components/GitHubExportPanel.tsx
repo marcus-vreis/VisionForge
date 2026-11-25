@@ -1,9 +1,13 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import {
   commitRunToGitHub, deleteGitHubToken, fetchGitHubPreview, fetchGitHubToken, saveGitHubToken,
-  type GitHubPreview, type HubTokenStatus,
+  startGitHubOAuth, type GitHubPreview, type HubTokenStatus,
 } from "../api/client";
 import { formatBytes } from "../lib/dataset-identity";
+import {
+  clearGitHubOAuthResult, openGitHubAuthorization, peekGitHubOAuthResult, type GitHubOAuthResult,
+} from "../lib/github-oauth";
+import { ROUTE, routeOpen, useSession } from "../lib/session";
 import { useI18n } from "../i18n/useT";
 import { ActionButton } from "./ui/ActionButton";
 import { GitHubIcon } from "./ui/BrandIcons";
@@ -27,6 +31,12 @@ export function GitHubExportPanel({ runId }: { runId: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [url, setUrl] = useState<string | null>(null);
+  // "Conectar com GitHub" when the operator set up an OAuth App (ADR-250).
+  const session = useSession();
+  const oauth = session.github_oauth === true && routeOpen(session, ROUTE.githubOAuth);
+  // The outcome the page came back from GitHub with, shown once.
+  const [returned] = useState(peekGitHubOAuthResult);
+  useEffect(() => { clearGitHubOAuthResult(); }, []);
 
   // Opening, another run or another language starts a fresh load (the effect's
   // deps below): the panel is reset while rendering, before the fetch runs.
@@ -61,6 +71,14 @@ export function GitHubExportPanel({ runId }: { runId: string }) {
     finally { setBusy(false); }
   };
 
+  const connect = async () => {
+    setBusy(true); setError(null);
+    try {
+      // Stays busy: the browser leaves for GitHub and comes back to the page.
+      await openGitHubAuthorization(startGitHubOAuth, (authorize) => window.location.assign(authorize));
+    } catch (e) { setError(reason(e, g.failed)); setBusy(false); }
+  };
+
   const upload = async () => {
     if (!preview || !status?.configured) return;
     setBusy(true); setError(null); setUrl(null);
@@ -82,8 +100,10 @@ export function GitHubExportPanel({ runId }: { runId: string }) {
     <p>{g.intro}</p>
     {busy && !preview && <p role="status">{g.loading}</p>}
     {status?.shared && <p role="alert">{g.shared}</p>}
+    <GitHubOAuthReturn result={returned} />
     {status && <div>
       {status.configured && <p>{g.configured}</p>}
+      <GitHubConnect offered={oauth} busy={busy} onConnect={() => void connect()} />
       <label>{g.token} <input type="password" autoComplete="new-password" value={token}
         onChange={(e) => setToken(e.target.value)} disabled={busy} style={FIELD} /></label>
       <p>{g.tokenHint}</p>
@@ -108,6 +128,26 @@ export function GitHubExportPanel({ runId }: { runId: string }) {
     {error && <p role="alert">{error}</p>}
     {url && <a href={url} target="_blank" rel="noopener noreferrer">{g.success}</a>}
   </section>;
+}
+
+/** How the page came back from GitHub, said once (ADR-250). */
+export function GitHubOAuthReturn({ result }: { result: GitHubOAuthResult | null }) {
+  const g = useI18n().t.github;
+  if (result === "connected") return <p role="status">{g.oauthConnected}</p>;
+  if (result === "failed") return <p role="alert">{g.oauthFailed}</p>;
+  return null;
+}
+
+/** "Conectar com GitHub", beside the pasted token, when the server offers it (ADR-250). */
+export function GitHubConnect({ offered, busy, onConnect }: {
+  offered: boolean; busy: boolean; onConnect: () => void;
+}) {
+  const g = useI18n().t.github;
+  if (!offered) return null;
+  return <>
+    <button type="button" disabled={busy} onClick={onConnect}>{g.oauthConnect}</button>
+    <p>{g.oauthHint}</p>
+  </>;
 }
 
 /** The server's translated reason when it sent one; else the generic failure. */

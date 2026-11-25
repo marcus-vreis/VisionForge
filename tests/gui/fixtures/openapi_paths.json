@@ -786,6 +786,28 @@
       "explorer"
     ]
   },
+  "GET /api/github/oauth/callback": {
+    "operationId": "callback_api_github_oauth_callback_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "query:code:optional",
+      "query:error:optional",
+      "query:state:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "303": {},
+      "400": {},
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
+  },
   "GET /api/github/preview": {
     "operationId": "preview_api_github_preview_get",
     "parameters": [
@@ -3018,6 +3040,26 @@
         "application/json": "HTTPValidationError"
       },
       "502": {}
+    },
+    "tags": [
+      "integrations"
+    ]
+  },
+  "POST /api/github/oauth/start": {
+    "operationId": "start_api_github_oauth_start_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
     },
     "tags": [
       "integrations"
