@@ -24,8 +24,8 @@ token, in the same file ``profile_tokens`` writes; the export reads it as before
   must be one this process issued, unexpired and unused (it is spent on first
   sight), and on a server it must belong to the signed-in person; otherwise 400.
   The code is then exchanged for the token and the browser goes back to the
-  page with ``?github_oauth=connected`` or ``?github_oauth=failed``: never the
-  code nor the token.
+  page with ``?github_oauth=connected``, ``denied`` (refused on GitHub) or
+  ``failed`` (GitHub gave no usable token): never the code nor the token.
 """
 
 from __future__ import annotations
@@ -305,9 +305,11 @@ def add_oauth_routes(
         # profile is the one it was opened for.
         if mode_of(request.app).enabled and _owner(resolve(header)) != _owner(profile):
             raise HTTPException(400, tr("github.oauth_state_invalid"))
-        token = None
-        if error is None and code:
-            token = exchange_code(app, code, pending.verifier)
+        if error is not None or not code:
+            # The person refused on GitHub (``error=access_denied``), or GitHub
+            # sent no code: nothing to exchange.
+            return _back(app, "denied")
+        token = exchange_code(app, code, pending.verifier)
         if token is None:
             return _back(app, "failed")
         write_token("github", profile, token)

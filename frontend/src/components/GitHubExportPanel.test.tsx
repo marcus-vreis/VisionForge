@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { LanguageContext } from "../i18n/context";
 import { en } from "../i18n/en";
 import { pt } from "../i18n/pt";
-import { GitHubConnect, GitHubExportPanel, GitHubOAuthReturn } from "./GitHubExportPanel";
+import { GitHubConnect, GitHubExportPanel } from "./GitHubExportPanel";
 
 describe("GitHubExportPanel", () => {
   it.each([pt, en])("starts closed and performs no request", (t) => {
@@ -35,18 +35,6 @@ describe("GitHubExportPanel", () => {
     expect(html).toContain(t.github.oauthConnect);
     expect(html).toContain("repo");
     expect(render(true, true)).toContain("disabled");
-  });
-
-  it.each([pt, en])("says once how the page came back from GitHub", (t) => {
-    const render = (result: "connected" | "failed" | null) => renderToStaticMarkup(
-      <LanguageContext.Provider value={{ lang: "pt", t, locale: "pt-BR", setLang: () => {} }}>
-        <GitHubOAuthReturn result={result} />
-      </LanguageContext.Provider>);
-    expect(render(null)).toBe("");
-    expect(render("connected")).toContain(t.github.oauthConnected);
-    expect(render("connected")).toContain('role="status"');
-    expect(render("failed")).toContain(t.github.oauthFailed);
-    expect(render("failed")).toContain('role="alert"');
   });
 
   it("names the folder in the repository", () => {

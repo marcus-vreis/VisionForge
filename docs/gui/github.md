@@ -41,8 +41,10 @@ Quando quem opera o servidor registrou um *OAuth App* do GitHub e passou as
 credenciais ao VisionForge (veja abaixo), o painel mostra **Conectar com
 GitHub** ao lado do campo do token (ADR-250). O botão abre o GitHub, você
 autoriza o app e volta para a página; o token fica salvo neste perfil, no
-mesmo lugar de um token colado, e o envio funciona igual. Ao voltar, o painel
-do GitHub diz se deu certo da próxima vez que você abri-lo. **Remover token**
+mesmo lugar de um token colado, e o envio funciona igual. Ao voltar, um aviso
+acima da barra de baixo diz se deu certo ("GitHub conectado: publicar um run
+usa essa conta") ou por que não (recusado no GitHub, ou o GitHub não devolveu
+token); recarregar a página não repete o aviso. **Remover token**
 desconecta. Colar um token continua funcionando, com ou sem o botão.
 
 - **Escopo `repo`.** O envio só escreve em repositório privado, e o escopo

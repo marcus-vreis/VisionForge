@@ -1,16 +1,18 @@
 /** "Conectar com GitHub": the way back from GitHub (ADR-250).
  *
  * The server's callback sends the browser to the page with
- * `?github_oauth=connected` or `?github_oauth=failed`, never the code nor the
- * token. The flag is read once, when the page loads, and taken out of the
- * address so a reload does not show it again; the GitHub panel shows it the
- * next time it is drawn.
+ * `?github_oauth=connected`, `denied` (refused on GitHub) or `failed` (GitHub
+ * gave no usable token), never the code nor the token. The flag is read once,
+ * when the page loads, and taken out of the address with
+ * `history.replaceState`, so a reload does not say it again; the page says it
+ * in the notice line above the bottom bar, like a queued submission.
  */
 
-export type GitHubOAuthResult = "connected" | "failed";
+export type GitHubOAuthResult = "connected" | "denied" | "failed";
 
 const PARAM = "github_oauth";
 const AUTHORIZE = "https://github.com/login/oauth/authorize";
+const RESULTS: readonly GitHubOAuthResult[] = ["connected", "denied", "failed"];
 
 let pending: GitHubOAuthResult | null = null;
 
@@ -24,7 +26,7 @@ export function captureGitHubOAuthResult(
   if (value === null) return null;
   url.searchParams.delete(PARAM);
   history.replaceState(history.state, "", `${url.pathname}${url.search}${url.hash}`);
-  pending = value === "connected" || value === "failed" ? value : null;
+  pending = RESULTS.find((result) => result === value) ?? null;
   return pending;
 }
 
@@ -36,6 +38,17 @@ export function peekGitHubOAuthResult(): GitHubOAuthResult | null {
 /** The outcome was shown: forget it. */
 export function clearGitHubOAuthResult(): void {
   pending = null;
+}
+
+/** What the notice says for `result`, in the language of `words`. */
+export function gitHubOAuthNotice(
+  result: GitHubOAuthResult | null,
+  words: { oauthConnected: string; oauthDenied: string; oauthFailed: string },
+): string | null {
+  if (result === "connected") return words.oauthConnected;
+  if (result === "denied") return words.oauthDenied;
+  if (result === "failed") return words.oauthFailed;
+  return null;
 }
 
 /** True only for GitHub's own authorization page, the one place the button may

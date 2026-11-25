@@ -347,8 +347,14 @@ def test_a_refusal_on_github_exchanges_nothing(
 ) -> None:
     state = _start(local)["state"]
     done = _callback(local, {"state": state, "error": "access_denied"})
-    assert done.headers["location"] == "/?github_oauth=failed"
+    assert done.status_code == 303
+    assert done.headers["location"] == "/?github_oauth=denied"
     assert github.calls == []
+    # A return with neither an error nor a code is no authorization either.
+    bare = _callback(local, {"state": _start(local)["state"]})
+    assert bare.headers["location"] == "/?github_oauth=denied"
+    assert github.calls == []
+    assert _token_of(None) is None
     # The refusal spent the request.
     assert _callback(local, {"state": state, "code": CODE}).status_code == 400
 

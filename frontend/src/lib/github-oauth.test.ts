@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { en } from "../i18n/en";
+import { pt } from "../i18n/pt";
 import {
   captureGitHubOAuthResult,
   clearGitHubOAuthResult,
+  gitHubOAuthNotice,
   isGitHubAuthorizeUrl,
   openGitHubAuthorization,
   peekGitHubOAuthResult,
@@ -16,7 +19,7 @@ function history() {
 afterEach(() => clearGitHubOAuthResult());
 
 describe("the way back from GitHub (ADR-250)", () => {
-  it.each(["connected", "failed"] as const)("keeps %s and cleans the address", (result) => {
+  it.each(["connected", "denied", "failed"] as const)("keeps %s and cleans the address", (result) => {
     const h = history();
     const href = `http://localhost:8000/?github_oauth=${result}&x=1#top`;
     expect(captureGitHubOAuthResult({ href }, h)).toBe(result);
@@ -37,6 +40,33 @@ describe("the way back from GitHub (ADR-250)", () => {
     expect(captureGitHubOAuthResult({ href: "http://localhost:8000/?github_oauth=<b>" }, h)).toBeNull();
     expect(h.replaceState).toHaveBeenCalledWith({ keep: 1 }, "", "/");
     expect(peekGitHubOAuthResult()).toBeNull();
+  });
+});
+
+describe("the notice the page opens with", () => {
+  it.each([pt, en])("says the outcome, or nothing", (t) => {
+    const g = t.github;
+    expect(gitHubOAuthNotice("connected", g)).toBe(g.oauthConnected);
+    expect(gitHubOAuthNotice("denied", g)).toBe(g.oauthDenied);
+    expect(gitHubOAuthNotice("failed", g)).toBe(g.oauthFailed);
+    expect(gitHubOAuthNotice(null, g)).toBeNull();
+    expect(new Set([g.oauthConnected, g.oauthDenied, g.oauthFailed]).size).toBe(3);
+  });
+
+  it("is said once: after the clear a reload's page has nothing to say", () => {
+    const h = history();
+    captureGitHubOAuthResult({ href: "http://localhost:8000/?github_oauth=connected" }, h);
+    expect(gitHubOAuthNotice(peekGitHubOAuthResult(), pt.github)).toBe(pt.github.oauthConnected);
+    clearGitHubOAuthResult();
+    // The address no longer has the flag: a reload reads the cleaned one.
+    const [, , cleaned] = h.replaceState.mock.calls[0] as [unknown, string, string];
+    expect(captureGitHubOAuthResult({ href: `http://localhost:8000${cleaned}` }, history())).toBeNull();
+    expect(gitHubOAuthNotice(peekGitHubOAuthResult(), pt.github)).toBeNull();
+  });
+
+  it("says the success in the words the lead asked for", () => {
+    expect(pt.github.oauthConnected).toBe("GitHub conectado: publicar um run usa essa conta.");
+    expect(en.github.oauthConnected).toContain("GitHub connected");
   });
 });
 
