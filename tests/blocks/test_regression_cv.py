@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import csv
+import math
 from pathlib import Path
 
 import pytest
 from PIL import Image
 
-from visionforge.blocks.regression_cv import run_regression_cross_validation
+from visionforge.blocks.regression_cv import (
+    FoldResult,
+    aggregate_folds,
+    run_regression_cross_validation,
+)
 from visionforge.utils.regression_config import RegressionConfig
 
 _N_ROWS = 6
@@ -81,3 +86,47 @@ class TestRegressionCrossValidation:
         config = _config(tmp_path)
         with pytest.raises(ValueError, match="exceed"):
             run_regression_cross_validation(config, n_folds=_N_ROWS + 1)
+
+
+class TestAggregateFoldsWithNonFiniteFolds:
+    """A fold whose metric is NaN or inf is not a measurement (ADR-061)."""
+
+    @staticmethod
+    def _fold(index: int, r2: float) -> FoldResult:
+        return FoldResult(
+            fold=index, status="success", train_size=4, val_size=2, metrics={"r2": r2}
+        )
+
+    def test_two_nan_folds_stay_out_and_are_counted(self) -> None:
+        folds = [
+            self._fold(0, math.nan),
+            self._fold(1, 0.5),
+            self._fold(2, math.nan),
+            self._fold(3, 0.7),
+        ]
+
+        aggregate = aggregate_folds(folds, ("r2",))
+
+        r2 = aggregate["r2"]
+        assert r2["n"] == 2
+        assert r2["n_non_finite"] == 2
+        assert r2["mean"] == pytest.approx(0.6)
+        assert r2["std"] == pytest.approx(0.1414213562)
+
+    def test_every_fold_non_finite_keeps_the_metric_with_no_statistics(self) -> None:
+        folds = [self._fold(0, math.nan), self._fold(1, math.inf)]
+
+        r2 = aggregate_folds(folds, ("r2",))["r2"]
+
+        assert r2["n"] == 0
+        assert r2["n_non_finite"] == 2
+        assert r2["mean"] is None
+        assert r2["std"] is None
+
+    def test_finite_folds_report_zero_non_finite(self) -> None:
+        folds = [self._fold(0, 0.5), self._fold(1, 0.7)]
+
+        r2 = aggregate_folds(folds, ("r2",))["r2"]
+
+        assert r2["n"] == 2
+        assert r2["n_non_finite"] == 0

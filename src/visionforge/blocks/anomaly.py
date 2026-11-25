@@ -26,6 +26,7 @@ from visionforge.core.anomaly_trainer import (
 from visionforge.core.cancellation import CancellationToken
 from visionforge.core.metric_ci import MetricCI, bootstrap_anomaly_cis
 from visionforge.core.plotter import MetricsPlotter, figure_graphic
+from visionforge.core.strict_json import dumps_strict
 from visionforge.core.trainer import seed_before_building
 from visionforge.core.training_health import single_class_test_split
 from visionforge.models.anomaly_factory import AnomalyModelFactory
@@ -196,7 +197,7 @@ class AnomalyBlock:
             ):
                 warnings.append(warning.to_dict())
         data["artifacts"]["graphics"] = [str(p) for p in graphics]
-        run_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        run_json_path.write_text(dumps_strict(data, indent=2), encoding="utf-8")
 
 
 __all__ = ["AnomalyBlock"]

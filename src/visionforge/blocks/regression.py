@@ -25,6 +25,7 @@ from visionforge.core.regression_trainer import (
     RegressionTrainer,
     RegressionTrainResult,
 )
+from visionforge.core.strict_json import dumps_strict
 from visionforge.core.trainer import seed_before_building
 from visionforge.core.training_health import constant_predictions
 from visionforge.models.regression_factory import RegressionModelFactory
@@ -182,7 +183,7 @@ class RegressionBlock:
                 name: ci.to_dict() for name, ci in self._metric_cis.items()
             }
         data["artifacts"]["graphics"] = [str(p) for p in graphics]
-        run_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        run_json_path.write_text(dumps_strict(data, indent=2), encoding="utf-8")
 
 
 __all__ = ["RegressionBlock"]

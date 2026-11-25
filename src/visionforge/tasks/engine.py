@@ -13,7 +13,6 @@ owns the loop while still honouring the run-dir/SSE/run.json contracts.
 
 from __future__ import annotations
 
-import json
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -28,6 +27,7 @@ from torch import nn
 from visionforge.core.cancellation import CancellationToken, is_cancelled
 from visionforge.core.dataset_fingerprint import fingerprint_from_config
 from visionforge.core.plotter import MetricsPlotter
+from visionforge.core.strict_json import dumps_strict
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything, resolve_device
 from visionforge.core.training_loop import (
@@ -552,7 +552,7 @@ class GenericTaskEngine:
             "warnings": result.warnings,
         }
         (result.run_dir / "run.json").write_text(
-            json.dumps(run_json, indent=2), encoding="utf-8"
+            dumps_strict(run_json, indent=2), encoding="utf-8"
         )
 
 

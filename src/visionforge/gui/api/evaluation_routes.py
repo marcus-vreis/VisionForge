@@ -23,6 +23,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Header, HTTPException
 from loguru import logger
 
+from visionforge.core.strict_json import dumps_strict
 from visionforge.gui.api.config_scope import profile_root
 from visionforge.gui.api.dataset_scope import current_scope
 from visionforge.gui.api.datasets_routes import _remember_dataset_root
@@ -564,7 +565,7 @@ def _evaluate_standalone_run(
         "artifacts": {},
     }
     data.setdefault("tests", []).append(record)
-    (run_dir / RUN_FILENAME).write_text(json.dumps(data, indent=2), encoding="utf-8")
+    (run_dir / RUN_FILENAME).write_text(dumps_strict(data, indent=2), encoding="utf-8")
 
     return RunTestResponse(
         test_id=test_id,
@@ -870,7 +871,7 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
         "artifacts": artifacts,
     }
     data.setdefault("tests", []).append(record)
-    run_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    run_json_path.write_text(dumps_strict(data, indent=2), encoding="utf-8")
 
     return RunTestResponse(
         test_id=test_id,

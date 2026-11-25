@@ -325,6 +325,25 @@ class TestSampleStd:
             statistics.stdev([0.5, 0.7, 0.9])
         )
 
+    def test_non_finite_folds_stay_out_of_the_spread(self) -> None:
+        import math
+        import statistics
+
+        from visionforge.core.replicates import sample_std
+
+        # Two folds whose R² came back NaN (a constant target) and one inf:
+        # statistics.stdev raised on them and took the whole K-fold down.
+        values = [math.nan, 0.5, math.nan, 0.7, math.inf]
+        assert sample_std(values) == pytest.approx(statistics.stdev([0.5, 0.7]))
+
+    def test_fewer_than_two_finite_values_have_no_spread(self) -> None:
+        import math
+
+        from visionforge.core.replicates import sample_std
+
+        assert sample_std([math.nan, math.nan]) is None
+        assert sample_std([math.nan, 0.5, math.inf]) is None
+
 
 class TestWithoutAStop:
     def test_every_unit_runs(self) -> None:

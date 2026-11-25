@@ -13,6 +13,7 @@ from visionforge.core.evaluator import EvalResult, Evaluator, bootstrap_eval_cis
 from visionforge.core.metric_ci import MetricCI
 from visionforge.core.plotter import MetricsPlotter, figure_graphic
 from visionforge.core.run_trackers import TrackerFactory
+from visionforge.core.strict_json import dumps_strict
 from visionforge.core.trainer import Trainer, TrainResult, seed_before_building
 from visionforge.models.factory import ModelFactory
 from visionforge.utils.config import ExperimentConfig
@@ -245,7 +246,7 @@ class ClassificationBlock(ExperimentBlock):
             }
         data["artifacts"]["graphics"] = [str(p) for p in graphics]
 
-        run_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        run_json_path.write_text(dumps_strict(data, indent=2), encoding="utf-8")
 
 
 __all__ = ["ClassificationBlock"]
