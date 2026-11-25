@@ -1,0 +1,110 @@
+name: Server mode behind oauth2-proxy
+
+# Server mode behind a real login proxy (ADR-247): the stack of
+# deploy/server/docker-compose.yml — a mock OpenID Connect provider,
+# oauth2-proxy and `visionforge gui --server` built from the repository's
+# Dockerfile — signed into with two accounts. The e2e suite plays the proxy
+# itself (ADR-224); this is the check that the real proxy names the user and
+# deletes a name the client sends.
+#
+# A Docker build, so it runs only when something on that path changes.
+
+on:
+  push:
+    branches: ["main", "development"]
+    paths:
+      - "src/visionforge/gui/**"
+      - "src/visionforge/__main__.py"
+      - "pyproject.toml"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "deploy/server/**"
+      - "scripts/check_server_proxy.py"
+      - ".github/workflows/server-proxy.yml"
+  pull_request:
+    paths:
+      - "src/visionforge/gui/**"
+      - "src/visionforge/__main__.py"
+      - "pyproject.toml"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "deploy/server/**"
+      - "scripts/check_server_proxy.py"
+      - ".github/workflows/server-proxy.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  stack:
+    name: oauth2-proxy + mock OIDC + server mode
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      COMPOSE_FILE: deploy/server/docker-compose.yml
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: docker/setup-buildx-action@v4.4.1
+
+      # The CPU image, the one the compose file names. Built here rather than by
+      # compose so its layers come from the Actions cache.
+      - name: Build the VisionForge image (CPU)
+        uses: docker/build-push-action@v7.4.0
+        with:
+          context: .
+          build-args: |
+            CUDA_TAG=cpu
+            BASE_IMAGE=ubuntu:22.04
+            VARIANT=cpu
+          tags: visionforge:cpu
+          load: true
+          cache-from: type=gha,scope=server-proxy
+          cache-to: type=gha,mode=max,scope=server-proxy
+
+      # Fresh for every run and masked in the log; nothing is stored in the
+      # repository or in the project's secrets.
+      - name: Generate the proxy's secrets
+        run: |
+          cookie="$(python3 -c 'import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())')"
+          client="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
+          echo "::add-mask::$cookie"
+          echo "::add-mask::$client"
+          {
+            echo "OAUTH2_PROXY_COOKIE_SECRET=$cookie"
+            echo "OAUTH2_PROXY_CLIENT_SECRET=$client"
+          } >> "$GITHUB_ENV"
+
+      - name: Start the stack
+        run: docker compose up -d --no-build --wait --wait-timeout 180
+
+      # Two accounts sign in through the provider's form; anonymous and forged
+      # requests stop at the proxy; one account's run stays out of the other's
+      # history; VisionForge's own port is not published on the host.
+      - name: Check through the proxy
+        run: python3 scripts/check_server_proxy.py --proxy http://localhost:4180 --provider http://localhost:9080 --direct http://localhost:8000
+
+      # Inside the network the port is reachable, and any address but the
+      # proxy's must get 403 even when it names a user. Host: localhost so the
+      # answer comes from the server-mode gate, not the Host check before it.
+      - name: Direct request from inside the network is refused
+        run: |
+          code="$(docker compose exec -T visionforge curl -s -o /dev/null -w '%{http_code}' \
+            -H 'Host: localhost' -H 'X-Forwarded-User: alice' http://visionforge:8000/api/session)"
+          echo "direct request answered $code"
+          test "$code" = "403"
+
+      - name: Logs of the stack
+        if: failure()
+        run: docker compose logs --no-color --timestamps
+
+      - name: Stop the stack
+        if: always()
+        # `|| true`: when an earlier step failed before the secrets existed,
+        # compose refuses to read the file and there is nothing to stop.
+        run: docker compose down -v || true
