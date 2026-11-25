@@ -188,8 +188,9 @@ def test_a_bundle_without_any_config_is_refused(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
     run_dir.mkdir()
     (run_dir / "run.json").write_text('{"artifacts": {}}', encoding="utf-8")
+    bundle = _bundle(tmp_path, run_dir)
     with pytest.raises(ReproduceError, match="no task config"):
-        read_bundle_record(_bundle(tmp_path, run_dir))
+        read_bundle_record(bundle)
 
 
 def test_an_unparsable_config_member_is_refused(tmp_path: Path) -> None:
@@ -197,8 +198,9 @@ def test_an_unparsable_config_member_is_refused(tmp_path: Path) -> None:
     run_dir.mkdir()
     (run_dir / "run.json").write_text('{"artifacts": {}}', encoding="utf-8")
     (run_dir / "config.json").write_text("{not json", encoding="utf-8")
+    bundle = _bundle(tmp_path, run_dir)
     with pytest.raises(ReproduceError, match=r"config\.json"):
-        read_bundle_record(_bundle(tmp_path, run_dir))
+        read_bundle_record(bundle)
 
 
 def test_a_tampered_bundle_fails_verification(tmp_path: Path) -> None:
@@ -328,7 +330,8 @@ def test_the_default_is_the_first_seed_that_finished(tmp_path: Path) -> None:
     assert record["group"]["children"][0]["seed"] == 9
     seed, child = pick_seed("replicates", record, record["config"], None)
     assert seed == 3
-    assert child is not None and child["status"] == "success"
+    assert child is not None
+    assert child["status"] == "success"
 
 
 def test_a_group_with_no_children_falls_back_to_its_first_seed() -> None:
@@ -855,12 +858,20 @@ def test_a_config_section_that_is_not_a_mapping_is_refused(
 ) -> None:
     config = {**_config(tmp_path), section: ["not", "a", "mapping"]}
     with pytest.raises(ReproduceError, match=section):
-        pick_seed("single", {}, config, None)
         reproduction_config(config, name="x", seed=1, data={}, output=None)
+
+
+def test_a_training_section_that_is_not_a_mapping_has_no_seed_to_pick(
+    tmp_path: Path,
+) -> None:
+    config = {**_config(tmp_path), "training": ["not", "a", "mapping"]}
+    with pytest.raises(ReproduceError, match="training"):
+        pick_seed("single", {}, config, None)
 
 
 def test_an_output_that_is_a_file_is_refused(tmp_path: Path) -> None:
     out = tmp_path / "out.txt"
     out.write_text("x", encoding="utf-8")
+    bundle = _bundle(tmp_path, _single_run(tmp_path))
     with pytest.raises(ReproduceError, match="out.txt"):
-        plan_reproduction(_bundle(tmp_path, _single_run(tmp_path)), output=out)
+        plan_reproduction(bundle, output=out)

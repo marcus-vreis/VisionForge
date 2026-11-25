@@ -14,6 +14,7 @@ every near pair without comparing all of them.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -112,7 +113,12 @@ def _candidate_pairs(values: list[int]) -> set[tuple[int, int]]:
         for value in values:
             buckets[(value >> (band * _BAND_BITS)) & _BAND_MASK].append(value)
         for bucket in buckets.values():
-            for i, a in enumerate(bucket):
-                for b in bucket[i + 1 :]:
-                    pairs.add((a, b) if a < b else (b, a))
+            pairs.update(_bucket_pairs(bucket))
     return pairs
+
+
+def _bucket_pairs(bucket: list[int]) -> Iterator[tuple[int, int]]:
+    """Every ordered (low, high) pair of hashes inside one band bucket."""
+    for i, a in enumerate(bucket):
+        for b in bucket[i + 1 :]:
+            yield (a, b) if a < b else (b, a)

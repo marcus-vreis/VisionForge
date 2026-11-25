@@ -51,7 +51,8 @@ def _snap(active: QueuedJob | None, *pending: QueuedJob) -> dict[str, Any]:
 
 def test_a_local_install_sees_the_whole_queue() -> None:
     lane = _lane_for(None, _snap(_job("r1", "a"), _job("r2", "b"), _job("r3", "a")))
-    assert lane.active is not None and lane.active.run_id == "r1"
+    assert lane.active is not None
+    assert lane.active.run_id == "r1"
     assert [job.run_id for job in lane.pending] == ["r2", "r3"]
     assert lane.others_ahead == 0
 
@@ -70,7 +71,8 @@ def test_the_running_job_of_who_asks_has_nobody_ahead() -> None:
     lane = _lane_for(
         "ana", _snap(_job("r1", "ana"), _job("r2", "bia"), _job("r3", "ana"))
     )
-    assert lane.active is not None and lane.active.run_id == "r1"
+    assert lane.active is not None
+    assert lane.active.run_id == "r1"
     assert [job.run_id for job in lane.pending] == ["r3"]
     assert lane.others_ahead == 0
 
@@ -114,7 +116,8 @@ def test_whose_a_job_is_survives_its_state(served: TestClient) -> None:
     job = _started("r1", BIA_SLUG)
     assert execution.profile_of_run("r1") == BIA_SLUG
     record = execution._finish_job(job)
-    assert record is not None and record["profile"] == BIA_SLUG
+    assert record is not None
+    assert record["profile"] == BIA_SLUG
     assert execution.profile_of_run("nope") is None
     assert execution.latest_run_of(BIA_SLUG) == "r1"
     assert execution.latest_run_of(ANA_SLUG) is None
