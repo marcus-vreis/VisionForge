@@ -267,6 +267,12 @@ visionforge reproduce evidence.zip --data datasets/my_dataset
   of one seed computed from the set's mean and std (exit code 1 when a metric
   falls outside it), and the library/device differences.
 
+  `visionforge export` sends a run to a third-party exporter that an installed
+  package declares under the `visionforge.exporters` entry-point group
+  (`visionforge export --list`, then `visionforge export outputs/models/my_run
+  --to NAME --option key=value`). Guide:
+  [`docs/custom/EXPORTERS.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/custom/EXPORTERS.md).
+
 - **Learning rate per model** (classification) — with
   `model_comparison.lr_policy: suggested` each architecture trains at its own
   suggested LR, and `grid_search.lr_mode: suggested_multiplier` reads the LR
@@ -673,6 +679,12 @@ visionforge reproduce evidencia.zip --data datasets/meu_dataset
   predição de 95% de uma semente, calculado da média e do desvio do conjunto
   (código de saída 1 quando uma métrica fica fora dele), e as diferenças de
   bibliotecas e dispositivo.
+
+  `visionforge export` envia um run para um exportador de terceiros que um
+  pacote instalado declara no grupo de entry-points `visionforge.exporters`
+  (`visionforge export --list`, depois `visionforge export outputs/models/meu_run
+  --to NOME --option chave=valor`). Guia:
+  [`docs/custom/EXPORTERS.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/custom/EXPORTERS.md).
 
 - **Learning rate por modelo** (classificação) — com
   `model_comparison.lr_policy: suggested` cada arquitetura treina com o seu LR
