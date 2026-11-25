@@ -54,6 +54,7 @@ import type { MetricCI } from "../types/run";
 import { accentForTask } from "../lib/task-accent";
 import { useCustomAccents } from "../lib/custom-accents";
 import { useResolvedTheme } from "./training-story/use-viewing";
+import { DatasetCleanupNote } from "./DatasetCleanupNote";
 import { Lightbox } from "./Lightbox";
 import { RunGroupDetail } from "./RunGroupDetail";
 import { RunCurves } from "./RunCurves";
@@ -1290,6 +1291,8 @@ export function RunDetailPanel({
         onUpdated={(wandb) => setDetail((previous) => previous ? { ...previous, wandb } : previous)} />
       <CometExportStatus key={`comet:${runId}`} runId={runId} status={detail?.comet}
         onUpdated={(comet) => setDetail((previous) => previous ? { ...previous, comet } : previous)} />
+
+      <DatasetCleanupNote entries={detail?.dataset_cleanup} />
 
       {resumeMsg && <ActionMessage message={resumeMsg} />}
 

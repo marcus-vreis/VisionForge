@@ -54,6 +54,7 @@ export function OwnDatasetUpload({ onUploaded }: OwnDatasetUploadProps) {
   const { t } = useI18n();
   const picker = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
+  const [deleteAfterRun, setDeleteAfterRun] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [upload, setUpload] = useState<DatasetUpload | null>(null);
   const [sent, setSent] = useState(0);
@@ -83,6 +84,7 @@ export function OwnDatasetUpload({ onUploaded }: OwnDatasetUploadProps) {
       );
       reset();
       setName("");
+      setDeleteAfterRun(false);
       setNotice(t.ownDatasets.uploaded(dataset.name));
       await onUploaded(dataset);
     } catch (e) {
@@ -102,6 +104,7 @@ export function OwnDatasetUpload({ onUploaded }: OwnDatasetUploadProps) {
         name: name.trim() || folderNameOf(chosen.name),
         filename: chosen.name,
         size: chosen.size,
+        delete_after_run: deleteAfterRun,
       });
     } catch (e) {
       failed(e, false);
@@ -158,6 +161,8 @@ export function OwnDatasetUpload({ onUploaded }: OwnDatasetUploadProps) {
         error={error}
         notice={notice}
         onName={setName}
+        deleteAfterRun={deleteAfterRun}
+        onDeleteAfterRun={setDeleteAfterRun}
         onPick={() => picker.current?.click()}
         onResume={() => void resume()}
         onCancel={() => void cancel()}
@@ -175,6 +180,9 @@ interface OwnDatasetUploadViewProps {
   error: string | null;
   notice: string | null;
   onName: (name: string) => void;
+  /** Delete the dataset once the next run that uses it ends (ADR-249). */
+  deleteAfterRun: boolean;
+  onDeleteAfterRun: (value: boolean) => void;
   onPick: () => void;
   onResume: () => void;
   onCancel: () => void;
@@ -189,6 +197,8 @@ export function OwnDatasetUploadView({
   error,
   notice,
   onName,
+  deleteAfterRun,
+  onDeleteAfterRun,
   onPick,
   onResume,
   onCancel,
@@ -220,6 +230,28 @@ export function OwnDatasetUploadView({
           {t.ownDatasets.upload}
         </button>
       </div>
+      <label
+        style={{
+          display: "flex",
+          gap: 8,
+          alignItems: "center",
+          lineHeight: 1.55,
+          color: "var(--vf-text)",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={deleteAfterRun}
+          disabled={phase !== "idle"}
+          onChange={(e) => onDeleteAfterRun(e.target.checked)}
+        />
+        {t.ownDatasets.deleteAfterRun}
+      </label>
+      {deleteAfterRun && (
+        <p style={{ margin: 0, lineHeight: 1.55, color: "var(--vf-text-dim)" }}>
+          {t.ownDatasets.deleteAfterRunHint}
+        </p>
+      )}
       {busy && (
         <div role="status" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <Progress pct={phase === "finishing" ? 100 : percent} />

@@ -25,6 +25,7 @@ from visionforge.gui.api.http_responses import (
     SERVER_ERROR_TEXT,
     TAG_DATASETS,
 )
+from visionforge.gui.api.upload_cleanup import is_marked, set_mark
 from visionforge.gui.disk_quota import folder_bytes
 from visionforge.utils.messages import tr
 
@@ -37,6 +38,8 @@ class OwnDataset(BaseModel):
     name: str
     path: str
     size_bytes: int
+    # Deleted once the next run that uses it ends (ADR-249).
+    delete_after_run: bool = False
 
 
 class OwnDatasetDeleted(BaseModel):
@@ -68,7 +71,12 @@ def _listed(own: Path) -> list[OwnDataset]:
     except OSError:
         return []
     return [
-        OwnDataset(name=p.name, path=str(p), size_bytes=folder_bytes(p))
+        OwnDataset(
+            name=p.name,
+            path=str(p),
+            size_bytes=folder_bytes(p),
+            delete_after_run=is_marked(own, p.name),
+        )
         for p in folders
     ]
 
@@ -134,5 +142,6 @@ async def delete_own_dataset(name: str) -> OwnDatasetDeleted:
         raise HTTPException(
             500, tr("own_dataset.delete_failed", name=name[:80], reason=reason)
         ) from exc
+    await asyncio.to_thread(set_mark, found[1], folder.name, False)
     logger.info("GUI: deleted the dataset {}", folder)
     return OwnDatasetDeleted(name=folder.name)

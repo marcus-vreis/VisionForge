@@ -31,6 +31,8 @@ function view(
         error={null}
         notice={null}
         onName={noop}
+        deleteAfterRun={false}
+        onDeleteAfterRun={noop}
         onPick={noop}
         onResume={noop}
         onCancel={noop}
@@ -77,6 +79,23 @@ describe("sending a dataset .zip to a shared server (ADR-246)", () => {
     expect(markup.match(/<button[^>]*disabled/g)).toHaveLength(1);
   });
 
+  it("offers to delete the dataset after the next training, off by default (ADR-249)", () => {
+    const off = view();
+    expect(off).toContain(pt.ownDatasets.deleteAfterRun);
+    expect(off).toMatch(/<input type="checkbox"(?![^>]*checked)[^>]*>/);
+    expect(off).not.toContain(pt.ownDatasets.deleteAfterRunHint);
+
+    const on = view({ deleteAfterRun: true });
+    expect(on).toMatch(/<input type="checkbox"[^>]*checked=""[^>]*>/);
+    expect(on).toContain(pt.ownDatasets.deleteAfterRunHint);
+    expect(on).not.toMatch(/<input type="checkbox"[^>]*disabled/);
+  });
+
+  it("holds the choice while the file is on its way", () => {
+    const markup = view({ phase: "sending", deleteAfterRun: true, sent: MIB, total: 4 * MIB });
+    expect(markup).toMatch(/<input type="checkbox"[^>]*disabled=""[^>]*>/);
+  });
+
   it("says when the dataset arrived", () => {
     expect(view({ notice: pt.ownDatasets.uploaded("beans") })).toContain(
       pt.ownDatasets.uploaded("beans"),
@@ -94,6 +113,8 @@ describe("sending a dataset .zip to a shared server (ADR-246)", () => {
           error={null}
           notice={null}
           onName={noop}
+          deleteAfterRun={false}
+          onDeleteAfterRun={noop}
           onPick={noop}
           onResume={noop}
           onCancel={noop}

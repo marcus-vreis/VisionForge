@@ -34,6 +34,7 @@ batch does not hold everybody else behind it. On a local install it stays FIFO.
 from __future__ import annotations
 
 import asyncio
+import time
 from collections import deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -89,6 +90,13 @@ class QueuedJob:
     # Which queue runs it (ADR-163, phase 4): LOCAL_LANE, or the lane of one
     # Google account. Set by RunLanes.submit.
     lane: str = "local"
+    # On a server, the folders of the person's own dataset folder the job reads,
+    # and where its runs are written (ADR-249): a dataset sent to be deleted
+    # after the run is kept while a job still names it.
+    datasets: tuple[Path, ...] = ()
+    models_dir: Path | None = None
+    # When the queue started it (``time.time()``); None while it waits.
+    started_at: float | None = None
 
     def describe(self) -> dict[str, Any]:
         """JSON-ready form for the queue endpoint (never includes the callable)."""
@@ -108,19 +116,23 @@ class QueuedJob:
 class RunQueue:
     """Accepts submissions at any time and executes them one at a time.
 
-    The two callbacks are how this stays independent of the route module's
+    The callbacks are how this stays independent of the route module's
     globals: ``on_start`` prepares per-run state (the fresh SSE queue and the
     "running" marker) and ``on_finish`` hands back the terminal snapshot to
-    record under the job's ``run_id``.
+    record under the job's ``run_id``. ``on_end``, when given, is awaited once
+    the job ended (completed, failed or stopped) and before that snapshot is
+    taken, while the job is still the lane's active one (ADR-249).
     """
 
     def __init__(
         self,
         on_start: Callable[[QueuedJob], None],
         on_finish: Callable[[QueuedJob], dict[str, Any] | None],
+        on_end: Callable[[QueuedJob], Awaitable[None]] | None = None,
     ) -> None:
         self._on_start = on_start
         self._on_finish = on_finish
+        self._on_end = on_end
         self._pending: deque[QueuedJob] = deque()
         self._active: QueuedJob | None = None
         self._records: dict[str, dict[str, Any]] = {}
@@ -225,6 +237,10 @@ class RunQueue:
         jobs = [self._active, *self._pending]
         return sum(1 for job in jobs if job is not None and job.profile == profile)
 
+    def jobs(self) -> list[QueuedJob]:
+        """The running job, if any, then the waiting ones."""
+        return [job for job in (self._active, *self._pending) if job is not None]
+
     def run_order(self) -> list[QueuedJob]:
         """The waiting jobs in the order they will start, if nobody submits more.
 
@@ -291,6 +307,7 @@ class RunQueue:
         while self._pending:
             job = self._next()
             self._active = job
+            job.started_at = time.time()
             try:
                 self._on_start(job)
                 await job.start()
@@ -301,10 +318,20 @@ class RunQueue:
                 # queue, which is the whole point of submitting a batch.
                 logger.exception("Queue: {} raised outside its executor.", job.run_id)
             finally:
+                await self._ended(job)
                 snapshot = self._on_finish(job)
                 if snapshot is not None:
                     self._remember(job.run_id, snapshot)
                 self._active = None
+
+    async def _ended(self, job: QueuedJob) -> None:
+        """Await ``on_end``; what it raises is logged, never the next job's."""
+        if self._on_end is None:
+            return
+        try:
+            await self._on_end(job)
+        except Exception:
+            logger.exception("Queue: the end step of {} failed.", job.run_id)
 
     def _remember(self, run_id: str, snapshot: dict[str, Any]) -> None:
         self._records[run_id] = snapshot
@@ -392,6 +419,10 @@ class RunLanes:
             if profile is not None:
                 return profile
         return None
+
+    def jobs(self) -> list[QueuedJob]:
+        """Every running and waiting job, over all lanes."""
+        return [job for queue in self._lanes.values() for job in queue.jobs()]
 
     def snapshots(self) -> list[dict[str, Any]]:
         """Each lane's active job and pending list, the local lane first."""

@@ -40,6 +40,7 @@ from visionforge.gui.api.run_history import (
 )
 from visionforge.gui.api.schemas import (
     CometStatus,
+    DatasetCleanup,
     DatasetInfo,
     MlflowStatus,
     RunDetail,
@@ -155,6 +156,20 @@ def _run_dataset(data: dict[str, Any]) -> DatasetInfo | None:
     )
 
 
+def _dataset_cleanup(data: dict[str, Any]) -> list[DatasetCleanup]:
+    """The datasets deleted after the run (ADR-249); a damaged entry is skipped."""
+    entries = data.get("dataset_cleanup")
+    if not isinstance(entries, list):
+        return []
+    cleanup: list[DatasetCleanup] = []
+    for entry in entries:
+        try:
+            cleanup.append(DatasetCleanup.model_validate(entry))
+        except ValueError:
+            continue
+    return cleanup
+
+
 def read_mlflow_status(run_dir: Path) -> MlflowStatus | None:
     """Read optional tracking diagnostics from a regular file inside the run."""
     sidecar = run_dir / "tracking.json"
@@ -223,6 +238,7 @@ def _build_run_detail(
         stopped=bool(data.get("stopped")),
         group_id=data.get("group_id"),
         group=data.get("group") if isinstance(data.get("group"), dict) else None,
+        dataset_cleanup=_dataset_cleanup(data),
         task=task,
         can_reveal=can_reveal(host),
         metric_directions=metric_directions(task, metrics, history),

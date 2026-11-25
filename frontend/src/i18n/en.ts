@@ -849,6 +849,16 @@ export const en: Dict = {
     uploadCancel: "Cancel upload",
     uploaded: (name: string) => `The dataset ${name} arrived and is in your folder.`,
     uploadFailed: "The upload stopped. Resume it to send only what is missing.",
+    deleteAfterRun: "Delete after the next training",
+    deleteAfterRunHint:
+      "Once the next training that uses this dataset ends, finished, failed or stopped, the server deletes it to free your space. A training still waiting for it keeps it until it ends too.",
+    deleteAfterRunBadge: "deleted after the next training",
+  },
+  datasetCleanup: {
+    deleted: (name: string, size: string) =>
+      `The dataset ${name} (${size}) was deleted after this training, as asked when it was sent.`,
+    failed: (name: string, reason: string) =>
+      `The dataset ${name} could not be deleted after this training: ${reason}. See your datasets to delete it.`,
   },
   datasetLab: {
     kicker: "// dataset lab",

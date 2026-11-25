@@ -60,6 +60,7 @@ import {
 import { LOCAL_SESSION, parseSession, type Session } from "../lib/session";
 import type { JsonSchema } from "../types/schema";
 import type {
+  DatasetCleanup,
   DatasetInfo,
   MetricCI,
   QueueSnapshot,
@@ -1407,6 +1408,8 @@ export interface RunDetail {
   /** On the group itself: its seeds, aggregates and, for a replicated
    *  comparison, the variants and paired tests, as the report recorded them. */
   group?: RunGroup | null;
+  /** The datasets the server deleted once the run ended (ADR-249). */
+  dataset_cleanup?: DatasetCleanup[];
   /** The task family: a built-in name, or `custom:<key>` for a researcher's own
    *  task. Absent from a server older than the comparison by task. */
   task?: string;
@@ -1461,6 +1464,8 @@ export interface OwnDataset {
   name: string;
   path: string;
   size_bytes: number;
+  /** Deleted once the next run that uses it ends (ADR-249). */
+  delete_after_run?: boolean;
 }
 
 /** The datasets of the signed-in person's own folder; empty on a local install. */
@@ -1480,6 +1485,8 @@ export async function startDatasetUpload(body: {
   name: string;
   filename: string;
   size: number;
+  /** Delete the dataset once the next run that uses it ends (ADR-249). */
+  delete_after_run?: boolean;
 }): Promise<DatasetUpload> {
   return request<DatasetUpload>("/uploads", {
     method: "POST",

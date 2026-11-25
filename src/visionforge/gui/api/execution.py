@@ -35,6 +35,7 @@ from loguru import logger
 from visionforge.core.cancellation import CancellationToken
 from visionforge.core.loader_lifecycle import describe_worker_spawn_failure
 from visionforge.core.run_trackers import TrackerFactory
+from visionforge.gui.api import upload_cleanup
 from visionforge.gui.api.run_events import RunEventLog
 from visionforge.gui.api.run_queue import (
     LOCAL_LANE,
@@ -89,6 +90,10 @@ class JobState:
     run: dict[str, Any] = dataclasses.field(default_factory=dict)
     # Whose job it is (ADR-114); in server mode only that person reads it.
     profile: str = "default"
+    # True from the start of a job that read a dataset sent to be deleted after
+    # the run until that deletion is done (ADR-249): the status stays
+    # "running", so the page reads the outcome with the result.
+    settling: bool = False
 
 
 # Started jobs by run_id, oldest first. A finished job stays a while so its
@@ -137,6 +142,7 @@ def _begin_job(job: QueuedJob) -> None:
         token=job.cancel_token,
         lane=job.lane,
         profile=job.profile,
+        settling=any(upload_cleanup.is_marked(f.parent, f.name) for f in job.datasets),
         run={
             "run_id": job.run_id,
             "status": "running",
@@ -154,6 +160,32 @@ def _finish_job(job: QueuedJob) -> dict[str, Any] | None:
     state = _JOB_STATES.get(job.run_id)
     # The record outlives the state, so it carries whose run it was.
     return {**state.run, "profile": job.profile} if state is not None else None
+
+
+async def _end_job(job: QueuedJob) -> None:
+    """Delete the datasets sent to go after this job's run (ADR-249).
+
+    The queue awaits it once the job ended, before its record is kept, so the
+    run dict and the record carry ``dataset_cleanup`` too.
+    """
+    if not job.datasets:
+        return
+    state = _JOB_STATES.get(job.run_id)
+    try:
+        run_dir = state.run.get("run_dir") if state is not None else None
+        others = [other for other in _LANES.jobs() if other is not job]
+        entries = await upload_cleanup.clean_after(job, others, run_dir)
+        if entries and state is not None:
+            state.run = {**state.run, upload_cleanup.RUN_KEY: entries}
+    finally:
+        if state is not None:
+            state.settling = False
+
+
+def _is_settling(run_id: str | None) -> bool:
+    """True while the job ended but its datasets are still being deleted."""
+    state = _JOB_STATES.get(run_id) if run_id is not None else None
+    return state is not None and state.settling
 
 
 def profile_of_run(run_id: str) -> str | None:
@@ -175,7 +207,7 @@ def latest_run_of(profile: str) -> str | None:
 
 
 def _new_lane() -> RunQueue:
-    return RunQueue(on_start=_begin_job, on_finish=_finish_job)
+    return RunQueue(on_start=_begin_job, on_finish=_finish_job, on_end=_end_job)
 
 
 # The local lane keeps its name: it is the queue ADR-075 introduced.
