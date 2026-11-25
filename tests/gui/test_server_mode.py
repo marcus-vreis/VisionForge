@@ -182,6 +182,7 @@ def test_a_local_install_reports_no_session() -> None:
         "closed": [],
         "closed_blocks": [],
         "quota": None,
+        "max_queued": None,
     }
 
 

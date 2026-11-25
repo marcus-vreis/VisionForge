@@ -9413,3 +9413,32 @@ ships with the next release.
 - *Migrate the built-in exporters to the protocol.* Out of scope: their routes carry GUI state (credentials, progress) the protocol does not model.
 - *A GUI listing for plugins.* Would need a form schema for the options; the CLI is enough for the first version.
 - *Load plugins from an `user_exporters/` folder, like models and tasks.* The entry-point lets a plugin be versioned and installed with `pip`; the folder remains possible later.
+
+## ADR-245 — In server mode each person has at most `--max-queued` jobs in the queue, and the queue takes turns between people
+
+**Date:** 2026-11-25
+**Status:** Accepted
+**Extends:** ADR-075 (one run queue per server), ADR-212 (phase 1: per-user limits in the queue), ADR-215 (the queue belongs to who started each job), ADR-226 (a bound and a 429 for the actions outside the queue)
+
+**Context:** in server mode every training of every person goes into one queue, drained in submission order. ADR-212 listed "starve the others" among the threats, with "one queue, no limits" as what existed. One account could line up fifty jobs, and the next person waited behind all fifty; ADR-215 only let them see how many were ahead.
+
+**Decision:**
+
+- `visionforge gui --server --max-queued N` (default 3, `DEFAULT_MAX_QUEUED` in `run_queue.py`) is how many jobs one person may have waiting or running, over every lane. The option needs `--server` and a value of 1 or more.
+- The gate binds the limit in the request scope (`DatasetScope.max_queued`, beside its `owner`). `_submit_job`, the one place every run route, strategy and resume goes through to queue a job, counts the person's jobs (`RunLanes.count_of`) and answers 429 with `server.queue_full` (pt/en) when they already have N. The count and the submit have no `await` between them, so two requests of the same person cannot both pass the last free place. Nothing is queued and nothing is written by the refusal itself.
+- A submission made in server mode marks its lane fair (`RunQueue.make_fair`). In a fair lane, when the GPU frees, the next job is the oldest one of the profile whose job started least recently; a profile that never started a job in this process comes first, and between those the oldest job wins. A1, A2, A3 then B1 run as A1, B1, A2, A3. The pending list stays in arrival order; `run_order()` simulates the turns from the starts so far, and the snapshot behind `GET /api/queue` lists the jobs in that order, so `others_ahead` and a person's own order match what will run.
+- A local install never binds an owner: no count, no 429, FIFO as before, also between local profiles (ADR-114).
+- `GET /api/session` gains `max_queued` (null on a local install). The page shows nothing new: a refused submission shows the server's message where the training was asked, as for the other 429.
+
+**Consequences:** one person's batch no longer holds everybody behind it, and nobody can take more than N places in the line. Someone who wants to line up a long night of experiments on a server sends N at a time, or the operator raises N. The order a person sees can change after they look: a job of someone who has not run yet goes before the jobs of someone who has.
+
+**Known limits:** the turns are per process: a restart forgets who ran last, as it forgets the queue. Turns count jobs, not GPU time: a person whose jobs take hours has the same turn as one whose jobs take minutes. A strategy (a sweep, replicates, a K-fold) is one job however many trainings it runs. The limit is the same for everybody; there is none per account. `status.queued` still counts every waiting job on the server.
+
+**Not verified:** nothing ran behind a real login proxy, and no real training was queued: the tests submit through the real app and routes with the classification executor replaced by one that holds until released. No GPU.
+
+**Alternatives considered:**
+
+- *Check the limit in the gate, like `--max-actions`.* The gate would need its own list of the routes that queue (the run routes, the strategies, resume), and it would refuse before the body is read; `_submit_job` is already the one door every job goes through.
+- *Weighted fair queueing by GPU time.* Fairer for unequal jobs, and it needs a job's cost before it runs, which nobody knows. Turns by job are simple to explain in one sentence.
+- *Strict FIFO with only the limit.* With N = 3 and five people, the last one still waits behind fourteen jobs; the turns put them second.
+- *One queue per person, served in turn.* The same order with more state; one list with a computed order keeps cancel, `is_writing` and the snapshot as they were.

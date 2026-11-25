@@ -2102,6 +2102,18 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "try again; nothing was lost."
         ),
     },
+    "server.queue_full": {
+        "pt": (
+            "Você já tem {limit} treino(s) na fila ou rodando, o máximo de cada "
+            "pessoa neste servidor. Espere um terminar (ou cancele um na fila) "
+            "e envie de novo; nada foi enfileirado."
+        ),
+        "en": (
+            "You already have {limit} training job(s) waiting or running, the "
+            "most each person may have on this server. Wait for one to end (or "
+            "cancel one in the queue) and submit again; nothing was queued."
+        ),
+    },
     "server.quota_full": {
         "pt": (
             "Sua pasta neste servidor está cheia: {used} de {limit}. Apague "

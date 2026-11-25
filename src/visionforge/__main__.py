@@ -459,6 +459,16 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     gui_parser.add_argument(
+        "--max-queued",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "in --server mode, how many trainings each person may have waiting "
+            "or running; the next one is refused until one ends. Default: 3"
+        ),
+    )
+    gui_parser.add_argument(
         "--user-header",
         default="X-Forwarded-User",
         metavar="NAME",
@@ -660,6 +670,7 @@ def _run_gui_command(args: argparse.Namespace, parser: argparse.ArgumentParser) 
             datasets_dirs=args.datasets_dir,
             quota_gb=args.quota_gb,
             max_actions=args.max_actions,
+            max_queued=args.max_queued,
         )
     except ServerModeError as exc:
         parser.error(str(exc))
