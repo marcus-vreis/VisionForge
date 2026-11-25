@@ -163,6 +163,27 @@
       "runs"
     ]
   },
+  "DELETE /api/uploads/{upload_id}": {
+    "operationId": "cancel_upload_api_uploads__upload_id__delete",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:upload_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "UploadCancelled"
+      },
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "datasets"
+    ]
+  },
   "DELETE /api/wandb/token": {
     "operationId": "forget_api_wandb_token_delete",
     "parameters": [
@@ -1141,6 +1162,26 @@
     },
     "tags": [
       "system"
+    ]
+  },
+  "GET /api/uploads/{upload_id}": {
+    "operationId": "upload_status_api_uploads__upload_id__get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:upload_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "UploadStatus"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "datasets"
     ]
   },
   "GET /api/wandb/token": {
@@ -3644,6 +3685,53 @@
       "system"
     ]
   },
+  "POST /api/uploads": {
+    "operationId": "start_upload_api_uploads_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "UploadStart"
+    },
+    "responses": {
+      "200": {
+        "application/json": "UploadStatus"
+      },
+      "404": {},
+      "409": {},
+      "413": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "507": {}
+    },
+    "tags": [
+      "datasets"
+    ]
+  },
+  "POST /api/uploads/{upload_id}/complete": {
+    "operationId": "complete_upload_api_uploads__upload_id__complete_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:upload_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "OwnDataset"
+      },
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "500": {},
+      "507": {}
+    },
+    "tags": [
+      "datasets"
+    ]
+  },
   "POST /api/wandb/runs/{run_id}/retry": {
     "operationId": "retry_api_wandb_runs__run_id__retry_post",
     "parameters": [
@@ -3776,6 +3864,30 @@
     },
     "tags": [
       "profiles"
+    ]
+  },
+  "PUT /api/uploads/{upload_id}/parts/{part}": {
+    "operationId": "put_upload_part_api_uploads__upload_id__parts__part__put",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:part:required",
+      "path:upload_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "UploadPart"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "507": {}
+    },
+    "tags": [
+      "datasets"
     ]
   },
   "PUT /api/wandb/token": {

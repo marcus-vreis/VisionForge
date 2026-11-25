@@ -9416,6 +9416,37 @@ ships with the next release.
 - *A GUI listing for plugins.* Would need a form schema for the options; the CLI is enough for the first version.
 - *Load plugins from an `user_exporters/` folder, like models and tasks.* The entry-point lets a plugin be versioned and installed with `pip`; the folder remains possible later.
 
+## ADR-246 — In server mode a person sends a dataset of their own as a .zip, in resumable parts
+
+**Date:** 2026-11-25
+**Status:** Accepted
+**Extends:** ADR-212 (phase 1: "upload of datasets in resumable parts with a per-user quota and archive limits"), ADR-219 (a person writes datasets only into their own folder), ADR-225 (the disk quota), ADR-227 (the person's own datasets)
+
+**Context:** on a server a person could get data there only through a provider download or the sample dataset (ADR-219), or by asking the operator to share a folder. A dataset on their own computer had no way in. An archive from a browser is also the first thing a signed-in person hands the server that the server unpacks itself: its names, sizes and file types are whatever its maker wrote, and ADR-212's threat model already listed "fill the disk with an archive".
+
+**Decision:**
+
+- `gui/api/upload_routes.py` adds five routes, all `owner` and open on a server: `POST /api/uploads` (folder name, file name, size) opens an upload; `PUT /api/uploads/{id}/parts/{n}` writes part `n`; `GET /api/uploads/{id}` lists the parts that arrived; `POST /api/uploads/{id}/complete` checks and unpacks; `DELETE /api/uploads/{id}` drops it. They sit in their own router, included next to the own-datasets one; `routes.py` does not grow.
+- Parts are 8 MiB, fixed by the server and given in the answer to the start; the last is shorter. A part must have exactly its length (400 otherwise) and is written at its place in one archive file the size of the upload, so sending a part again rewrites the same bytes: a broken connection is resumed by asking which parts arrived and sending the rest. Starting again with the same folder name, file name and size answers the upload already open, so a reloaded page resumes too.
+- The upload lives in the person's profile folder (`uploads/<id>/`), beside their dataset folder and outside it, so it is not listed as a dataset and counts against their quota. The id is 32 random hex characters looked up only in that folder: another account's id, a made-up one and one that expired all answer 404. An upload untouched for 24 h is removed the next time that person starts one. A person has at most three open.
+- The folder name is one plain name (no `/ \ : * ? " < > |`, no leading or trailing dot or space, at most 120 characters); the file must end in `.zip`. A name that is already a folder of theirs, or that another open upload of theirs goes to, is 409.
+- Limits: `--max-upload-gb` (default 5, needs `--server`) caps the declared size, 413 above it. With `--quota-gb`, the start is refused (507) when the folder plus the declared size passes the ceiling; the archive file is made at the declared size at once, so the size counts from the start, and a part is refused (507) when the folder went over the ceiling meanwhile. Before unpacking, the folder plus the unpacked size must fit (507, and the parts are kept to finish after freeing space). These checks are in the handlers, which know the sizes; the gate's own check (ADR-225) does not count these routes.
+- `gui/upload_archive.py` checks the archive before writing a byte. The central directory is located from the end record (ZIP64 included) and walked without being loaded: more than 200,000 entries or an index above 64 MiB is refused before `zipfile` reads it, since `zipfile` loads the whole index into memory. Then each entry: an absolute name, `..`, `.`, an empty segment, `:` (a drive or a stream) or `\` is refused, and so are symbolic links, devices and pipes (by the Unix mode in the entry), password-protected entries, a name used both as a file and as a folder, an entry above 1 MiB that expands more than 100 times, an unpacked total above four times `--max-upload-gb`, and an archive with no file. Any of these answers 422 with the entry's name and drops the upload: those bytes can never make a dataset. `__MACOSX/` is skipped.
+- Unpacking writes into a folder inside the upload, never over an existing file (`open(..., "xb")`), checks that every resolved path stays inside it, and counts each entry's bytes again against its declared size. When the archive holds one top folder (a zipped dataset folder), that folder is the dataset. It is then renamed into the person's dataset folder under the declared name, and refused (409) if something got there meanwhile: an existing dataset is never replaced.
+- The page: "Meus datasets" gains a folder-name field (empty: the file's name without `.zip`) and "Enviar .zip". The file is sliced in the parts the server gives and sent one after another with a progress bar; a failure leaves "Retomar envio", which asks the server what arrived and sends only the rest, and "Cancelar envio". When the dataset arrives the list and the session's disk figure are read again. The button hides when the server lists `POST /api/uploads` as closed.
+
+**Consequences:** a person brings a dataset of their own to a server without the operator, into their own folder only, and a dropped connection costs at most one part. A hostile archive is refused before anything is written. The local tool is unchanged: nobody has an own folder there and every upload route answers 404.
+
+**Known limits:** the "deletion at the end of the run" item of ADR-212's phase 1 (deleting an uploaded dataset after its training, logged and written to `run.json`) is not in this decision and stays pending; an uploaded dataset stays until its owner deletes it. Unpacking runs inside the `complete` request and is not counted in `--max-actions`; a reverse proxy with a short timeout may cut the answer of a large archive while the server finishes. The quota figure the parts check may be up to 15 s old (ADR-225). Only `.zip` is taken, not `.tar` or `.7z`. On Windows, `zipfile` reads a `\` in an entry name as `/`, so such an entry unpacks into a subfolder instead of being refused. A sparse archive file (Linux) counts at its declared size in the quota, though the disk holds only what arrived.
+
+**Not verified:** nothing ran behind a real login proxy. The end-to-end suite sent a small archive through the browser, with a dropped first part, against a server in this mode on Windows; an upload of several gigabytes was not timed, nor its unpacking. The link, device and ZIP64 checks ran on Windows only.
+
+**Alternatives considered:**
+
+- *One request with the whole file (multipart form).* Simple, and a dropped connection at 90 % of 5 GB starts over; the proxy's body limit would also have to be raised to the whole size.
+- *The tus protocol.* A standard for resumable uploads, with a client library; a dependency on each side for what five small routes do.
+- *A separate file per part, joined at the end.* Joining copies the whole archive once more and needs twice its size on disk at the end; writing at the offset needs neither.
+- *`ZipFile.extractall`.* It strips `..` and drive letters instead of refusing them and has no limit on size or ratio; checking every entry first keeps "nothing was unpacked" true.
 ## ADR-245 — In server mode each person has at most `--max-queued` jobs in the queue, and the queue takes turns between people
 
 **Date:** 2026-11-25

@@ -57,6 +57,7 @@ export const ROUTE = {
   datasetDownload: "POST /api/dataset/download",
   datasetLab: "POST /api/explorer/summary",
   ownDatasets: "GET /api/datasets/own",
+  datasetUpload: "POST /api/uploads",
   datasetAudit: "POST /api/dataset/audit",
   maskAnalysis: "POST /api/explorer/masks",
   targetAnalysis: "POST /api/explorer/targets",
