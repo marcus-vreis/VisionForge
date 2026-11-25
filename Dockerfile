@@ -86,10 +86,17 @@ WORKDIR /app
 # dependency set, and torch is a ~2 GB download nobody wants to repeat.
 COPY pyproject.toml README.md LICENSE ./
 COPY src/visionforge/__init__.py ./src/visionforge/__init__.py
+# torch comes from the PyTorch index, its dependencies may not: torch >= 2.11
+# needs setuptools >= 84.1 on Python 3.12+, and that index mirrors setuptools
+# only up to 78.1.0. With it as the only index (`--index-url`) nothing resolves.
+# The PyTorch index is searched first (`--extra-index-url` outranks PyPI) and
+# `unsafe-first-match` falls through to PyPI for a package whose versions there
+# do not fit, so torch stays the +cpu/+cuXXX build and setuptools comes from PyPI.
 RUN uv venv --python 3.13 /opt/venv \
     && VIRTUAL_ENV=/opt/venv uv pip install --no-cache \
         "torch>=2.3" "torchvision>=0.18" \
-        --index-url "https://download.pytorch.org/whl/${CUDA_TAG}"
+        --extra-index-url "https://download.pytorch.org/whl/${CUDA_TAG}" \
+        --index-strategy unsafe-first-match
 
 ENV PATH="/opt/venv/bin:${PATH}" \
     VIRTUAL_ENV=/opt/venv

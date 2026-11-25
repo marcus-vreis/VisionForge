@@ -117,8 +117,48 @@ firewall.
    Authelia fazem isso por padrão; num proxy montado à mão, confira.
 3. Servir por HTTPS.
 
-*Não verificado:* nenhuma instalação real com oauth2-proxy ou Authelia foi
-feita ainda; o comportamento acima foi testado com pedidos simulados.
+Com o oauth2-proxy, isso foi conferido numa instalação de verdade: veja
+"Exemplo com oauth2-proxy" logo abaixo. O Authelia não foi testado.
+
+### Exemplo com oauth2-proxy
+
+O arquivo [`deploy/server/docker-compose.yml`](../../deploy/server/docker-compose.yml)
+sobe três contêineres numa rede só deles: um provedor de login de teste
+(`mock-oauth2-server`, que aceita qualquer nome), o oauth2-proxy e o
+VisionForge (imagem de CPU do `Dockerfile` do repositório) em
+`--server --trusted-proxy 172.30.42.10 --datasets-dir /work/datasets`. A porta
+do VisionForge não é publicada: só a do proxy (4180) e a da página de login
+(9080), ambas em `127.0.0.1`.
+
+```bash
+export OAUTH2_PROXY_COOKIE_SECRET="$(python3 -c 'import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())')"
+export OAUTH2_PROXY_CLIENT_SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
+docker compose -f deploy/server/docker-compose.yml up --build
+```
+
+Abra `http://localhost:4180` e entre com qualquer nome. Os dois segredos vêm
+do ambiente e não ficam no repositório; sem eles o compose não sobe. Para usar
+de verdade, troque o provedor de teste pelo da instituição (as URLs que o
+nomeiam estão no arquivo) e ponha HTTPS na frente do proxy.
+
+O job `server-proxy.yml` da CI sobe esse mesmo arquivo a cada mudança no
+servidor, no `Dockerfile` ou nele, entra com duas contas pela página de login
+(`scripts/check_server_proxy.py`) e confere:
+
+- sem login, uma página vai para o login do provedor e a API é recusada,
+  também quando o pedido traz `X-Forwarded-User`; nada chega ao VisionForge;
+- `GET /api/health` passa sem login;
+- `/api/session` de cada conta traz o nome com que ela entrou, e um
+  `X-Forwarded-User` com o nome da outra conta, enviado pelo cliente, não muda
+  isso;
+- um treino de 1 época de uma conta aparece no histórico dela; a outra não o
+  vê no histórico, recebe 404 ao pedi-lo e não vê o dataset de exemplo dele;
+- a porta do VisionForge não responde de fora da rede, e de dentro dela, de um
+  endereço que não é o do proxy, responde 403 mesmo com `X-Forwarded-User`.
+
+*Não verificado:* um provedor real (GitHub, Google, institucional), HTTPS, o
+Authelia, e o proxy na mesma máquina que o VisionForge (`--trusted-proxy
+127.0.0.1`).
 
 ## Onde ficam os datasets
 

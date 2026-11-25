@@ -8518,6 +8518,8 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 
 **Addendum (2026-11-24): `POST /api/model/defaults` is `confined`.** It was `open` because it suggests settings for an architecture, but its optional `base_dir` is walked and up to 200 images of it are opened for the suggested size: on a server that read any folder the server account could. `ModelDefaultsRequest.base_dir` is now `DatasetDir | None` and the route is listed in `READY`; without `base_dir` it answers as before. The walk runs in a worker thread (`asyncio.to_thread`), and an `OSError` from it leaves the size unsuggested instead of answering 500.
 
+**Addendum (2026-11-25): the proxy is the peer, never a forwarded address.** uvicorn's default `proxy_headers=True` trusts `X-Forwarded-For` from 127.0.0.1 and puts that address in the request's `client`. The gate reads `client` to recognise the login proxy, so two things went wrong: a proxy on the same machine (`--trusted-proxy 127.0.0.1`, the example in `docs/gui/servidor.md`) sends the browser's address and every request was refused with 403; and any local process could send `X-Forwarded-For: <proxy address>` and be taken for a remote proxy, naming any account. In server mode `start_server` now passes `proxy_headers=False`; a local install keeps uvicorn's default. Tests: `tests/gui/test_server_mode_proxy_headers.py` builds the app exactly as uvicorn serves it.
+
 ## ADR-214 — In server mode a request reads datasets only from the person's own folder and the folders the operator shares
 
 **Date:** 2026-11-18
@@ -9414,6 +9416,30 @@ ships with the next release.
 - *A GUI listing for plugins.* Would need a form schema for the options; the CLI is enough for the first version.
 - *Load plugins from an `user_exporters/` folder, like models and tasks.* The entry-point lets a plugin be versioned and installed with `pip`; the folder remains possible later.
 
+## ADR-247 — CI runs server mode behind oauth2-proxy and a mock OpenID Connect provider
+
+**Date:** 2026-11-25
+**Status:** Accepted
+**Extends:** ADR-213 (the gate and `--trusted-proxy`), ADR-224 (the e2e suite plays the proxy)
+
+**Context:** phase 0 of server mode (ADR-212, issue #352) rests on one hand-off: an authenticating proxy names the user in `X-Forwarded-User` and deletes a value the client sent. Every check so far set that header itself, in pytest, in the e2e suite (ADR-224) and by hand, so nothing showed that a real proxy does either half.
+
+**Decision:**
+
+- `deploy/server/docker-compose.yml` runs three services on a private network with a fixed subnet: `ghcr.io/navikt/mock-oauth2-server:6.1.5` (interactive login, any user name becomes `sub`), `quay.io/oauth2-proxy/oauth2-proxy:v7.15.6` at the fixed address `172.30.42.10`, and VisionForge from the repository's `Dockerfile` (CPU variant) with `gui --server --trusted-proxy 172.30.42.10 --datasets-dir /work/datasets`. VisionForge's port is not published.
+- oauth2-proxy skips OIDC discovery and names each endpoint where it is used: the browser reaches the login page at `localhost:9080`, the proxy reaches the token and JWKS endpoints as `mock-oauth2:8080`, and the issuer is that internal name because the mock writes the caller's host into `iss`. `--pass-user-headers` and `--skip-auth-strip-headers` (both the defaults, written out) put `sub` in `X-Forwarded-User` after deleting the client's; `GET /api/health` is the only route without a login. The cookie and client secrets come from the environment and are generated per CI run.
+- A separate workflow, `server-proxy.yml`, builds the image with the Actions cache, starts the stack and runs `scripts/check_server_proxy.py` (standard library only): two accounts sign in through the provider's form with a cookie jar; anonymous and forged-header requests stop at the proxy; each `/api/session` names its own account with a forged header for the other; one account trains one epoch and the other sees neither the run (history and 404) nor the sample dataset; the port is not reachable from the host. A last step asks VisionForge from inside the network, from an address that is not the proxy's, and expects 403.
+- The workflow runs on changes to `src/visionforge/gui/`, `__main__.py`, `pyproject.toml`, the `Dockerfile`, `deploy/server/`, the script and itself, and on demand.
+
+**Consequences:** the hand-off ADR-213 assumed is now exercised with the proxy most deployments would use, on every change to the server. A failure here and not in the e2e suite points at the proxy's configuration or the network, not at the gate. The compose file doubles as the example in `docs/gui/servidor.md`.
+
+**Known limits:** the provider is a mock, over plain HTTP; a real provider's claims (GitHub login, Google `email`) are not exercised. One topology only: the proxy in its own container. With the proxy on the same machine (`--trusted-proxy 127.0.0.1`), uvicorn's own proxy-header handling trusts `127.0.0.1` by default and replaces the client address with the first `X-Forwarded-For` value, which oauth2-proxy sends; that setup is not covered here. Authelia is not covered. The image's dependencies are resolved at build time, not from `uv.lock`, as in the root `docker-compose.yml`.
+
+**Alternatives considered:**
+
+- *A job inside `ci.yml`'s e2e job.* Every pull request would pay a Docker build, including those that do not touch the server; a separate workflow with path filters runs only when it can fail.
+- *Keycloak or Dex as the provider.* Real identity servers, and minutes of start-up and a realm to configure; the mock's login form is enough to drive the authorization-code flow oauth2-proxy uses.
+- *Playwright in a browser.* Closer to a person, and a browser install for a flow of four requests that a cookie jar replays.
 ## ADR-246 — In server mode a person sends a dataset of their own as a .zip, in resumable parts
 
 **Date:** 2026-11-25
