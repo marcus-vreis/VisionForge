@@ -25,6 +25,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- `visionforge reproduce`: o intervalo de previsão cortava ao domínio inferido só pelo nome da métrica, então uma acurácia gravada em 0–100 (84, 85, 86) dava um intervalo invertido que excluía a média e os valores observados. Agora o corte só acontece quando a média, o mínimo e o máximo gravados estão todos dentro do domínio, e o intervalo nunca sai com `low > high`.
 - Modo servidor: o download de dataset escrevia fora da pasta pedida quando um nome de split do pedido tinha `..` ou era um caminho absoluto, inclusive na pasta de datasets de outra pessoa. Agora `splits` só aceita nomes que descem (422 antes de baixar), e cada split e cada classe precisa ficar dentro da pasta de destino em qualquer modo, também quando o nome vem do Hugging Face (um split ou rótulo com `..` ou `\` para o download com uma mensagem) (ADR-219).
 - Modo servidor: `GET /api/dataset/file`, `GET /api/explorer/thumb` e `POST /api/dataset/audit` respondiam diferente para um caminho fora das pastas da pessoa conforme ele existisse ou não, o que deixava descobrir arquivos de outros perfis. Agora o escopo é conferido antes de ler o disco: fora dele a resposta é sempre 403 (arquivo e miniatura) ou 422 (um split da auditoria que sobe de pasta) (ADR-214).
 

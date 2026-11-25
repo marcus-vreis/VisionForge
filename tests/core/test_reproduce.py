@@ -532,6 +532,25 @@ def test_prediction_interval_is_clipped_to_the_metric_domain() -> None:
     assert high == 1.0
 
 
+def test_prediction_interval_of_a_percent_scale_metric_is_not_inverted() -> None:
+    # Accuracy recorded on a 0-100 scale: the name says [0, 1], the values do not.
+    aggregate = {**_aggregate(3, 85.0, 1.0), "min": 84.0, "max": 86.0}
+    record = {"group": {"aggregates": {"accuracy": aggregate}}}
+    (low, high) = prediction_intervals(record)["accuracy"]
+    assert low <= high
+    assert low <= 84.0 and high >= 86.0
+    assert low < 85.0 < high
+
+
+def test_prediction_interval_is_clipped_when_every_observed_value_is_in_domain() -> (
+    None
+):
+    aggregate = {**_aggregate(5, 0.97, 0.05), "min": 0.9, "max": 0.99}
+    (low, high) = prediction_intervals({"group": {"aggregates": {R2: aggregate}}})[R2]
+    assert high == 1.0
+    assert low == pytest.approx(0.97 - 0.152072, abs=1e-4)
+
+
 @pytest.mark.parametrize(
     "aggregate",
     [
