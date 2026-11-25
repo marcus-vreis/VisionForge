@@ -67,6 +67,28 @@ def torchvision_datasets() -> list[str]:
     return sorted(_TORCHVISION_DATASETS)
 
 
+def _child(parent: Path, name: str) -> Path:
+    """``parent / name``, refused unless it is a folder strictly below ``parent``.
+
+    Split and class names can come from the request or from the provider (a
+    Hugging Face dataset names its own splits and labels): ``..``, a root or a
+    backslash on Windows would otherwise write next to, or above, the target.
+
+    Raises:
+        ValueError: ``name`` does not stay inside ``parent``.
+    """
+    # A backslash separates folders on Windows only: refused everywhere, so the
+    # same name gets the same answer on every server.
+    if "\\" in name:
+        raise ValueError(tr("download.name_outside", name=name[:80]))
+    target = parent / name
+    base = parent.resolve()
+    resolved = target.resolve()
+    if resolved == base or not resolved.is_relative_to(base):
+        raise ValueError(tr("download.name_outside", name=name[:80]))
+    return target
+
+
 def _materialize(ds: Any, split_dir: Path, class_names: Any, limit: int | None) -> int:
     """Write ``(PIL image, label)`` items into ``split_dir/<class>/<idx>.png``."""
     per_class: dict[str, int] = defaultdict(int)
@@ -80,7 +102,7 @@ def _materialize(ds: Any, split_dir: Path, class_names: Any, limit: int | None) 
         name = name.replace("/", "_").replace(" ", "_")
         if limit is not None and per_class[name] >= limit:
             continue
-        class_dir = split_dir / name
+        class_dir = _child(split_dir, name)
         class_dir.mkdir(parents=True, exist_ok=True)
         image.convert("RGB").save(class_dir / f"{idx}.png")
         per_class[name] += 1
@@ -155,7 +177,7 @@ def download_torchvision(
             ds = ds_cls(root=raw_root, train=(split == "train"), download=True)
             ds_classes = list(getattr(ds, "classes", []) or [])
             classes = ds_classes or classes
-            count = _materialize(ds, out / split, ds_classes, limit)
+            count = _materialize(ds, _child(out, split), ds_classes, limit)
             split_counts[split] = count
             total += count
             logger.info("torchvision {} {}: {} images", key, split, count)
@@ -411,7 +433,7 @@ def _materialize_hf(
         else:
             name = str(label)
         name = str(name).replace("/", "_").replace(" ", "_")
-        class_dir = split_dir / name
+        class_dir = _child(split_dir, name)
         class_dir.mkdir(parents=True, exist_ok=True)
         image.convert("RGB").save(class_dir / f"{idx}.png")
         written += 1
@@ -486,9 +508,11 @@ def download_huggingface(
 
     total = 0
     split_counts: dict[str, int] = {}
+    # The Hub names the splits: every one is checked before any is written.
+    split_dirs = {split: _child(out, str(split)) for split in split_map}
     for split, split_ds in split_map.items():
         count = _materialize_hf(
-            split_ds, out / split, image_col, label_col, class_names
+            split_ds, split_dirs[split], image_col, label_col, class_names
         )
         split_counts[split] = count
         total += count

@@ -8497,6 +8497,8 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Open every `owner` route now, since each already resolves a profile.* The training routes take dataset paths in their body, and a route that resolves a profile can still read outside it. Reading first is the point.
 - *The readable slug alone as the folder.* Two accounts that fold to the same slug would share runs and tokens.
 
+**Addendum (2026-11-24): `POST /api/model/defaults` is `confined`.** It was `open` because it suggests settings for an architecture, but its optional `base_dir` is walked and up to 200 images of it are opened for the suggested size: on a server that read any folder the server account could. `ModelDefaultsRequest.base_dir` is now `DatasetDir | None` and the route is listed in `READY`; without `base_dir` it answers as before. The walk runs in a worker thread (`asyncio.to_thread`), and an `OSError` from it leaves the size unsuggested instead of answering 500.
+
 ## ADR-214 — In server mode a request reads datasets only from the person's own folder and the folders the operator shares
 
 **Date:** 2026-11-18
@@ -8528,6 +8530,8 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Check the path in each handler.* Nine handlers today and 45 in the end, each a place to forget; the type is checked by a test.
 - *Inspect the JSON body in the gate.* The gate would have to know which strings are paths, and it would check a path the handler then reads again in another spelling.
 - *A fixed list of dataset names instead of paths.* Cleaner for a server, and it would fork the request models and the forms from the local tool, which names folders.
+
+**Addendum (2026-11-24): outside the scope, one answer whether the path exists or not.** `/api/dataset/file` and `/api/explorer/thumb` resolved the path strictly (404 when missing), and `/api/dataset/file` checked the extension (400) before asking the scope (403), so the status told whether a file of another profile existed. Both now resolve without `strict`, ask the scope first, and only then check the extension and that the file or folder exists. `DatasetAuditRequest.splits` became `dict[str, DatasetPart]`: with `layout: yolo` a climbing split was looked up on the disk and the error named the folder found or not found.
 
 ## ADR-215 — In server mode a run, its progress and the queue belong to who started it, and a config names only what its owner may reach
 
@@ -8658,6 +8662,7 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Put the evaluation actions in the queue.* It would settle the shared-GPU limit, and it changes how the page waits for their result (a request today, a job then); it belongs with a decision about fairness, not with opening the routes.
 
 **Update (2026-11-24):** a regression test reads images named by the rows of the chosen CSV, not only the CSV itself. On a server each row's image must resolve inside the scope before the checkpoint is loaded (`_confine_manifest_images`); a row with an absolute path or `..` that leaves it answers 400 naming the line, never the path, so the answer does not tell whether that file exists.
+**Addendum (2026-11-24): an anomaly test calibrates inside the scope.** Testing an anomaly run on a folder sets `base_dir` to that folder's parent and keeps the run's `train_dir/normal_dir`, the split the threshold is calibrated on. Choosing a shared folder itself put that parent, and the split, one level above it. `_evaluate_anomaly_checkpoint` now refuses (400, `testrun.anomaly_train_outside`) a training split the scope does not hold, before checking whether it exists, so the answer says nothing about the disk outside.
 
 ## ADR-219 — In server mode a person writes a dataset into their own folder only, with their own key
 
@@ -8688,6 +8693,8 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Let a download go anywhere in the scope.* The shared folders are the operator's; a person writing there changes what everyone trains on.
 - *Per-person saved keys.* The right end state for convenience, and it needs the credential store moved under the profile (it is one file per machine today); typing the key per download is safe now.
 - *Set and unset `KAGGLE_API_TOKEN` around a Kaggle download.* The client authenticates at import, once per process, and two downloads at once would race on the variable; a lock would serialize every Kaggle download and still leave the first key authenticated.
+
+**Addendum (2026-11-24): split and class names stay inside the target.** `DatasetDownloadRequest.splits` was `list[str]`, so a split with `..` or an absolute path wrote outside `out_dir`, into another person's folder among others. It is now `list[DatasetPart]` (422 before anything is fetched), and `dataset_download._child` refuses, in any mode, a split or class folder that does not resolve strictly below its parent (message `download.name_outside`): a Hugging Face dataset names its own splits and labels, and a `..` or, on Windows, a `\` in one of them climbed the same way. The Hub's split names are all checked before the first image is written. The test that every path of a confined route is typed now also fails on a `list` or `dict` of plain `str`.
 
 ## ADR-220 — In server mode the dataset Laboratory reads the scope, its jobs have an owner, and what it writes lands in the person's folder
 
@@ -9171,6 +9178,8 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 
 - *Depend on cleanlab.* A new dependency for twenty lines of arithmetic that are tested here by hand.
 - *List every misclassification.* That is the confusion matrix already in the run; the thresholds keep only the images the model is confidently sure about.
+
+**Addendum (2026-11-24): on a server.** `POST /api/runs/{id}/label_suspects` reads the run's stored dataset like `/resume` (ADR-218): `confine_stored_config` validates the stored config, scopes its outputs and calls `confine_config`, so a dataset that left the shared folders is refused with 422 before any prediction. The action writes CSVs and `report.json` into the run and runs inference in the request, so it counts for the quota (`disk_quota._GROWING`, 507) and for the action limit (`HEAVY_ROUTES`, 429). A run without `data.base_dir` and a damaged `report.json` answer 400 with a message (`suspects.no_base_dir`, `suspects.report_unreadable`) instead of 500.
 
 ## ADR-238 — The integrity scan measures brightness, contrast and sharpness
 

@@ -37,6 +37,7 @@ from visionforge.gui.api.http_responses import (
 )
 from visionforge.gui.api.label_suspects_run import (
     LabelSuspectsRequest,
+    confine_stored_config,
     execute_label_suspects,
     saved_report,
 )
@@ -172,6 +173,7 @@ def build_evaluation_router(
         in ``<run_dir>/label_suspects/``.
         """
         run_dir = _checkpoint_run_dir(find_run_dir, run_id, profile, "label_suspects")
+        confine_stored_config(run_dir, profile)
         return await _run_off_loop(
             execute_label_suspects,
             run_dir,
@@ -182,14 +184,20 @@ def build_evaluation_router(
 
     @router.get(
         "/runs/{run_id}/label_suspects",
-        responses={404: {"description": NOT_FOUND_TEXT}},
+        responses={
+            400: {"description": BAD_REQUEST_TEXT},
+            404: {"description": NOT_FOUND_TEXT},
+        },
     )
     async def label_suspects_saved(run_id: str, profile: ProfileDep) -> dict[str, Any]:
         """The last suspicious-label report of this run; ``report`` None if none."""
         run_dir = find_run_dir(run_id, profile)
         if run_dir is None:
             raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
-        return {"report": await asyncio.to_thread(saved_report, run_dir)}
+        try:
+            return {"report": await asyncio.to_thread(saved_report, run_dir)}
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
 
     @router.post(
         "/runs/{run_id}/export_onnx",
@@ -700,6 +708,12 @@ def _evaluate_anomaly_checkpoint(
         / anom_config.data.train_dir
         / anom_config.data.normal_dir
     )
+    # ``base_dir`` is the chosen folder's parent, which may sit above the
+    # folder a server shares: the split must be in the scope on its own, and
+    # is refused before the disk says whether it exists (ADR-218).
+    scope = current_scope()
+    if scope is not None and not scope.holds(train_normal.resolve()):
+        raise ValueError(tr("testrun.anomaly_train_outside"))
     if not train_normal.is_dir():
         raise ValueError(
             tr(

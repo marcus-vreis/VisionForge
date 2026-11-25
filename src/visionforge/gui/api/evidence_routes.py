@@ -27,7 +27,7 @@ class DatasetAuditRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     base_dir: DatasetDir
-    splits: dict[str, str] | None = None
+    splits: dict[str, DatasetPart] | None = None
     group_manifest: Path | None = None
     strict_groups: bool = Field(default=False)
     near_duplicates: bool = Field(default=False)

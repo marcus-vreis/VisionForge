@@ -101,7 +101,6 @@ async def preview_preprocess(
 @router.post(
     "/sample-dataset",
     status_code=201,
-    response_model=SampleDatasetResponse,
     responses={
         200: {"model": SampleDatasetResponse, "description": _SAMPLE_REUSED_TEXT},
         400: {"description": BAD_REQUEST_TEXT},

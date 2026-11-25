@@ -206,13 +206,13 @@ def audit_dataset(
         overlaps = _group_overlaps(root, Path(group_manifest), images, memberships)
     empty = [split for split in present if counts[split] == 0]
     return {
-        "ok": not (
-            duplicates
-            or near
-            or unreadable_count
-            or missing
-            or empty
-            or (strict_groups and overlaps)
+        "ok": not _has_findings(
+            duplicates,
+            near,
+            unreadable_count,
+            missing,
+            empty,
+            strict_groups and overlaps,
         ),
         "root": str(root),
         "hash_algorithm": "sha256",
@@ -230,6 +230,11 @@ def audit_dataset(
         "strict_groups": strict_groups,
         "group_overlaps": overlaps,
     }
+
+
+def _has_findings(*findings: object) -> bool:
+    """True when any finding is truthy (a non-empty list or a non-zero count)."""
+    return any(findings)
 
 
 def _near_groups(

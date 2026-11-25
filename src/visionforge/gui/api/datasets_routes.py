@@ -409,10 +409,11 @@ async def serve_dataset_file(path: str) -> FileResponse:
     """Serve a local image file for dataset preview thumbnails.
 
     Defense in depth — even though VisionForge runs locally, the path must:
-    1. resolve to a real file
+    1. sit inside one of the dataset roots the user has already probed via
+       /dataset/pick, /dataset/stats, /dataset/samples, etc. (checked first,
+       so a path outside them gets one answer whether it exists or not)
     2. carry a known image extension
-    3. sit inside one of the dataset roots the user has already probed via
-       /dataset/pick, /dataset/stats, /dataset/samples, etc.
+    3. resolve to a real file
 
     Without #3 a crafted query could read any file the server process can
     open. Restricting to the session's allow-list keeps the endpoint useful
@@ -426,14 +427,18 @@ async def serve_dataset_file(path: str) -> FileResponse:
     candidate = Path(path)
     if not candidate.is_absolute():
         raise HTTPException(400, tr("file.not_absolute"))
+    # The allow-list first: a path outside it gets one answer whether it
+    # exists or not, so the route cannot tell what lies beyond the scope.
     try:
-        resolved = candidate.resolve(strict=True)  # NOSONAR pythonsecurity:S6549
-    except OSError as exc:
-        raise HTTPException(404, tr("file.not_found")) from exc
-    if resolved.suffix.lower() not in _IMAGE_EXTS:
-        raise HTTPException(400, tr("file.not_image"))
+        resolved = candidate.resolve()  # NOSONAR pythonsecurity:S6549
+    except (OSError, RuntimeError) as exc:
+        raise HTTPException(403, tr("file.not_in_dataset")) from exc
     if not _is_inside_allowed_root(resolved):
         raise HTTPException(403, tr("file.not_in_dataset"))
+    if resolved.suffix.lower() not in _IMAGE_EXTS:
+        raise HTTPException(400, tr("file.not_image"))
+    if not resolved.is_file():
+        raise HTTPException(404, tr("file.not_found"))
     return FileResponse(resolved)  # NOSONAR python:S2083
 
 

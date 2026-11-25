@@ -24,6 +24,14 @@ export function tourStatus(taskKey: string, tasks: string[] | null): "loading" |
 }
 
 /**
+ * A researcher's own task is never in the server's list: its tour is read from
+ * its file on request (`GET /api/custom/{key}/code-tour`), so it is always asked.
+ */
+export function tourSupport(taskKey: string, tasks: string[] | null, custom: boolean): "loading" | "missing" | "supported" {
+  return custom ? "supported" : tourStatus(taskKey, tasks);
+}
+
+/**
  * The server's reason when it has no tour for this run (a 404 with a message,
  * such as a task whose training is not this project's code), or null for any
  * other failure.

@@ -16,6 +16,7 @@ from typing import Any
 
 BAD_REQUEST_TEXT = "Invalid request"
 FORBIDDEN_TEXT = "Access denied"
+ACCESS_DENIED_KEY = "file.access_denied"
 NOT_FOUND_TEXT = "Resource not found"
 CONFLICT_TEXT = "Operation conflicts with current state"
 UNPROCESSABLE_TEXT = "Validation Error"

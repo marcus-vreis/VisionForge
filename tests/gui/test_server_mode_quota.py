@@ -34,7 +34,7 @@ MIB = 1024 * 1024
 def test_the_option_needs_server_mode_and_a_size_above_zero() -> None:
     with pytest.raises(ServerModeError, match="--quota-gb"):
         ServerMode.from_options(enabled=False, quota_gb=5)
-    for bad in (0, -1):
+    for bad in (0, -1, float("nan")):
         with pytest.raises(ServerModeError, match="above zero"):
             ServerMode.from_options(enabled=True, trusted_proxies=[PROXY], quota_gb=bad)
     mode = ServerMode.from_options(enabled=True, trusted_proxies=[PROXY], quota_gb=2.5)
@@ -68,11 +68,12 @@ def test_which_routes_write_new_data() -> None:
         "POST /api/runs/{run_id}/gradcam",
         "POST /api/runs/{run_id}/batch_predict",
         "POST /api/runs/{run_id}/export_onnx",
+        "POST /api/runs/{run_id}/label_suspects",
     ):
         assert key in growing
     # A new route that answers on a server changes this number: decide whether
     # it writes new data before changing it.
-    assert len(growing) == 37
+    assert len(growing) == 38
     # Reading, planning, cancelling, sending elsewhere and deleting never count.
     for key in (
         "GET /api/runs",
