@@ -8497,6 +8497,8 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Open every `owner` route now, since each already resolves a profile.* The training routes take dataset paths in their body, and a route that resolves a profile can still read outside it. Reading first is the point.
 - *The readable slug alone as the folder.* Two accounts that fold to the same slug would share runs and tokens.
 
+**Addendum (2026-11-24): `POST /api/model/defaults` is `confined`.** It was `open` because it suggests settings for an architecture, but its optional `base_dir` is walked and up to 200 images of it are opened for the suggested size: on a server that read any folder the server account could. `ModelDefaultsRequest.base_dir` is now `DatasetDir | None` and the route is listed in `READY`; without `base_dir` it answers as before. The walk runs in a worker thread (`asyncio.to_thread`), and an `OSError` from it leaves the size unsuggested instead of answering 500.
+
 ## ADR-214 — In server mode a request reads datasets only from the person's own folder and the folders the operator shares
 
 **Date:** 2026-11-18
@@ -8658,6 +8660,8 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Let the output path be anywhere in the person's folder.* A second rule and a second type for a need nobody has on a server: the file is downloaded from the run, not picked up from a path.
 - *Open the two classification blocks instead.* They name a checkpoint and an output file as config paths; confining them would repeat what the run routes already guarantee by taking a run id.
 - *Put the evaluation actions in the queue.* It would settle the shared-GPU limit, and it changes how the page waits for their result (a request today, a job then); it belongs with a decision about fairness, not with opening the routes.
+
+**Addendum (2026-11-24): an anomaly test calibrates inside the scope.** Testing an anomaly run on a folder sets `base_dir` to that folder's parent and keeps the run's `train_dir/normal_dir`, the split the threshold is calibrated on. Choosing a shared folder itself put that parent, and the split, one level above it. `_evaluate_anomaly_checkpoint` now refuses (400, `testrun.anomaly_train_outside`) a training split the scope does not hold, before checking whether it exists, so the answer says nothing about the disk outside.
 
 ## ADR-219 — In server mode a person writes a dataset into their own folder only, with their own key
 
@@ -9171,6 +9175,8 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 
 - *Depend on cleanlab.* A new dependency for twenty lines of arithmetic that are tested here by hand.
 - *List every misclassification.* That is the confusion matrix already in the run; the thresholds keep only the images the model is confidently sure about.
+
+**Addendum (2026-11-24): on a server.** `POST /api/runs/{id}/label_suspects` reads the run's stored dataset like `/resume` (ADR-218): `confine_stored_config` validates the stored config, scopes its outputs and calls `confine_config`, so a dataset that left the shared folders is refused with 422 before any prediction. The action writes CSVs and `report.json` into the run and runs inference in the request, so it counts for the quota (`disk_quota._GROWING`, 507) and for the action limit (`HEAVY_ROUTES`, 429). A run without `data.base_dir` and a damaged `report.json` answer 400 with a message (`suspects.no_base_dir`, `suspects.report_unreadable`) instead of 500.
 
 ## ADR-238 — The integrity scan measures brightness, contrast and sharpness
 

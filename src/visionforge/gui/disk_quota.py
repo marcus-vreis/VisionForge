@@ -26,7 +26,8 @@ STALE_AFTER_S = 15.0
 # dataset, and the files an evaluation action leaves in the run.
 _GROWING = re.compile(
     r"/(?:run|sweep|compare|cv|replicates|replicated-comparison|resume"
-    r"|download|sample-dataset|apply|test|gradcam|batch_predict|export_onnx)$"
+    r"|download|sample-dataset|apply|test|gradcam|batch_predict|export_onnx"
+    r"|label_suspects)$"
 )
 
 
