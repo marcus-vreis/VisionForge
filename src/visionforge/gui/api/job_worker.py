@@ -111,27 +111,25 @@ if sys.platform == "win32":
 
         return available
 
-else:
-
-    def _pipe_peek(fd: int) -> Callable[[], int | None] | None:
-        """POSIX reads block without holding anything another thread needs."""
-        return None
-
 
 class _Stdin:
-    """The server's lines on fd 0, read without ever leaving a read pending on Windows.
+    """The server's lines on ``fd``, read without ever leaving a read pending on Windows.
 
     On Windows a thread blocked in a read of the stdin pipe also blocks every
     other call on that handle, and the start-up code of a DLL with its own C
     runtime asks for the type of the standard handles: numpy's OpenBLAS, which
-    torch loads, then waits for ever under the loader lock. So the pipe is
-    peeked and only read when bytes are waiting.
+    torch loads, then waits for ever under the loader lock. So there the pipe
+    is peeked with ``available`` and read only when bytes are waiting. With no
+    ``available`` (POSIX, where a blocked read holds nothing another thread
+    needs) it is read as usual.
     """
 
-    def __init__(self, fd: int = 0) -> None:
+    def __init__(
+        self, fd: int, available: Callable[[], int | None] | None = None
+    ) -> None:
         self._fd = fd
         self._buffer = b""
-        self._available = _pipe_peek(fd)
+        self._available = available
 
     def line(self) -> bytes | None:
         """The next line without its newline; None at the end of input."""
@@ -155,6 +153,13 @@ class _Stdin:
             time.sleep(_PEEK_S)
 
 
+def _server_stdin() -> _Stdin:
+    """This process's stdin, the pipe the server writes to."""
+    if sys.platform == "win32":
+        return _Stdin(0, _pipe_peek(0))
+    return _Stdin(0)
+
+
 def _watch_stdin(
     stdin: _Stdin, token: Any, grace: float, finished: threading.Event
 ) -> None:
@@ -166,7 +171,7 @@ def _watch_stdin(
     while (raw := stdin.line()) is not None:
         try:
             message = json.loads(raw.decode("utf-8"))
-        except (UnicodeDecodeError, ValueError):
+        except ValueError:  # a UnicodeDecodeError too
             continue
         if isinstance(message, dict) and message.get("type") == "stop":
             token.cancel()
@@ -235,7 +240,7 @@ def run(spec: dict[str, Any], pipe: _Pipe, token: Any) -> None:
 def main() -> int:
     """Read the spec, run it, and exit."""
     pipe = _Pipe(_protocol_stream())
-    stdin = _Stdin()
+    stdin = _server_stdin()
     first = stdin.line()
     if first is None:
         return 2  # no spec: the server went away before sending it

@@ -3,6 +3,9 @@ source = src/visionforge
 omit =
     src/visionforge/__init__.py
     src/visionforge/*/__init__.py
+# A server job trains in a child Python (ADR-248): coverage.py measures the
+# child too, and pytest-cov combines its data file with the suite's.
+patch = subprocess
 
 [report]
 exclude_lines =

@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import io
 import os
 import sys
 import textwrap
 import threading
-from collections.abc import Iterator
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -32,6 +32,7 @@ from visionforge.gui.api.job_process import (
     child_spec,
     pinned_config,
 )
+from visionforge.gui.api.run_events import RunEventLog
 from visionforge.gui.api.run_queue import QueuedJob
 from visionforge.utils.config import ExperimentConfig
 from visionforge.utils.messages import tr
@@ -134,16 +135,14 @@ def fake_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 @pytest.fixture
-def fake(
-    fake_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> Iterator[ModuleType]:
+def fake(fake_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     """The fake module, importable here and in the child; tokens in the server's env."""
     monkeypatch.syspath_prepend(str(fake_dir))
     monkeypatch.setenv("PYTHONPATH", os.pathsep.join([str(SRC), str(fake_dir)]))
     for name in SECRETS:
         monkeypatch.setenv(name, f"secret-{name.lower()}")
     monkeypatch.chdir(tmp_path)
-    yield importlib.import_module(FAKE_MODULE)
+    return importlib.import_module(FAKE_MODULE)
 
 
 def _spec(fake: ModuleType, **config: Any) -> dict[str, Any]:
@@ -221,12 +220,65 @@ def test_the_config_crosses_with_its_paths_made_absolute(
     assert ExperimentConfig.model_validate(data).model_dump(mode="json") == data
 
 
+def test_the_relay_hands_on_events_keeps_the_end_and_skips_the_rest() -> None:
+    events: list[dict[str, Any]] = []
+    relay = job_process._Relay(events.append)
+    lines = [
+        b'{"type": "event", "event": {"epoch": 1}}',
+        b"\xff\xfe not utf-8",
+        b"not json",
+        b"[1, 2]",
+        b'{"type": "event", "event": "not a dict"}',
+        b'{"type": "event", "event": {"epoch": 2}}',
+        b'{"type": "job_end", "status": "ok", "report": {}}',
+    ]
+    relay.read(io.BytesIO(b"\n".join(lines) + b"\n"))
+    assert events == [{"epoch": 1}, {"epoch": 2}]
+    assert relay.end == {"type": "job_end", "status": "ok", "report": {}}
+    assert relay.drained.is_set()
+
+
+def test_a_child_that_cannot_start_fails_its_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def no_python(*_: Any, **__: Any) -> Any:
+        raise FileNotFoundError("python.exe")
+
+    monkeypatch.setattr(job_process.subprocess, "Popen", no_python)
+    monkeypatch.setattr(job_process.tempfile, "tempdir", str(tmp_path))
+    job = ChildJob({}, lambda e: None, CancellationToken())
+    outcome = job.supervise()
+    assert outcome.status == "failed"
+    assert outcome.error == tr("job.child_start", error=FileNotFoundError("python.exe"))
+    assert job.pid is None
+    assert list(tmp_path.iterdir()) == [], "the working folder is removed"
+
+
+def test_a_failure_around_the_child_becomes_the_runs_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def broken(*_: Any, **__: Any) -> ChildOutcome:
+        raise RuntimeError("pipe gone")
+
+    monkeypatch.setattr(job_process, "run_in_child", broken)
+    log = RunEventLog("r1")
+    run = asyncio.run(job_process.execute_in_child("r1", {}, log, CancellationToken()))
+    assert run == {
+        "run_id": "r1",
+        "status": "failed",
+        "error": "RuntimeError: pipe gone",
+        "report": None,
+        "run_dir": None,
+    }
+
+
 # ── a real child ────────────────────────────────────────────────────────────
 
 
 def test_events_arrive_in_order_and_the_result_comes_back(fake: ModuleType) -> None:
-    outcome, events, _ = _run(_spec(fake, epochs=3))
+    outcome, events, job = _run(_spec(fake, epochs=3))
     assert outcome.status == "completed", outcome.error
+    assert isinstance(job.pid, int)
     assert [e["epoch"] for e in events] == [1, 2, 3]
     assert events[2] == {"type": "epoch_end", "epoch": 3, "loss": pytest.approx(1 / 3)}
     out = str(Path.cwd() / "out")
@@ -469,6 +521,37 @@ def test_a_server_classification_trains_in_a_child_and_exports_at_the_end(
     # Classification reads its folder from the training result: the checkpoint's.
     assert (state.run["status"], state.run["run_dir"]) == ("completed", str(out))
     assert exported == [(trackers, out)]
+
+
+@pytest.mark.usefixtures("jobs")
+def test_a_job_that_cannot_be_handed_to_a_child_fails_and_closes_its_stream(
+    fake: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def unsendable(*_: Any, **__: Any) -> dict[str, Any]:
+        raise ValueError("config not serialisable")
+
+    monkeypatch.setattr(job_process, "child_spec", unsendable)
+    monkeypatch.setattr(
+        execution, "_block_types", lambda: {"classification": fake.FakeBlock}
+    )
+    task_state = _start("seg_9", isolated=True)
+    cls_state = _start("cls_9", isolated=True)
+
+    async def scenario() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        await training_routes._execute_block(
+            fake.FakeBlock, "segmentation", fake.FakeConfig(), "seg_9", None
+        )
+        await execution._execute_experiment(
+            fake.FakeConfig(),  # type: ignore[arg-type]
+            "cls_9",
+            trackers=(object(),),  # type: ignore[arg-type]
+        )
+        return await _events(task_state), await _events(cls_state)
+
+    assert asyncio.run(scenario()) == ([], [])
+    for state in (task_state, cls_state):
+        assert state.run["status"] == "failed"
+        assert state.run["error"] == "ValueError: config not serialisable"
 
 
 @pytest.mark.slow

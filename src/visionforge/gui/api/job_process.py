@@ -122,6 +122,11 @@ _KEEP_NAMES = frozenset(
         "VISIONFORGE_LANG",
         "VISIONFORGE_OFFLINE",
         "VISIONFORGE_CONTAINER",
+        # Set only when the server itself runs under coverage.py (the test
+        # suite, `patch = ["subprocess"]`): the child then measures itself too.
+        "COVERAGE_PROCESS_CONFIG",
+        "COVERAGE_PROCESS_START",
+        "COVERAGE_CORE",
     }
 )
 # Families passed whole: locale, Python, CUDA and the math libraries' threads.
@@ -260,7 +265,7 @@ class _Relay:
     def _take(self, raw: bytes) -> None:
         try:
             message = json.loads(raw.decode("utf-8"))
-        except (UnicodeDecodeError, ValueError):
+        except ValueError:  # a UnicodeDecodeError too
             logger.warning("Job child: unreadable line {!r}", raw[:200])
             return
         if not isinstance(message, dict):
