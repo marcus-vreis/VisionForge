@@ -29,6 +29,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- Modo servidor: o VisionForge reconhece o proxy de login só pelo endereço que conectou. Antes, o uvicorn trocava esse endereço pelo `X-Forwarded-For` quando o pedido vinha de 127.0.0.1: com o proxy na mesma máquina todo pedido era recusado com 403, e um processo local podia mandar o endereço de um proxy remoto no cabeçalho e entrar com qualquer conta. O uso local não muda (ADR-213).
 - Estatística: `comparison_summary.json`, `cv_summary.json`, o resumo dos grupos (réplicas, comparação, varredura) e o `run.json` do grupo gravavam `NaN` quando uma métrica não era finita, o que não é JSON válido e o navegador recusa. Agora saem como `null` (`allow_nan=False` pega qualquer regressão). O `group` do `run.json` de uma comparação replicada passa a copiar `non_finite_seeds`; `n_tested` de cada comparação já vinha na cópia (ADR-061).
 - Estatística: `alpha` fora de (0, 1) (0, 1, 5 digitado como 5 %, NaN) é recusado com `ValueError` em `paired_comparison`, `holm_correct`, `comparison_matrix`, `min_untied_pairs`, `build_report` e `run_replicated_comparison`, este último antes de treinar qualquer variante (ADR-187).
 - Exportação LaTeX da comparação replicada: a nota da tabela passa a nomear as seeds, por variante, que saíram dos testes e do ranking por métrica não finita, e usa o `alpha` do relatório em vez de 0,05 fixo (ADR-061).

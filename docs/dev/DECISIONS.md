@@ -8518,6 +8518,8 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 
 **Addendum (2026-11-24): `POST /api/model/defaults` is `confined`.** It was `open` because it suggests settings for an architecture, but its optional `base_dir` is walked and up to 200 images of it are opened for the suggested size: on a server that read any folder the server account could. `ModelDefaultsRequest.base_dir` is now `DatasetDir | None` and the route is listed in `READY`; without `base_dir` it answers as before. The walk runs in a worker thread (`asyncio.to_thread`), and an `OSError` from it leaves the size unsuggested instead of answering 500.
 
+**Addendum (2026-11-25): the proxy is the peer, never a forwarded address.** uvicorn's default `proxy_headers=True` trusts `X-Forwarded-For` from 127.0.0.1 and puts that address in the request's `client`. The gate reads `client` to recognise the login proxy, so two things went wrong: a proxy on the same machine (`--trusted-proxy 127.0.0.1`, the example in `docs/gui/servidor.md`) sends the browser's address and every request was refused with 403; and any local process could send `X-Forwarded-For: <proxy address>` and be taken for a remote proxy, naming any account. In server mode `start_server` now passes `proxy_headers=False`; a local install keeps uvicorn's default. Tests: `tests/gui/test_server_mode_proxy_headers.py` builds the app exactly as uvicorn serves it.
+
 ## ADR-214 — In server mode a request reads datasets only from the person's own folder and the folders the operator shares
 
 **Date:** 2026-11-18
