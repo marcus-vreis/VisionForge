@@ -16,7 +16,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from loguru import logger
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.gui.api.dataset_download import credentials_in_play, download_dataset
@@ -120,6 +120,24 @@ def _remember_dataset_root(base_dir: str | Path) -> None:
             _ALLOWED_DATASET_ROOTS.add(resolved)
     except OSError:
         pass
+
+
+def open_preview_image(path: Path) -> Any:
+    """``path`` decoded as an RGB ``PIL.Image``, for a preview strip.
+
+    Raises:
+        HTTPException: 400 naming the file when it cannot be decoded (truncated,
+            not an image, too large): the person's data, not a server fault.
+    """
+    from PIL import Image
+
+    try:
+        with Image.open(path) as opened:
+            return opened.convert("RGB")
+    except (OSError, ValueError, Image.DecompressionBombError) as exc:
+        raise HTTPException(
+            400, tr("preview.unreadable_image", name=path.name)
+        ) from exc
 
 
 def _is_inside_allowed_root(path: Path) -> bool:
@@ -502,7 +520,6 @@ def _render_augment_preview(req: AugmentPreviewRequest) -> AugmentPreviewRespons
 
     import torchvision.transforms as T
     import torchvision.transforms.functional as TF
-    from PIL import Image
 
     from visionforge.utils.config import TransformConfig
 
@@ -516,7 +533,13 @@ def _render_augment_preview(req: AugmentPreviewRequest) -> AugmentPreviewRespons
             message=tr("scan.split_no_images", split=req.split),
         )
 
-    tc = TransformConfig.model_validate(req.transforms)
+    try:
+        tc = TransformConfig.model_validate(req.transforms)
+    except ValidationError as exc:
+        fields = ", ".join(
+            ".".join(str(part) for part in error["loc"]) for error in exc.errors()
+        )
+        raise HTTPException(422, tr("preview.bad_transforms", fields=fields)) from exc
     size = tc.image_size
     active: list[str] = []
     if tc.horizontal_flip:
@@ -556,7 +579,7 @@ def _render_augment_preview(req: AugmentPreviewRequest) -> AugmentPreviewRespons
     # preprocess preview above.
     token = uuid.uuid4().hex[:8]
 
-    original_img = Image.open(img_path).convert("RGB")
+    original_img = open_preview_image(img_path)
     original_path = cache_dir / f"00_original_{token}.png"
     T.Compose([T.Resize(size), T.CenterCrop(size)])(original_img).save(original_path)
 
@@ -1097,6 +1120,11 @@ def _regression_split_stats(
     try:
         with csv_path.open(newline="", encoding="utf-8") as stream:
             return _scan_regression_rows(csv.DictReader(stream), images_root, req)
+    except (UnicodeDecodeError, csv.Error) as exc:
+        # Not text, or not UTF-8: the file's content, not a missing manifest.
+        raise HTTPException(
+            400, tr("scan.manifest_unreadable", name=csv_path.name)
+        ) from exc
     except OSError as exc:
         return RegressionSplitStats(rows=0, missing=True, missing_columns=[str(exc)])
 

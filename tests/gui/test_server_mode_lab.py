@@ -297,3 +297,85 @@ def test_every_laboratory_route_answers_on_a_server(client: TestClient) -> None:
     closed = client.get("/api/session", headers=ANA).json()["closed"]
     assert [key for key in closed if "/api/explorer/" in key] == []
     assert len([key for key in READY if "/api/explorer/" in key]) == 40
+
+
+def _distinct_dataset(root: Path) -> Path:
+    """A tiny class-folder dataset whose images no sample dataset has."""
+    from PIL import Image
+
+    for split in ("train", "val"):
+        for index, name in enumerate(("cat", "dog")):
+            folder = root / split / name
+            folder.mkdir(parents=True)
+            color = (17 + index * 90, 3 + len(split) * 40, 211 - index * 50)
+            Image.new("RGB", (24, 24), color=color).save(folder / f"{name}.png")
+    return root
+
+
+def _shared_files_are_unlinked(shared: Path) -> bool:
+    return all(p.stat().st_nlink == 1 for p in shared.rglob("*") if p.is_file())
+
+
+def test_any_shared_source_makes_the_derived_dataset_a_copy(tmp_path: Path) -> None:
+    own = (tmp_path / "ana" / "datasets").resolve()
+    shared = (tmp_path / "shared").resolve()
+    (own / "mine").mkdir(parents=True)
+    (shared / "beans").mkdir(parents=True)
+    with dataset_scope(_as("ana", own)):
+        # Her own dataset first: next to it, but nothing linked to the shared one.
+        assert placement(own / "mine", shared / "beans") == {"link": copy_only}
+        assert placement(own / "mine", own / "mine") == {}
+        assert placement(shared / "beans", own / "mine") == {
+            "parent": own,
+            "link": copy_only,
+        }
+
+
+def test_merging_an_own_dataset_with_a_shared_one_copies_the_shared_files(
+    client: TestClient, world: dict[str, Path]
+) -> None:
+    other = _distinct_dataset(world["shared"] / "pets")
+    sample = client.post(
+        "/api/sample-dataset", json={"task": "classification"}, headers=ANA
+    ).json()
+    preview = client.post(
+        "/api/explorer/merge/preview",
+        json={"base_dir": sample["path"], "other_dir": str(other)},
+        headers=ANA,
+    )
+    assert preview.status_code == 200, preview.text
+    job = f"/api/explorer/merge/{preview.json()['job_id']}"
+    assert _finished(client, job, ANA)["state"] == "done"
+    applied = client.post(f"{job}/apply", json={"dest_name": "mixed"}, headers=ANA)
+    assert applied.status_code == 200, applied.text
+    done = _finished(client, f"/api/explorer/merge/{applied.json()['job_id']}", ANA)
+    assert done["state"] == "done", done
+    assert Path(done["result"]["path"]) == world["own"] / "mixed"
+    assert done["result"]["files_linked"] == 0
+    assert _shared_files_are_unlinked(world["shared"])
+
+
+def test_incorporating_shared_images_into_an_own_dataset_copies_them(
+    client: TestClient, world: dict[str, Path]
+) -> None:
+    other = _distinct_dataset(world["shared"] / "pets")
+    sample = client.post(
+        "/api/sample-dataset", json={"task": "classification"}, headers=ANA
+    ).json()
+    preview = client.post(
+        "/api/explorer/incorporate/preview",
+        json={"base_dir": sample["path"], "source_dir": str(other / "train")},
+        headers=ANA,
+    )
+    assert preview.status_code == 200, preview.text
+    job = f"/api/explorer/incorporate/{preview.json()['job_id']}"
+    assert _finished(client, job, ANA)["state"] == "done"
+    body = {"dest_name": "grown", "accept_classes": ["cat", "dog"]}
+    applied = client.post(f"{job}/apply", json=body, headers=ANA)
+    assert applied.status_code == 200, applied.text
+    done = _finished(
+        client, f"/api/explorer/incorporate/{applied.json()['job_id']}", ANA
+    )
+    assert done["state"] == "done", done
+    assert done["result"]["added"] > 0
+    assert _shared_files_are_unlinked(world["shared"])
