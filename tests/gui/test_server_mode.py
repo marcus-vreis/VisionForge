@@ -474,9 +474,9 @@ def test_the_cli_hands_the_server_options_to_the_server() -> None:
         ]
     )
     mode = seen["server_mode"]
-    assert (
-        mode.enabled and mode.trusts("10.0.0.5") and mode.user_header == "Remote-User"
-    )
+    assert mode.enabled
+    assert mode.trusts("10.0.0.5")
+    assert mode.user_header == "Remote-User"
     assert not _run_cli(["gui"])["server_mode"].enabled
 
 

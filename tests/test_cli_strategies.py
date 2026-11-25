@@ -423,10 +423,10 @@ class TestCrossValidation:
         assert {f["select_on"] for f in report["fold_results"]} == {"last"}
 
     def test_an_unknown_select_on_is_refused(self, tmp_path: Path) -> None:
+        config = _task_config(tmp_path)
         with pytest.raises(ValueError, match="select_on"):
             cli.run_strategy(
-                {"kind": "cv", "n_folds": 2, "select_on": "middle"},
-                _task_config(tmp_path),
+                {"kind": "cv", "n_folds": 2, "select_on": "middle"}, config
             )
 
 

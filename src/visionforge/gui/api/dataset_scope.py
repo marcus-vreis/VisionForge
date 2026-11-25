@@ -64,6 +64,10 @@ def dataset_scope(scope: DatasetScope | None) -> Iterator[None]:
         _SCOPE.reset(token)
 
 
+_OUTSIDE = "server.dataset_outside"
+_WRITE_OUTSIDE = "server.dataset_write_outside"
+
+
 def _confined_dir(raw: str) -> str:
     """``raw`` resolved, when a scope is bound and holds it; else refused."""
     scope = current_scope()
@@ -72,16 +76,16 @@ def _confined_dir(raw: str) -> str:
     text = raw.strip()
     # ``~`` is the home of the account the server runs as, nobody's dataset.
     if not text or text.startswith("~"):
-        raise ValueError(tr("server.dataset_outside"))
+        raise ValueError(tr(_OUTSIDE))
     candidate = Path(text)
     if not candidate.is_absolute():
-        raise ValueError(tr("server.dataset_outside"))
+        raise ValueError(tr(_OUTSIDE))
     try:
         resolved = candidate.resolve()
     except (OSError, RuntimeError) as exc:
-        raise ValueError(tr("server.dataset_outside")) from exc
+        raise ValueError(tr(_OUTSIDE)) from exc
     if not scope.holds(resolved):
-        raise ValueError(tr("server.dataset_outside"))
+        raise ValueError(tr(_OUTSIDE))
     return str(resolved)
 
 
@@ -140,15 +144,15 @@ def _own_new_dir(raw: str) -> str:
     text = raw.strip()
     candidate = Path(text)
     if scope.own is None or not text or text.startswith("~"):
-        raise ValueError(tr("server.dataset_write_outside"))
+        raise ValueError(tr(_WRITE_OUTSIDE))
     if not candidate.is_absolute():
-        raise ValueError(tr("server.dataset_write_outside"))
+        raise ValueError(tr(_WRITE_OUTSIDE))
     try:
         resolved = candidate.resolve()
     except (OSError, RuntimeError) as exc:
-        raise ValueError(tr("server.dataset_write_outside")) from exc
+        raise ValueError(tr(_WRITE_OUTSIDE)) from exc
     if resolved == scope.own or not resolved.is_relative_to(scope.own):
-        raise ValueError(tr("server.dataset_write_outside"))
+        raise ValueError(tr(_WRITE_OUTSIDE))
     return str(resolved)
 
 

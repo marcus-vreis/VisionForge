@@ -226,24 +226,37 @@ def pick_seed(
         ReproduceError: the seed is not one of the group's, or none is recorded.
     """
     if kind == "single":
-        if requested is not None:
-            return requested, None
-        seed = _section(config, "training").get("seed")
-        if not isinstance(seed, int) or isinstance(seed, bool):
-            raise ReproduceError("the bundle records no training seed; pass --seed N")
-        return seed, None
-    group: Mapping[str, Any] = record["group"]
+        return _single_seed(config, requested)
+    return _group_seed(record["group"], requested)
+
+
+def _single_seed(
+    config: Mapping[str, Any], requested: int | None
+) -> tuple[int, dict[str, Any] | None]:
+    """``requested`` or the recorded ``training.seed`` of a single run."""
+    if requested is not None:
+        return requested, None
+    seed = _section(config, "training").get("seed")
+    if not isinstance(seed, int) or isinstance(seed, bool):
+        raise ReproduceError("the bundle records no training seed; pass --seed N")
+    return seed, None
+
+
+def _group_seed(
+    group: Mapping[str, Any], requested: int | None
+) -> tuple[int, dict[str, Any] | None]:
+    """``requested`` when it is a group seed, else the first that finished."""
     children: list[dict[str, Any]] = [
         c for c in group.get("children") or [] if isinstance(c, dict)
     ]
     seeds = [s for s in group.get("seeds") or [] if isinstance(s, int)]
-    by_seed = {c.get("seed"): c for c in children}
     if requested is not None:
         if requested not in seeds:
             listed = ", ".join(str(s) for s in seeds) or "none"
             raise ReproduceError(
                 f"seed {requested} is not one of the group's seeds: {listed}"
             )
+        by_seed = {c.get("seed"): c for c in children}
         return requested, by_seed.get(requested)
     finished = [c for c in children if c.get("status") == _SUCCESS]
     for child in finished or children:

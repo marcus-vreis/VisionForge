@@ -25,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import ipaddress
+import math
 import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
@@ -481,7 +482,7 @@ class ServerMode:
             return cls()
         if max_actions is not None and max_actions < 1:
             raise ServerModeError(f"--max-actions {max_actions!r} must be 1 or more.")
-        if quota_gb is not None and not quota_gb > 0:
+        if quota_gb is not None and (math.isnan(quota_gb) or quota_gb <= 0):
             raise ServerModeError(f"--quota-gb {quota_gb!r} must be above zero.")
         if not proxies:
             raise ServerModeError(
@@ -491,14 +492,7 @@ class ServerMode:
             )
         if not header or header.lower() == PROFILE_HEADER.lower():
             raise ServerModeError(f"--user-header cannot be {user_header!r}.")
-        networks: list[Network] = []
-        for proxy in proxies:
-            try:
-                networks.append(ipaddress.ip_network(proxy, strict=False))
-            except ValueError as exc:
-                raise ServerModeError(
-                    f"--trusted-proxy {proxy!r} is not an IP address or a CIDR block."
-                ) from exc
+        networks = [_parse_network(proxy) for proxy in proxies]
         for folder in shared:
             if not folder.is_dir():
                 raise ServerModeError(
@@ -528,6 +522,16 @@ class ServerMode:
             address.version == network.version and address in network
             for network in self.trusted
         )
+
+
+def _parse_network(proxy: str) -> Network:
+    """One ``--trusted-proxy`` value as a network, or a ServerModeError."""
+    try:
+        return ipaddress.ip_network(proxy, strict=False)
+    except ValueError as exc:
+        raise ServerModeError(
+            f"--trusted-proxy {proxy!r} is not an IP address or a CIDR block."
+        ) from exc
 
 
 OFF = ServerMode()
@@ -658,6 +662,12 @@ class ServerModeGate:
         if key is None or not answers(key):
             await _refuse(scope, receive, send, 404, "server.route_off")
             return
+        await self._serve(mode, key, scope, receive, send)
+
+    async def _serve(
+        self, mode: ServerMode, key: str, scope: Scope, receive: Receive, send: Send
+    ) -> None:
+        """Sign the person in and run the request inside their dataset scope."""
         raw = Headers(scope=scope).get(mode.user_header)
         if raw is None and key == HEALTH_ROUTE:
             await self.app(_with_profile(scope, None), receive, send)
