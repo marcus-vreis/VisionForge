@@ -36,7 +36,7 @@ from visionforge.gui.api.evaluation_routes import (
     build_evaluation_router,
 )
 from visionforge.gui.api.evidence_routes import EvidenceExports, build_evidence_router
-from visionforge.gui.api.execution import _LANES, _run_state
+from visionforge.gui.api.execution import _LANES
 from visionforge.gui.api.execution_routes import router as execution_router
 from visionforge.gui.api.explorer_routes import router as explorer_router
 from visionforge.gui.api.folder_opener import (
@@ -261,8 +261,8 @@ router.include_router(
     build_runs_router(
         lambda run_id, profile: _find_run_dir(run_id, profile),
         lambda header: current_profile(header),
-        _run_state,
         lambda request: _client_host(request),
+        _EVIDENCE_EXPORTS,
     )
 )
 router.include_router(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 
 from fastapi import APIRouter
@@ -39,7 +40,9 @@ def build_system_router(
     @router.post("/model/defaults", tags=[TAG_EXPERIMENTS])
     async def model_defaults(req: ModelDefaultsRequest) -> ModelDefaultsResponse:
         """Suggested settings for this architecture (ADR-099/100)."""
-        return system_service.model_defaults(req)
+        # Sampling ``base_dir`` walks the folder and opens images: a large tree
+        # must not hold the event loop every other request waits on.
+        return await asyncio.to_thread(system_service.model_defaults, req)
 
     @router.post("/model/learning-rate-plan", tags=[TAG_EXPERIMENTS])
     async def learning_rate_plan(

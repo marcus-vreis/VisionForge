@@ -11,6 +11,7 @@ import pytest
 from PIL import Image
 
 from visionforge.utils.config import ExperimentConfig
+from visionforge.utils.messages import using_lang
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -595,3 +596,112 @@ class TestRegistry:
 
         registry = BlockRegistry.discover()
         assert "ModelComparisonBlock" in registry
+
+
+# ── trials compare architectures only (ADR-044 addendum) ─────────────────────
+
+
+class TestTrialsCompareArchitecturesOnly:
+    """Each trial only swaps ``model.name``. ``timm_model`` / ``custom_model``
+    take precedence over it in ``ModelFactory``, ``weights_path`` loads one
+    checkpoint into every architecture, and a non-``train`` mode trains nothing;
+    any of them would publish the same model under N architecture names.
+    """
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [("timm_model", "mobilenetv3_small_100"), ("custom_model", "my_net")],
+    )
+    def test_alternate_model_source_is_refused(
+        self, tmp_path: Path, dataset_root: Path, field: str, value: str
+    ) -> None:
+        raw = _base_raw(tmp_path, dataset_root)
+        raw["model"][field] = value
+        with using_lang("en"), pytest.raises(ValueError, match=f"model.{field}"):
+            ExperimentConfig.model_validate(raw)
+
+    def test_weights_path_is_refused(self, tmp_path: Path, dataset_root: Path) -> None:
+        weights = tmp_path / "w.pth"
+        weights.write_bytes(b"")
+        raw = _base_raw(tmp_path, dataset_root)
+        raw["model"]["weights_path"] = str(weights)
+        with using_lang("en"), pytest.raises(ValueError, match="model.weights_path"):
+            ExperimentConfig.model_validate(raw)
+
+    @pytest.mark.parametrize("mode", ["evaluate", "infer"])
+    def test_non_train_mode_is_refused(
+        self, tmp_path: Path, dataset_root: Path, mode: str
+    ) -> None:
+        raw = _base_raw(tmp_path, dataset_root)
+        raw["classification"] = {"mode": mode}
+        with using_lang("en"), pytest.raises(ValueError, match="classification.mode"):
+            ExperimentConfig.model_validate(raw)
+
+    def test_the_same_fields_stay_valid_outside_a_comparison(
+        self, tmp_path: Path, dataset_root: Path
+    ) -> None:
+        raw = _base_raw(tmp_path, dataset_root)
+        raw["block"] = "classification"
+        raw["model"]["timm_model"] = "mobilenetv3_small_100"
+        config = ExperimentConfig.model_validate(raw)
+        assert config.model.timm_model == "mobilenetv3_small_100"
+
+
+# ── a NaN metric is never crowned (carbon-stats finding 2) ───────────────────
+
+
+class TestNonFiniteMetricRanking:
+    def _run(
+        self, mc_config: ExperimentConfig, f1_values: list[float]
+    ) -> tuple[Any, dict[str, Any]]:
+        from visionforge.blocks.model_comparison import ModelComparisonBlock
+
+        reports = [_mock_block_report(0.8, f1, 0.85) for f1 in f1_values]
+        call_count: list[int] = [0]
+        group: dict[str, Any] = {}
+
+        def mock_run(self: Any) -> None:  # noqa: ANN001
+            pass
+
+        def mock_report(self: Any) -> dict[str, Any]:  # noqa: ANN001
+            idx = call_count[0]
+            call_count[0] += 1
+            return reports[idx]
+
+        def capture_group(*args: Any, **kwargs: Any) -> None:
+            group.update(kwargs)
+
+        block = ModelComparisonBlock()
+        block.setup(mc_config)
+        with (
+            patch(
+                "visionforge.blocks.classification_runner.ClassificationBlock.run",
+                mock_run,
+            ),
+            patch(
+                "visionforge.blocks.classification_runner.ClassificationBlock.report",
+                mock_report,
+            ),
+            patch("visionforge.blocks._search_utils.write_sweep_group", capture_group),
+        ):
+            block.run()
+        return block, group
+
+    @pytest.mark.parametrize(
+        ("f1_values", "best_arch", "best_index"),
+        [([float("nan"), 0.75], "resnet34", 1), ([0.75, float("nan")], "resnet18", 0)],
+    )
+    def test_nan_metric_ranks_last_whatever_the_order(
+        self,
+        mc_config: ExperimentConfig,
+        f1_values: list[float],
+        best_arch: str,
+        best_index: int,
+    ) -> None:
+        block, group = self._run(mc_config, f1_values)
+        assert block._trials[0]["model_arch"] == best_arch
+        assert group["best_index"] == best_index
+
+    def test_all_nan_crowns_no_architecture(self, mc_config: ExperimentConfig) -> None:
+        _, group = self._run(mc_config, [float("nan"), float("nan")])
+        assert group["best_index"] is None

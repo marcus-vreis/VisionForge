@@ -5,6 +5,7 @@ claim where the data cannot support one.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import pytest
@@ -17,6 +18,7 @@ from visionforge.core.replicated_comparison import (
 )
 from visionforge.core.replicates import ReplicateTrial
 from visionforge.core.task_runner import RunResult
+from visionforge.utils.messages import using_lang
 
 
 class _FakeConfig:
@@ -171,16 +173,17 @@ class TestRunReplicatedComparison:
         """Wilcoxon's p floor at n=5 is 0.0625 > 0.05. A huge, perfectly
         consistent gap still comes back 'not significant' — reporting that as
         'no effect' would be flatly wrong, so the report must explain it."""
-        report = run_replicated_comparison(
-            _FakeRunner(), _base(), self._variants(), [1, 2, 3, 4, 5], "accuracy"
-        )
+        with using_lang("en"):
+            report = run_replicated_comparison(
+                _FakeRunner(), _base(), self._variants(), [1, 2, 3, 4, 5], "accuracy"
+            )
         comparison = report["comparisons"][0]
         assert comparison["mean_difference"] == pytest.approx(0.10)  # a real gap
         assert comparison["significant"] is False
         assert comparison["underpowered"] is True
         assert comparison["min_achievable_p"] == pytest.approx(0.0625)
         assert report["underpowered"] is True
-        assert "6+" in report["power_note"]
+        assert "at least 6 paired seeds that differ" in report["power_note"]
 
     def test_enough_seeds_clears_the_power_warning(self) -> None:
         report = run_replicated_comparison(
@@ -415,14 +418,155 @@ class TestRankingUsesTheSameSeeds:
 
     def test_the_power_note_quotes_the_seeds_actually_paired(self) -> None:
         # Six seeds were asked for; only three finished in both variants.
+        with using_lang("en"):
+            report = build_report(
+                [
+                    _variant("a", {1: 0.9, 2: 0.91, 3: 0.92}),
+                    _variant("b", {1: 0.5, 2: 0.51, 3: 0.52}),
+                ],
+                [1, 2, 3, 4, 5, 6],
+                "accuracy",
+            )
+
+        assert report["underpowered"] is True
+        assert "used 3 of the 3 paired seeds (0 tied" in report["power_note"]
+
+
+class TestPowerNote:
+    """The note quotes the pairs the rank test kept and the alpha it ran at."""
+
+    def test_tied_pairs_are_named_and_not_counted(self) -> None:
+        # Eight seeds, four tied: a four-pair test, floor 2/2**4 = 0.125. The
+        # old note said "with 8 paired seeds" and asked for "6+".
+        a = {s: 0.90 + 0.01 * s for s in range(8)}
+        b = {s: (a[s] if s < 4 else 0.50) for s in range(8)}
+
+        with using_lang("en"):
+            report = build_report(
+                [_variant("a", a), _variant("b", b)], list(range(8)), "accuracy"
+            )
+
+        comparison = report["comparisons"][0]
+        assert comparison["test"] == "wilcoxon"
+        assert comparison["n_pairs"] == 8
+        assert comparison["n_tested"] == 4
+        note = report["power_note"]
+        assert "used 4 of the 8 paired seeds (4 tied" in note
+        assert "below 0.1250" in note
+        assert "at least 6 paired seeds that differ" in note
+
+    def test_the_minimum_follows_alpha(self) -> None:
+        # Seven untied pairs at alpha=0.01: floor 2/2**7 = 0.0156 > 0.01, and
+        # the minimum is ceil(1 - log2(0.01)) = ceil(7.64) = 8, not "6+".
+        a = {s: 0.90 + 0.001 * s for s in range(7)}
+        b = dict.fromkeys(a, 0.50)
+
+        with using_lang("en"):
+            report = build_report(
+                [_variant("a", a), _variant("b", b)],
+                list(range(7)),
+                "accuracy",
+                alpha=0.01,
+            )
+
+        note = report["power_note"]
+        assert "used 7 of the 7 paired seeds (0 tied" in note
+        assert "below 0.0156" in note
+        assert "alpha=0.01" in note
+        assert "at least 8 paired seeds that differ" in note
+
+    def test_the_note_is_in_the_bound_language(self) -> None:
+        with using_lang("pt"):
+            report = build_report(
+                [
+                    _variant("a", {1: 0.9, 2: 0.91, 3: 0.92}),
+                    _variant("b", {1: 0.5, 2: 0.51, 3: 0.52}),
+                ],
+                [1, 2, 3],
+                "accuracy",
+            )
+
+        assert "usou 3 das 3 seeds pareadas" in report["power_note"]
+
+
+class TestDuplicateSeeds:
+    """``[42, 42, 7]`` used to train four runs, report n=3 in the aggregate and
+    n_pairs=2 in the test of the same variant."""
+
+    def test_a_repeated_seed_is_refused_before_any_training(self) -> None:
+        runner = _FakeRunner()
+
+        with using_lang("en"), pytest.raises(ValueError, match="must be unique"):
+            run_replicated_comparison(
+                runner, _base(), {"a": {}, "b": {}}, [42, 42, 7], "accuracy"
+            )
+
+        assert runner.seen == []
+
+    def test_two_copies_of_one_seed_are_not_two_seeds(self) -> None:
+        with pytest.raises(ValueError, match="distintas"):
+            run_replicated_comparison(
+                _FakeRunner(), _base(), {"a": {}, "b": {}}, [3, 3], "accuracy"
+            )
+
+
+class TestNonFiniteMetric:
+    """One NaN seed used to crash the report after every run had trained, and
+    on its own it led the ranking (``sorted`` keeps NaN where it finds it)."""
+
+    def _report(self) -> dict[str, Any]:
+        a = {0: math.nan, **dict.fromkeys(range(1, 8), 0.2)}
+        b = {s: 0.10 + 0.001 * s for s in range(8)}
+        c = {s: 0.50 + 0.002 * s for s in range(8)}
+
+        def variant(label: str, values: dict[int, float]) -> VariantResult:
+            return VariantResult(
+                label,
+                {},
+                [
+                    ReplicateTrial(s, "success", {"rmse": v}, 0.1)
+                    for s, v in values.items()
+                ],
+            )
+
+        return build_report(
+            [variant("A", a), variant("B", b), variant("C", c)], list(range(8)), "rmse"
+        )
+
+    def test_the_seed_is_left_out_and_recorded(self) -> None:
+        report = self._report()
+
+        assert report["non_finite_seeds"] == {"A": [0]}
+        assert report["variants"]["A"]["per_seed"] == dict.fromkeys(range(1, 8), 0.2)
+        assert report["variants"]["A"]["aggregates"]["rmse"]["n"] == 7
+        assert report["variants"]["A"]["aggregates"]["rmse"]["n_non_finite"] == 1
+
+    def test_every_pair_is_tested_on_finite_seeds(self) -> None:
+        report = self._report()
+
+        pairs = {(c["label_a"], c["label_b"]): c for c in report["comparisons"]}
+        assert set(pairs) == {("A", "B"), ("A", "C"), ("B", "C")}
+        assert pairs["A", "B"]["n_pairs"] == 7
+        assert pairs["B", "C"]["n_pairs"] == 8
+        assert pairs["B", "C"]["significant"] is True
+        assert all(math.isfinite(c["p_value"]) for c in report["comparisons"])
+
+    def test_the_ranking_ignores_the_nan(self) -> None:
+        report = self._report()
+
+        # Means over seeds 1..7: B 0.104, A 0.200, C 0.508; rmse is lower-better.
+        assert report["ranking_seeds"] == list(range(1, 8))
+        assert report["ranked_by_mean"] == ["B", "A", "C"]
+        assert report["best_by_mean"] == "B"
+
+    def test_a_clean_report_records_nothing(self) -> None:
         report = build_report(
             [
                 _variant("a", {1: 0.9, 2: 0.91, 3: 0.92}),
                 _variant("b", {1: 0.5, 2: 0.51, 3: 0.52}),
             ],
-            [1, 2, 3, 4, 5, 6],
+            [1, 2, 3],
             "accuracy",
         )
 
-        assert report["underpowered"] is True
-        assert "With 3 paired seeds" in report["power_note"]
+        assert report["non_finite_seeds"] == {}

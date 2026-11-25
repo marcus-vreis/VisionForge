@@ -564,3 +564,122 @@ class TestHodgesLehmann:
         assert result.p_value == 1.0
         assert result.ci_low == 0.0
         assert result.ci_high == 0.0
+
+
+class TestIntervalFollowsAlpha:
+    """The interval is dual to the test at the comparison's own alpha (ADR-187).
+
+    A 95% interval beside alpha=0.01 excluded zero while p=0.035 was not
+    significant; beside alpha=0.10 it would contain zero next to a rejection.
+    """
+
+    def test_paired_t_interval_uses_one_minus_alpha(self) -> None:
+        a = {0: 2.0, 1: 3.0, 2: 4.0}
+        b = dict.fromkeys(a, 0.0)
+
+        result = paired_comparison("accuracy", a, b, test="paired_t", alpha=0.01)
+
+        # mean 3, sd 1, n 3: t(0.995, 2) = 9.9248, half-width 9.9248 / sqrt(3).
+        half = float(stats.t.ppf(0.995, 2)) / math.sqrt(3)
+        assert half == pytest.approx(5.730111, rel=1e-6)
+        assert result.p_value == pytest.approx(0.035099, rel=1e-4)
+        assert result.ci_low == pytest.approx(3.0 - half)
+        assert result.ci_high == pytest.approx(3.0 + half)
+        assert result.ci_confidence == pytest.approx(0.99)
+        # p > alpha and the interval holds zero: the two agree.
+        assert result.ci_low is not None
+        assert result.ci_low < 0.0
+
+    def test_a_looser_alpha_narrows_the_interval(self) -> None:
+        a = {0: 2.0, 1: 3.0, 2: 4.0}
+        b = dict.fromkeys(a, 0.0)
+
+        result = paired_comparison("accuracy", a, b, test="paired_t", alpha=0.10)
+
+        half = float(stats.t.ppf(0.95, 2)) / math.sqrt(3)
+        assert result.ci_low == pytest.approx(3.0 - half)
+        assert result.ci_high == pytest.approx(3.0 + half)
+        assert result.ci_confidence == pytest.approx(0.90)
+
+    def test_underpowered_wilcoxon_reports_no_interval_at_its_alpha(self) -> None:
+        # Six pairs: floor 2/2**6 = 0.03125 > 0.01, and no 99% Hodges-Lehmann
+        # interval exists either, for the same reason.
+        a = {i: 1.1 + 0.1 * i for i in range(6)}
+        b = dict.fromkeys(a, 1.0)
+
+        result = paired_comparison("accuracy", a, b, alpha=0.01)
+
+        assert result.test == "wilcoxon"
+        assert result.min_achievable_p == pytest.approx(0.03125)
+        assert result.underpowered is True
+        assert result.ci_low is None
+        assert result.ci_high is None
+
+    def test_hodges_lehmann_reaches_the_requested_coverage(self) -> None:
+        differences = [0.01 * (i + 1) for i in range(10)]
+        a, b = _pairs(differences)
+
+        result = paired_comparison("accuracy", a, b, test="wilcoxon", alpha=0.01)
+
+        expected = hodges_lehmann_ci(differences, confidence=0.99)
+        assert expected.ci_low is not None
+        assert result.ci_low == pytest.approx(expected.ci_low)
+        assert result.ci_high == pytest.approx(expected.ci_high)
+        assert result.ci_confidence == pytest.approx(expected.confidence)
+        assert expected.confidence >= 0.99
+
+    def test_the_matrix_passes_alpha_to_the_interval(self) -> None:
+        differences = [0.01 * (i + 1) for i in range(10)]
+        a, b = _pairs(differences)
+
+        (result,) = comparison_matrix("accuracy", {"a": a, "b": b}, alpha=0.01)
+
+        # Ten evenly spaced differences pass Shapiro-Wilk: a paired t.
+        assert result.ci_method == "t"
+        assert result.ci_confidence == pytest.approx(0.99)
+        low, high = paired_t_ci(differences, confidence=0.99)
+        assert result.ci_low == pytest.approx(low)
+        assert result.ci_high == pytest.approx(high)
+
+
+class TestNonFiniteValues:
+    """A NaN or inf is not a measurement: it stays out of the test."""
+
+    @pytest.mark.parametrize("bad", [math.nan, math.inf, -math.inf])
+    def test_a_non_finite_seed_is_left_out_of_the_pair(self, bad: float) -> None:
+        a = {s: 0.2 + 0.001 * s for s in range(8)}
+        b = {s: 0.1 + 0.003 * s for s in range(8)}
+        a[0] = bad
+
+        result = paired_comparison("rmse", a, b)
+        clean = paired_comparison(
+            "rmse",
+            {s: v for s, v in a.items() if s != 0},
+            {s: v for s, v in b.items() if s != 0},
+        )
+
+        assert result.n_pairs == 7
+        assert result.p_value == clean.p_value
+        assert result.mean_a == pytest.approx(clean.mean_a)
+        assert math.isfinite(result.effect_size)
+
+    def test_a_nan_p_value_does_not_stop_holm(self) -> None:
+        from dataclasses import replace
+
+        base = paired_comparison(
+            "m", {1: 1.0, 2: 1.0, 3: 1.0}, {1: 1.0, 2: 1.0, 3: 1.0}
+        )
+        comparisons = [
+            replace(base, p_value=math.nan, label_a="broken"),
+            replace(base, p_value=0.001, label_a="clear"),  # 0.05/2 -> reject
+        ]
+
+        flagged = holm_correct(comparisons)
+
+        assert [c.label_a for c in flagged] == ["broken", "clear"]
+        assert [c.significant for c in flagged] == [False, True]
+
+    def test_a_nan_effect_size_is_not_large(self) -> None:
+        from visionforge.core.significance import _effect_label
+
+        assert _effect_label(math.nan) == "undefined"

@@ -372,3 +372,122 @@ class TestUndefinedMetric:
         )
 
         assert result.per_seed("auroc") == {1: 0.9}
+
+
+def _trials(metric: str, values: list[float]) -> list[ReplicateTrial]:
+    return [
+        ReplicateTrial(seed=i, status="success", metrics={metric: v})
+        for i, v in enumerate(values)
+    ]
+
+
+class TestNonFiniteMetric:
+    """A NaN or inf (a test split with a NaN target) is not a measurement.
+
+    It used to crash the aggregate (``statistics.stdev`` refuses NaN) after
+    every seed had trained; it is now left out like a null and counted.
+    """
+
+    @pytest.mark.parametrize("bad", [math.nan, math.inf])
+    def test_non_finite_stays_out_and_is_counted(self, bad: float) -> None:
+        agg = aggregate_replicates(_trials("rmse", [bad, 0.2, 0.3, 0.4]))["rmse"]
+
+        assert agg["n"] == 3
+        assert agg["n_non_finite"] == 1
+        assert agg["mean"] == pytest.approx(0.3)
+        assert agg["max"] == 0.4
+        half = float(stats.t.ppf(0.975, 2)) * 0.1 / math.sqrt(3)
+        assert agg["ci95_high"] == pytest.approx(0.3 + half)
+
+    def test_a_clean_metric_counts_zero(self) -> None:
+        agg = aggregate_replicates(_trials("rmse", [0.2, 0.3]))["rmse"]
+
+        assert agg["n_non_finite"] == 0
+
+    def test_a_metric_non_finite_everywhere_has_no_mean(self) -> None:
+        agg = aggregate_replicates(_trials("rmse", [math.nan, math.nan]))["rmse"]
+
+        assert agg["n"] == 0
+        assert agg["n_non_finite"] == 2
+        assert agg["mean"] is None
+        assert agg["ci95_low"] is None
+
+    def test_the_paired_comparison_skips_it_too(self) -> None:
+        result = VariantResult(
+            label="a", overrides={}, trials=_trials("rmse", [math.nan, 0.2])
+        )
+
+        assert result.per_seed("rmse") == {1: 0.2}
+        assert result.non_finite_seeds("rmse") == [0]
+
+
+class TestObservedValuesOutsideTheNamedDomain:
+    """The domain guessed from a name does not hold for every task.
+
+    A custom task reporting accuracy in percent (84, 85, 86) had its t interval
+    cut to ``[82.52, 1.0]``: inverted, and excluding its own mean.
+    """
+
+    def test_percent_accuracy_is_not_clipped(self) -> None:
+        agg = aggregate_replicates(_trials("accuracy", [84.0, 85.0, 86.0]))["accuracy"]
+
+        half = float(stats.t.ppf(0.975, 2)) * 1.0 / math.sqrt(3)
+        assert half == pytest.approx(2.484138, rel=1e-6)
+        assert agg["ci95_low"] == pytest.approx(85.0 - half)
+        assert agg["ci95_high"] == pytest.approx(85.0 + half)
+        assert agg["ci95_clipped"] is False
+
+    def test_a_negative_delta_f1_is_not_clipped(self) -> None:
+        agg = aggregate_replicates(_trials("delta_f1", [-0.10, -0.05, 0.0]))["delta_f1"]
+
+        half = float(stats.t.ppf(0.975, 2)) * 0.05 / math.sqrt(3)
+        assert agg["ci95_low"] == pytest.approx(-0.05 - half)
+        assert agg["ci95_high"] == pytest.approx(-0.05 + half)
+        assert agg["ci95_clipped"] is False
+
+    def test_a_negative_absolute_error_is_not_clipped(self) -> None:
+        agg = aggregate_replicates(_trials("mae", [-0.2, 0.1, 0.4]))["mae"]
+
+        assert agg["ci95_clipped"] is False
+        assert agg["ci95_low"] is not None
+        assert agg["ci95_low"] < -0.2
+
+    @pytest.mark.parametrize(
+        ("metric", "values"),
+        [
+            ("accuracy", [84.0, 85.0, 86.0]),
+            ("accuracy", [0.8, 0.9, 1.0]),
+            ("accuracy", [0.0, 0.0, 0.3]),
+            ("mae", [0.1, 0.2, 0.9]),
+            ("mae", [-5.0, 1.0, 2.0]),
+            ("r2", [0.5, 0.9, 1.5]),
+        ],
+    )
+    def test_the_interval_is_never_inverted_and_holds_the_mean(
+        self, metric: str, values: list[float]
+    ) -> None:
+        agg = aggregate_replicates(_trials(metric, values))[metric]
+
+        low, high, mean = agg["ci95_low"], agg["ci95_high"], agg["mean"]
+        assert low is not None
+        assert high is not None
+        assert mean is not None
+        assert low <= mean <= high
+
+
+class TestDuplicateSeeds:
+    """A seed listed twice is one sample counted twice (pseudo-replication)."""
+
+    def test_run_replicates_refuses_a_repeated_seed(self) -> None:
+        runner = _FakeRunner()
+
+        with pytest.raises(ValueError, match="distintas"):
+            run_replicates(runner, _base(), [42, 42, 7], metric="score")
+
+        assert runner.seen == []
+
+    def test_the_message_follows_the_language(self) -> None:
+        from visionforge.utils.messages import using_lang
+
+        with using_lang("en"), pytest.raises(ValueError, match="must be unique"):
+            run_replicates(_FakeRunner(), _base(), [1, 1], metric="score")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import pytest
@@ -107,6 +108,16 @@ class TestMetricAccumulator:
         acc.update(preds, targets)
         _, _, _, r2 = acc.compute()
         assert r2 == 0.0  # ss_tot == 0 guard
+
+    def test_non_finite_target_gives_nan_r2_not_zero(self) -> None:
+        """A NaN target makes ss_tot NaN; the variance guard must not read it as 0."""
+        acc = _MetricAccumulator()
+        targets = torch.tensor([[0.0], [2.0], [float("nan")]])
+        preds = torch.tensor([[0.0], [2.0], [4.0]])
+        acc.update(preds, targets)
+        mse, _, _, r2 = acc.compute()
+        assert math.isnan(mse)
+        assert math.isnan(r2)
 
 
 # ── RegressionTrainer ─────────────────────────────────────────────────────────

@@ -187,7 +187,9 @@ async def merge_apply(job_id: str, req: MergeApplyRequest) -> dict[str, Any]:
         plan = plan_merge(analysis, req.mapping)
         # A source edited after the preview would make the preview a lie.
         await asyncio.to_thread(ensure_sources_unchanged, analysis)
-        started = _JOBS.start_apply(analysis, plan, req.dest_name, **placement(root))
+        # Any shared source makes the result a copy, not just dataset A (ADR-220).
+        where = placement(root, analysis.roots["b"])
+        started = _JOBS.start_apply(analysis, plan, req.dest_name, **where)
     except MergeError as exc:
         raise _refuse(exc) from exc
     except JobBusyError as exc:

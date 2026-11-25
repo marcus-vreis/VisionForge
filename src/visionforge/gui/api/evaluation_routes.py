@@ -13,6 +13,7 @@ importing this module stays light (#260).
 """
 
 import asyncio
+import csv
 import json
 from collections.abc import Callable
 from datetime import datetime
@@ -36,6 +37,7 @@ from visionforge.gui.api.http_responses import (
 )
 from visionforge.gui.api.label_suspects_run import (
     LabelSuspectsRequest,
+    confine_stored_config,
     execute_label_suspects,
     saved_report,
 )
@@ -171,6 +173,7 @@ def build_evaluation_router(
         in ``<run_dir>/label_suspects/``.
         """
         run_dir = _checkpoint_run_dir(find_run_dir, run_id, profile, "label_suspects")
+        confine_stored_config(run_dir, profile)
         return await _run_off_loop(
             execute_label_suspects,
             run_dir,
@@ -181,14 +184,20 @@ def build_evaluation_router(
 
     @router.get(
         "/runs/{run_id}/label_suspects",
-        responses={404: {"description": NOT_FOUND_TEXT}},
+        responses={
+            400: {"description": BAD_REQUEST_TEXT},
+            404: {"description": NOT_FOUND_TEXT},
+        },
     )
     async def label_suspects_saved(run_id: str, profile: ProfileDep) -> dict[str, Any]:
         """The last suspicious-label report of this run; ``report`` None if none."""
         run_dir = find_run_dir(run_id, profile)
         if run_dir is None:
             raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
-        return {"report": await asyncio.to_thread(saved_report, run_dir)}
+        try:
+            return {"report": await asyncio.to_thread(saved_report, run_dir)}
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
 
     @router.post(
         "/runs/{run_id}/export_onnx",
@@ -584,6 +593,8 @@ def _evaluate_regression_checkpoint(
     from visionforge.utils.regression_config import RegressionConfig
 
     reg_config = RegressionConfig.model_validate(config_dict)
+    data = reg_config.data
+    _confine_manifest_images(chosen, data.base_dir / data.images_dir, data.image_column)
     reg_model = RegressionModelFactory.create(reg_config.model)
     reg_model.load_state_dict(
         torch.load(checkpoint, map_location="cpu", weights_only=True)
@@ -595,6 +606,36 @@ def _evaluate_regression_checkpoint(
         raise ValueError(tr("testrun.no_rows", path=chosen))
     mse, rmse, mae, r2 = RegressionTrainer(reg_config).evaluate(reg_model, reg_loader)
     return {"mse": mse, "rmse": rmse, "mae": mae, "r2": r2}
+
+
+def _confine_manifest_images(
+    manifest: Path, images_root: Path, image_column: str
+) -> None:
+    """On a server, refuse a manifest row whose image is outside the scope.
+
+    The chosen CSV is in the scope, but each row names an image relative to
+    ``images_root``, and an absolute path or ``..`` would make the server read
+    someone else's file. The refusal names the line, never the path, and is
+    decided before anything is opened, so it does not tell whether that file
+    exists (ADR-214).
+
+    Raises:
+        ValueError: a row's image resolves outside the request's scope.
+    """
+    scope = current_scope()
+    if scope is None:
+        return
+    with manifest.open(encoding="utf-8", newline="") as stream:
+        for line, row in enumerate(csv.DictReader(stream), start=2):
+            image = (row.get(image_column) or "").strip()
+            if not image:
+                continue  # the loader reports an empty cell itself
+            try:
+                inside = scope.holds((images_root / image).resolve())
+            except (OSError, RuntimeError):
+                inside = False
+            if not inside:
+                raise ValueError(tr("testrun.manifest_image_outside", line=line))
 
 
 def _evaluate_segmentation_checkpoint(
@@ -667,6 +708,12 @@ def _evaluate_anomaly_checkpoint(
         / anom_config.data.train_dir
         / anom_config.data.normal_dir
     )
+    # ``base_dir`` is the chosen folder's parent, which may sit above the
+    # folder a server shares: the split must be in the scope on its own, and
+    # is refused before the disk says whether it exists (ADR-218).
+    scope = current_scope()
+    if scope is not None and not scope.holds(train_normal.resolve()):
+        raise ValueError(tr("testrun.anomaly_train_outside"))
     if not train_normal.is_dir():
         raise ValueError(
             tr(
