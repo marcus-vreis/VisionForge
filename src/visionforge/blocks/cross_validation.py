@@ -21,6 +21,7 @@ from sklearn.model_selection import (
 from torch.utils.data import DataLoader, Subset
 from torchvision.datasets import ImageFolder
 
+from visionforge.blocks._cv_common import fold_drop_last
 from visionforge.blocks._search_utils import make_trial_progress_wrapper
 from visionforge.blocks.base import ExperimentBlock
 from visionforge.core.cancellation import (
@@ -164,13 +165,18 @@ class _FoldDataModule:
         self._class_names: list[str] = list(train_ds.classes)
 
     def train_loader(self) -> DataLoader:  # type: ignore[type-arg]
-        """DataLoader for the fold's training split (shuffled)."""
+        """DataLoader for the fold's training split (shuffled).
+
+        Drops the trailing partial batch by the rule every K-fold shares
+        (``fold_drop_last``): a batch of one breaks BatchNorm in train mode.
+        """
         return DataLoader(
             self._train_ds,
             batch_size=self._batch_size,
             shuffle=True,
             num_workers=self._num_workers,
             pin_memory=self._pin_memory,
+            drop_last=fold_drop_last(len(self._train_ds), self._batch_size),
         )
 
     def val_loader(self) -> DataLoader:  # type: ignore[type-arg]

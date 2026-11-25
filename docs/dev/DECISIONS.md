@@ -652,6 +652,8 @@ the rule ADR-061 introduced for the replicated comparison
 Backend-first per the Phase-5 norm; the GUI surface and the generic sweep/
 batch-predict are the next ADR-041 slices.
 
+**Addendum (2026-11-25): the classification block compares architectures only, and never crowns a NaN.** `ModelComparisonBlock` swaps only `model.name` per trial, but `ModelFactory` lets `model.timm_model` and `model.custom_model` win over it, `model.weights_path` loads one checkpoint into every architecture (and turns ImageNet weights off), and `classification.mode` other than `train` trains nothing: each would publish the same model under N architecture names in `ranking.csv`. The `ExperimentConfig` validator now refuses them when `block` is `model_comparison` (`config.model_comparison_fixed_model`, PT and EN, naming the field). Refused rather than cleared per trial, because clearing would run a config other than the one written and hide that the field was ignored. The same fields stay valid in every other block. The ranking maps a non-finite metric to "missing" before `rank_by_metric`, since a NaN compares False both ways and `sorted` could leave it first; the History group's `best_index` is the first trial with a finite metric, or none (this also stops crowning a trial whose metric is missing when all are).
+
 ## ADR-045 — Generic hyperparameter sweep over the TaskRunner handle
 
 **Date:** 2026-06
@@ -827,6 +829,8 @@ keeps the val fold un-augmented. Passing `n_folds/shuffle/seed` as call argument
 (not a new config field) matches the comparison/sweep precedent and needs no config
 migration. The `drop_last` guard is standard BatchNorm hygiene that CV makes
 necessary because folds shrink the training set.
+
+**Addendum (2026-11-25): the classification K-fold shares the rule.** `CrossValidationBlock._FoldDataModule.train_loader` had no `drop_last`, so at `image_size: 32` a stride-32 backbone with BatchNorm (resnet18) failed on every fold whose train size is 1 modulo the batch size, and the K-fold averaged only the surviving folds. The rule moved to `_cv_common.fold_drop_last(n_train, batch_size)` (`n_train > batch_size`) and both K-folds call it. As in the task K-fold, the trailing partial batch is dropped whatever its size; the loader shuffles each epoch, so a different remainder is left out each time. Classification K-fold numbers of folds with a remainder change slightly.
 
 ## ADR-051 — timm as an optional model source
 
@@ -1982,6 +1986,8 @@ calibrated rather than merely self-consistent. Rendering was confirmed in the
 browser against that run (five intervals under the right labels, no console
 errors).
 
+**Addendum (2026-11-25): binary keeps class 1 as the positive class without probabilities.** With `y_proba_full` absent, `n_classes` came from the largest label, so a binary split with only class 0 gave `n_classes = 1` and precision/recall/F1 scored class 0 (`1.0 [1.0, 1.0]`) where the Evaluator (sklearn `average="binary"`) reports `0.0`. `bootstrap_classification_cis` now takes at least 2 classes for `task="binary"`, as `bootstrap_anomaly_cis` already did.
+
 ---
 
 ## ADR-075 — Submissions queue instead of being refused
@@ -2151,6 +2157,8 @@ score) beside `test_*`, while the History card's `miou` was the *test* score, so
 meant two splits. New runs write `val_miou`, `val_dice` and `val_pixel_acc`; the card
 projection and the comparison table read `val_<name>` first and fall back to the bare
 name, so a run written earlier lists as before. The bare names are no longer written.
+
+**Addendum (2026-11-25): a non-finite target is refused at reading, and R² is never invented.** `float()` accepts `nan` and `inf`, so one such cell in a regression CSV reached the metrics. The constant-target guard (`ss_tot > 1e-12`, else 0.0) read a NaN `ss_tot` as "no variance": the test R² came out `0.0` and its interval `[0.0, 1.0]` while MSE was NaN. Both `_regression_metrics` and `_MetricAccumulator` now return NaN R² when `ss_tot` is not finite (parity kept, and NaN predictions already gave NaN), and `RegressionCsvDataset` refuses a non-finite target naming the file, line and column (`regdata.non_finite_target`, PT and EN). Refusing inside `bootstrap_regression_cis` was rejected: it runs after training, so it would fail a finished run instead of reporting the NaN that the accumulator reports.
 
 ## ADR-077 — The post-training surface stops being classification-shaped
 

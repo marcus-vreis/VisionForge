@@ -138,6 +138,25 @@ class TestRegressionCsvDataset:
                 transform,  # type: ignore[arg-type]
             )
 
+    @pytest.mark.parametrize("cell", ["nan", "inf", "-inf", "NaN"])
+    def test_non_finite_target_raises_with_its_row(
+        self, tmp_path: Path, cell: str
+    ) -> None:
+        """float() accepts 'nan' and 'inf'; a non-finite target would turn every
+        metric of the split into NaN (and used to fake a finite R²)."""
+        (tmp_path / "m.csv").write_text(
+            f"image,target\na.png,1.0\nb.png,{cell}\n", encoding="utf-8"
+        )
+        transform = _transform()
+        with pytest.raises(ValueError, match=r"linha 3.*'target'.*não finito"):
+            RegressionCsvDataset(
+                tmp_path / "m.csv",
+                tmp_path,
+                "image",
+                ["target"],
+                transform,  # type: ignore[arg-type]
+            )
+
     def test_empty_manifest_raises(self, tmp_path: Path) -> None:
         (tmp_path / "m.csv").write_text("image,target\n", encoding="utf-8")
         transform = _transform()

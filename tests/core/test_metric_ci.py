@@ -131,6 +131,30 @@ class TestPointEstimates:
         )
         assert cis["auc_roc"].value == pytest.approx(roc_auc_score(true, proba[:, 1]))
 
+    def test_binary_without_probabilities_scores_class_one_when_absent(self):
+        """Only class 0 in truth and prediction: sklearn's binary average still
+        scores the positive class 1 (no TP, no FP, no FN -> 0.0), as the
+        Evaluator reports. Inferring n_classes = 1 from the labels used to score
+        class 0 instead and print 1.0 [1.0, 1.0].
+        """
+        true = np.zeros(20, dtype=np.int64)
+        pred = np.zeros(20, dtype=np.int64)
+
+        cis = bootstrap_classification_cis(
+            true, pred, task="binary", y_proba_full=None, n_resamples=50
+        )
+
+        assert cis["accuracy"].value == 1.0
+        for name, scorer in (
+            ("precision", precision_score),
+            ("recall", recall_score),
+            ("f1", f1_score),
+        ):
+            expected = scorer(true, pred, average="binary", zero_division=0)
+            assert expected == 0.0
+            assert cis[name].value == expected
+            assert (cis[name].ci_low, cis[name].ci_high) == (0.0, 0.0)
+
     def test_multiclass_point_estimates_equal_the_evaluator_metrics(self):
         true, pred, proba = _multiclass_case()
 
