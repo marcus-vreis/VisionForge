@@ -85,6 +85,8 @@ def test_a_peeked_pipe_is_read_only_when_bytes_wait(
 def test_the_windows_peek_counts_waiting_bytes_and_sees_the_pipe_close(
     pipe: tuple[int, int],
 ) -> None:
+    if sys.platform != "win32":  # narrows for mypy on Linux, where it is absent
+        pytest.skip("PeekNamedPipe is Windows'")
     read_fd, write_fd = pipe
     peek = job_worker._pipe_peek(read_fd)
     assert peek() == 0
