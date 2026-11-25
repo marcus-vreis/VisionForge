@@ -33,7 +33,6 @@ from __future__ import annotations
 import contextlib
 import csv
 import json
-import math
 import os
 from collections.abc import Iterable
 from dataclasses import asdict
@@ -45,6 +44,7 @@ from loguru import logger
 
 from visionforge.core.cancellation import STOPPED, CancellationToken, job_was_stopped
 from visionforge.core.latex_export import report_to_latex
+from visionforge.core.strict_json import dumps_strict, json_safe
 from visionforge.utils.messages import tr
 from visionforge.utils.paths import validate_path_component
 
@@ -101,21 +101,7 @@ def _metadata_path(root: Path, run_dir: Path) -> Path:
     return path
 
 
-def _json_safe(value: Any) -> Any:
-    """``value`` with every NaN / infinity replaced by ``None``.
-
-    A bootstrap interval or a test statistic can come out non-finite, and
-    Python writes that as a bare ``NaN`` that no browser parses and the API
-    refuses to serve. The report keeps the token it always had; the group, which
-    the interface reads, says "no value" instead.
-    """
-    if isinstance(value, float):
-        return value if math.isfinite(value) else None
-    if isinstance(value, dict):
-        return {k: _json_safe(v) for k, v in value.items()}
-    if isinstance(value, list | tuple):
-        return [_json_safe(v) for v in value]
-    return value
+_json_safe = json_safe
 
 
 def _child(row: dict[str, Any], variant: str | None) -> dict[str, Any]:
@@ -268,6 +254,9 @@ def _copy_comparison_group(group: dict[str, Any], report: dict[str, Any]) -> Non
             "not_run": report.get("not_run") or [],
             "underpowered": bool(report.get("underpowered")),
             "power_note": report.get("power_note") or "",
+            # Per variant, the seeds a NaN or infinite metric left out of
+            # its tests and the ranking; absent in older runs.
+            "non_finite_seeds": report.get("non_finite_seeds") or {},
         }
     )
 
@@ -284,7 +273,10 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
     """Replace ``path`` whole, so a reader never sees a half-written run.json."""
     tmp = path.with_name(path.name + ".tmp")
     try:
-        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        # Every caller builds ``path`` with _metadata_path/_contained_path, which
+        # keeps it inside the outputs root.
+        text = dumps_strict(data)
+        tmp.write_text(text, encoding="utf-8")  # NOSONAR pythonsecurity:S2083
         tmp.replace(path)
     except OSError:
         # Do not leave the half step behind: the next reader of this folder
@@ -601,7 +593,7 @@ def write_group_summary(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     (out_dir / f"{kind}_summary.json").write_text(
-        json.dumps(report, indent=2), encoding="utf-8"
+        dumps_strict(report), encoding="utf-8"
     )
 
     rows = report.get("trials") or report.get("fold_results") or []

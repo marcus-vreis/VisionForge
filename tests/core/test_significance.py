@@ -683,3 +683,35 @@ class TestNonFiniteValues:
         from visionforge.core.significance import _effect_label
 
         assert _effect_label(math.nan) == "undefined"
+
+
+class TestAlphaRange:
+    """alpha is a probability strictly between 0 and 1; anything else is a typo."""
+
+    BAD = [0.0, 1.0, -0.05, 1.5, math.nan, math.inf]
+
+    @pytest.mark.parametrize("alpha", BAD)
+    def test_paired_comparison_rejects_it(self, alpha: float) -> None:
+        a, b = _pairs([0.1, 0.2, 0.3, 0.4])
+        with pytest.raises(ValueError, match="alpha"):
+            paired_comparison("m", a, b, alpha=alpha)
+
+    @pytest.mark.parametrize("alpha", BAD)
+    def test_holm_correct_rejects_it(self, alpha: float) -> None:
+        with pytest.raises(ValueError, match="alpha"):
+            holm_correct([], alpha=alpha)
+
+    @pytest.mark.parametrize("alpha", BAD)
+    def test_comparison_matrix_rejects_it(self, alpha: float) -> None:
+        groups = {"a": {1: 0.1, 2: 0.2, 3: 0.3}, "b": {1: 0.2, 2: 0.3, 3: 0.5}}
+        with pytest.raises(ValueError, match="alpha"):
+            comparison_matrix("m", groups, alpha=alpha)
+
+    def test_the_message_is_in_both_languages(self) -> None:
+        from visionforge.utils.messages import using_lang
+
+        a, b = _pairs([0.1, 0.2, 0.3, 0.4])
+        with using_lang("pt"), pytest.raises(ValueError, match="entre 0 e 1"):
+            paired_comparison("m", a, b, alpha=2.0)
+        with using_lang("en"), pytest.raises(ValueError, match="between 0 and 1"):
+            paired_comparison("m", a, b, alpha=2.0)

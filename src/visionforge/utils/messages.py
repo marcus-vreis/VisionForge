@@ -2245,6 +2245,10 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "re-running the task against another split."
         ),
     },
+    "significance.alpha_range": {
+        "pt": "O nível alpha deve estar entre 0 e 1 (exclusive), recebi {alpha}.",
+        "en": "The significance level alpha must be between 0 and 1 (exclusive), got {alpha}.",
+    },
     "compare.seeds_unique": {
         "pt": "As seeds da comparação precisam ser distintas.",
         "en": "Comparison seeds must be unique.",
@@ -3515,6 +3519,18 @@ CATALOG: dict[str, dict[Lang, str]] = {
             r"$^{{*}}$ significant at $\alpha={alpha}$ after Holm-Bonferroni "
             "correction across the family. Differences are A minus B on the "
             "seeds both configurations ran.{power_note}"
+        ),
+    },
+    "latex.comparison_non_finite": {
+        "pt": (
+            r"\textbf{{Seeds excluídas:}} uma métrica não finita (NaN ou "
+            "infinito) tirou estas seeds dos testes e do ranking da variante "
+            "({excluded})."
+        ),
+        "en": (
+            r"\textbf{{Seeds excluded:}} a non-finite metric (NaN or "
+            "infinity) left these seeds out of the variant's tests and "
+            "ranking ({excluded})."
         ),
     },
     "latex.comparison_underpowered": {

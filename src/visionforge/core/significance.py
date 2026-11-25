@@ -26,6 +26,7 @@ import numpy as np
 from scipy import stats
 
 from visionforge.core.metric_vocabulary import is_lower_is_better
+from visionforge.utils.messages import tr
 
 TestKind = Literal["paired_t", "wilcoxon"]
 # How the interval of the paired difference was built: the dual of the test that
@@ -105,6 +106,16 @@ class PairedComparison:
     def to_dict(self) -> dict[str, Any]:
         """JSON-ready form for the run report."""
         return asdict(self)
+
+
+def validate_alpha(alpha: float) -> None:
+    """Raise ``ValueError`` unless ``alpha`` is a level strictly inside (0, 1).
+
+    A 0, a 1 or a 5 (meant as 5 %) would give an empty interval, a test that
+    always rejects, or a crash deep in the statistics; NaN fails the check too.
+    """
+    if not (0.0 < alpha < 1.0):
+        raise ValueError(tr("significance.alpha_range", alpha=alpha))
 
 
 def bootstrap_ci(
@@ -361,6 +372,7 @@ def paired_comparison(
         ValueError: when fewer than two seeds are shared — a paired test needs
             at least two differences to have any dispersion to reason about.
     """
+    validate_alpha(alpha)
     shared = sorted(
         s for s in set(a) & set(b) if math.isfinite(a[s]) and math.isfinite(b[s])
     )
@@ -441,6 +453,7 @@ def holm_correct(
     used to unflag every sound pair after it. It still counts in the family
     size, which only makes the correction more conservative.
     """
+    validate_alpha(alpha)
     if not comparisons:
         return []
 
@@ -474,6 +487,7 @@ def comparison_matrix(
     Groups whose seeds do not overlap enough are skipped rather than compared
     with a weaker test — silence is better than a misleading p-value.
     """
+    validate_alpha(alpha)  # before the loop below, which skips a pair's ValueError
     labels = list(groups)
     comparisons: list[PairedComparison] = []
     for i, label_a in enumerate(labels):
@@ -508,4 +522,5 @@ __all__ = [
     "paired_comparison",
     "paired_t_ci",
     "signed_rank_cdf",
+    "validate_alpha",
 ]

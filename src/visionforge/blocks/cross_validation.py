@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import inspect
-import json
 from collections.abc import Callable, Iterator
 from datetime import datetime
 from pathlib import Path
@@ -40,6 +39,7 @@ from visionforge.core.evaluator import Evaluator
 from visionforge.core.pin_memory import pin_memory_for
 from visionforge.core.replicates import sample_std
 from visionforge.core.run_groups import write_run_group
+from visionforge.core.strict_json import dumps_strict
 from visionforge.core.trainer import Trainer, TrainResult, seed_before_building
 from visionforge.models.factory import ModelFactory
 from visionforge.utils.config import CrossValidationConfig, DataConfig, ExperimentConfig
@@ -537,7 +537,7 @@ class CrossValidationBlock(ExperimentBlock):
         }
 
         (out_dir / "cv_summary.json").write_text(
-            json.dumps(summary, indent=2), encoding="utf-8"
+            dumps_strict(summary), encoding="utf-8"
         )
 
     def _write_top_level_run_json(self, base_name: str) -> None:

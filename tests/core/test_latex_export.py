@@ -348,6 +348,44 @@ class TestComparisonTable:
         assert "Holm-Bonferroni" in tex
         assert r"\alpha=0.05" in tex
 
+    def test_note_names_the_seeds_a_non_finite_metric_took_out(self) -> None:
+        tex = comparison_to_latex(
+            self._comparisons(), non_finite_seeds={"novo": [3, 5], "base": [7]}
+        )
+
+        assert "non-finite" in tex
+        assert "novo: 3, 5" in tex
+        assert "base: 7" in tex
+
+    def test_the_non_finite_note_is_in_portuguese_too(self) -> None:
+        from visionforge.utils.messages import using_lang
+
+        with using_lang("pt"):
+            tex = comparison_to_latex(
+                self._comparisons(), non_finite_seeds={"novo": [3]}
+            )
+
+        assert "não finita" in tex
+        assert "novo: 3" in tex
+
+    def test_no_non_finite_note_when_no_seed_was_left_out(self) -> None:
+        assert "non-finite" not in comparison_to_latex(
+            self._comparisons(), non_finite_seeds={}
+        )
+        assert "non-finite" not in comparison_to_latex(self._comparisons())
+
+    def test_report_to_latex_passes_alpha_and_the_excluded_seeds(self) -> None:
+        report = {
+            "comparisons": self._comparisons(),
+            "alpha": 0.01,
+            "non_finite_seeds": {"novo": [4]},
+        }
+
+        tex = report_to_latex(report) or ""
+
+        assert r"\alpha=0.01" in tex
+        assert "novo: 4" in tex
+
     def test_test_name_is_human_readable(self) -> None:
         assert r"paired t" in comparison_to_latex(self._comparisons())
 
