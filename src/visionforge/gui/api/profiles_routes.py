@@ -72,6 +72,43 @@ def _reject_for_server(slug: str, req: ProfileUpdateRequest, own: str | None) ->
         raise HTTPException(422, tr("server.mlflow_closed"))
 
 
+def _create_or_refuse(req: ProfileCreateRequest, profiles_dir: Path) -> Profile:
+    """Create the profile, turning each failure into its HTTP status."""
+    try:
+        return create_profile(req.name, profiles_dir, req.pronoun)
+    except ProfileNameError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except ProfileExistsError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ProfileCreateError as exc:
+        logger.warning("GUI: could not create profile for {!r}: {}", req.name, exc)
+        raise HTTPException(500, str(exc)) from exc
+
+
+def _update_or_refuse(
+    slug: str, req: ProfileUpdateRequest, profiles_dir: Path, models_dir: Path
+) -> Profile:
+    """Update the profile, turning each failure into its HTTP status."""
+    try:
+        return update_profile(
+            slug,
+            profiles_dir,
+            models_dir,
+            name=req.name,
+            pronoun=req.pronoun,
+            settings=req.settings,
+        )
+    except InvalidProfileError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except UnknownProfileError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ProfileNameError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except ProfileCreateError as exc:
+        logger.warning("GUI: could not save profile {}: {}", slug, exc)
+        raise HTTPException(500, str(exc)) from exc
+
+
 def build_profiles_router(dirs: ProfileDirs) -> APIRouter:
     """Router for /profiles; mount it under the ``/api`` router that sets the language."""
     router = APIRouter(tags=[TAG_PROFILES])
@@ -114,15 +151,7 @@ def build_profiles_router(dirs: ProfileDirs) -> APIRouter:
                 refuses to make the folders (permissions, full disk).
         """
         profiles_dir, _ = dirs()
-        try:
-            profile = create_profile(req.name, profiles_dir, req.pronoun)
-        except ProfileNameError as exc:
-            raise HTTPException(422, str(exc)) from exc
-        except ProfileExistsError as exc:
-            raise HTTPException(409, str(exc)) from exc
-        except ProfileCreateError as exc:
-            logger.warning("GUI: could not create profile for {!r}: {}", req.name, exc)
-            raise HTTPException(500, str(exc)) from exc
+        profile = _create_or_refuse(req, profiles_dir)
         logger.info("GUI: created profile {} at {}", profile.slug, profile.root)
         return _profile_info(profile)
 
@@ -149,24 +178,7 @@ def build_profiles_router(dirs: ProfileDirs) -> APIRouter:
         """
         profiles_dir, models_dir = dirs()
         _reject_for_server(slug, req, _signed_in())
-        try:
-            profile = update_profile(
-                slug,
-                profiles_dir,
-                models_dir,
-                name=req.name,
-                pronoun=req.pronoun,
-                settings=req.settings,
-            )
-        except InvalidProfileError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        except UnknownProfileError as exc:
-            raise HTTPException(404, str(exc)) from exc
-        except ProfileNameError as exc:
-            raise HTTPException(422, str(exc)) from exc
-        except ProfileCreateError as exc:
-            logger.warning("GUI: could not save profile {}: {}", slug, exc)
-            raise HTTPException(500, str(exc)) from exc
+        profile = _update_or_refuse(slug, req, profiles_dir, models_dir)
         return _profile_info(profile)
 
     return router

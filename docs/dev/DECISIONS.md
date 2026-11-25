@@ -8531,6 +8531,8 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Inspect the JSON body in the gate.* The gate would have to know which strings are paths, and it would check a path the handler then reads again in another spelling.
 - *A fixed list of dataset names instead of paths.* Cleaner for a server, and it would fork the request models and the forms from the local tool, which names folders.
 
+**Addendum (2026-11-24): outside the scope, one answer whether the path exists or not.** `/api/dataset/file` and `/api/explorer/thumb` resolved the path strictly (404 when missing), and `/api/dataset/file` checked the extension (400) before asking the scope (403), so the status told whether a file of another profile existed. Both now resolve without `strict`, ask the scope first, and only then check the extension and that the file or folder exists. `DatasetAuditRequest.splits` became `dict[str, DatasetPart]`: with `layout: yolo` a climbing split was looked up on the disk and the error named the folder found or not found.
+
 ## ADR-215 — In server mode a run, its progress and the queue belong to who started it, and a config names only what its owner may reach
 
 **Date:** 2026-11-18
@@ -8690,6 +8692,8 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Let a download go anywhere in the scope.* The shared folders are the operator's; a person writing there changes what everyone trains on.
 - *Per-person saved keys.* The right end state for convenience, and it needs the credential store moved under the profile (it is one file per machine today); typing the key per download is safe now.
 - *Set and unset `KAGGLE_API_TOKEN` around a Kaggle download.* The client authenticates at import, once per process, and two downloads at once would race on the variable; a lock would serialize every Kaggle download and still leave the first key authenticated.
+
+**Addendum (2026-11-24): split and class names stay inside the target.** `DatasetDownloadRequest.splits` was `list[str]`, so a split with `..` or an absolute path wrote outside `out_dir`, into another person's folder among others. It is now `list[DatasetPart]` (422 before anything is fetched), and `dataset_download._child` refuses, in any mode, a split or class folder that does not resolve strictly below its parent (message `download.name_outside`): a Hugging Face dataset names its own splits and labels, and a `..` or, on Windows, a `\` in one of them climbed the same way. The Hub's split names are all checked before the first image is written. The test that every path of a confined route is typed now also fails on a `list` or `dict` of plain `str`.
 
 ## ADR-220 — In server mode the dataset Laboratory reads the scope, its jobs have an owner, and what it writes lands in the person's folder
 
@@ -9357,3 +9361,33 @@ ships with the next release.
 - *Drop the `detection` extra.* The empty names exist so an install line saved
   in a requirements file or a README elsewhere keeps resolving (ADR-106); the
   same holds for `[detection]`.
+
+## ADR-244 — Third-party run exporters through the `visionforge.exporters` entry-point
+
+**Date:** 2026-11-24
+**Status:** Accepted
+**Relates to:** ADR-005 (trust boundary is the user's filesystem), ADR-058 (researcher tasks), ADR-170 (MLflow export)
+
+**Context:** the AUDIT-2026-11-09 section 6 listed an entry-point for third-party exporters as a larger bet without a task. The seven built-in exporters (MLflow, W&B, Comet, Zenodo, GitHub, DVC, Hugging Face Hub) each have a GUI route and a page in `docs/gui/`; a lab that wants an internal registry or a format of its own has to fork the package. The review `product-competitive` also warned that each integration inside the package adds maintenance against a third party's API, so the way out for the next ones is to live outside it.
+
+**Decision:**
+
+- A package declares an object under `[project.entry-points."visionforge.exporters"]`: a class (instantiated with no arguments) or an instance with `name: str`, `description: str` and `export(run_dir, options) -> ExportResult`. `ExportResult` is a frozen dataclass with `destination` (URL or path) and `notes`. Both live in `core/exporter_plugins.py`, with `discover_exporters()` and `run_exporter()`.
+- An entry-point that fails to load or instantiate, or does not follow the protocol (empty `name`, no `description`, no callable `export`), is logged as a warning and skipped. On a duplicate `name` the first one found stays. Discovery never raises, so a broken plugin cannot stop the CLI.
+- `run_exporter` refuses a `run_dir` without `run.json` with a `ValueError` before calling the plugin.
+- `visionforge export --list` prints name and description; `visionforge export RUN_DIR --to NAME [--option key=value ...]` prints the destination on stdout and the notes on stderr. An unknown name, a bad option or an error the plugin raises as `ValueError`/`OSError` exits with code 2. The handler is in `cli_export.py`, not in `__main__.py`.
+- The built-in exporters are not migrated and keep their routes. The GUI does not list plugins. Messages go through `tr()` (`exporters.*`, pt/en). `docs/custom/EXPORTERS.md` is the guide.
+
+**Consequences:**
+
+- Installing a package that declares the group is enough to run its code under `visionforge export`; the trust is the one of any installed package (ADR-005). VisionForge passes no credential and the guide says to read tokens from the environment, not from `--option`.
+- `RunExporter`, `ExportResult` and the group name become public API: they change only in a minor release below 1.0, with a CHANGELOG note. The shape of `run.json` is not promised to plugins.
+- The options are strings only, so a plugin that wants a typed option parses it itself.
+- A plugin raising any other exception from `export` shows a traceback; only `ValueError` and `OSError` are treated as errors the user can fix.
+- Discovery runs on every `export` call and loads every declared entry-point, including ones for other names than `--to`. Acceptable for a CLI that runs once per export.
+
+**Alternatives considered:**
+
+- *Migrate the built-in exporters to the protocol.* Out of scope: their routes carry GUI state (credentials, progress) the protocol does not model.
+- *A GUI listing for plugins.* Would need a form schema for the options; the CLI is enough for the first version.
+- *Load plugins from an `user_exporters/` folder, like models and tasks.* The entry-point lets a plugin be versioned and installed with `pip`; the folder remains possible later.

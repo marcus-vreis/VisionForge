@@ -1347,6 +1347,11 @@ export async function fetchCodeTour(task: string, settings: CodeSettings): Promi
   return request<CodeSection[]>(`/code-tour/${encodeURIComponent(task)}${suffix}`);
 }
 
+/** The functions of a researcher's own task, read from its file (`GET /api/custom/{key}/code-tour`). */
+export async function fetchCustomCodeTour(key: string): Promise<CodeSection[]> {
+  return request<CodeSection[]>(`/custom/${encodeURIComponent(key)}/code-tour`);
+}
+
 /** The tasks whose training code "Como funciona" can show. */
 export async function fetchCodeTourTasks(): Promise<CodeTourTask[]> {
   return request<CodeTourTask[]>("/code-tour");

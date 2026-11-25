@@ -126,15 +126,13 @@ def test_a_shared_dataset_can_be_audited(
     )
     assert audit.status_code == 200, audit.text
     assert sum(audit.json()["image_counts"].values()) > 0
-    # A split that climbs out of the dataset is reported, never read.
+    # A split that climbs out of the dataset is refused with the body, never read.
     climbing = client.post(
         "/api/dataset/audit",
         json={"base_dir": str(world["beans"]), "splits": {"train": "../../secret"}},
         headers=ANA,
     )
-    assert climbing.status_code in (200, 400), climbing.text
-    if climbing.status_code == 200:
-        assert climbing.json()["image_counts"] == {"train": 0}
+    assert climbing.status_code == 422, climbing.text
 
 
 def test_the_session_no_longer_lists_these_routes_as_closed(

@@ -34,7 +34,7 @@ MIB = 1024 * 1024
 def test_the_option_needs_server_mode_and_a_size_above_zero() -> None:
     with pytest.raises(ServerModeError, match="--quota-gb"):
         ServerMode.from_options(enabled=False, quota_gb=5)
-    for bad in (0, -1):
+    for bad in (0, -1, float("nan")):
         with pytest.raises(ServerModeError, match="above zero"):
             ServerMode.from_options(enabled=True, trusted_proxies=[PROXY], quota_gb=bad)
     mode = ServerMode.from_options(enabled=True, trusted_proxies=[PROXY], quota_gb=2.5)
