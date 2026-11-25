@@ -139,7 +139,8 @@ def test_the_defaults_walk_the_folder_off_the_event_loop(
         json={"architecture": "resnet18", "base_dir": str(tmp_path)},
     )
     assert response.status_code == 200, response.text
-    assert on_loop and not any(on_loop)
+    assert on_loop
+    assert not any(on_loop)
 
 
 def test_a_folder_that_cannot_be_read_leaves_the_size_unsuggested(
@@ -256,8 +257,10 @@ def test_suspects_on_a_dataset_that_left_the_scope_are_refused(
 
 def test_suspects_count_for_the_quota_and_the_action_limit() -> None:
     post, get = f"POST {SUSPECTS}", f"GET {SUSPECTS}"
-    assert grows(post) and heavy(post)
-    assert not grows(get) and not heavy(get)
+    assert grows(post)
+    assert heavy(post)
+    assert not grows(get)
+    assert not heavy(get)
 
 
 def test_a_run_without_a_dataset_folder_is_a_clear_error(tmp_path: Path) -> None:
