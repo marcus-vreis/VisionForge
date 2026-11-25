@@ -32,6 +32,23 @@ _HOOKS: tuple[tuple[str, str, Step], ...] = (
 )
 _OWN_LOOP: tuple[str, str, Step] = ("train", "run", "train")
 
+# Message keys spelled out, not built from the section id, so the catalog test
+# that every key is used somewhere can find them.
+_SUMMARY_KEYS: dict[str, str] = {
+    "data": "code.custom.summary.data",
+    "model": "code.custom.summary.model",
+    "loss": "code.custom.summary.loss",
+    "validate": "code.custom.summary.validate",
+    "train": "code.custom.summary.train",
+}
+_NOTE_KEYS: dict[str, str] = {
+    "data": "code.custom.note.data",
+    "model": "code.custom.note.model",
+    "loss": "code.custom.note.loss",
+    "validate": "code.custom.note.validate",
+    "train": "code.custom.note.train",
+}
+
 
 def custom_code_tour(spec_cls: type[TaskSpec]) -> list[dict[str, Any]]:
     """The sections of a researcher's task, in the shape ``GET /api/code-tour`` sends.
@@ -54,7 +71,7 @@ def _section(
     except (OSError, TypeError):
         return _without_source(section_id, step, hook, qualified)
     lines = textwrap.dedent("".join(raw)).rstrip("\n").split("\n")
-    note = Note(f"def {hook}(", f"code.custom.note.{section_id}")
+    note = Note(f"def {hook}(", _NOTE_KEYS[section_id])
     try:
         first, last = note_span(note, lines)
     except ValueError:  # a hook bound to a function of another name
@@ -62,7 +79,7 @@ def _section(
     return {
         "id": section_id,
         "step": step,
-        "summary": tr(f"code.custom.summary.{section_id}"),
+        "summary": tr(_SUMMARY_KEYS[section_id]),
         "name": getattr(target, "__qualname__", qualified),
         "file": _file(target),
         "first_line": first_line,
@@ -80,7 +97,7 @@ def _without_source(
     return {
         "id": section_id,
         "step": step,
-        "summary": tr(f"code.custom.summary.{section_id}"),
+        "summary": tr(_SUMMARY_KEYS[section_id]),
         "name": qualified,
         "file": "",
         "first_line": 1,
