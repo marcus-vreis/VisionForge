@@ -15,6 +15,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- Tarefas próprias (`user_tasks/`): a aba **Código** mostra o código do pesquisador, lido com `inspect` da classe já registrada: `build_loaders`, `build_model`, `compute_loss`, `compute_metrics` e, no Nível 2, o `run`, no mesmo formato das tarefas embutidas, cada função com uma nota de quando o motor a chama. Nada é executado além do import que o registro já faz. Uma função sem texto-fonte vira uma nota que explica, não um erro. Nova rota `GET /api/custom/{key}/code-tour`, desligada no modo servidor como o resto das tarefas próprias. O arquivo sai como pasta e nome, nunca o caminho absoluto (ADR-173, ADR-058).
 - Regressão e segmentação, K-fold: `select_on` (`best` ou `last`, padrão `best`) escolhe a época que avalia cada fold, como na classificação. Entra no corpo de `POST /api/{regression,segmentation}/cv`, nas opções `strategy` do YAML da CLI e no cartão **Cross-validation** da GUI (**Época por fold**). `last` avalia os pesos da última época treinada, sem escolher a época no fold. O relatório do K-fold (`run.json`, `cv_summary.json`) grava `select_on` no topo e `select_on` e `selected_epoch` em cada fold. Sem mudança de `schema_version`: o campo é do pedido, não do config (ADR-242).
 
 ### Changed

@@ -780,6 +780,7 @@ export function TrainingOverlay({
                 sheetVisible={visible}
                 taskKey={taskKey}
                 settings={codeSettings}
+                custom={customRun}
               />
             </LazySurface>
           </div>

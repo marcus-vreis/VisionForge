@@ -418,6 +418,26 @@
       "datasets"
     ]
   },
+  "GET /api/custom/{key}/code-tour": {
+    "operationId": "custom_task_code_tour_api_custom__key__code_tour_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:key:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "array[CodeSection]"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "custom-tasks"
+    ]
+  },
   "GET /api/custom/{key}/schema": {
     "operationId": "custom_task_schema_api_custom__key__schema_get",
     "parameters": [

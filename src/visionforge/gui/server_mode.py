@@ -121,6 +121,7 @@ ROUTE_CLASSES: dict[str, RouteClass] = {
     "POST /api/credentials": "off",
     "DELETE /api/credentials/{provider}": "off",
     "DELETE /api/custom/{key}": "off",
+    "GET /api/custom/{key}/code-tour": "off",
     "POST /api/custom/{key}/hide": "off",
     "POST /api/custom/{key}/replicated-comparison": "off",
     "POST /api/custom/{key}/replicates": "off",
