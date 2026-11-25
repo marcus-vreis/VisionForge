@@ -868,6 +868,18 @@ export const pt = {
     deleting: "apagando…",
     deleted: (name: string) => `O dataset ${name} foi apagado.`,
     failed: "Não foi possível apagar o dataset.",
+    uploadIntro:
+      "Envie um dataset do seu computador como .zip: ele vira uma pasta nos seus datasets. Se a conexão cair, retome: só o que falta é enviado de novo.",
+    uploadName: "Nome da pasta nova",
+    uploadNameHint: "Vazio: o nome do arquivo, sem o .zip.",
+    upload: "Enviar .zip",
+    uploadProgress: (percent: number, sent: string, total: string) =>
+      `enviando… ${percent}% (${sent} de ${total})`,
+    uploadFinishing: "conferindo e extraindo no servidor…",
+    uploadResume: "Retomar envio",
+    uploadCancel: "Cancelar envio",
+    uploaded: (name: string) => `O dataset ${name} chegou e está na sua pasta.`,
+    uploadFailed: "O envio parou. Retome para mandar só o que falta.",
   },
   datasetLab: {
     kicker: "// laboratório de datasets",

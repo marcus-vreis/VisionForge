@@ -2117,6 +2117,145 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Não foi possível apagar o dataset '{name}': {reason}.",
         "en": "The dataset '{name}' could not be deleted: {reason}.",
     },
+    # ── A dataset sent as a .zip, in parts (ADR-246) ─────────────────────────
+    "upload.not_found": {
+        "pt": (
+            "Este envio não existe mais: terminou, foi cancelado ou ficou 24 h "
+            "parado. Comece de novo."
+        ),
+        "en": (
+            "This upload no longer exists: it finished, was cancelled or sat "
+            "idle for 24 h. Start again."
+        ),
+    },
+    "upload.bad_name": {
+        "pt": (
+            "O nome da pasta precisa ser um nome só: sem barras, dois-pontos ou "
+            '* ? " < > |, sem ponto no começo ou no fim.'
+        ),
+        "en": (
+            "The folder name must be a single name: no slashes, colons or "
+            '* ? " < > |, and no dot at the start or the end.'
+        ),
+    },
+    "upload.not_zip_name": {
+        "pt": "Envie um arquivo .zip.",
+        "en": "Send a .zip file.",
+    },
+    "upload.too_big": {
+        "pt": "O arquivo tem {size}; neste servidor cada envio vai até {limit}.",
+        "en": "The file is {size}; on this server each upload is at most {limit}.",
+    },
+    "upload.exists": {
+        "pt": (
+            "Já existe uma pasta '{name}' nos seus datasets. Escolha outro nome "
+            "ou apague a que existe."
+        ),
+        "en": (
+            "A folder '{name}' already exists among your datasets. Choose "
+            "another name or delete the existing one."
+        ),
+    },
+    "upload.name_busy": {
+        "pt": "Outro arquivo já está sendo enviado para a pasta '{name}'.",
+        "en": "Another file is already being uploaded to the folder '{name}'.",
+    },
+    "upload.too_many_open": {
+        "pt": (
+            "Você já tem {count} envios em andamento. Conclua ou cancele um "
+            "antes de começar outro."
+        ),
+        "en": (
+            "You already have {count} uploads in progress. Finish or cancel one "
+            "before starting another."
+        ),
+    },
+    "upload.quota": {
+        "pt": (
+            "Não cabe na sua pasta: ela tem {used} de {limit} e o dataset "
+            "precisa de {size}. Apague runs ou datasets e tente de novo."
+        ),
+        "en": (
+            "It does not fit in your folder: it holds {used} of {limit} and the "
+            "dataset needs {size}. Delete runs or datasets and try again."
+        ),
+    },
+    "upload.no_part": {
+        "pt": "Este envio tem as partes 0 a {last}; a parte {part} não existe.",
+        "en": "This upload has parts 0 to {last}; there is no part {part}.",
+    },
+    "upload.bad_part": {
+        "pt": "A parte {part} precisa ter {expected} bytes e chegou com {received}.",
+        "en": "Part {part} must be {expected} bytes and {received} arrived.",
+    },
+    "upload.busy": {
+        "pt": "Este envio está sendo extraído agora. Espere terminar.",
+        "en": "This upload is being unpacked right now. Wait for it to end.",
+    },
+    "upload.missing_parts": {
+        "pt": "Ainda faltam partes deste envio ({count}). Envie-as e conclua de novo.",
+        "en": "Parts of this upload are still missing ({count}). Send them and finish again.",
+    },
+    "upload.not_zip": {
+        "pt": "O arquivo não é um .zip que o VisionForge consiga ler. Nada foi extraído.",
+        "en": "The file is not a .zip VisionForge can read. Nothing was unpacked.",
+    },
+    "upload.unsafe_path": {
+        "pt": (
+            "O .zip tem um caminho que sairia da pasta do dataset: '{name}'. "
+            "Nada foi extraído."
+        ),
+        "en": (
+            "The .zip holds a path that would leave the dataset folder: "
+            "'{name}'. Nothing was unpacked."
+        ),
+    },
+    "upload.symlink": {
+        "pt": "O .zip tem um link simbólico ('{name}'), que não é aceito. Nada foi extraído.",
+        "en": "The .zip holds a symbolic link ('{name}'), which is refused. Nothing was unpacked.",
+    },
+    "upload.special_file": {
+        "pt": "O .zip tem um arquivo especial ('{name}'), que não é aceito. Nada foi extraído.",
+        "en": "The .zip holds a special file ('{name}'), which is refused. Nothing was unpacked.",
+    },
+    "upload.encrypted": {
+        "pt": "O .zip tem um arquivo com senha ('{name}'). Envie um .zip sem senha.",
+        "en": "The .zip holds a password-protected file ('{name}'). Send one without a password.",
+    },
+    "upload.too_many_entries": {
+        "pt": "O .zip tem arquivos demais: o limite é {limit}. Nada foi extraído.",
+        "en": "The .zip holds too many files: the limit is {limit}. Nothing was unpacked.",
+    },
+    "upload.ratio": {
+        "pt": (
+            "O arquivo '{name}' do .zip cresce mais de {ratio} vezes ao ser "
+            "extraído, como numa bomba de compressão. Nada foi extraído."
+        ),
+        "en": (
+            "The file '{name}' in the .zip grows more than {ratio} times when "
+            "unpacked, like a compression bomb. Nothing was unpacked."
+        ),
+    },
+    "upload.too_big_unpacked": {
+        "pt": "Extraído, o .zip passaria de {limit}. Nada foi extraído.",
+        "en": "Unpacked, the .zip would exceed {limit}. Nothing was unpacked.",
+    },
+    "upload.empty": {
+        "pt": "O .zip não tem nenhum arquivo.",
+        "en": "The .zip holds no file.",
+    },
+    "upload.duplicate": {
+        "pt": "O .zip tem duas entradas para '{name}'. Nada foi extraído.",
+        "en": "The .zip holds two entries for '{name}'. Nothing was unpacked.",
+    },
+    "upload.corrupt": {
+        "pt": "O .zip está corrompido ou usa uma compressão que não é lida aqui: {reason}.",
+        "en": "The .zip is damaged or uses a compression not read here: {reason}.",
+    },
+    "upload.failed": {
+        "pt": "Não foi possível extrair o dataset: {reason}.",
+        "en": "The dataset could not be unpacked: {reason}.",
+    },
     "server.busy": {
         "pt": (
             "O servidor está ocupado com ações de outras pessoas. Espere um "
