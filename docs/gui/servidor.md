@@ -98,6 +98,7 @@ visionforge gui --server --trusted-proxy 127.0.0.1 --allowed-host visionforge.me
 | `--user-header <nome>` | Cabeçalho em que o proxy informa a conta. O padrão é `X-Forwarded-User` (oauth2-proxy); no Authelia é `Remote-User`. |
 | `--datasets-dir <pasta>` | Pasta de datasets que todos podem **ler**. Pode repetir. A pasta precisa existir. |
 | `--max-actions <número>` | Quantas ações pesadas rodam ao mesmo tempo fora da fila, somando todas as pessoas. O padrão é 2. Veja "Ações que rodam na hora". |
+| `--max-queued <número>` | Quantos treinos **cada pessoa** pode ter esperando ou rodando na fila. O padrão é 3. Veja "A fila". |
 | `--quota-gb <número>` | O máximo que a pasta de **cada pessoa** pode ocupar, em GB (aceita decimais, como `0.5`). Sem ela não há limite. Veja "Cota de disco". |
 | `--max-upload-gb <número>` | O maior `.zip` que uma pessoa pode enviar de uma vez como dataset, em GB. O padrão é 5. Veja "Enviar um dataset (.zip)". |
 | `--allowed-host <nome>` | O nome público pelo qual as pessoas chegam (o do proxy). |
@@ -162,6 +163,27 @@ Cada pessoa vê os próprios jobs por inteiro. Dos outros aparece só um número
 quantos estão rodando ou esperando na frente do seu primeiro job (ou, se você
 não tem job, quantos há na fila). Um run de outra pessoa responde como um run
 que não existe: não dá para ler o progresso, o resultado nem parar.
+
+### Limite por pessoa e vez de cada um
+
+- **Limite:** cada pessoa pode ter no máximo `--max-queued` treinos (3, se você
+  não disser) esperando ou rodando, somando todas as filas. Uma estratégia
+  (sweep, réplicas, K-fold) conta como um treino. O seguinte recebe o aviso
+  "Você já tem 3 treino(s) na fila ou rodando" (erro 429) e nada entra na
+  fila: espere um terminar ou cancele um na fila e envie de novo. O limite é
+  de cada pessoa; os outros continuam enviando.
+- **Vez:** quando a GPU fica livre, o próximo treino não é o mais antigo da
+  fila, e sim o mais antigo da pessoa que rodou há mais tempo (quem ainda não
+  rodou vem primeiro). Se Ana envia A1, A2 e A3 e depois Bia envia B1, a ordem
+  é A1, B1, A2, A3. O número de jobs "na frente" que cada pessoa vê já segue
+  essa ordem, mas pode mudar: um job de alguém que ainda não rodou passa na
+  frente dos de quem já rodou.
+
+A vez conta treinos, não tempo de GPU: um treino de horas e um de minutos valem
+uma vez cada. Ela vale enquanto o processo está de pé; ao reiniciar o servidor
+a fila e a memória de quem rodou por último somem juntas. No uso local nada
+disso existe: a fila segue a ordem de envio e não há limite. `GET /api/session`
+informa o limite em `max_queued` (nulo no uso local). Decisão: ADR-245.
 
 ## Ações que rodam na hora
 

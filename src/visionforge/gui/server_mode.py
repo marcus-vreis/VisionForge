@@ -46,6 +46,7 @@ from visionforge.gui.api.profiles import (
     ensure_profile,
     slugify,
 )
+from visionforge.gui.api.run_queue import DEFAULT_MAX_QUEUED
 from visionforge.gui.disk_quota import GIB, DiskUsage, grows, size_text
 from visionforge.utils.messages import LANG_HEADER, message, resolve_lang
 
@@ -458,15 +459,15 @@ def _reject_options_without_server(
     shared: list[Path],
     header: str,
     quota_gb: float | None,
-    max_actions: int | None,
+    counts: tuple[int | None, ...],
     max_upload_gb: float | None,
 ) -> None:
     """Raise when a server-only option was given without ``--server``."""
     given = proxies or shared or header != DEFAULT_USER_HEADER or quota_gb
-    if given or max_actions is not None or max_upload_gb is not None:
+    if given or any(c is not None for c in counts) or max_upload_gb is not None:
         raise ServerModeError(
             "--trusted-proxy, --user-header, --datasets-dir, --quota-gb, "
-            "--max-actions and --max-upload-gb need --server."
+            "--max-actions, --max-queued and --max-upload-gb need --server."
         )
 
 
@@ -476,12 +477,15 @@ def _above_zero(option: str, value: float | None) -> None:
 
 
 def _check_limits(
-    quota_gb: float | None, max_actions: int | None, max_upload_gb: float | None
+    quota_gb: float | None,
+    counts: tuple[int | None, int | None],
+    max_upload_gb: float | None,
 ) -> None:
-    """Raise when ``--max-actions``, ``--quota-gb`` or ``--max-upload-gb`` is
-    out of range."""
-    if max_actions is not None and max_actions < 1:
-        raise ServerModeError(f"--max-actions {max_actions!r} must be 1 or more.")
+    """Raise when ``--max-actions``, ``--max-queued``, ``--quota-gb`` or
+    ``--max-upload-gb`` is out of range."""
+    for option, count in zip(("--max-actions", "--max-queued"), counts, strict=True):
+        if count is not None and count < 1:
+            raise ServerModeError(f"{option} {count!r} must be 1 or more.")
     _above_zero("--quota-gb", quota_gb)
     _above_zero("--max-upload-gb", max_upload_gb)
 
@@ -501,6 +505,8 @@ class ServerMode:
     max_actions: int = DEFAULT_MAX_ACTIONS
     # The largest .zip one upload may declare (``--max-upload-gb``, ADR-246).
     max_upload_bytes: int = int(DEFAULT_MAX_UPLOAD_GB * GIB)
+    # How many jobs each person may have waiting or running (``--max-queued``).
+    max_queued: int = DEFAULT_MAX_QUEUED
 
     @classmethod
     def from_options(
@@ -513,6 +519,7 @@ class ServerMode:
         quota_gb: float | None = None,
         max_actions: int | None = None,
         max_upload_gb: float | None = None,
+        max_queued: int | None = None,
     ) -> ServerMode:
         """Validate what the command line gave.
 
@@ -522,18 +529,23 @@ class ServerMode:
                 is not an IP or a CIDR block; an empty header name; a
                 ``--datasets-dir`` that is not a folder; ``--quota-gb`` without
                 ``--server`` or not above zero; ``--max-actions`` without
-                ``--server`` or below one; ``--max-upload-gb`` without
-                ``--server`` or not above zero.
+                ``--server`` or below one; ``--max-queued`` likewise;
+                ``--max-upload-gb`` without ``--server`` or not above zero.
         """
         proxies = [p.strip() for p in trusted_proxies if p.strip()]
         header = user_header.strip()
         shared = [Path(d) for d in datasets_dirs]
         if not enabled:
             _reject_options_without_server(
-                proxies, shared, header, quota_gb, max_actions, max_upload_gb
+                proxies,
+                shared,
+                header,
+                quota_gb,
+                (max_actions, max_queued),
+                max_upload_gb,
             )
             return cls()
-        _check_limits(quota_gb, max_actions, max_upload_gb)
+        _check_limits(quota_gb, (max_actions, max_queued), max_upload_gb)
         if not proxies:
             raise ServerModeError(
                 "--server needs --trusted-proxy <address>: the address of the "
@@ -559,6 +571,7 @@ class ServerMode:
                 (DEFAULT_MAX_UPLOAD_GB if max_upload_gb is None else max_upload_gb)
                 * GIB
             ),
+            max_queued=DEFAULT_MAX_QUEUED if max_queued is None else max_queued,
         )
 
     def trusts(self, client_host: str | None) -> bool:
@@ -757,7 +770,10 @@ class ServerModeGate:
         try:
             with dataset_scope(
                 DatasetScope(
-                    readable=(own, *mode.datasets), owner=profile.slug, own=own
+                    readable=(own, *mode.datasets),
+                    owner=profile.slug,
+                    own=own,
+                    max_queued=mode.max_queued,
                 )
             ):
                 await self.app(signed, receive, send)

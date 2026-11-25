@@ -25,6 +25,10 @@ module rather than a few lines in the route layer:
 The queue is deliberately in-memory and not persisted. It describes what this
 server process is about to do; a restart losing the pending list is correct
 behavior, not a gap — the durable record of a run is its ``run.json`` on disk.
+
+On a server for several people (ADR-245) a lane is *fair*: the next job is the
+oldest one of the person whose job started least recently, so one person's
+batch does not hold everybody else behind it. On a local install it stays FIFO.
 """
 
 from __future__ import annotations
@@ -45,6 +49,10 @@ from visionforge.core.cancellation import CancellationToken
 # Bounded because a long session would otherwise grow without limit, and the
 # durable record is run.json — this cache only serves the "just finished" fetch.
 _MAX_RECORDS = 100
+
+# How many jobs one person may have waiting or running on a server (ADR-245),
+# when the operator does not say (``--max-queued``).
+DEFAULT_MAX_QUEUED = 3
 
 # Where a running job stops when asked (ADR-111): the boundary after which it
 # starts nothing new. Inside a multi-unit job the training in flight is still cut
@@ -117,8 +125,22 @@ class RunQueue:
         self._active: QueuedJob | None = None
         self._records: dict[str, dict[str, Any]] = {}
         self._worker: asyncio.Task[None] | None = None
+        # Fair order (ADR-245): turned on by ``make_fair`` and kept, since a
+        # process is a server for several people for its whole life or never.
+        self._fair = False
+        # When each profile's job last started, as a count of starts.
+        self._starts = 0
+        self._last_start: dict[str, int] = {}
 
     # ── submission ────────────────────────────────────────────────────────────
+
+    def make_fair(self) -> None:
+        """Pick the next job across profiles from now on (see :meth:`run_order`).
+
+        A server for several people calls it before each submission; nothing
+        turns it off but :meth:`reset`.
+        """
+        self._fair = True
 
     def submit(self, job: QueuedJob) -> str:
         """Enqueue a job; returns ``"running"`` if it starts now, else ``"queued"``."""
@@ -198,11 +220,39 @@ class RunQueue:
         """How many jobs are waiting to start."""
         return len(self._pending)
 
+    def count_of(self, profile: str) -> int:
+        """How many jobs of ``profile`` wait or run here."""
+        jobs = [self._active, *self._pending]
+        return sum(1 for job in jobs if job is not None and job.profile == profile)
+
+    def run_order(self) -> list[QueuedJob]:
+        """The waiting jobs in the order they will start, if nobody submits more.
+
+        FIFO on a local install. In a fair lane (ADR-245) each next job is the
+        oldest one of the profile whose job started least recently; a profile
+        that never ran here comes first, and between those the oldest job wins.
+        """
+        if not self._fair:
+            return list(self._pending)
+        last = dict(self._last_start)
+        starts = self._starts
+        left = list(self._pending)
+        order: list[QueuedJob] = []
+        while left:
+            index = min(
+                range(len(left)), key=lambda i: (last.get(left[i].profile, -1), i)
+            )
+            job = left.pop(index)
+            starts += 1
+            last[job.profile] = starts
+            order.append(job)
+        return order
+
     def snapshot(self) -> dict[str, Any]:
-        """Active job + ordered pending list, for ``GET /api/queue``."""
+        """Active job + pending list in run order, for ``GET /api/queue``."""
         return {
             "active": self._active.describe() if self._active else None,
-            "pending": [job.describe() for job in self._pending],
+            "pending": [job.describe() for job in self.run_order()],
         }
 
     def record(self, run_id: str) -> dict[str, Any] | None:
@@ -222,13 +272,24 @@ class RunQueue:
         if self._worker is not None and not self._worker.done():
             self._worker.cancel()
         self._worker = None
+        self._fair = False
+        self._starts = 0
+        self._last_start.clear()
 
     # ── worker ────────────────────────────────────────────────────────────────
 
+    def _next(self) -> QueuedJob:
+        """Take the job that starts now: the first of :meth:`run_order`."""
+        job = self.run_order()[0] if self._fair else self._pending[0]
+        self._pending.remove(job)
+        self._starts += 1
+        self._last_start[job.profile] = self._starts
+        return job
+
     async def _drain(self) -> None:
-        """Run pending jobs in submission order until none are left."""
+        """Run pending jobs in run order until none are left."""
         while self._pending:
-            job = self._pending.popleft()
+            job = self._next()
             self._active = job
             try:
                 self._on_start(job)
@@ -280,10 +341,18 @@ class RunLanes:
             self._lanes[key] = self._make_lane()
         return self._lanes[key]
 
-    def submit(self, job: QueuedJob, lane: str = LOCAL_LANE) -> str:
-        """Enqueue in ``lane``; ``"running"`` if it starts now, else ``"queued"``."""
+    def submit(
+        self, job: QueuedJob, lane: str = LOCAL_LANE, *, fair: bool = False
+    ) -> str:
+        """Enqueue in ``lane``; ``"running"`` if it starts now, else ``"queued"``.
+
+        ``fair`` turns the lane's fair order on (:meth:`RunQueue.make_fair`).
+        """
         job.lane = lane
-        return self.lane(lane).submit(job)
+        queue = self.lane(lane)
+        if fair:
+            queue.make_fair()
+        return queue.submit(job)
 
     def cancel(self, run_id: str) -> bool:
         """Stop the job with that id in whichever lane holds it (see RunQueue.cancel)."""
@@ -298,6 +367,10 @@ class RunLanes:
     def pending_count(self) -> int:
         """Jobs waiting to start, over all lanes."""
         return sum(queue.pending_count() for queue in self._lanes.values())
+
+    def count_of(self, profile: str) -> int:
+        """How many jobs of ``profile`` wait or run, over all lanes."""
+        return sum(queue.count_of(profile) for queue in self._lanes.values())
 
     def is_writing(self, run_id: str, run_dir: Path, profile: str) -> bool:
         return any(
@@ -333,6 +406,7 @@ class RunLanes:
 
 __all__ = [
     "COLAB_LANE_PREFIX",
+    "DEFAULT_MAX_QUEUED",
     "LOCAL_LANE",
     "NotStoppableError",
     "QueuedJob",
