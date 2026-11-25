@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, useState } from "react";
 import { pickCheckpointFile } from "../api/client";
-import { humanizeFieldPath, type ValidationError } from "../hooks/useExperiment";
+import { humanizeFieldPath, validationLine, type ValidationError } from "../hooks/useExperiment";
 import { usePendingImport, type PendingImportProps } from "../hooks/usePendingImport";
 import { useT } from "../i18n/useT";
 import { resolveSchema as resolveNullableSchema } from "../lib/schema-form";
@@ -2938,7 +2938,7 @@ export function ParamPanel({
           sections={reviewSections}
           learningRatePlan={learningRatePlanRequest(formData)}
           errors={validationErrors.map(
-            (err) => `${humanizeFieldPath(t, err.field)} — ${err.message}`,
+            (err) => validationLine(humanizeFieldPath(t, err.field), err.message),
           )}
           ready={baseDir.trim() !== ""}
         />

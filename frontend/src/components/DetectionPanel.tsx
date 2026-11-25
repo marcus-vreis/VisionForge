@@ -32,7 +32,7 @@ import {
 } from "../lib/detection-models";
 import { exportConfigToYaml, importIntoForm } from "../lib/yaml-config";
 import { usePendingImport, type PendingImportProps } from "../hooks/usePendingImport";
-import type { ValidationError } from "../hooks/useExperiment";
+import { validationLine, type ValidationError } from "../hooks/useExperiment";
 import {
   NumberField,
   SelectField,
@@ -1008,7 +1008,7 @@ export function DetectionPanel({
     {
       id: "review", content: (
         <>
-          <ReviewStep taskKey="detection" name={formData.name} onNameChange={(name) => setFormData((p) => ({ ...p, name }))} suggestion={suggestion} sections={sections} errors={validationErrors.map((e) => `${e.field.join(" > ")}: ${e.message}`)} ready={!!datasetPath.trim()}
+          <ReviewStep taskKey="detection" name={formData.name} onNameChange={(name) => setFormData((p) => ({ ...p, name }))} suggestion={suggestion} sections={sections} errors={validationErrors.map((e) => validationLine(e.field.join(" > "), e.message, ": "))} ready={!!datasetPath.trim()}
             onExportYaml={() =>
               exportConfigToYaml(
                 buildDetectionPayload(formData),

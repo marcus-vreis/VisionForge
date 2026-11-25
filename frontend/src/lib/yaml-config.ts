@@ -1,7 +1,7 @@
 import * as jsyaml from "js-yaml";
 import type { Dict } from "../i18n/pt";
 import type { JsonSchema } from "../types/schema";
-import { humanizeFieldPath, type ValidationError } from "../hooks/useExperiment";
+import { humanizeFieldPath, validationLine, type ValidationError } from "../hooks/useExperiment";
 
 /**
  * Serialize formData to YAML and trigger a browser file download.
@@ -390,7 +390,7 @@ export function importReviewMessage(t: Dict, review: ImportReview): string | nul
   if (issues.length === 0) return null;
   const summary = issues
     .slice(0, 5)
-    .map((iss) => `· ${humanizeFieldPath(t, iss.field)} — ${iss.message}`)
+    .map((iss) => `· ${validationLine(humanizeFieldPath(t, iss.field), iss.message)}`)
     .join("\n");
   const lines = [t.paramPanel.importWarnings(issues.length, summary, Math.max(0, issues.length - 5))];
   if (ignored > 0) lines.push(t.paramPanel.importDropped(ignored));
