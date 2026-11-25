@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import csv
 import gc
-import json
 import math
 from typing import Any
 
@@ -19,6 +18,7 @@ from visionforge.core.cancellation import (
 )
 from visionforge.core.learning_rate import comparison_trial_rate
 from visionforge.core.significance import infer_direction
+from visionforge.core.strict_json import dumps_strict
 from visionforge.core.task_runner import ProgressCallback, UnitProgress, rank_by_metric
 from visionforge.utils.config import ExperimentConfig
 
@@ -215,7 +215,7 @@ class ModelComparisonBlock(ExperimentBlock):
 
         # Full dump — all trials including failures, preserving insertion order.
         (out_dir / "comparison_summary.json").write_text(
-            json.dumps(self._trials, indent=2), encoding="utf-8"
+            dumps_strict(self._trials), encoding="utf-8"
         )
 
         successful = [t for t in self._trials if t["status"] == "success"]

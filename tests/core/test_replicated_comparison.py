@@ -13,6 +13,7 @@ import pytest
 from visionforge.core.replicated_comparison import (
     VariantResult,
     build_report,
+    min_untied_pairs,
     run_replicated_comparison,
     validate_variants,
 )
@@ -570,3 +571,21 @@ class TestNonFiniteMetric:
         )
 
         assert report["non_finite_seeds"] == {}
+
+
+class TestAlphaRange:
+    @pytest.mark.parametrize("alpha", [0.0, 1.0, -0.1, 2.0, math.nan])
+    def test_run_rejects_it_before_training_anything(self, alpha: float) -> None:
+        runner = _FakeRunner()
+        with pytest.raises(ValueError, match="alpha"):
+            run_replicated_comparison(
+                runner, _base(), {"a": {}, "b": {}}, [1, 2, 3], "accuracy", alpha=alpha
+            )
+        assert runner.seen == []
+
+    @pytest.mark.parametrize("alpha", [0.0, 1.0, 2.0, math.nan])
+    def test_build_report_and_min_untied_pairs_reject_it(self, alpha: float) -> None:
+        with pytest.raises(ValueError, match="alpha"):
+            build_report([], [1, 2], "accuracy", alpha=alpha)
+        with pytest.raises(ValueError, match="alpha"):
+            min_untied_pairs(alpha)

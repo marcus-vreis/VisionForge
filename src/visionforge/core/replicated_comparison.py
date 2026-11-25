@@ -30,7 +30,11 @@ from visionforge.core.replicates import (
     aggregate_replicates,
     run_replicates,
 )
-from visionforge.core.significance import comparison_matrix, infer_direction
+from visionforge.core.significance import (
+    comparison_matrix,
+    infer_direction,
+    validate_alpha,
+)
 from visionforge.core.task_runner import (
     TaskRunner,
     UnitProgress,
@@ -145,6 +149,7 @@ def run_replicated_comparison(
             repeated seed (one sample counted twice), or fewer than two seeds,
             which leaves no dispersion to test.
     """
+    validate_alpha(alpha)  # before any variant trains
     validate_variants(base_config_dict, variants)
     if len(set(seeds)) != len(seeds):
         raise ValueError(tr("compare.seeds_unique"))
@@ -227,6 +232,7 @@ def build_report(
     the ranking; ``non_finite_seeds`` names it per variant, so the report
     never looks complete when it is not.
     """
+    validate_alpha(alpha)
     groups = {r.label: r.per_seed(metric) for r in results}
     non_finite = {
         r.label: seeds_ for r in results if (seeds_ := r.non_finite_seeds(metric))
@@ -309,6 +315,7 @@ def min_untied_pairs(alpha: float) -> int:
 
     ``2**(1 - n) <= alpha`` gives ``n >= 1 - log2(alpha)``: 6 at 0.05, 8 at 0.01.
     """
+    validate_alpha(alpha)
     return math.ceil(1.0 - math.log2(alpha))
 
 

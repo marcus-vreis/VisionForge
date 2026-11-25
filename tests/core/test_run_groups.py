@@ -339,6 +339,42 @@ def _comparison_report(
 
 
 class TestReplicatedComparisonGroup:
+    def test_the_group_keeps_the_seeds_a_non_finite_metric_took_out(
+        self, tmp_path: Path
+    ) -> None:
+        report = _comparison_report(
+            tmp_path,
+            {
+                "base": {1: 0.70, 2: 0.72, 3: 0.71, 4: 0.69, 5: 0.73, 6: 0.70},
+                "lr": {1: 0.80, 2: 0.83, 3: 0.81, 4: 0.79, 5: 0.84, 6: 0.80},
+            },
+            not_run=[],
+        )
+        report["non_finite_seeds"] = {"lr": [3]}
+        report["comparisons"][0]["n_tested"] = 5
+
+        group = build_group("replicated_comparison", report, None)
+
+        assert group["non_finite_seeds"] == {"lr": [3]}
+        assert group["comparisons"][0]["n_tested"] == 5
+
+    def test_a_report_without_non_finite_seeds_gives_an_empty_mapping(
+        self, tmp_path: Path
+    ) -> None:
+        report = _comparison_report(
+            tmp_path,
+            {
+                "base": {1: 0.70, 2: 0.72, 3: 0.71, 4: 0.69, 5: 0.73, 6: 0.70},
+                "lr": {1: 0.80, 2: 0.83, 3: 0.81, 4: 0.79, 5: 0.84, 6: 0.80},
+            },
+            not_run=[],
+        )
+        report.pop("non_finite_seeds")
+
+        group = build_group("replicated_comparison", report, None)
+
+        assert group["non_finite_seeds"] == {}
+
     def test_variants_paired_tests_and_ranking_are_the_reports(
         self, tmp_path: Path
     ) -> None:

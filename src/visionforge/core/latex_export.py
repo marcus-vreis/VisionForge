@@ -297,12 +297,20 @@ def cv_to_latex(report: dict[str, Any], *, experiment: str = "") -> str:
 
 
 def comparison_to_latex(
-    comparisons: list[dict[str, Any]], *, experiment: str = "", alpha: float = 0.05
+    comparisons: list[dict[str, Any]],
+    *,
+    experiment: str = "",
+    alpha: float = 0.05,
+    non_finite_seeds: dict[str, list[int]] | None = None,
 ) -> str:
     """Paired significance matrix: difference, CI, test, p, effect size.
 
     The caption names how each interval was built (ADR-187): the dual of the
     row's test, or the percentile bootstrap of a report written before it.
+
+    ``non_finite_seeds`` maps a variant to the seeds a NaN or infinite
+    metric left out of its tests; the note names them, so the table never
+    reads as built on every seed (ADR-061).
     """
     rows: list[list[str]] = []
     methods: list[str] = []
@@ -334,6 +342,19 @@ def comparison_to_latex(
         floor = max(float(c.get("min_achievable_p") or 0.0) for c in blocked)
         power_note = " " + tr_artifact(
             "latex.comparison_underpowered", floor=floor, alpha=alpha
+        )
+    excluded = {
+        label: seeds for label, seeds in (non_finite_seeds or {}).items() if seeds
+    }
+    if excluded:
+        power_note += " " + tr_artifact(
+            "latex.comparison_non_finite",
+            excluded=escape(
+                "; ".join(
+                    f"{label}: {', '.join(str(s) for s in seeds)}"
+                    for label, seeds in excluded.items()
+                )
+            ),
         )
     ci_note = tr_artifact(
         "latex.comparison_ci",
@@ -397,7 +418,12 @@ def report_to_latex(report: dict[str, Any], *, experiment: str = "") -> str | No
     if "trials" in report and "best_trial" in report:
         return sweep_to_latex(report, experiment=experiment)
     if "comparisons" in report:
-        return comparison_to_latex(report["comparisons"], experiment=experiment)
+        return comparison_to_latex(
+            report["comparisons"],
+            experiment=experiment,
+            alpha=report.get("alpha", 0.05),
+            non_finite_seeds=report.get("non_finite_seeds"),
+        )
     return None
 
 
