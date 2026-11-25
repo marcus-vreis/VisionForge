@@ -32,8 +32,9 @@ TestKind = Literal["paired_t", "wilcoxon"]
 # produced the p-value next to it (ADR-187), so the two cannot disagree.
 CiMethod = Literal["t", "hodges_lehmann"]
 
-# Confidence of the paired-difference interval: dual to a two-sided test at
-# alpha = 0.05, the comparison's significance level.
+# Default confidence of the paired-difference interval: dual to a two-sided test
+# at alpha = 0.05. ``paired_comparison`` builds it at ``1 - alpha`` instead, so
+# the interval answers the same question as the test beside it (ADR-187).
 _CI_CONFIDENCE = 0.95
 
 # Below this many pairs a normality check is meaningless, so the rank-based
@@ -74,9 +75,9 @@ class PairedComparison:
     p_value: float
     effect_size: float  # Cohen's d_z (paired)
     effect_label: str
-    # 95% interval of the paired difference, built by inverting the test that
-    # gave ``p_value`` (``ci_method``). None at an end the data cannot bound:
-    # below 6 pairs no Hodges-Lehmann interval reaches 95% (ADR-187).
+    # ``1 - alpha`` interval of the paired difference, built by inverting the
+    # test that gave ``p_value`` (``ci_method``). None at an end the data cannot
+    # bound: below 6 pairs no Hodges-Lehmann interval reaches 95% (ADR-187).
     ci_low: float | None
     ci_high: float | None
     # Smallest p the chosen test could possibly return with this many pairs.
@@ -84,6 +85,10 @@ class PairedComparison:
     # True when that floor is above alpha: no result, however consistent, can
     # reach significance — "not significant" then means "not enough seeds".
     underpowered: bool = False
+    # Pairs the test actually used: every pair for the t test, the non-zero
+    # differences for the Wilcoxon (scipy drops ties, ADR-177). None in a
+    # report written before this field existed.
+    n_tested: int | None = None
     significant: bool = False  # set by holm_correct over a family of tests
     # "t": Student-t interval of the mean difference (dual of the paired t).
     # "hodges_lehmann": Walsh-average interval with the exact signed-rank
@@ -92,8 +97,9 @@ class PairedComparison:
     # The point the interval brackets: the mean difference for "t", the
     # Hodges-Lehmann estimate (median of the Walsh averages) otherwise.
     ci_estimate: float | None = None
-    # Coverage the interval actually has: the exact signed-rank distribution is
-    # discrete, so the Hodges-Lehmann one is at least 95%, rarely exactly.
+    # Coverage the interval actually has: ``1 - alpha`` for the t interval; the
+    # exact signed-rank distribution is discrete, so the Hodges-Lehmann one is
+    # at least ``1 - alpha``, rarely exactly.
     ci_confidence: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -234,13 +240,13 @@ def hodges_lehmann_ci(
 
 
 def _difference_interval(
-    kind: TestKind, differences: list[float]
+    kind: TestKind, differences: list[float], confidence: float
 ) -> tuple[CiMethod, float | None, float | None, float, float]:
     """The interval dual to ``kind``: method, low, high, estimate, coverage."""
     if kind == "paired_t":
-        low, high = paired_t_ci(differences)
-        return "t", low, high, statistics.fmean(differences), _CI_CONFIDENCE
-    hl = hodges_lehmann_ci(differences)
+        low, high = paired_t_ci(differences, confidence=confidence)
+        return "t", low, high, statistics.fmean(differences), confidence
+    hl = hodges_lehmann_ci(differences, confidence=confidence)
     return "hodges_lehmann", hl.ci_low, hl.ci_high, hl.estimate, hl.confidence
 
 
@@ -291,7 +297,13 @@ def min_achievable_p(test: TestKind, n_pairs: int) -> float:
 
 
 def _effect_label(dz: float) -> str:
-    """Cohen's conventional bands, stated as guidance rather than truth."""
+    """Cohen's conventional bands, stated as guidance rather than truth.
+
+    A non-finite ``dz`` has no band: ``abs(nan) < 0.8`` is False, which used
+    to label it "large".
+    """
+    if not math.isfinite(dz):
+        return "undefined"
     magnitude = abs(dz)
     if magnitude < 0.2:
         return "negligible"
@@ -337,13 +349,21 @@ def paired_comparison(
     """Compare two configs over their shared seeds.
 
     ``a`` and ``b`` map ``seed -> metric value``. Only seeds present in both
-    are used, because pairing is what makes the test sensitive.
+    are used, because pairing is what makes the test sensitive. A NaN or
+    infinite value is not a measurement: its seed is treated as absent from
+    that side, so it leaves this pair only (callers record it; ADR-061).
+
+    The interval of the difference is built at ``1 - alpha``, the dual of the
+    test at the same level, and ``underpowered`` compares the test's floor with
+    the same ``alpha`` (ADR-187).
 
     Raises:
         ValueError: when fewer than two seeds are shared — a paired test needs
             at least two differences to have any dispersion to reason about.
     """
-    shared = sorted(set(a) & set(b))
+    shared = sorted(
+        s for s in set(a) & set(b) if math.isfinite(a[s]) and math.isfinite(b[s])
+    )
     if len(shared) < 2:
         raise ValueError(
             f"'{label_a}' and '{label_b}' share {len(shared)} seed(s); a paired "
@@ -372,7 +392,7 @@ def paired_comparison(
     # The interval inverts the same test as the p-value (ADR-187): a percentile
     # bootstrap here once excluded zero beside p > 0.05 with ten seeds.
     ci_method, ci_low, ci_high, ci_estimate, ci_confidence = _difference_interval(
-        kind, differences
+        kind, differences, 1.0 - alpha
     )
     # scipy's Wilcoxon drops zero differences (zero_method="wilcox"), so a tied
     # pair adds nothing to the test and the floor is set by the others.
@@ -398,6 +418,7 @@ def paired_comparison(
         ci_high=ci_high,
         min_achievable_p=floor,
         underpowered=floor > alpha,
+        n_tested=tested,
         ci_method=ci_method,
         ci_estimate=ci_estimate,
         ci_confidence=ci_confidence,
@@ -414,10 +435,20 @@ def holm_correct(
     powerful than plain Bonferroni and needs no independence assumption, so it
     is the right default for a comparison matrix. Returned in the input order
     with ``significant`` set.
+
+    A NaN p-value is never significant and is ordered last: ``sorted`` leaves
+    NaN where it finds it, and ``nan <= threshold`` stopping the step-down
+    used to unflag every sound pair after it. It still counts in the family
+    size, which only makes the correction more conservative.
     """
     if not comparisons:
         return []
-    order = sorted(range(len(comparisons)), key=lambda i: comparisons[i].p_value)
+
+    def _key(i: int) -> tuple[bool, float]:
+        p = comparisons[i].p_value
+        return (math.isnan(p), 0.0 if math.isnan(p) else p)
+
+    order = sorted(range(len(comparisons)), key=_key)
     total = len(comparisons)
     flags = [False] * total
     for rank, index in enumerate(order):

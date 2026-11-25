@@ -2198,6 +2198,26 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "As seeds das réplicas precisam ser distintas.",
         "en": "Replicate seeds must be unique.",
     },
+    # ── Power note of a replicated comparison (core/replicated_comparison.py) ─
+    "replicated.power_note": {
+        "pt": (
+            "O teste de postos usou {tested} das {n_pairs} seeds pareadas "
+            "({ties} empataram e foram descartadas), então não consegue retornar "
+            "um p-valor abaixo de {floor:.4f}, que está acima de alpha={alpha}: "
+            "nenhuma diferença, por maior e mais consistente que seja, pode ser "
+            "marcada como significativa. Com alpha={alpha} são necessárias ao "
+            "menos {needed} seeds pareadas que difiram; adicione seeds antes de "
+            "concluir algo de um resultado não significativo."
+        ),
+        "en": (
+            "The rank test used {tested} of the {n_pairs} paired seeds "
+            "({ties} tied and were dropped), so it cannot return a p-value below "
+            "{floor:.4f}, which is above alpha={alpha}: no difference, however "
+            "large and consistent, can be flagged significant. At alpha={alpha} "
+            "it needs at least {needed} paired seeds that differ; add seeds "
+            "before concluding anything from a non-significant result."
+        ),
+    },
     # ── visionforge run with a strategy envelope (ADR-184) ───────────────────
     "cli.strategy_shape": {
         "pt": (

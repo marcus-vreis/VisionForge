@@ -16,6 +16,7 @@ get it from the same code.
 from __future__ import annotations
 
 import copy
+import math
 import statistics
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
@@ -36,6 +37,7 @@ from visionforge.core.task_runner import (
     runner_cancel_token,
     runner_metric_direction,
 )
+from visionforge.utils.messages import tr
 
 
 @dataclass
@@ -52,12 +54,28 @@ class VariantResult:
         return [t for t in self.trials if t.status == "success"]
 
     def per_seed(self, metric: str) -> dict[int, float]:
-        """``seed -> metric`` for successful trials that reported it."""
+        """``seed -> metric`` for successful trials that reported a finite value.
+
+        A NaN or infinite value is not a measurement: it would stop the Holm
+        step-down, lead the ranking (``sorted`` keeps NaN where it finds it)
+        and crash the aggregate. Its seed is left out of this variant's tests
+        and ranking, and :meth:`non_finite_seeds` names it for the report.
+        """
         return {
-            t.seed: float(t.metrics[metric])
+            t.seed: value
             for t in self.successful
             if t.metrics.get(metric) is not None
+            and math.isfinite(value := float(t.metrics[metric]))
         }
+
+    def non_finite_seeds(self, metric: str) -> list[int]:
+        """Seeds of successful trials whose ``metric`` came back NaN or inf."""
+        return [
+            t.seed
+            for t in self.successful
+            if t.metrics.get(metric) is not None
+            and not math.isfinite(float(t.metrics[metric]))
+        ]
 
 
 def _set_nested(target: dict[str, Any], dot_key: str, value: Any) -> None:
@@ -123,10 +141,13 @@ def run_replicated_comparison(
     (``UnitProgress``, ADR-118), then a single ``end`` after the last one.
 
     Raises:
-        ValueError: for invalid variants (see :func:`validate_variants`) or
-            fewer than two seeds, which leaves no dispersion to test.
+        ValueError: for invalid variants (see :func:`validate_variants`), a
+            repeated seed (one sample counted twice), or fewer than two seeds,
+            which leaves no dispersion to test.
     """
     validate_variants(base_config_dict, variants)
+    if len(set(seeds)) != len(seeds):
+        raise ValueError(tr("compare.seeds_unique"))
     if len(seeds) < 2:
         raise ValueError(
             f"A paired comparison needs at least 2 seeds, got {len(seeds)}."
@@ -201,8 +222,23 @@ def build_report(
     variant — and the mistake reads as authoritative because it arrives with
     a p-value beside it. ``not_run`` names requested variants that never
     started, so a stopped comparison does not simply lose them (ADR-111).
+
+    A seed whose metric came back NaN or inf leaves that variant's tests and
+    the ranking; ``non_finite_seeds`` names it per variant, so the report
+    never looks complete when it is not.
     """
     groups = {r.label: r.per_seed(metric) for r in results}
+    non_finite = {
+        r.label: seeds_ for r in results if (seeds_ := r.non_finite_seeds(metric))
+    }
+    for label, bad in non_finite.items():
+        logger.warning(
+            "Replicated comparison: variant '{}' reported a non-finite {} for "
+            "seed(s) {}; left out of its tests and of the ranking.",
+            label,
+            metric,
+            bad,
+        )
     comparable = {label: values for label, values in groups.items() if len(values) >= 2}
     comparisons = comparison_matrix(metric, comparable, alpha=alpha)
 
@@ -239,6 +275,7 @@ def build_report(
         # were too few seeds for the test to ever reject.
         "underpowered": bool(comparisons) and all(c.underpowered for c in comparisons),
         "power_note": _power_note(comparisons, alpha),
+        "non_finite_seeds": non_finite,
         "not_run": list(not_run or []),
     }
 
@@ -267,20 +304,35 @@ def _rank_on_shared_seeds(
     return shared, ranked
 
 
+def min_untied_pairs(alpha: float) -> int:
+    """Fewest untied pairs whose Wilcoxon floor ``2 / 2**n`` reaches ``alpha``.
+
+    ``2**(1 - n) <= alpha`` gives ``n >= 1 - log2(alpha)``: 6 at 0.05, 8 at 0.01.
+    """
+    return math.ceil(1.0 - math.log2(alpha))
+
+
 def _power_note(comparisons: list[Any], alpha: float) -> str:
-    """Explain, in the report, when the seed count caps what can be concluded."""
+    """Explain, in the report, when the seed count caps what can be concluded.
+
+    The note quotes the pairs the rank test kept (scipy drops tied pairs,
+    ADR-177), how many tied, and the minimum for the configured ``alpha``.
+    """
     blocked = [c for c in comparisons if c.underpowered]
     if not blocked:
         return ""
     # The seeds actually paired, not the ones requested: after a stop or a
     # failed seed the test ran on fewer, and that is what capped it.
     worst = max(blocked, key=lambda c: c.min_achievable_p)
-    return (
-        f"With {worst.n_pairs} paired seeds the rank test cannot return a "
-        f"p-value below {worst.min_achievable_p:.4f}, which is above "
-        f"alpha={alpha}: no difference, however large and consistent, can be "
-        f"flagged significant. Increase the number of seeds (6+ for "
-        f"alpha=0.05) before concluding anything from a non-significant result."
+    tested = worst.n_pairs if worst.n_tested is None else worst.n_tested
+    return tr(
+        "replicated.power_note",
+        tested=tested,
+        n_pairs=worst.n_pairs,
+        ties=worst.n_pairs - tested,
+        floor=worst.min_achievable_p,
+        alpha=alpha,
+        needed=min_untied_pairs(alpha),
     )
 
 
