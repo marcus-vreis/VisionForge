@@ -292,6 +292,10 @@ def start_server(
             app.state.server_mode.max_actions,
         )
         logger.info(
+            "Server mode: a dataset upload may be at most {} bytes",
+            app.state.server_mode.max_upload_bytes,
+        )
+        logger.info(
             "Server mode: at most {} jobs per person waiting or running; the "
             "queue takes turns between people",
             app.state.server_mode.max_queued,

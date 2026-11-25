@@ -1,8 +1,17 @@
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 import { ApiError, deleteOwnDataset, fetchOwnDatasets, fetchSession, type OwnDataset } from "../api/client";
 import { useI18n } from "../i18n/useT";
-import { diskSize, gigabytes, quotaFull, setSession, useSession } from "../lib/session";
+import {
+  ROUTE,
+  diskSize,
+  gigabytes,
+  quotaFull,
+  routeOpen,
+  setSession,
+  useSession,
+} from "../lib/session";
+import { OwnDatasetUpload } from "./OwnDatasetUpload";
 
 type Load = "loading" | "ready" | "failed";
 
@@ -23,10 +32,12 @@ const BUTTON: CSSProperties = {
  *
  * What they downloaded or derived counts against their disk quota: here they
  * see each one's size and delete what they no longer need. Deleting asks
- * twice, in the row itself, since it cannot be undone.
+ * twice, in the row itself, since it cannot be undone. A dataset from their
+ * own computer arrives here as a .zip (ADR-246).
  */
 export function OwnDatasets() {
   const { t } = useI18n();
+  const canUpload = routeOpen(useSession(), ROUTE.datasetUpload);
   const [load, setLoad] = useState<Load>("loading");
   const [datasets, setDatasets] = useState<OwnDataset[]>([]);
   const [asking, setAsking] = useState<string | null>(null);
@@ -77,8 +88,19 @@ export function OwnDatasets() {
     }
   };
 
+  const afterUpload = async () => {
+    await refresh();
+    try {
+      // The new dataset counts in the profile menu's disk figure.
+      setSession(await fetchSession());
+    } catch {
+      // The list is right; the figure catches up on the next load.
+    }
+  };
+
   return (
     <OwnDatasetsView
+      upload={canUpload ? <OwnDatasetUpload onUploaded={afterUpload} /> : null}
       load={load}
       datasets={datasets}
       asking={asking}
@@ -106,6 +128,8 @@ interface OwnDatasetsViewProps {
   notice: string | null;
   onAsk: (name: string | null) => void;
   onDelete: (name: string) => void;
+  /** "Send .zip", where the server takes uploads. */
+  upload?: ReactNode;
 }
 
 /** What the list shows for a given state; the tests render it without a server. */
@@ -118,6 +142,7 @@ export function OwnDatasetsView({
   notice,
   onAsk,
   onDelete,
+  upload = null,
 }: OwnDatasetsViewProps) {
   const { t, locale } = useI18n();
   const quota = useSession().quota;
@@ -141,6 +166,7 @@ export function OwnDatasetsView({
           )}
         </div>
       )}
+      {upload}
       {notice && <div role="status">{notice}</div>}
       {error && <div role="alert">{error}</div>}
       {load === "loading" && <div>{t.ownDatasets.loading}</div>}
