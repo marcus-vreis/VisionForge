@@ -77,6 +77,10 @@ def _child(parent: Path, name: str) -> Path:
     Raises:
         ValueError: ``name`` does not stay inside ``parent``.
     """
+    # A backslash separates folders on Windows only: refused everywhere, so the
+    # same name gets the same answer on every server.
+    if "\\" in name:
+        raise ValueError(tr("download.name_outside", name=name[:80]))
     target = parent / name
     base = parent.resolve()
     resolved = target.resolve()
