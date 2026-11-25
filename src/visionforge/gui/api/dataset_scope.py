@@ -32,12 +32,15 @@ class DatasetScope:
     ``owner`` is the profile of the signed-in person: the routes that list or
     stop jobs show and touch only that profile's (ADR-215). ``own`` is that
     person's dataset folder, the only place a request may write a dataset
-    (ADR-219); it is one of ``readable``.
+    (ADR-219); it is one of ``readable``. ``max_queued`` is how many jobs that
+    person may have waiting or running (``--max-queued``, ADR-245); None is no
+    limit.
     """
 
     readable: tuple[Path, ...]
     owner: str = ""
     own: Path | None = None
+    max_queued: int | None = None
 
     def holds(self, path: Path) -> bool:
         """True when the resolved ``path`` is one of the folders or inside one."""

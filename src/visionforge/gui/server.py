@@ -174,6 +174,9 @@ async def session(request: Request) -> dict[str, Any]:
         # What this person's folder holds against the server's ceiling
         # (``--quota-gb``, ADR-225); null when the operator set none.
         "quota": quota,
+        # How many jobs each person may have waiting or running
+        # (``--max-queued``, ADR-245); null on a local install.
+        "max_queued": mode.max_queued if mode.enabled else None,
     }
 
 
@@ -288,6 +291,15 @@ def start_server(
             "Server mode: at most {} heavy actions at once outside the queue",
             app.state.server_mode.max_actions,
         )
+        logger.info(
+            "Server mode: a dataset upload may be at most {} bytes",
+            app.state.server_mode.max_upload_bytes,
+        )
+        logger.info(
+            "Server mode: at most {} jobs per person waiting or running; the "
+            "queue takes turns between people",
+            app.state.server_mode.max_queued,
+        )
         if app.state.server_mode.quota_bytes is not None:
             logger.info(
                 "Server mode: each person's folder may hold {} bytes",
@@ -309,8 +321,19 @@ def start_server(
             f"http://{page_host}:{port}"  # NOSONAR python:S5332 - local server URL
         )
         webbrowser.open(page_url)
+    # uvicorn would replace the client address with ``X-Forwarded-For`` when the
+    # peer is 127.0.0.1. The server-mode gate knows the login proxy by the peer
+    # that connected, so a forwarded address must never stand in for it: a
+    # proxy on this machine would be refused, and any local process could
+    # claim to be a remote proxy (ADR-213, amended 2026-11-25).
     _SERVER = uvicorn.Server(
-        uvicorn.Config(app, host=host, port=port, log_level="warning")
+        uvicorn.Config(
+            app,
+            host=host,
+            port=port,
+            log_level="warning",
+            proxy_headers=not app.state.server_mode.enabled,
+        )
     )
     _SERVER.run()
 

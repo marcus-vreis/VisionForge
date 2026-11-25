@@ -48,6 +48,7 @@ from visionforge.gui.api.schemas import (
     SampleDatasetRequest,
     SampleDatasetResponse,
 )
+from visionforge.gui.api.upload_routes import router as upload_router
 from visionforge.utils.messages import tr
 
 # Where the preview's PNGs are written, one folder per source class; served by
@@ -65,6 +66,8 @@ _KIND = "kind"
 router = APIRouter()
 # A person's own datasets on a server: listed and deleted (ADR-227).
 router.include_router(own_datasets_router)
+# ...and sent from their browser as a .zip, in parts (ADR-246).
+router.include_router(upload_router)
 
 
 @router.post(

@@ -1,0 +1,1 @@
+import{t as e}from"./react-CpM7gLRQ.js";var t=e();function n({pct:e}){return(0,t.jsx)(`div`,{role:`progressbar`,"aria-valuenow":e,"aria-valuemin":0,"aria-valuemax":100,style:{height:6,borderRadius:3,background:`rgb(var(--lt-ink, 255 255 255) / 0.08)`},children:(0,t.jsx)(`div`,{style:{height:`100%`,width:`${e}%`,borderRadius:3,background:`var(--accent-vf)`}})})}export{n as t};

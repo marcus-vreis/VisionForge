@@ -1,5 +1,7 @@
+import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { crc32 } from "node:zlib";
 import { expect, test, type Browser, type BrowserContext } from "@playwright/test";
 
 import { pt } from "../src/i18n/pt";
@@ -171,6 +173,83 @@ test("a person deletes a dataset of their own folder, after being asked twice", 
   ).toBeVisible();
   await expect(list.getByText(pt.ownDatasets.empty, { exact: true })).toBeVisible();
   expect((await (await request.get("/api/datasets/own")).json()).datasets).toHaveLength(0);
+});
+
+/** A .zip of `entries`, stored without compression: enough for a tiny dataset. */
+function storedZip(entries: Record<string, Buffer>): Buffer {
+  const pieces: Buffer[] = [];
+  const index: Buffer[] = [];
+  let offset = 0;
+  for (const [entry, data] of Object.entries(entries)) {
+    const name = Buffer.from(entry, "utf8");
+    const crc = crc32(data);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0x0800, 6); // UTF-8 names
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(0x0800, 8);
+    central.writeUInt32LE(crc, 16);
+    central.writeUInt32LE(data.length, 20);
+    central.writeUInt32LE(data.length, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt32LE(offset, 42);
+    pieces.push(local, name, data);
+    index.push(central, name);
+    offset += local.length + name.length + data.length;
+  }
+  const directory = Buffer.concat(index);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(index.length / 2, 8);
+  end.writeUInt16LE(index.length / 2, 10);
+  end.writeUInt32LE(directory.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...pieces, directory, end]);
+}
+
+test("a person sends a dataset .zip of their own and resumes it after a failure", async ({
+  page,
+  request,
+}) => {
+  const zip = storedZip({
+    "frutas/train/maca/1.jpg": randomBytes(2048),
+    "frutas/val/maca/2.jpg": randomBytes(1024),
+  });
+  // The first part is lost on the way, as when the connection drops.
+  let dropped = false;
+  await page.route("**/api/uploads/*/parts/*", async (route) => {
+    if (dropped) return route.continue();
+    dropped = true;
+    return route.abort("connectionreset");
+  });
+
+  await enter(page, "Ana");
+  await page.locator("[data-tour='datasets']").click();
+  await page.getByRole("tab", { name: pt.datasetsOverlay.tabMine }).click();
+  const mine = page.getByRole("region", { name: pt.ownDatasets.title });
+  await mine.locator("input[type='file']").setInputFiles({
+    name: "frutas.zip",
+    mimeType: "application/zip",
+    buffer: zip,
+  });
+
+  const resume = mine.getByRole("button", { name: pt.ownDatasets.uploadResume });
+  await expect(resume).toBeVisible();
+  await expect(mine.getByRole("alert")).toBeVisible();
+  await resume.click();
+
+  await expect(mine.getByText(pt.ownDatasets.uploaded("frutas"), { exact: true })).toBeVisible();
+  await expect(mine.getByText("frutas", { exact: true })).toBeVisible();
+  const own = (await (await request.get("/api/datasets/own")).json()).datasets;
+  expect(own).toEqual([expect.objectContaining({ name: "frutas", size_bytes: 3072 })]);
 });
 
 test("the server refuses what is outside a person's folders or off for a server", async ({

@@ -8518,6 +8518,8 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 
 **Addendum (2026-11-24): `POST /api/model/defaults` is `confined`.** It was `open` because it suggests settings for an architecture, but its optional `base_dir` is walked and up to 200 images of it are opened for the suggested size: on a server that read any folder the server account could. `ModelDefaultsRequest.base_dir` is now `DatasetDir | None` and the route is listed in `READY`; without `base_dir` it answers as before. The walk runs in a worker thread (`asyncio.to_thread`), and an `OSError` from it leaves the size unsuggested instead of answering 500.
 
+**Addendum (2026-11-25): the proxy is the peer, never a forwarded address.** uvicorn's default `proxy_headers=True` trusts `X-Forwarded-For` from 127.0.0.1 and puts that address in the request's `client`. The gate reads `client` to recognise the login proxy, so two things went wrong: a proxy on the same machine (`--trusted-proxy 127.0.0.1`, the example in `docs/gui/servidor.md`) sends the browser's address and every request was refused with 403; and any local process could send `X-Forwarded-For: <proxy address>` and be taken for a remote proxy, naming any account. In server mode `start_server` now passes `proxy_headers=False`; a local install keeps uvicorn's default. Tests: `tests/gui/test_server_mode_proxy_headers.py` builds the app exactly as uvicorn serves it.
+
 ## ADR-214 — In server mode a request reads datasets only from the person's own folder and the folders the operator shares
 
 **Date:** 2026-11-18
@@ -9438,3 +9440,62 @@ ships with the next release.
 - *A job inside `ci.yml`'s e2e job.* Every pull request would pay a Docker build, including those that do not touch the server; a separate workflow with path filters runs only when it can fail.
 - *Keycloak or Dex as the provider.* Real identity servers, and minutes of start-up and a realm to configure; the mock's login form is enough to drive the authorization-code flow oauth2-proxy uses.
 - *Playwright in a browser.* Closer to a person, and a browser install for a flow of four requests that a cookie jar replays.
+## ADR-246 — In server mode a person sends a dataset of their own as a .zip, in resumable parts
+
+**Date:** 2026-11-25
+**Status:** Accepted
+**Extends:** ADR-212 (phase 1: "upload of datasets in resumable parts with a per-user quota and archive limits"), ADR-219 (a person writes datasets only into their own folder), ADR-225 (the disk quota), ADR-227 (the person's own datasets)
+
+**Context:** on a server a person could get data there only through a provider download or the sample dataset (ADR-219), or by asking the operator to share a folder. A dataset on their own computer had no way in. An archive from a browser is also the first thing a signed-in person hands the server that the server unpacks itself: its names, sizes and file types are whatever its maker wrote, and ADR-212's threat model already listed "fill the disk with an archive".
+
+**Decision:**
+
+- `gui/api/upload_routes.py` adds five routes, all `owner` and open on a server: `POST /api/uploads` (folder name, file name, size) opens an upload; `PUT /api/uploads/{id}/parts/{n}` writes part `n`; `GET /api/uploads/{id}` lists the parts that arrived; `POST /api/uploads/{id}/complete` checks and unpacks; `DELETE /api/uploads/{id}` drops it. They sit in their own router, included next to the own-datasets one; `routes.py` does not grow.
+- Parts are 8 MiB, fixed by the server and given in the answer to the start; the last is shorter. A part must have exactly its length (400 otherwise) and is written at its place in one archive file the size of the upload, so sending a part again rewrites the same bytes: a broken connection is resumed by asking which parts arrived and sending the rest. Starting again with the same folder name, file name and size answers the upload already open, so a reloaded page resumes too.
+- The upload lives in the person's profile folder (`uploads/<id>/`), beside their dataset folder and outside it, so it is not listed as a dataset and counts against their quota. The id is 32 random hex characters looked up only in that folder: another account's id, a made-up one and one that expired all answer 404. An upload untouched for 24 h is removed the next time that person starts one. A person has at most three open.
+- The folder name is one plain name (no `/ \ : * ? " < > |`, no leading or trailing dot or space, at most 120 characters); the file must end in `.zip`. A name that is already a folder of theirs, or that another open upload of theirs goes to, is 409.
+- Limits: `--max-upload-gb` (default 5, needs `--server`) caps the declared size, 413 above it. With `--quota-gb`, the start is refused (507) when the folder plus the declared size passes the ceiling; the archive file is made at the declared size at once, so the size counts from the start, and a part is refused (507) when the folder went over the ceiling meanwhile. Before unpacking, the folder plus the unpacked size must fit (507, and the parts are kept to finish after freeing space). These checks are in the handlers, which know the sizes; the gate's own check (ADR-225) does not count these routes.
+- `gui/upload_archive.py` checks the archive before writing a byte. The central directory is located from the end record (ZIP64 included) and walked without being loaded: more than 200,000 entries or an index above 64 MiB is refused before `zipfile` reads it, since `zipfile` loads the whole index into memory. Then each entry: an absolute name, `..`, `.`, an empty segment, `:` (a drive or a stream) or `\` is refused, and so are symbolic links, devices and pipes (by the Unix mode in the entry), password-protected entries, a name used both as a file and as a folder, an entry above 1 MiB that expands more than 100 times, an unpacked total above four times `--max-upload-gb`, and an archive with no file. Any of these answers 422 with the entry's name and drops the upload: those bytes can never make a dataset. `__MACOSX/` is skipped.
+- Unpacking writes into a folder inside the upload, never over an existing file (`open(..., "xb")`), checks that every resolved path stays inside it, and counts each entry's bytes again against its declared size. When the archive holds one top folder (a zipped dataset folder), that folder is the dataset. It is then renamed into the person's dataset folder under the declared name, and refused (409) if something got there meanwhile: an existing dataset is never replaced.
+- The page: "Meus datasets" gains a folder-name field (empty: the file's name without `.zip`) and "Enviar .zip". The file is sliced in the parts the server gives and sent one after another with a progress bar; a failure leaves "Retomar envio", which asks the server what arrived and sends only the rest, and "Cancelar envio". When the dataset arrives the list and the session's disk figure are read again. The button hides when the server lists `POST /api/uploads` as closed.
+
+**Consequences:** a person brings a dataset of their own to a server without the operator, into their own folder only, and a dropped connection costs at most one part. A hostile archive is refused before anything is written. The local tool is unchanged: nobody has an own folder there and every upload route answers 404.
+
+**Known limits:** the "deletion at the end of the run" item of ADR-212's phase 1 (deleting an uploaded dataset after its training, logged and written to `run.json`) is not in this decision and stays pending; an uploaded dataset stays until its owner deletes it. Unpacking runs inside the `complete` request and is not counted in `--max-actions`; a reverse proxy with a short timeout may cut the answer of a large archive while the server finishes. The quota figure the parts check may be up to 15 s old (ADR-225). Only `.zip` is taken, not `.tar` or `.7z`. On Windows, `zipfile` reads a `\` in an entry name as `/`, so such an entry unpacks into a subfolder instead of being refused. A sparse archive file (Linux) counts at its declared size in the quota, though the disk holds only what arrived.
+
+**Not verified:** nothing ran behind a real login proxy. The end-to-end suite sent a small archive through the browser, with a dropped first part, against a server in this mode on Windows; an upload of several gigabytes was not timed, nor its unpacking. The link, device and ZIP64 checks ran on Windows only.
+
+**Alternatives considered:**
+
+- *One request with the whole file (multipart form).* Simple, and a dropped connection at 90 % of 5 GB starts over; the proxy's body limit would also have to be raised to the whole size.
+- *The tus protocol.* A standard for resumable uploads, with a client library; a dependency on each side for what five small routes do.
+- *A separate file per part, joined at the end.* Joining copies the whole archive once more and needs twice its size on disk at the end; writing at the offset needs neither.
+- *`ZipFile.extractall`.* It strips `..` and drive letters instead of refusing them and has no limit on size or ratio; checking every entry first keeps "nothing was unpacked" true.
+## ADR-245 — In server mode each person has at most `--max-queued` jobs in the queue, and the queue takes turns between people
+
+**Date:** 2026-11-25
+**Status:** Accepted
+**Extends:** ADR-075 (one run queue per server), ADR-212 (phase 1: per-user limits in the queue), ADR-215 (the queue belongs to who started each job), ADR-226 (a bound and a 429 for the actions outside the queue)
+
+**Context:** in server mode every training of every person goes into one queue, drained in submission order. ADR-212 listed "starve the others" among the threats, with "one queue, no limits" as what existed. One account could line up fifty jobs, and the next person waited behind all fifty; ADR-215 only let them see how many were ahead.
+
+**Decision:**
+
+- `visionforge gui --server --max-queued N` (default 3, `DEFAULT_MAX_QUEUED` in `run_queue.py`) is how many jobs one person may have waiting or running, over every lane. The option needs `--server` and a value of 1 or more.
+- The gate binds the limit in the request scope (`DatasetScope.max_queued`, beside its `owner`). `_submit_job`, the one place every run route, strategy and resume goes through to queue a job, counts the person's jobs (`RunLanes.count_of`) and answers 429 with `server.queue_full` (pt/en) when they already have N. The count and the submit have no `await` between them, so two requests of the same person cannot both pass the last free place. Nothing is queued and nothing is written by the refusal itself.
+- A submission made in server mode marks its lane fair (`RunQueue.make_fair`). In a fair lane, when the GPU frees, the next job is the oldest one of the profile whose job started least recently; a profile that never started a job in this process comes first, and between those the oldest job wins. A1, A2, A3 then B1 run as A1, B1, A2, A3. The pending list stays in arrival order; `run_order()` simulates the turns from the starts so far, and the snapshot behind `GET /api/queue` lists the jobs in that order, so `others_ahead` and a person's own order match what will run.
+- A local install never binds an owner: no count, no 429, FIFO as before, also between local profiles (ADR-114).
+- `GET /api/session` gains `max_queued` (null on a local install). The page shows nothing new: a refused submission shows the server's message where the training was asked, as for the other 429.
+
+**Consequences:** one person's batch no longer holds everybody behind it, and nobody can take more than N places in the line. Someone who wants to line up a long night of experiments on a server sends N at a time, or the operator raises N. The order a person sees can change after they look: a job of someone who has not run yet goes before the jobs of someone who has.
+
+**Known limits:** the turns are per process: a restart forgets who ran last, as it forgets the queue. Turns count jobs, not GPU time: a person whose jobs take hours has the same turn as one whose jobs take minutes. A strategy (a sweep, replicates, a K-fold) is one job however many trainings it runs. The limit is the same for everybody; there is none per account. `status.queued` still counts every waiting job on the server.
+
+**Not verified:** nothing ran behind a real login proxy, and no real training was queued: the tests submit through the real app and routes with the classification executor replaced by one that holds until released. No GPU.
+
+**Alternatives considered:**
+
+- *Check the limit in the gate, like `--max-actions`.* The gate would need its own list of the routes that queue (the run routes, the strategies, resume), and it would refuse before the body is read; `_submit_job` is already the one door every job goes through.
+- *Weighted fair queueing by GPU time.* Fairer for unequal jobs, and it needs a job's cost before it runs, which nobody knows. Turns by job are simple to explain in one sentence.
+- *Strict FIFO with only the limit.* With N = 3 and five people, the last one still waits behind fourteen jobs; the turns put them second.
+- *One queue per person, served in turn.* The same order with more state; one list with a computed order keeps cancel, `is_writing` and the snapshot as they were.

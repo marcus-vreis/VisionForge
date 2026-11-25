@@ -837,6 +837,18 @@ export const en: Dict = {
     deleting: "deleting…",
     deleted: (name: string) => `The dataset ${name} was deleted.`,
     failed: "The dataset could not be deleted.",
+    uploadIntro:
+      "Send a dataset from your computer as a .zip: it becomes a folder among your datasets. If the connection drops, resume: only what is missing is sent again.",
+    uploadName: "New folder name",
+    uploadNameHint: "Empty: the file's name, without .zip.",
+    upload: "Send .zip",
+    uploadProgress: (percent: number, sent: string, total: string) =>
+      `sending… ${percent}% (${sent} of ${total})`,
+    uploadFinishing: "checking and unpacking on the server…",
+    uploadResume: "Resume upload",
+    uploadCancel: "Cancel upload",
+    uploaded: (name: string) => `The dataset ${name} arrived and is in your folder.`,
+    uploadFailed: "The upload stopped. Resume it to send only what is missing.",
   },
   datasetLab: {
     kicker: "// dataset lab",

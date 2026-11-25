@@ -6,8 +6,9 @@
 > estratégias (validação cruzada, busca, comparação, réplicas), e mostra a fila,
 > o progresso e o histórico de cada um. Um run pronto pode ser retomado, testado
 > em outro dataset, explicado com Grad-CAM, usado em lote e exportado para
-> ONNX. Cada pessoa pode baixar um dataset, criar o de exemplo e usar o
-> Laboratório de datasets, gravando só na própria pasta. Um run pode ser
+> ONNX. Cada pessoa pode baixar um dataset, enviar um `.zip` do próprio
+> computador, criar o de exemplo e usar o Laboratório de datasets, gravando só
+> na própria pasta. Um run pode ser
 > baixado (ZIP, Markdown) e publicado no Hugging Face Hub, no Zenodo e no
 > GitHub com o token de quem o treinou. Cada pessoa pode mandar os próprios
 > treinos ao Weights & Biases e ao Comet, com a própria chave. O Colab, o DVC
@@ -17,7 +18,7 @@
 > pessoas. Não ofereça este servidor a desconhecidos.
 
 Esta página sai do código atual (`gui/server_mode.py`) e das decisões ADR-212
-a ADR-227. O que não foi testado está marcado como *não verificado*.
+a ADR-227 e ADR-246. O que não foi testado está marcado como *não verificado*.
 
 ## O que muda em relação ao uso local
 
@@ -97,7 +98,9 @@ visionforge gui --server --trusted-proxy 127.0.0.1 --allowed-host visionforge.me
 | `--user-header <nome>` | Cabeçalho em que o proxy informa a conta. O padrão é `X-Forwarded-User` (oauth2-proxy); no Authelia é `Remote-User`. |
 | `--datasets-dir <pasta>` | Pasta de datasets que todos podem **ler**. Pode repetir. A pasta precisa existir. |
 | `--max-actions <número>` | Quantas ações pesadas rodam ao mesmo tempo fora da fila, somando todas as pessoas. O padrão é 2. Veja "Ações que rodam na hora". |
+| `--max-queued <número>` | Quantos treinos **cada pessoa** pode ter esperando ou rodando na fila. O padrão é 3. Veja "A fila". |
 | `--quota-gb <número>` | O máximo que a pasta de **cada pessoa** pode ocupar, em GB (aceita decimais, como `0.5`). Sem ela não há limite. Veja "Cota de disco". |
+| `--max-upload-gb <número>` | O maior `.zip` que uma pessoa pode enviar de uma vez como dataset, em GB. O padrão é 5. Veja "Enviar um dataset (.zip)". |
 | `--allowed-host <nome>` | O nome público pelo qual as pessoas chegam (o do proxy). |
 
 Deixe o VisionForge escutando só em `127.0.0.1` (o padrão) quando o proxy roda
@@ -162,8 +165,8 @@ Authelia, e o proxy na mesma máquina que o VisionForge (`--trusted-proxy
 No modo servidor uma pessoa só consegue apontar para duas áreas do disco:
 
 - **A pasta dela:** `outputs/profiles/<perfil>/datasets/`, criada no primeiro
-  acesso. A tela não envia arquivos do seu computador: o que entra ali vem de
-  um download pela tela, do dataset de exemplo, do Laboratório ou de quem
+  acesso. O que entra ali vem de um `.zip` enviado do seu computador, de um
+  download pela tela, do dataset de exemplo, do Laboratório ou de quem
   administra o servidor (veja "Pôr um dataset no servidor").
 - **As pastas compartilhadas:** as que o servidor recebeu em `--datasets-dir`.
   Servem para os datasets que o grupo todo usa.
@@ -200,6 +203,27 @@ Cada pessoa vê os próprios jobs por inteiro. Dos outros aparece só um número
 quantos estão rodando ou esperando na frente do seu primeiro job (ou, se você
 não tem job, quantos há na fila). Um run de outra pessoa responde como um run
 que não existe: não dá para ler o progresso, o resultado nem parar.
+
+### Limite por pessoa e vez de cada um
+
+- **Limite:** cada pessoa pode ter no máximo `--max-queued` treinos (3, se você
+  não disser) esperando ou rodando, somando todas as filas. Uma estratégia
+  (sweep, réplicas, K-fold) conta como um treino. O seguinte recebe o aviso
+  "Você já tem 3 treino(s) na fila ou rodando" (erro 429) e nada entra na
+  fila: espere um terminar ou cancele um na fila e envie de novo. O limite é
+  de cada pessoa; os outros continuam enviando.
+- **Vez:** quando a GPU fica livre, o próximo treino não é o mais antigo da
+  fila, e sim o mais antigo da pessoa que rodou há mais tempo (quem ainda não
+  rodou vem primeiro). Se Ana envia A1, A2 e A3 e depois Bia envia B1, a ordem
+  é A1, B1, A2, A3. O número de jobs "na frente" que cada pessoa vê já segue
+  essa ordem, mas pode mudar: um job de alguém que ainda não rodou passa na
+  frente dos de quem já rodou.
+
+A vez conta treinos, não tempo de GPU: um treino de horas e um de minutos valem
+uma vez cada. Ela vale enquanto o processo está de pé; ao reiniciar o servidor
+a fila e a memória de quem rodou por último somem juntas. No uso local nada
+disso existe: a fila segue a ordem de envio e não há limite. `GET /api/session`
+informa o limite em `max_queued` (nulo no uso local). Decisão: ADR-245.
 
 ## Ações que rodam na hora
 
@@ -238,6 +262,55 @@ o que não usa mais.
   apagado, mas as ações que releem o dataset (como retomar o treino) deixam de
   funcionar para ele.
 
+## Enviar um dataset (.zip)
+
+Na mesma aba, **Enviar .zip** manda um dataset do seu computador para a sua
+pasta de datasets.
+
+1. Compacte a pasta do dataset num `.zip` (no Windows, "Enviar para → Pasta
+   compactada"). Se o `.zip` tiver uma única pasta no topo, ela vira o
+   dataset; a pasta `__MACOSX` que o macOS acrescenta é ignorada.
+2. Em **Nome da pasta nova**, escreva o nome que o dataset vai ter na sua
+   pasta. Vazio, vale o nome do arquivo sem o `.zip`. É um nome só: sem
+   barras, sem dois-pontos, sem ponto no começo ou no fim.
+3. Clique em **Enviar .zip** e escolha o arquivo. O envio vai em partes de
+   8 MB, com uma barra de progresso. No fim o servidor confere e extrai o
+   `.zip` ("conferindo e extraindo no servidor…") e o dataset aparece na
+   lista. O caminho completo dele é o que vai no campo de dataset da tarefa.
+
+Se a conexão cair no meio, aparece **Retomar envio**: o servidor diz quais
+partes já chegaram e só as que faltam vão de novo. Recarregar a página e
+escolher o mesmo arquivo com o mesmo nome de pasta também continua de onde
+parou. **Cancelar envio** descarta o que já foi.
+
+O que o servidor recusa, sem extrair nada:
+
+- **Pasta que já existe** (erro 409): um dataset seu nunca é substituído.
+  Escolha outro nome ou apague o antigo.
+- **Arquivo grande demais** (erro 413): acima de `--max-upload-gb` (5 GB se
+  quem opera não disser outro valor).
+- **Sem espaço** (erro 507), com `--quota-gb`: o tamanho do `.zip` conta desde
+  o começo do envio, e antes de extrair o servidor confere se o dataset
+  extraído também cabe. Nesse último caso as partes ficam guardadas: libere
+  espaço e retome.
+- **`.zip` perigoso ou estranho** (erro 422): caminho absoluto ou com `..`,
+  link simbólico, arquivo especial, arquivo com senha, nome repetido, mais de
+  200.000 arquivos, um arquivo que cresce mais de 100 vezes ao ser extraído
+  (bomba de compressão) ou, extraído, mais de 4 vezes `--max-upload-gb`. A
+  mensagem diz qual entrada foi recusada, e o envio é descartado.
+
+Cada pessoa tem no máximo 3 envios abertos ao mesmo tempo. Um envio parado por
+24 horas é apagado na próxima vez que a mesma pessoa começa outro. Enquanto
+dura, o envio fica em `outputs/profiles/<conta>/uploads/`, fora da pasta de
+datasets; ninguém mais o vê (para outra conta, a resposta é 404).
+
+Limites que o operador precisa conhecer: a extração roda dentro do pedido que
+conclui o envio e não conta em `--max-actions`; um proxy com tempo limite
+curto pode cortar a resposta de um `.zip` grande enquanto o servidor termina.
+Só `.zip` é aceito. **Ainda não existe** a remoção automática do dataset
+enviado ao fim do treino (prevista na fase 1 da ADR-212): ele fica na pasta
+até a pessoa apagá-lo.
+
 ## Cota de disco
 
 Sem `--quota-gb`, cada pessoa pode encher o disco do servidor. Com
@@ -249,7 +322,9 @@ Sem `--quota-gb`, cada pessoa pode encher o disco do servidor. Com
 - **Quando é conferido:** na hora em que a pessoa pede algo que grava dados
   novos: um treino ou uma estratégia, retomar um run, baixar ou criar um
   dataset, aplicar uma operação do Laboratório, e as ações de um run pronto
-  (testar em outro dataset, Grad-CAM, inferência em lote, exportar ONNX).
+  (testar em outro dataset, Grad-CAM, inferência em lote, exportar ONNX). O
+  envio de um `.zip` confere a cota com o tamanho dele, no começo e antes de
+  extrair (veja "Enviar um dataset (.zip)").
 - **O que acontece com a pasta cheia:** esses pedidos são recusados (erro 507)
   com o tamanho usado e o limite. Ler, abrir, baixar, publicar e **apagar**
   runs continuam funcionando.
@@ -291,6 +366,7 @@ for menor que a soma das cotas, ele ainda pode encher.
 | MLflow local (ligar e reenviar) | não num servidor (grava num arquivo do disco dele, que ninguém abriria) |
 | Criar outro perfil | não num servidor (o perfil é a conta do login) |
 | Listar e apagar os datasets da **sua** pasta ("Meus datasets") | sim; só as pastas diretamente na sua pasta, e não enquanto um treino seu roda ou espera |
+| Enviar um dataset do seu computador como `.zip` ("Enviar .zip") | sim, em partes que se retomam, para uma pasta nova da **sua** pasta de datasets |
 | Seletor de pasta, "abrir pasta", atualizar o VisionForge, Colab, tarefas próprias, credenciais de download | desligados no modo servidor |
 
 ## Estratégias num servidor
@@ -462,6 +538,15 @@ aba foi vista também à mão, com três datasets listados. *Não verificado:* a
 recusa com um treino na fila vista na tela (os testes automáticos cobrem pela
 rota) e apagar um dataset grande, de vários GB.
 
+Enviar um `.zip`, em 2026-11-25: a suíte Playwright, num servidor de verdade no
+Windows, escolhe um `.zip` pequeno, derruba a primeira parte no caminho, clica
+em **Retomar envio** e confere que o dataset aparece na lista com o tamanho
+certo. Os testes da rota, com a aplicação real, cobrem a parte que faltou, a
+conta alheia (404), a cota (507), a pasta existente (409), o caminho com `..`,
+o link simbólico e a bomba de compressão. *Não verificado:* um envio de vários
+GB (tempo de envio e de extração), atrás de um proxy de verdade, e a
+checagem de links e de ZIP64 no Linux.
+
 ## Tirar um run do servidor
 
 - **Baixar.** "Bundle do experimento" baixa um ZIP com o registro do run, os
@@ -487,7 +572,7 @@ esses caminhos.
 
 ## Pôr um dataset no servidor
 
-Há três caminhos:
+Há quatro caminhos:
 
 1. **O operador compartilha uma pasta** com `--datasets-dir`. Todos leem,
    ninguém grava pela tela.
@@ -497,6 +582,8 @@ Há três caminhos:
 3. **"Criar dataset de exemplo"**, no campo do dataset de cada tarefa: um
    conjunto pequeno e sintético, gravado na mesma pasta, para um primeiro
    treino.
+4. **Enviar um `.zip` do seu computador**, em **Datasets → Meus datasets**.
+   Vai para a mesma pasta (veja "Enviar um dataset (.zip)").
 
 Regras do download num servidor:
 
