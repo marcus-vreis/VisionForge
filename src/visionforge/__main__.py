@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from visionforge import __version__
+from visionforge.cli_export import add_export_parser, run_export_command
 
 # Map ExperimentConfig.block snake_case literals to BlockRegistry class names.
 # A URL, not `user_tasks/README.md`: that file ships only in the source tree,
@@ -616,6 +617,7 @@ def main() -> None:
         help="where the new run goes (default: the usual outputs folder)",
     )
     _add_offline_flag(reproduce_parser)
+    add_export_parser(subparsers)
 
     args = parser.parse_args()
     _bind_language_from_env()
@@ -634,6 +636,10 @@ def main() -> None:
 
     if args.command == "reproduce":
         _run_reproduce_command(args, parser)
+        return
+
+    if args.command == "export":
+        run_export_command(args, parser)
         return
 
     setup_logger()

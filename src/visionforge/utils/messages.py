@@ -744,6 +744,43 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Inferência em lote não é suportada para runs de '{task}' ainda.",
         "en": "Batch inference is not supported for '{task}' runs yet.",
     },
+    # ── third-party exporters (ADR-244) ──────────────────────────────────────
+    "exporters.load_failed": {
+        "pt": "Exportador '{entry}' ignorado: falha ao carregar ({error}).",
+        "en": "Exporter '{entry}' skipped: it failed to load ({error}).",
+    },
+    "exporters.bad_protocol": {
+        "pt": "Exportador '{entry}' ignorado: precisa de name, description e export().",
+        "en": "Exporter '{entry}' skipped: it needs name, description and export().",
+    },
+    "exporters.duplicate": {
+        "pt": "Exportador '{entry}' ignorado: o nome '{name}' já está em uso.",
+        "en": "Exporter '{entry}' skipped: the name '{name}' is already taken.",
+    },
+    "exporters.no_run_json": {
+        "pt": "'{run_dir}' não é um run: falta o run.json.",
+        "en": "'{run_dir}' is not a run: run.json is missing.",
+    },
+    "exporters.bad_option": {
+        "pt": "Opção inválida '{option}': use chave=valor.",
+        "en": "Invalid option '{option}': use key=value.",
+    },
+    "exporters.usage": {
+        "pt": "informe run_dir e --to NOME (ou use --list).",
+        "en": "give run_dir and --to NAME (or use --list).",
+    },
+    "exporters.unknown": {
+        "pt": "Exportador '{name}' desconhecido. Disponíveis: {available}.",
+        "en": "Unknown exporter '{name}'. Available: {available}.",
+    },
+    "exporters.none_installed": {
+        "pt": "Nenhum exportador de terceiros instalado.",
+        "en": "No third-party exporter installed.",
+    },
+    "exporters.none_available": {
+        "pt": "nenhum",
+        "en": "none",
+    },
     # ── runs and the queue ───────────────────────────────────────────────────
     "evidence.audit_failed": {
         "pt": "Não foi possível auditar as imagens: {error}",
