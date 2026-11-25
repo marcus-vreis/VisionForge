@@ -107,6 +107,10 @@ def bootstrap_classification_cis(
     n_classes = (
         proba.shape[1] if proba is not None else int(max(true.max(), pred.max())) + 1
     )
+    if task == "binary":
+        # The positive class is 1 even when no label in the split is 1, as in
+        # the Evaluator (sklearn average="binary"); n_classes = 1 would score 0.
+        n_classes = max(n_classes, 2)
     average: Literal["binary", "macro"] = "binary" if task == "binary" else "macro"
 
     rng = np.random.default_rng(seed)
@@ -409,10 +413,12 @@ def _regression_metrics(
     total = drawn_true.sum(axis=(1, 2))
     ss_tot = np.einsum("rnt,rnt->r", drawn_true, drawn_true) - (total * total) / count
     # Same guard as the streaming accumulator: a constant target has no variance
-    # to explain, and R² is undefined rather than perfect.
+    # to explain, and R² is undefined rather than perfect. A non-finite ss_tot
+    # (a NaN/inf target) is not "no variance": R² stays NaN, like MSE.
     r2 = np.where(
         ss_tot > 1e-12, 1.0 - sse / np.where(ss_tot > 1e-12, ss_tot, 1.0), 0.0
     )
+    r2 = np.where(np.isfinite(ss_tot), r2, np.nan)
 
     return {"mse": mse, "rmse": np.sqrt(mse), "mae": mae, "r2": r2}
 

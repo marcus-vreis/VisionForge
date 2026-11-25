@@ -62,6 +62,17 @@ class CrossValidationReport:
     select_on: str = "best"
 
 
+def fold_drop_last(n_train: int, batch_size: int) -> bool:
+    """Whether a K-fold train loader drops its trailing partial batch (ADR-050).
+
+    A trailing size-one batch breaks BatchNorm in train mode, and folds are
+    small. A fold that fits in one batch keeps it, or it would train on nothing.
+    Shared by every K-fold (task K-fold here, classification in
+    ``blocks/cross_validation.py``).
+    """
+    return n_train > batch_size
+
+
 class _FoldDataModule:
     """train/val loaders over ``Subset``s of the augmented / clean datasets."""
 
@@ -77,14 +88,12 @@ class _FoldDataModule:
 
     def train_loader(self) -> DataLoader:  # type: ignore[type-arg]
         """Return a shuffled, single-process loader for the training fold."""
-        # A trailing size-one batch breaks BatchNorm unless the entire fold is tiny.
-        drop_last = len(self._train) > self._batch_size  # type: ignore[arg-type]
         return DataLoader(
             self._train,
             batch_size=self._batch_size,
             shuffle=True,
             num_workers=0,
-            drop_last=drop_last,
+            drop_last=fold_drop_last(len(self._train), self._batch_size),  # type: ignore[arg-type]
         )
 
     def val_loader(self) -> DataLoader:  # type: ignore[type-arg]

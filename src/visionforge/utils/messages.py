@@ -624,6 +624,16 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Manifest '{path}', linha {line}: alvo não numérico ({error}).",
         "en": "Manifest '{path}' row {line}: non-numeric target ({error}).",
     },
+    "regdata.non_finite_target": {
+        "pt": (
+            "Manifest '{path}', linha {line}: alvo '{column}' não finito "
+            "('{value}'). Corrija ou remova a linha."
+        ),
+        "en": (
+            "Manifest '{path}' row {line}: non-finite '{column}' target "
+            "('{value}'). Fix or remove the row."
+        ),
+    },
     "scan.anomaly_train_missing": {
         "pt": "Pasta de treino normal não encontrada: {train_dir}/{normal_dir}",
         "en": "Normal training folder not found: {train_dir}/{normal_dir}",
@@ -3107,6 +3117,19 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "en": (
             "auc_roc metric is not defined for multiclass tasks. Use 'accuracy' "
             "or 'f1' instead."
+        ),
+    },
+    "config.model_comparison_fixed_model": {
+        "pt": (
+            "model_comparison constrói cada arquitetura de model_comparison.model_names"
+            "; {field} faria todas as tentativas usarem o mesmo modelo sob "
+            "nomes diferentes. Remova {field} ou rode um bloco classification."
+        ),
+        "en": (
+            "model_comparison builds each architecture in "
+            "model_comparison.model_names; {field} would make every "
+            "trial use the same model under different names. Remove {field} or "
+            "run a classification block."
         ),
     },
     "config.select_on_last_early_stopping": {

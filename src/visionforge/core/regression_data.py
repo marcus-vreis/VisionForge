@@ -11,6 +11,7 @@ class index).
 from __future__ import annotations
 
 import csv
+import math
 from pathlib import Path
 from typing import Any
 
@@ -90,6 +91,19 @@ class RegressionCsvDataset(Dataset):  # type: ignore[type-arg]
                             error=exc,
                         )
                     ) from exc
+                # float() accepts "nan" and "inf"; one such cell makes every
+                # metric of the split NaN, so it is refused here, by its row.
+                for column, value in zip(target_columns, targets, strict=True):
+                    if not math.isfinite(value):
+                        raise ValueError(
+                            tr(
+                                "regdata.non_finite_target",
+                                path=csv_path,
+                                line=line_no,
+                                column=column,
+                                value=row[column],
+                            )
+                        )
                 self._rows.append((image, targets))
 
         if not self._rows:
