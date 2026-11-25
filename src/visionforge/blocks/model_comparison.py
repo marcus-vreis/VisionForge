@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import gc
 import json
+import math
 from typing import Any
 
 import torch
@@ -146,9 +147,12 @@ class ModelComparisonBlock(ExperimentBlock):
         metric = mc.metric
         successful = [t for t in unsorted if t["status"] == "success"]
         failed = [t for t in unsorted if t["status"] != "success"]
+        # A NaN compares False both ways, so sorted() could leave it first; it
+        # ranks like a missing value and is never crowned.
         ranked = rank_by_metric(
-            successful, lambda t: t[metric], infer_direction(metric)
+            successful, lambda t: _finite_or_none(t[metric]), infer_direction(metric)
         )
+        best = next((t for t in ranked if _finite_or_none(t[metric]) is not None), None)
 
         self._trials = ranked + failed
         self._write_artifacts()
@@ -161,7 +165,7 @@ class ModelComparisonBlock(ExperimentBlock):
             overrides_of=lambda t: _trial_overrides(t, mc.lr_policy),
             metric=metric,
             direction=infer_direction(metric),
-            best_index=ranked[0]["trial_index"] if ranked else None,
+            best_index=best["trial_index"] if best is not None else None,
             planned=len(mc.model_names),
             stopped=job_was_stopped(
                 [t["status"] for t in self._trials],
@@ -240,6 +244,13 @@ class ModelComparisonBlock(ExperimentBlock):
                         "training_time_s": trial["training_time_s"],
                     }
                 )
+
+
+def _finite_or_none(value: Any) -> float | None:
+    """The metric as a rankable number, or None when missing or not finite."""
+    if value is None or not math.isfinite(value):
+        return None
+    return float(value)
 
 
 def _trial_overrides(trial: dict[str, Any], lr_policy: str) -> dict[str, Any]:

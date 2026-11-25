@@ -8,6 +8,8 @@ would bracket a value the report never shows.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
 import torch
@@ -85,6 +87,21 @@ class TestRegressionCis:
 
     def test_tiny_split_gets_no_interval(self) -> None:
         assert bootstrap_regression_cis(np.zeros((5, 1)), np.zeros((5, 1))) == {}
+
+    def test_nan_target_does_not_fabricate_a_finite_r2(self) -> None:
+        """ss_tot is NaN for the full split and for every resample that draws the
+        NaN row; the constant-target fallback (0.0) is for zero variance, not
+        for an undefined one. R² must stay NaN like MSE, as the accumulator does.
+        """
+        true = [float(i) for i in range(19)] + [float("nan")]
+        pred = [float(i) for i in range(20)]
+
+        cis = bootstrap_regression_cis(true, pred, n_resamples=200, seed=0)
+
+        assert math.isnan(cis["mse"].value)
+        assert math.isnan(cis["r2"].value)
+        assert math.isnan(cis["r2"].ci_low)
+        assert math.isnan(cis["r2"].ci_high)
 
 
 class TestAnomalyCis:

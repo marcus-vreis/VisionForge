@@ -563,6 +563,8 @@ class ExperimentConfig(BaseModel):
             and self.task == "multiclass"
         ):
             raise ValueError(tr("config.auc_multiclass"))
+        if self.block == "model_comparison":
+            _check_comparison_builds_each_model(self)
         if self.grid_search is not None:
             _check_grid_lr_mode(self.grid_search)
         if self.cross_validation is not None:
@@ -587,6 +589,27 @@ def check_select_on_last(select_on: str, *, patience: int, scheduler_kind: str) 
         raise ValueError(tr("config.select_on_last_early_stopping", patience=patience))
     if scheduler_kind == "plateau":
         raise ValueError(tr("config.select_on_last_plateau"))
+
+
+def _check_comparison_builds_each_model(config: "ExperimentConfig") -> None:
+    """Refuse the fields that would make every comparison trial one model.
+
+    A trial swaps only ``model.name`` (ADR-044 addendum): ``timm_model`` and
+    ``custom_model`` win over it in ``ModelFactory``, ``weights_path`` loads one
+    checkpoint into each architecture, and a non-``train`` mode trains nothing.
+    Refused rather than cleared, so the config never runs other than as written.
+    """
+    model = config.model
+    for name, value in (
+        ("model.timm_model", model.timm_model),
+        ("model.custom_model", model.custom_model),
+        ("model.weights_path", model.weights_path),
+    ):
+        if value is not None:
+            raise ValueError(tr("config.model_comparison_fixed_model", field=name))
+    if config.classification.mode != "train":
+        field = f"classification.mode='{config.classification.mode}'"
+        raise ValueError(tr("config.model_comparison_fixed_model", field=field))
 
 
 def _check_grid_lr_mode(grid: GridSearchConfig) -> None:

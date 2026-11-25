@@ -95,6 +95,10 @@ class _MetricAccumulator:
         rmse = math.sqrt(mse)
         mae = self.sum_abs_err / self.n
         ss_tot = self.sum_y_sq - (self.sum_y * self.sum_y) / self.n
+        if not math.isfinite(ss_tot):
+            # A NaN/inf target: the variance is undefined, not zero (the 0.0
+            # fallback below is for a constant target only).
+            return mse, rmse, mae, math.nan
         r2 = 1.0 - (self.sum_sq_err / ss_tot) if ss_tot > 1e-12 else 0.0
         return mse, rmse, mae, r2
 
