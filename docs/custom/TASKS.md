@@ -62,6 +62,7 @@ Every custom task `<key>` gets these endpoints with no extra code:
 | `GET /api/tasks` | lists built-ins + your tasks (drives the GUI tabs) |
 | `GET /api/custom/<key>/schema` | your Config's JSON Schema (drives the form) |
 | `POST /api/custom/<key>/run` | one training run, live monitor included |
+| `GET /api/custom/<key>/code-tour` | your hooks' real source, for the **Código** tab (`docs/gui/codigo.md`) |
 | `POST /api/custom/<key>/sweep` | grid/random/Optuna over **any** Config field, including the ones you declared (ADR-045) |
 | `POST /api/custom/<key>/replicates` | N seeds → mean ± std ± 95% CI, never ranked (ADR-056) |
 | `POST /api/custom/<key>/replicated-comparison` | variants over shared seeds, paired tests (ADR-061) |

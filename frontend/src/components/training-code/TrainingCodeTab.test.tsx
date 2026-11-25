@@ -12,7 +12,7 @@ import { LanguageContext } from "../../i18n/context";
 import { en } from "../../i18n/en";
 import { pt } from "../../i18n/pt";
 import { lineMarks } from "../../lib/code-lines";
-import { libraryNotice, tourStatus, unavailableReason } from "../../lib/code-tour";
+import { libraryNotice, tourStatus, tourSupport, unavailableReason } from "../../lib/code-tour";
 import { RUN_STEPS, type RunStep } from "../../lib/run-steps";
 import { storySpecFor } from "../../lib/story-family";
 import { SHEET_TABS } from "../../lib/training-story";
@@ -309,6 +309,13 @@ describe("the code of the step", () => {
     expect(tourStatus("regression", ["classification", "regression"])).toBe("supported");
     expect(tourStatus("regression", ["classification"])).toBe("missing");
     expect(tourStatus("my_custom_task", ["classification", "regression"])).toBe("missing");
+  });
+
+  it("always asks the server for a researcher's own task, whose tour is not in the list", () => {
+    expect(tourSupport("my_custom_task", null, true)).toBe("supported");
+    expect(tourSupport("my_custom_task", ["classification"], true)).toBe("supported");
+    expect(tourSupport("my_custom_task", ["classification"], false)).toBe("missing");
+    expect(tourSupport("regression", null, false)).toBe("loading");
   });
 
   it("shows the server's reason when it has no tour for this run", () => {

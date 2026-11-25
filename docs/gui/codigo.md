@@ -37,6 +37,16 @@ linhas. Ela junta as antigas abas "Como funciona" e "Código" (ADR-204). Tudo aq
 - **Todas as tarefas.** Classificação, regressão, segmentação, anomalia e
   detecção têm um roteiro cada (ADR-181). A lista vem do servidor, então uma
   tarefa nova com roteiro aparece sem mudança na página.
+- **Tarefas próprias.** Uma tarefa de `user_tasks/` mostra o código que você
+  escreveu: `build_loaders` (dados), `build_model` (modelo), `compute_loss`
+  (perda) e `compute_metrics` (validação), mais o seu `run` (treino) numa tarefa
+  de Nível 2. O servidor lê o texto-fonte da classe já registrada com `inspect`,
+  sem executar nada além do import que o registro já faz, e cada função leva uma
+  nota sobre quando o motor a chama. Uma função sem texto-fonte (embutida,
+  extensão em C, arquivo que mudou depois do import) vira uma nota que diz isso,
+  não um erro. O arquivo aparece como pasta e nome (`user_tasks/minha.py`), nunca
+  como caminho absoluto. No modo servidor a rota fica desligada, como o resto das
+  tarefas próprias.
 
 ## Rotas
 
@@ -44,6 +54,7 @@ linhas. Ela junta as antigas abas "Como funciona" e "Código" (ADR-204). Tudo aq
 |---|---|
 | `GET /api/code-tour` | as tarefas com roteiro e as configurações que cada uma lê |
 | `GET /api/code-tour/{task}` | as seções da tarefa: fonte, primeira linha, arquivo dentro do pacote e as notas |
+| `GET /api/custom/{key}/code-tour` | as seções de uma tarefa própria, lidas do arquivo do pesquisador |
 
 A rota lê as configurações da consulta (`tour_settings`): uma chave que a tarefa
 não conhece, ou um valor que ela não aceita, é descartado e as notas dessa
