@@ -34,7 +34,7 @@ from loguru import logger
 
 from visionforge.core.cancellation import CancellationToken
 from visionforge.core.loader_lifecycle import describe_worker_spawn_failure
-from visionforge.core.run_trackers import TrackerFactory
+from visionforge.core.run_trackers import TrackerFactory, export_run_record
 from visionforge.gui.api.run_events import RunEventLog
 from visionforge.gui.api.run_queue import (
     LOCAL_LANE,
@@ -89,6 +89,8 @@ class JobState:
     run: dict[str, Any] = dataclasses.field(default_factory=dict)
     # Whose job it is (ADR-114); in server mode only that person reads it.
     profile: str = "default"
+    # Run the block in a child process when the executor can (ADR-248).
+    isolated: bool = False
 
 
 # Started jobs by run_id, oldest first. A finished job stays a while so its
@@ -137,6 +139,7 @@ def _begin_job(job: QueuedJob) -> None:
         token=job.cancel_token,
         lane=job.lane,
         profile=job.profile,
+        isolated=job.isolated,
         run={
             "run_id": job.run_id,
             "status": "running",
@@ -324,6 +327,46 @@ def _failed_run(run_id: str, error: Exception) -> dict[str, Any]:
     }
 
 
+# The values of ``config.block`` a server job still runs in the training thread:
+# the strategies that train several models in one job. The child process runs one
+# training of one model (ADR-248); these are its next step.
+_IN_THREAD_BLOCKS = frozenset(
+    {"cross_validation", "grid_search", "random_search", "model_comparison"}
+)
+
+
+async def _execute_in_child(
+    block_cls: type[_Block],
+    config: ExperimentConfig,
+    run_id: str,
+    resume_dir: Path | None,
+    trackers: tuple[TrackerFactory, ...],
+) -> None:
+    """Run one classification training of a server job in a child process (ADR-248).
+
+    The trackers stay here: they hold the person's tokens, which the child must
+    not have. The finished ``run.json`` is sent to them once the run completed,
+    as for the other tasks (ADR-197), instead of epoch by epoch.
+    """
+    from visionforge.gui.api.job_process import child_spec, execute_in_child
+
+    state = _job_state(run_id)
+    logger.info("GUI: Starting experiment {} (block={}, child)", run_id, config.block)
+    try:
+        spec = child_spec(
+            block_cls, config, resume_dir, report_section=None, spawn_hint=True
+        )
+        state.run = await execute_in_child(run_id, spec, state.log, state.token)
+    except Exception as e:
+        logger.exception("GUI: Experiment {} failed", run_id)
+        state.run = _failed_run(run_id, e)
+    finally:
+        await state.log.put(None)
+    run_dir = state.run.get("run_dir")
+    if trackers and state.run.get("status") == "completed" and run_dir:
+        await asyncio.to_thread(export_run_record, trackers, Path(run_dir))
+
+
 async def _execute_experiment(
     config: ExperimentConfig,
     run_id: str,
@@ -337,6 +380,10 @@ async def _execute_experiment(
     block_types = _block_types()
 
     state = _job_state(run_id)
+    if state.isolated and config.block not in _IN_THREAD_BLOCKS:
+        block_cls = block_types.get(config.block, block_types["classification"])
+        await _execute_in_child(block_cls, config, run_id, resume_dir, trackers)
+        return
 
     loop = asyncio.get_running_loop()
     queue = state.log

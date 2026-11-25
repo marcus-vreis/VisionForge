@@ -89,6 +89,9 @@ class QueuedJob:
     # Which queue runs it (ADR-163, phase 4): LOCAL_LANE, or the lane of one
     # Google account. Set by RunLanes.submit.
     lane: str = "local"
+    # A server's job: an executor that can run it in a child process does so
+    # (ADR-248). A local job keeps the training thread.
+    isolated: bool = False
 
     def describe(self) -> dict[str, Any]:
         """JSON-ready form for the queue endpoint (never includes the callable)."""
