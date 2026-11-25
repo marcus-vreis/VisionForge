@@ -50,6 +50,21 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
 
+      # Fresh for every run and masked in the log; nothing is stored in the
+      # repository or in the project's secrets. First, so every later step
+      # (the logs and the stop on failure too) can read the compose file, which
+      # refuses to load without them.
+      - name: Generate the proxy's secrets
+        run: |
+          cookie="$(python3 -c 'import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())')"
+          client="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
+          echo "::add-mask::$cookie"
+          echo "::add-mask::$client"
+          {
+            echo "OAUTH2_PROXY_COOKIE_SECRET=$cookie"
+            echo "OAUTH2_PROXY_CLIENT_SECRET=$client"
+          } >> "$GITHUB_ENV"
+
       - uses: docker/setup-buildx-action@v4.4.1
 
       # The CPU image, the one the compose file names. Built here rather than by
@@ -66,19 +81,6 @@ jobs:
           load: true
           cache-from: type=gha,scope=server-proxy
           cache-to: type=gha,mode=max,scope=server-proxy
-
-      # Fresh for every run and masked in the log; nothing is stored in the
-      # repository or in the project's secrets.
-      - name: Generate the proxy's secrets
-        run: |
-          cookie="$(python3 -c 'import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())')"
-          client="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
-          echo "::add-mask::$cookie"
-          echo "::add-mask::$client"
-          {
-            echo "OAUTH2_PROXY_COOKIE_SECRET=$cookie"
-            echo "OAUTH2_PROXY_CLIENT_SECRET=$client"
-          } >> "$GITHUB_ENV"
 
       - name: Start the stack
         run: docker compose up -d --no-build --wait --wait-timeout 180
