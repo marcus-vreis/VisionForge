@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -212,19 +213,28 @@ def _emit_untrained_fold_end(
 def aggregate_folds(
     folds: list[FoldResult], names: tuple[str, ...]
 ) -> dict[str, dict[str, float | int | None]]:
-    """Mean, sample std and n of each metric over the folds that finished."""
+    """Mean, sample std and n of each metric over the folds that finished.
+
+    A fold whose metric is NaN or infinite (an R² on a constant target) is not
+    a measurement: it stays out of the mean and std, and ``n_non_finite`` counts
+    it, as the replicate aggregate does (ADR-061). A metric with no finite value
+    keeps its entry with ``n = 0`` and null statistics.
+    """
     successful = [f for f in folds if f.status == "success"]
     aggregate: dict[str, dict[str, float | int | None]] = {}
     for name in names:
-        values = [f.metrics[name] for f in successful if name in f.metrics]
-        if values:
-            aggregate[name] = {
-                "mean": float(np.mean(values)),
-                "std": sample_std(values),
-                "n": len(values),
-                # Runs before ADR-111 wrote the population std (ddof=0).
-                "std_ddof": 1,
-            }
+        reported = [f.metrics[name] for f in successful if name in f.metrics]
+        if not reported:
+            continue
+        values = [v for v in reported if math.isfinite(v)]
+        aggregate[name] = {
+            "mean": float(np.mean(values)) if values else None,
+            "std": sample_std(values),
+            "n": len(values),
+            "n_non_finite": len(reported) - len(values),
+            # Runs before ADR-111 wrote the population std (ddof=0).
+            "std_ddof": 1,
+        }
     return aggregate
 
 

@@ -134,8 +134,12 @@ def sample_std(values: list[float]) -> float | None:
     so the same "± std" means the same thing everywhere. A single value
     reports None rather than a 0.0 that reads as "no variation" -- a stopped
     K-fold often has exactly one finished fold (ADR-111).
+
+    A NaN or infinite value is not a measurement (ADR-061): it stays out, as in
+    ``aggregate_replicates``, so fewer than two finite values also give None.
     """
-    return statistics.stdev(values) if len(values) >= 2 else None
+    finite = [v for v in values if math.isfinite(v)]
+    return statistics.stdev(finite) if len(finite) >= 2 else None
 
 
 def aggregate_replicates(

@@ -38,6 +38,7 @@ from visionforge.core.resume import (
     save_resume_state,
 )
 from visionforge.core.resume_provenance import validate_resume_dataset
+from visionforge.core.strict_json import dumps_strict
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything
 from visionforge.core.training_health import (
@@ -1221,7 +1222,7 @@ class DetectionTrainer:
             **training_loop.run_json_tail(result, graphics),
         }
         (run_dir / "run.json").write_text(
-            json.dumps(run_json, indent=2), encoding="utf-8"
+            dumps_strict(run_json, indent=2), encoding="utf-8"
         )
 
 

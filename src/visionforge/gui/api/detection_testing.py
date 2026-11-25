@@ -13,11 +13,11 @@ trainer) and reads mAP off its results.
 
 from __future__ import annotations
 
-import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from visionforge.core.strict_json import dumps_strict
 from visionforge.gui.api.schemas import RunTestRequest, RunTestResponse
 from visionforge.utils.detection_config import DetectionConfig
 from visionforge.utils.doctor import ultralytics_missing_message
@@ -62,7 +62,7 @@ def evaluate_detection_run(
         "artifacts": {},
     }
     data.setdefault("tests", []).append(record)
-    (run_dir / "run.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
+    (run_dir / "run.json").write_text(dumps_strict(data, indent=2), encoding="utf-8")
 
     return RunTestResponse(
         test_id=test_id,

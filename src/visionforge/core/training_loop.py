@@ -28,6 +28,7 @@ from visionforge.core.resume import (
     save_resume_state,
 )
 from visionforge.core.resume_provenance import validate_resume_dataset
+from visionforge.core.strict_json import dumps_strict
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.training_health import HealthWarning, non_finite_metric
 from visionforge.utils.environment import capture_environment
@@ -528,17 +529,7 @@ def record_non_finite_failure(run_dir: Path, error: NonFiniteMetricError) -> Non
     data = json.loads(path.read_text(encoding="utf-8"))
     data["status"] = "failed"
     data["error"] = str(error)
-    path.write_text(json.dumps(_without_non_finite(data), indent=2), encoding="utf-8")
-
-
-def _without_non_finite(value: Any) -> Any:
-    if isinstance(value, float) and not math.isfinite(value):
-        return None
-    if isinstance(value, dict):
-        return {k: _without_non_finite(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_without_non_finite(v) for v in value]
-    return value
+    path.write_text(dumps_strict(data, indent=2), encoding="utf-8")
 
 
 def finish_checkpoint_writes(
@@ -1125,7 +1116,9 @@ def write_task_run_json(
         ],
         **run_json_tail(result),
     }
-    (run_dir / "run.json").write_text(json.dumps(run_json, indent=2), encoding="utf-8")
+    (run_dir / "run.json").write_text(
+        dumps_strict(run_json, indent=2), encoding="utf-8"
+    )
 
 
 def training_warnings(

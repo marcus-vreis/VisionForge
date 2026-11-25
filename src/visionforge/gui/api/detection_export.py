@@ -9,10 +9,10 @@ error so the GUI can keep the action hidden for those runs.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
+from visionforge.core.strict_json import dumps_strict
 from visionforge.gui.api.schemas import ExportOnnxRequest, ExportOnnxResponse
 from visionforge.utils.doctor import ultralytics_missing_message
 from visionforge.utils.messages import tr
@@ -67,7 +67,7 @@ def export_detection_run(
 
     # Record the exported artifact on the run so it shows up next time.
     data.setdefault("artifacts", {})["onnx"] = str(exported.resolve())
-    (run_dir / "run.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
+    (run_dir / "run.json").write_text(dumps_strict(data, indent=2), encoding="utf-8")
 
     size = exported.stat().st_size if exported.is_file() else 0
     return ExportOnnxResponse(

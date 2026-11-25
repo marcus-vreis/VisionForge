@@ -24,6 +24,7 @@ from visionforge.core.segmentation_trainer import (
     SegmentationTrainer,
     SegmentationTrainResult,
 )
+from visionforge.core.strict_json import dumps_strict
 from visionforge.core.trainer import seed_before_building
 from visionforge.models.segmentation_factory import SegmentationModelFactory
 from visionforge.utils.segmentation_config import SegmentationConfig
@@ -180,7 +181,7 @@ class SegmentationBlock:
                 name: ci.to_dict() for name, ci in self._metric_cis.items()
             }
         data["artifacts"]["graphics"] = [str(p) for p in graphics]
-        run_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        run_json_path.write_text(dumps_strict(data, indent=2), encoding="utf-8")
 
 
 __all__ = ["SegmentationBlock"]
