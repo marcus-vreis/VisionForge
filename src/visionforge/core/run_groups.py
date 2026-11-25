@@ -273,7 +273,10 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
     """Replace ``path`` whole, so a reader never sees a half-written run.json."""
     tmp = path.with_name(path.name + ".tmp")
     try:
-        tmp.write_text(dumps_strict(data), encoding="utf-8")
+        # Every caller builds ``path`` with _metadata_path/_contained_path, which
+        # keeps it inside the outputs root.
+        text = dumps_strict(data)
+        tmp.write_text(text, encoding="utf-8")  # NOSONAR pythonsecurity:S2083
         tmp.replace(path)
     except OSError:
         # Do not leave the half step behind: the next reader of this folder

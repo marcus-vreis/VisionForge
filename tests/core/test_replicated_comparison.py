@@ -577,9 +577,11 @@ class TestAlphaRange:
     @pytest.mark.parametrize("alpha", [0.0, 1.0, -0.1, 2.0, math.nan])
     def test_run_rejects_it_before_training_anything(self, alpha: float) -> None:
         runner = _FakeRunner()
+        base = _base()
+        variants: dict[str, dict[str, object]] = {"a": {}, "b": {}}
         with pytest.raises(ValueError, match="alpha"):
             run_replicated_comparison(
-                runner, _base(), {"a": {}, "b": {}}, [1, 2, 3], "accuracy", alpha=alpha
+                runner, base, variants, [1, 2, 3], "accuracy", alpha=alpha
             )
         assert runner.seen == []
 
