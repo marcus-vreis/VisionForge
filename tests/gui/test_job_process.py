@@ -93,6 +93,13 @@ _FAKE_SOURCE = textwrap.dedent(
                     "resume": str(self._resume_dir),
                 }
                 return
+            if c.mode == "numpy":
+                # A C extension whose DLLs load while the job is running, as
+                # torch's do: numpy's OpenBLAS starts a CRT of its own.
+                import numpy
+
+                self._report = {"sum": int(numpy.arange(4).sum())}
+                return
             if c.mode == "noisy":
                 print("an epoch, said the library")
                 os.write(1, b"raw bytes on fd 1\\n")
@@ -234,6 +241,25 @@ def test_a_library_printing_to_stdout_does_not_break_the_events(
     outcome, events, _ = _run(_spec(fake, mode="noisy", epochs=2))
     assert outcome.status == "completed", outcome.error
     assert [e["epoch"] for e in events] == [1, 2]
+
+
+def test_a_block_that_loads_a_native_library_mid_run_does_not_hang(
+    fake: ModuleType,
+) -> None:
+    # On Windows, a thread of the child blocked reading its stdin pipe froze the
+    # load of numpy's OpenBLAS DLL (its CRT start-up queries the standard
+    # handles): a real training never imported torch and stayed "running".
+    result: list[ChildOutcome] = []
+    job = ChildJob(_spec(fake, mode="numpy"), lambda e: None, CancellationToken())
+    runner = threading.Thread(target=lambda: result.append(job.supervise()))
+    runner.start()
+    runner.join(60)
+    if runner.is_alive():
+        job.kill()
+        runner.join(30)
+    assert result, "the child hung loading numpy"
+    assert result[0].status == "completed", result[0].error
+    assert result[0].report == {"sum": 6}
 
 
 def test_a_stop_reaches_the_block_at_its_stop_point(fake: ModuleType) -> None:
@@ -443,6 +469,53 @@ def test_a_server_classification_trains_in_a_child_and_exports_at_the_end(
     # Classification reads its folder from the training result: the checkpoint's.
     assert (state.run["status"], state.run["run_dir"]) == ("completed", str(out))
     assert exported == [(trackers, out)]
+
+
+@pytest.mark.slow
+@pytest.mark.usefixtures("jobs")
+def test_a_real_classification_trains_in_a_child_on_the_cpu(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The real launch: the training stack (torch, numpy's OpenBLAS) loads in the child."""
+    from visionforge.gui.api.sample_dataset import create_sample_dataset
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "-1")
+    monkeypatch.setenv(
+        "PYTHONPATH", os.pathsep.join([str(SRC), os.environ.get("PYTHONPATH", "")])
+    )
+    sample = create_sample_dataset(tmp_path / "datasets", "classification")
+    config = ExperimentConfig.model_validate(
+        {
+            "name": "child_real",
+            "model": {
+                "name": "resnet18",
+                "num_classes": len(sample.classes) or 2,
+                "pretrained": False,
+            },
+            "training": {"epochs": 2, "batch_size": 4},
+            "data": {
+                "base_dir": sample.path,
+                "num_workers": 0,
+                "pin_memory": False,
+                "transforms": {"image_size": 32},
+            },
+            "device": {"kind": "cpu"},
+        }
+    )
+    state = _start("real_1", isolated=True)
+
+    async def scenario() -> list[dict[str, Any]]:
+        await asyncio.wait_for(execution._execute_experiment(config, "real_1"), 300)
+        return await _events(state)
+
+    events = asyncio.run(scenario())
+    assert state.run["status"] == "completed", state.run["error"]
+    epochs = [e["epoch"] for e in events if e.get("event") == "epoch_end"]
+    assert epochs == [1, 2]
+    run_dir = Path(state.run["run_dir"])
+    assert (run_dir / "run.json").is_file()
+    assert run_dir.is_relative_to(tmp_path)
 
 
 @pytest.mark.usefixtures("jobs")

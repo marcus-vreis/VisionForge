@@ -14,6 +14,7 @@ library that prints (Ultralytics does) cannot be read as an event. Later lines
 on stdin are ``{"type": "stop"}``: the block's cancellation token is set and it
 stops at its stop point (ADR-111). When stdin closes, the server is gone: the
 block is stopped the same way and the process exits by itself after the grace.
+On Windows stdin is peeked, never left with a read pending (see ``_Stdin``).
 
 The block and config classes are imported by the ``module:QualName`` the server
 sent; this script is reached only through the server's pipe.
@@ -29,6 +30,8 @@ import json
 import os
 import sys
 import threading
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import IO, Any
 
@@ -36,6 +39,9 @@ from typing import IO, Any
 ORPHAN_EXIT = 70
 # How long the child waits, after its last line, for the server to close stdin.
 _CLOSE_WAIT_S = 10.0
+# How often an idle stdin pipe is peeked on Windows, and the most read at once.
+_PEEK_S = 0.1
+_CHUNK = 65536
 
 
 class _Pipe:
@@ -77,15 +83,87 @@ def _load(path: str) -> Any:
     return target
 
 
+if sys.platform == "win32":
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    def _pipe_peek(fd: int) -> Callable[[], int | None]:
+        """How many bytes wait in the pipe at ``fd``; None once it is closed."""
+        handle = msvcrt.get_osfhandle(fd)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        peek = kernel32.PeekNamedPipe
+        peek.argtypes = [
+            wintypes.HANDLE,
+            ctypes.c_void_p,
+            wintypes.DWORD,
+            ctypes.c_void_p,
+            ctypes.POINTER(wintypes.DWORD),
+            ctypes.c_void_p,
+        ]
+        peek.restype = wintypes.BOOL
+
+        def available() -> int | None:
+            count = wintypes.DWORD(0)
+            if not peek(handle, None, 0, None, ctypes.byref(count), None):
+                return None  # broken pipe: the server closed it
+            return int(count.value)
+
+        return available
+
+else:
+
+    def _pipe_peek(fd: int) -> Callable[[], int | None] | None:
+        """POSIX reads block without holding anything another thread needs."""
+        return None
+
+
+class _Stdin:
+    """The server's lines on fd 0, read without ever leaving a read pending on Windows.
+
+    On Windows a thread blocked in a read of the stdin pipe also blocks every
+    other call on that handle, and the start-up code of a DLL with its own C
+    runtime asks for the type of the standard handles: numpy's OpenBLAS, which
+    torch loads, then waits for ever under the loader lock. So the pipe is
+    peeked and only read when bytes are waiting.
+    """
+
+    def __init__(self, fd: int = 0) -> None:
+        self._fd = fd
+        self._buffer = b""
+        self._available = _pipe_peek(fd)
+
+    def line(self) -> bytes | None:
+        """The next line without its newline; None at the end of input."""
+        while b"\n" not in self._buffer:
+            chunk = self._read()
+            if chunk is None:
+                return None
+            self._buffer += chunk
+        line, _, self._buffer = self._buffer.partition(b"\n")
+        return line
+
+    def _read(self) -> bytes | None:
+        if self._available is None:
+            return os.read(self._fd, _CHUNK) or None
+        while True:
+            count = self._available()
+            if count is None:
+                return None
+            if count:
+                return os.read(self._fd, min(count, _CHUNK))
+            time.sleep(_PEEK_S)
+
+
 def _watch_stdin(
-    stdin: IO[bytes], token: Any, grace: float, finished: threading.Event
+    stdin: _Stdin, token: Any, grace: float, finished: threading.Event
 ) -> None:
     """Set ``token`` on a stop line; on end of input also exit after ``grace``.
 
     The server closes stdin once it has read ``job_end``; that end of input is
     the normal way out and changes nothing.
     """
-    for raw in stdin:
+    while (raw := stdin.line()) is not None:
         try:
             message = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, ValueError):
@@ -157,8 +235,11 @@ def run(spec: dict[str, Any], pipe: _Pipe, token: Any) -> None:
 def main() -> int:
     """Read the spec, run it, and exit."""
     pipe = _Pipe(_protocol_stream())
-    stdin = sys.stdin.buffer
-    spec = json.loads(stdin.readline().decode("utf-8"))
+    stdin = _Stdin()
+    first = stdin.line()
+    if first is None:
+        return 2  # no spec: the server went away before sending it
+    spec = json.loads(first.decode("utf-8"))
 
     from visionforge.core.cancellation import CancellationToken
 

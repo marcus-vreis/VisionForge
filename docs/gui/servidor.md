@@ -203,8 +203,9 @@ inclusive a pasta de configuração com os tokens. Impedir isso pede rodar o
 treino em container ou com outra conta do sistema, o que ainda não existe; por
 isso o servidor continua sendo para um grupo que confia entre si. K-fold,
 buscas, comparações e as estratégias ainda rodam dentro do servidor.
-*Não verificado:* nenhum treino real nem GPU rodou num processo próprio nos
-testes. Decisão: ADR-248.
+*Não verificado:* só a classificação do dataset de exemplo foi treinada de
+verdade num processo próprio, na CPU; as outras quatro tarefas e a GPU não.
+Decisão: ADR-248.
 
 ## Ações que rodam na hora
 
