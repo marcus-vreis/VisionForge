@@ -37,6 +37,7 @@ from visionforge.core.task_runner import (
     discard_cut_unit_resume,
     runner_cancel_token,
 )
+from visionforge.utils.messages import tr
 
 
 @dataclass
@@ -96,6 +97,26 @@ def metric_domain(metric: str) -> tuple[float | None, float | None]:
     return None, None
 
 
+def _observed_domain(
+    metric: str, values: list[float]
+) -> tuple[float | None, float | None]:
+    """``metric_domain(metric)``, unless the values themselves leave it.
+
+    The domain is a guess from the name. A custom task that reports accuracy
+    in percent (84, 85, 86) or a signed ``delta_f1`` shows the guess is wrong
+    for that metric, and clipping on it cut ``[82.5, 87.5]`` to ``[82.5, 1.0]``:
+    an inverted interval that excluded its own mean. Then nothing is clipped.
+    With every value inside the domain the mean is too, so a clipped interval
+    still holds the mean and is never inverted.
+    """
+    floor, ceiling = metric_domain(metric)
+    if (floor is not None and min(values) < floor) or (
+        ceiling is not None and max(values) > ceiling
+    ):
+        return None, None
+    return floor, ceiling
+
+
 def _clip_to_domain(
     low: float, high: float, domain: tuple[float | None, float | None]
 ) -> tuple[float, float, bool]:
@@ -133,7 +154,9 @@ def aggregate_replicates(
     above 1). It is **clipped to the metric's domain** (``metric_domain``:
     errors >= 0, [0, 1] scores inside [0, 1], R² <= 1) and ``ci95_clipped``
     says it was, so the report never shows an impossible value and never hides
-    that the interval was cut. Clipping, rather than swapping in the bootstrap,
+    that the interval was cut. When an observed value already lies outside the
+    domain the name suggests, the name was wrong for this metric and nothing is
+    clipped. Clipping, rather than swapping in the bootstrap,
     keeps ``ci95`` meaning one thing (the t interval) while the bootstrap
     stays beside it, untouched, for the reader who wants a distribution-free
     one (ADR-061).
@@ -143,6 +166,11 @@ def aggregate_replicates(
     distribution of the mean is normal, which a handful of seeds cannot
     establish. When the two disagree, that disagreement is itself the finding
     — the t interval is leaning on an assumption the data does not support.
+
+    A NaN or infinite value (a test split with a NaN target) is not a
+    measurement either: it stays out like a null, and ``n_non_finite`` counts
+    it so the report says how many seeds it lost. A metric with no finite
+    value keeps its entry with ``n = 0`` and null statistics.
     """
     successful = [t for t in trials if t.status == "success"]
     keys: list[str] = list(dict.fromkeys(k for t in successful for k in t.metrics))
@@ -151,8 +179,26 @@ def aggregate_replicates(
     for key in keys:
         # An undefined metric (an anomaly AUROC on a one-class test split,
         # #170) is null: it stays out of the mean and the interval.
-        values = [t.metrics[key] for t in successful if t.metrics.get(key) is not None]
+        reported = [v for t in successful if (v := t.metrics.get(key)) is not None]
+        if not reported:
+            continue
+        values = [v for v in reported if math.isfinite(v)]
+        n_non_finite = len(reported) - len(values)
         if not values:
+            aggregates[key] = {
+                "n": 0,
+                "n_non_finite": n_non_finite,
+                "mean": None,
+                "std": None,
+                "std_ddof": 1,
+                "min": None,
+                "max": None,
+                "ci95_low": None,
+                "ci95_high": None,
+                "ci95_clipped": False,
+                "boot95_low": None,
+                "boot95_high": None,
+            }
             continue
         n = len(values)
         mean = statistics.fmean(values)
@@ -165,7 +211,7 @@ def aggregate_replicates(
             ci_low: float | None
             ci_high: float | None
             ci_low, ci_high, clipped = _clip_to_domain(
-                mean - half_width, mean + half_width, metric_domain(key)
+                mean - half_width, mean + half_width, _observed_domain(key, values)
             )
             boot = bootstrap_ci(values)
             if boot is not None:
@@ -175,6 +221,8 @@ def aggregate_replicates(
             ci_low = ci_high = None
         aggregates[key] = {
             "n": n,
+            # Seeds that reported NaN or inf for this metric, left out above.
+            "n_non_finite": n_non_finite,
             "mean": mean,
             "std": std,
             # Says which std this is, as the K-fold's aggregate does: a reader
@@ -243,6 +291,9 @@ def run_replicates(
     set's first seed in the job) and ``unit_overrides`` (what else the unit
     varies, e.g. the variant); the job then owns the terminal ``end``.
 
+    ``seeds`` must be distinct: one seed listed twice is one sample counted
+    twice, which narrows the interval by pseudo-replication.
+
     A stop carried by the runner (ADR-111) cuts the replicate in flight and
     starts no further seed. A replicate the runner reports as cut is recorded
     as ``stopped``, outside the aggregate, whose ``n`` then counts only the
@@ -250,7 +301,12 @@ def run_replicates(
 
     With ``figure_dir`` the set also leaves ``replicates_strip`` there, in the
     formats and dpi of the config's ``output`` section (``write_replicates_strip``).
+
+    Raises:
+        ValueError: when a seed is repeated, before any training.
     """
+    if len(set(seeds)) != len(seeds):
+        raise ValueError(tr("replicates.seeds_unique"))
     token = runner_cancel_token(runner)
     trials: list[ReplicateTrial] = []
     base_name = str(base_config_dict.get("name", "replicates"))
