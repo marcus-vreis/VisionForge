@@ -30,6 +30,9 @@ from pydantic import ValidationError
 
 from visionforge.core.run_trackers import TrackerFactory
 from visionforge.gui.api import submission
+from visionforge.gui.api.custom_code_tour_routes import (
+    router as custom_code_tour_router,
+)
 from visionforge.gui.api.execution import _job_state
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST_TEXT,
@@ -73,6 +76,7 @@ def _generic_task_engine() -> "type[_GenericTaskEngine]":
 
 
 router = APIRouter()
+router.include_router(custom_code_tour_router)
 
 
 # Built-in task descriptors — accents mirror frontend/src/types/tasks.ts.

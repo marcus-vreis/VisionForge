@@ -166,9 +166,15 @@ class TestServeDatasetFile:
     def test_404_on_missing_file(self, tmp_path: Path) -> None:
         from visionforge.gui.server import app
 
+        # Missing inside a probed root: outside every root it is a 403, the
+        # same answer as for a file that exists there.
+        root = _balanced_dataset(tmp_path / "ds")
         client = TestClient(app, raise_server_exceptions=True)
-        resp = client.get(f"/api/dataset/file?path={tmp_path / 'nope.png'}")
+        client.post("/api/dataset/stats", json={"base_dir": str(root)})
+        resp = client.get(f"/api/dataset/file?path={root.resolve() / 'nope.png'}")
         assert resp.status_code == 404
+        outside = client.get(f"/api/dataset/file?path={tmp_path / 'nope.png'}")
+        assert outside.status_code == 403
 
 
 class TestDatasetStatsEndpoint:

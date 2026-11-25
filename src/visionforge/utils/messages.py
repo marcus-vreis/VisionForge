@@ -1047,6 +1047,50 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Ainda não há código comentado para esta tarefa.",
         "en": "There is no annotated code for this task yet.",
     },
+    "code.custom.summary.data": {
+        "pt": "Monta os carregadores de treino, validação e teste da sua tarefa.",
+        "en": "Builds your task's training, validation and test loaders.",
+    },
+    "code.custom.summary.model": {
+        "pt": "Cria a rede da sua tarefa, nova a cada treino.",
+        "en": "Creates your task's network, fresh for every training.",
+    },
+    "code.custom.summary.loss": {
+        "pt": "Calcula a perda de um lote, que o treino minimiza.",
+        "en": "Computes the loss of one batch, which the training minimizes.",
+    },
+    "code.custom.summary.validate": {
+        "pt": "Mede o modelo num conjunto e devolve as métricas da sua tarefa.",
+        "en": "Measures the model on a set and returns your task's metrics.",
+    },
+    "code.custom.summary.train": {
+        "pt": "O laço de treino inteiro é seu: o VisionForge só chama esta função.",
+        "en": "The whole training loop is yours: VisionForge only calls this function.",
+    },
+    "code.custom.note.data": {
+        "pt": "O motor chama esta função uma vez, no início do treino. Devolve (treino, validação, teste ou None).",
+        "en": "The engine calls this function once, at the start of the training. It returns (train, validation, test or None).",
+    },
+    "code.custom.note.model": {
+        "pt": "O motor chama esta função uma vez por treino e move a rede para o dispositivo escolhido.",
+        "en": "The engine calls this function once per training and moves the network to the chosen device.",
+    },
+    "code.custom.note.loss": {
+        "pt": "O motor chama esta função a cada lote de treino. O valor que ela devolve é retropropagado e o otimizador atualiza os pesos.",
+        "en": "The engine calls this function on every training batch. The value it returns is back-propagated and used by the optimizer.",
+    },
+    "code.custom.note.validate": {
+        "pt": "O motor chama esta função ao fim de cada época. As chaves devolvidas devem ser as métricas declaradas em @register_task.",
+        "en": "The engine calls this function at the end of every epoch. The keys it returns must be the metrics declared in @register_task.",
+    },
+    "code.custom.note.train": {
+        "pt": "Esta função substitui o laço do motor (Nível 2): épocas, checkpoints e eventos ficam por sua conta.",
+        "en": "This function replaces the engine's loop (Level 2): epochs, checkpoints and events are up to you.",
+    },
+    "code.custom.no_source": {
+        "pt": "Não foi possível ler o código de {name}: o Python não tem o texto-fonte dele (função embutida, extensão em C ou arquivo que mudou depois da importação).",
+        "en": "Could not read the code of {name}: Python has no source text for it (a builtin, a C extension, or a file that changed after the import).",
+    },
     "code.data.resize": {
         "pt": "Toda imagem fica do mesmo tamanho (image_size × image_size): a rede recebe um tensor de forma fixa. O Resize ajusta o lado menor e o CenterCrop corta o centro.",
         "en": "Every image gets the same size (image_size × image_size): the network takes a tensor of fixed shape. Resize scales the shorter side and CenterCrop cuts the centre.",
@@ -2692,6 +2736,16 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "en": (
             "Hugging Face dataset '{dataset}' has no image+label features to "
             "materialize into an ImageFolder."
+        ),
+    },
+    "download.name_outside": {
+        "pt": (
+            "O nome de split ou de classe '{name}' sairia da pasta de destino. "
+            "O download parou."
+        ),
+        "en": (
+            "The split or class name '{name}' would leave the target folder. "
+            "The download stopped."
         ),
     },
     "download.hf_revision_failed": {

@@ -252,13 +252,16 @@ def explorer_thumb(
     base = Path(root)
     if not base.is_absolute():
         raise HTTPException(400, tr("file.not_absolute"))
+    # Only roots the explorer already opened are served, and one outside them
+    # gets the same answer whether it exists or not.
     try:
-        # Only roots the explorer already opened are served (checked below).
-        resolved_root = base.resolve(strict=True)  # NOSONAR pythonsecurity:S6549
-    except OSError as exc:
-        raise HTTPException(404, tr("file.not_found")) from exc
+        resolved_root = base.resolve()  # NOSONAR pythonsecurity:S6549
+    except (OSError, RuntimeError) as exc:
+        raise HTTPException(403, tr("file.not_in_dataset")) from exc
     if not _is_inside_allowed_root(resolved_root):
         raise HTTPException(403, tr("file.not_in_dataset"))
+    if not resolved_root.is_dir():
+        raise HTTPException(404, tr("file.not_found"))
     try:
         image = contained_path(resolved_root, path)
         label = contained_path(resolved_root, label_path) if label_path else None

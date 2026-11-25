@@ -71,9 +71,10 @@ export interface RunCodeProps {
 export function TrainingCodeTab({
   taskKey,
   settings,
+  custom = false,
   ...props
-}: RunCodeProps & { taskKey: string; settings: CodeSettings | null }) {
-  const tour = useTour(taskKey, settings);
+}: RunCodeProps & { taskKey: string; settings: CodeSettings | null; custom?: boolean }) {
+  const tour = useTour(taskKey, settings, custom);
   return <RunCodePanel {...props} tour={tour} />;
 }
 

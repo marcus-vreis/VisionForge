@@ -1007,7 +1007,7 @@ class DatasetDownloadRequest(BaseModel):
     )
     dataset: str
     out_dir: OwnDatasetDir
-    splits: list[str] = ["train", "test"]
+    splits: list[DatasetPart] = ["train", "test"]
     limit: int | None = Field(default=None, ge=1)
     api_key: SecretStr | None = None
     token: SecretStr | None = None

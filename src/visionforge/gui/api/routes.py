@@ -47,6 +47,7 @@ from visionforge.gui.api.folder_opener import (
 )
 from visionforge.gui.api.github_routes import build_github_router
 from visionforge.gui.api.http_responses import (
+    ACCESS_DENIED_KEY,
     BAD_REQUEST_TEXT,
     CONFLICT_TEXT,
     FORBIDDEN_TEXT,
@@ -544,13 +545,12 @@ async def serve_artifact(file_path: str) -> FileResponse:
     candidate = Path(os.path.abspath(file_path))
     outputs_root = Path(os.path.abspath("outputs"))
     if not candidate.is_relative_to(outputs_root):
-        raise HTTPException(403, tr("file.access_denied"))
-
+        raise HTTPException(403, tr(ACCESS_DENIED_KEY))
     resolved = candidate.resolve()
     outputs_dir = outputs_root.resolve()
 
     if not resolved.is_relative_to(outputs_dir):
-        raise HTTPException(403, tr("file.access_denied"))
+        raise HTTPException(403, tr(ACCESS_DENIED_KEY))
 
     # In server mode ``outputs/`` holds everybody's runs: a person is served
     # only what sits under their own profile folder (ADR-215).
@@ -558,7 +558,7 @@ async def serve_artifact(file_path: str) -> FileResponse:
     if scope is not None and scope.owner:
         own = (_PROFILES_DIR / scope.owner).resolve()
         if not resolved.is_relative_to(own):
-            raise HTTPException(403, tr("file.access_denied"))
+            raise HTTPException(403, tr(ACCESS_DENIED_KEY))
 
     if not resolved.is_file():
         raise HTTPException(404, tr("file.not_found"))
