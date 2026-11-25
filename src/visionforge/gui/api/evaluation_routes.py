@@ -13,6 +13,7 @@ importing this module stays light (#260).
 """
 
 import asyncio
+import csv
 import json
 from collections.abc import Callable
 from datetime import datetime
@@ -584,6 +585,8 @@ def _evaluate_regression_checkpoint(
     from visionforge.utils.regression_config import RegressionConfig
 
     reg_config = RegressionConfig.model_validate(config_dict)
+    data = reg_config.data
+    _confine_manifest_images(chosen, data.base_dir / data.images_dir, data.image_column)
     reg_model = RegressionModelFactory.create(reg_config.model)
     reg_model.load_state_dict(
         torch.load(checkpoint, map_location="cpu", weights_only=True)
@@ -595,6 +598,36 @@ def _evaluate_regression_checkpoint(
         raise ValueError(tr("testrun.no_rows", path=chosen))
     mse, rmse, mae, r2 = RegressionTrainer(reg_config).evaluate(reg_model, reg_loader)
     return {"mse": mse, "rmse": rmse, "mae": mae, "r2": r2}
+
+
+def _confine_manifest_images(
+    manifest: Path, images_root: Path, image_column: str
+) -> None:
+    """On a server, refuse a manifest row whose image is outside the scope.
+
+    The chosen CSV is in the scope, but each row names an image relative to
+    ``images_root``, and an absolute path or ``..`` would make the server read
+    someone else's file. The refusal names the line, never the path, and is
+    decided before anything is opened, so it does not tell whether that file
+    exists (ADR-214).
+
+    Raises:
+        ValueError: a row's image resolves outside the request's scope.
+    """
+    scope = current_scope()
+    if scope is None:
+        return
+    with manifest.open(encoding="utf-8", newline="") as stream:
+        for line, row in enumerate(csv.DictReader(stream), start=2):
+            image = (row.get(image_column) or "").strip()
+            if not image:
+                continue  # the loader reports an empty cell itself
+            try:
+                inside = scope.holds((images_root / image).resolve())
+            except (OSError, RuntimeError):
+                inside = False
+            if not inside:
+                raise ValueError(tr("testrun.manifest_image_outside", line=line))
 
 
 def _evaluate_segmentation_checkpoint(

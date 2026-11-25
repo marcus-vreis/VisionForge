@@ -636,7 +636,29 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Nenhum CSV de manifest encontrado na pasta base.",
         "en": "No manifest CSV found in the base folder.",
     },
+    "scan.manifest_unreadable": {
+        "pt": "O manifest '{name}' não é um CSV em texto UTF-8.",
+        "en": "The manifest '{name}' is not a UTF-8 text CSV.",
+    },
+    "preview.unreadable_image": {
+        "pt": "Não foi possível abrir a imagem '{name}' para a prévia.",
+        "en": "Could not open the image '{name}' for the preview.",
+    },
+    "preview.bad_transforms": {
+        "pt": "Ajuste de aumento de dados inválido: {fields}.",
+        "en": "Invalid augmentation setting: {fields}.",
+    },
     # ── testing a finished run on another folder ─────────────────────────────
+    "testrun.manifest_image_outside": {
+        "pt": (
+            "A linha {line} do manifest aponta para uma imagem fora das pastas "
+            "de datasets deste servidor."
+        ),
+        "en": (
+            "Line {line} of the manifest points at an image outside this "
+            "server's dataset folders."
+        ),
+    },
     "testrun.path_not_found": {
         "pt": "Caminho não encontrado: {path}",
         "en": "Path not found: {path}",

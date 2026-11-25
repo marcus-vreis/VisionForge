@@ -8657,6 +8657,8 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Open the two classification blocks instead.* They name a checkpoint and an output file as config paths; confining them would repeat what the run routes already guarantee by taking a run id.
 - *Put the evaluation actions in the queue.* It would settle the shared-GPU limit, and it changes how the page waits for their result (a request today, a job then); it belongs with a decision about fairness, not with opening the routes.
 
+**Update (2026-11-24):** a regression test reads images named by the rows of the chosen CSV, not only the CSV itself. On a server each row's image must resolve inside the scope before the checkpoint is loaded (`_confine_manifest_images`); a row with an absolute path or `..` that leaves it answers 400 naming the line, never the path, so the answer does not tell whether that file exists.
+
 ## ADR-219 — In server mode a person writes a dataset into their own folder only, with their own key
 
 **Date:** 2026-11-19
@@ -8715,6 +8717,8 @@ The code as it is on 2026-11-18 (`development`, b95c6919), read through the Fast
 - *Hard-link into the person's folder.* Free on disk, and it ties a person's dataset to files the operator may replace or remove in place; a copy is theirs.
 - *Keep one job at a time for the whole server.* It protects the disk, and one person's long analysis would answer "busy" to everyone else with no way to see why.
 - *Per-owner registries.* A dictionary of registries keyed by owner; the owner on the job does the same with one lock and one place to look a job up.
+
+**Update (2026-11-24):** `placement(source_root, *other_roots)` takes every source of the result. A merge passes both datasets: when dataset A is the person's own and B is shared, the result is still written next to A, and with `link=copy_only`, so it shares no inode with B. Incorporating images needed no change: it hard-links only the base dataset's files and always copies the new images.
 
 ## ADR-221 — In server mode a run leaves the server through its owner: download, and publish with the owner's token
 

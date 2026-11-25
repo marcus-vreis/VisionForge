@@ -22,6 +22,12 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 - K-fold, todas as tarefas com a opção: `select_on: last` com `early_stopping_patience` acima de 0 passa a ser recusado com uma mensagem que explica o motivo. Na classificação o erro vem ao carregar o config; na regressão e na segmentação, como 422 no pedido do K-fold, também pela CLI. A parada antecipada lê a validação do próprio fold, então a última época ainda seria escolhida por ela (ADR-242). O mesmo vale para `scheduler.kind: plateau`, que reduz a taxa de aprendizado lendo essa validação: `select_on: last` com ele também é recusado nos mesmos três pontos.
 
+### Fixed
+
+- Dados: a prévia de aumento de dados com um ajuste fora da faixa (por exemplo `rotation_degrees` negativo) respondia 500; agora responde 422 nomeando o campo. A prévia de aumento e a de pré-processamento respondiam 500 quando a primeira imagem da classe estava corrompida ou não era imagem; agora respondem 400 com o nome do arquivo. As estatísticas do dataset de regressão respondiam 500 para um manifest que não é CSV em UTF-8 (Latin-1, binário); agora respondem 400 com o nome do manifest.
+- Modo servidor: juntar um dataset da própria pasta com um compartilhado criava hard links para os arquivos do compartilhado dentro da pasta da pessoa, porque só o primeiro dataset decidia. Agora qualquer fonte compartilhada faz o resultado ser cópia (ADR-220). Incorporar imagens já copiava as novas.
+- Modo servidor: testar um run de regressão num CSV da pasta da pessoa lia as imagens que as linhas do CSV apontavam, mesmo fora das pastas dela (caminho absoluto ou `..`). Agora uma linha assim é recusada com 400, que cita só o número da linha, antes de qualquer imagem ser aberta (ADR-218).
+
 ## [0.23.0] — 2026-11-24
 
 ### Added

@@ -47,7 +47,7 @@ def copy_only(src: Path, dst: Path) -> None:
     raise OSError("hard links are not used across a shared and a personal folder")
 
 
-def placement(source_root: Path) -> dict[str, Any]:
+def placement(source_root: Path, *other_roots: Path) -> dict[str, Any]:
     """Where the dataset derived from ``source_root`` is written (ADR-220).
 
     Next to its source, which is what the build functions do with no keyword:
@@ -55,9 +55,13 @@ def placement(source_root: Path) -> dict[str, Any]:
     person's own dataset folder. A source in a shared folder is the operator's:
     its result goes into the person's own folder instead, copied and never
     hard-linked, so nothing of theirs shares a file with what everyone reads.
+    ``other_roots`` are the result's further sources (a merge's second
+    dataset): any of them in a shared folder makes the whole result a copy,
+    even when it is written next to the person's own ``source_root``.
 
     Returns:
-        The keywords for the build function: empty, or ``parent`` and ``link``.
+        The keywords for the build function: empty, ``link``, or ``parent`` and
+        ``link``.
 
     Raises:
         HTTPException: 403 on a server with no folder of the person's to write in.
@@ -65,12 +69,19 @@ def placement(source_root: Path) -> dict[str, Any]:
     scope = current_scope()
     if scope is None:
         return {}
-    if scope.own is None:
+    own = scope.own
+    if own is None:
         raise HTTPException(403, tr("server.dataset_write_outside"))
-    beside = source_root.parent.resolve()
-    if beside == scope.own or beside.is_relative_to(scope.own):
+
+    def is_own(root: Path) -> bool:
+        beside = root.parent.resolve()
+        return beside == own or beside.is_relative_to(own)
+
+    if not is_own(source_root):
+        return {"parent": own, "link": copy_only}
+    if all(is_own(root) for root in other_roots):
         return {}
-    return {"parent": scope.own, "link": copy_only}
+    return {"link": copy_only}
 
 
 def destination_parent(source_root: Path) -> Path:

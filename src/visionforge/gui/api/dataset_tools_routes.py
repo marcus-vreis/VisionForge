@@ -23,7 +23,11 @@ from loguru import logger
 
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.gui.api.dataset_scope import current_scope, preview_cache
-from visionforge.gui.api.datasets_routes import _IMAGE_EXTS, _remember_dataset_root
+from visionforge.gui.api.datasets_routes import (
+    _IMAGE_EXTS,
+    _remember_dataset_root,
+    open_preview_image,
+)
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST_TEXT,
     SERVER_ERROR_TEXT,
@@ -225,7 +229,6 @@ def _render_preprocess_preview(
     req: PreprocessPreviewRequest,
 ) -> PreprocessPreviewResponse:
     """Save original + per-step previews and return their artifact paths."""
-    from PIL import Image
 
     from visionforge.core.preprocessing import (
         apply_pipeline,
@@ -244,7 +247,7 @@ def _render_preprocess_preview(
     # pipeline changes. Fresh names every call — old ones were unlinked above.
     token = uuid.uuid4().hex[:8]
 
-    original_img = Image.open(img_path).convert("RGB")
+    original_img = open_preview_image(img_path)
     original_path = cache_dir / f"00_original_{token}.png"
     original_img.save(original_path)
 
