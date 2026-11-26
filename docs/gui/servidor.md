@@ -741,7 +741,8 @@ termina com um resumo (hash) do nome completo da conta, então `a.b@lab.org` e
 (veja [Cifrar os tokens por perfil](tokens.md#cifrar-os-tokens-por-perfil));
 sem ela são arquivos de texto na pasta de configuração do usuário do sistema
 que roda o servidor, e o servidor avisa disso no log ao iniciar. Com a chave,
-uma cópia dessa pasta não entrega os tokens. Quem administra a máquina, ou
+uma cópia dessa pasta não entrega os tokens, e cada painel de token mostra em
+qual dos dois casos o servidor está. Quem administra a máquina, ou
 roda código como o usuário do servidor, alcança a chave e consegue lê-los.
 *Não verificado:* a chave entregue por um secret do Docker num servidor de
 verdade; os testes definem a variável no próprio processo.

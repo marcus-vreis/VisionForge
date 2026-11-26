@@ -29,7 +29,7 @@ from visionforge.gui.api.http_responses import (
 )
 from visionforge.gui.api.profiles import PROFILE_HEADER
 from visionforge.gui.api.routes import router as api_router
-from visionforge.gui.api.token_cipher import KEY_ENV, token_cipher
+from visionforge.gui.api.token_cipher import KEY_ENV, token_cipher, tokens_encrypted
 from visionforge.gui.security import (
     HostOriginGuard,
     HostPolicy,
@@ -182,6 +182,9 @@ async def session(request: Request) -> dict[str, Any]:
         # Whether "Conectar com GitHub" works here: the operator gave the
         # server a GitHub OAuth App in the environment (ADR-250).
         "github_oauth": oauth_app() is not None,
+        # Whether a saved token is encrypted on this server's disk (ADR-253);
+        # null on a local install, where the question is not asked.
+        "tokens_encrypted": tokens_encrypted() if mode.enabled else None,
     }
 
 

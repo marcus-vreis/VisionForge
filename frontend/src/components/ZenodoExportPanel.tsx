@@ -7,6 +7,7 @@ import { formatBytes } from "../lib/dataset-identity";
 import { useI18n } from "../i18n/useT";
 import { ActionButton } from "./ui/ActionButton";
 import { ZenodoIcon } from "./ui/BrandIcons";
+import { TokenStorageNote } from "./TokenStorageNote";
 
 const FIELD: CSSProperties = {
   background: "var(--vf-panel)", color: "var(--vf-text)", padding: 8,
@@ -104,6 +105,7 @@ export function ZenodoExportPanel({ runId }: { runId: string }) {
     </fieldset>
     {site === "sandbox" && <p>{z.sandboxHint}</p>}
     {status?.shared && <p role="alert">{z.shared}</p>}
+    <TokenStorageNote />
     {status && <div>
       {status.configured && <p>{z.configured}</p>}
       <label>{z.token} <input type="password" autoComplete="new-password" value={token}

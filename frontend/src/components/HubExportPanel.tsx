@@ -6,6 +6,7 @@ import {
 import { useT } from "../i18n/useT";
 import { ActionButton } from "./ui/ActionButton";
 import { HuggingFaceIcon } from "./ui/BrandIcons";
+import { TokenStorageNote } from "./TokenStorageNote";
 
 const FIELD: CSSProperties = {
   background: "var(--vf-panel)", color: "var(--vf-text)", padding: 8,
@@ -78,6 +79,7 @@ export function HubExportPanel({ runId }: { runId: string }) {
     <button type="button" onClick={() => { setToken(""); setOpen(false); }} disabled={busy}>{t.hub.close}</button>
     {busy && !preview && <p role="status">{t.hub.loading}</p>}
     {status?.shared && <p role="alert">{t.hub.shared}</p>}
+    <TokenStorageNote />
     {status && <div>
       {status.configured && <p>{t.hub.configured}</p>}
       <label>{t.hub.token} <input type="password" autoComplete="new-password" value={token}

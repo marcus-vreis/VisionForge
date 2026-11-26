@@ -8,6 +8,7 @@ import type { ProfileInfo } from "../lib/profile";
 import { TRACKER_FIELD as FIELD, TRACKER_HINT, TRACKER_LABEL } from "./trackerStyles";
 import { TrackerSwitch } from "./TrackerSwitch";
 import { WandbIcon } from "./ui/BrandIcons";
+import { TokenStorageNote } from "./TokenStorageNote";
 
 const DEFAULTS: WandbSettings = { enabled: false, project: "visionforge", entity: "" };
 
@@ -65,6 +66,7 @@ export function WandbProfileSettings({ profile, onSaved }: {
       <button type="button" style={{ alignSelf: "flex-start" }} disabled={busy || !changed || !project.trim()}
         onClick={() => void save({ project: project.trim(), entity: entity.trim() })}>{t.wandb.saveTarget}</button>
       {keyStatus?.shared && <div role="alert">{t.wandb.shared}</div>}
+      <TokenStorageNote />
       {keyStatus?.configured && <div>{t.wandb.configured}</div>}
       <label style={TRACKER_LABEL}>{t.wandb.token} <input type="password" autoComplete="new-password" value={token}
         disabled={busy} style={FIELD} onChange={(e) => setToken(e.target.value)} /></label>

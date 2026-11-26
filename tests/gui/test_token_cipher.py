@@ -22,6 +22,7 @@ from visionforge.gui.api.token_cipher import (
     SEALED_PREFIX,
     TokenKeyError,
     token_cipher,
+    tokens_encrypted,
 )
 from visionforge.gui.server_mode import ServerMode
 
@@ -302,3 +303,18 @@ def test_the_panel_says_no_token_when_the_key_is_gone(
     # Saving again replaces the file nobody can open.
     again = client.put("/api/hub/token", json={"token": TOKEN}, headers=ANA)
     assert again.json()["configured"]
+
+
+def test_the_session_says_whether_tokens_are_encrypted(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert client.get("/api/session", headers=ANA).json()["tokens_encrypted"] is False
+    monkeypatch.setenv(KEY_ENV, _new_key())
+    assert client.get("/api/session", headers=ANA).json()["tokens_encrypted"] is True
+
+
+def test_a_key_that_went_bad_reads_as_not_encrypted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(KEY_ENV, "not-a-key-at-all")
+    assert tokens_encrypted() is False

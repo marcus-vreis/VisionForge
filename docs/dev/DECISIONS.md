@@ -9681,7 +9681,7 @@ ships with the next release.
 
 **Consequences:** a copy of the config folder without the key holds no usable token. Losing the key loses every saved token; each person pastes theirs again. `configured` now costs a file read and a decryption per panel load. The dataset providers' `credentials.json` and the Colab CLI login stay plain: both are off in server mode (ADR-212, ADR-219).
 
-**Known limits:** this protects the files, not the process. The key lives in the server's environment and memory; whoever runs code as the server's system user reads both (on Linux, `/proc/<pid>/environ`), and that includes a job's child until it runs under another account or in a container (ADR-248). A token nobody reads stays under the old key after a rotation; there is no command that re-seals every file. The GUI does not say whether tokens are encrypted; the server log and the FAQ do.
+**Known limits:** this protects the files, not the process. The key lives in the server's environment and memory; whoever runs code as the server's system user reads both (on Linux, `/proc/<pid>/environ`), and that includes a job's child until it runs under another account or in a container (ADR-248). A token nobody reads stays under the old key after a rotation; there is no command that re-seals every file. *Amended 2026-11-26:* the page now says it. `GET /api/session` carries `tokens_encrypted` (null on a local install) and each of the five token panels shows one line on a server: encrypted on disk, or plain text the operator can read.
 
 **Not verified:** the key delivered by a Docker or systemd secret on a real server; the tests set the variable in their own process. A rotation over many profiles. `cryptography` versions other than the installed 50.0.2.
 

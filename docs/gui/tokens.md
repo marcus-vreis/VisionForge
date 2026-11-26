@@ -78,6 +78,8 @@ O que muda:
   como recuperar.
 - Uma chave malformada, ou a variável definida sem o pacote `cryptography`
   instalado, impede o servidor de iniciar e a mensagem diz qual dos dois.
+- No modo servidor, cada painel de token mostra uma linha que diz se o
+  servidor guarda o token cifrado ou em texto puro.
 
 O que isso protege: uma cópia da pasta de configuração (backup, imagem de
 disco, drive sincronizado) sem a chave. O que **não** protege: quem lê o

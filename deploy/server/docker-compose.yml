@@ -108,6 +108,10 @@ services:
       - visionforge-outputs:/work/outputs
     environment:
       VISIONFORGE_CONTAINER: "1"
+      # Optional: a Fernet key encrypts the tokens people save (ADR-253).
+      # Unset, they are plain text in the config folder and the log says so.
+      #   export VISIONFORGE_TOKEN_KEY="$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
+      VISIONFORGE_TOKEN_KEY: ${VISIONFORGE_TOKEN_KEY:-}
     healthcheck:
       # Any HTTP answer means the server is up. From inside its own container
       # the answer is 403 (this address is not the proxy), so no `--fail`.

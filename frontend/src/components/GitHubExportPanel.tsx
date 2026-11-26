@@ -9,6 +9,7 @@ import { ROUTE, routeOpen, useSession } from "../lib/session";
 import { useI18n } from "../i18n/useT";
 import { ActionButton } from "./ui/ActionButton";
 import { GitHubIcon } from "./ui/BrandIcons";
+import { TokenStorageNote } from "./TokenStorageNote";
 
 // The only host a commit link may point at.
 const GITHUB_HOST = /^github\.com$/;
@@ -95,6 +96,7 @@ export function GitHubExportPanel({ runId }: { runId: string }) {
     <p>{g.intro}</p>
     {busy && !preview && <p role="status">{g.loading}</p>}
     {status?.shared && <p role="alert">{g.shared}</p>}
+    <TokenStorageNote />
     {status && <div>
       {status.configured && <p>{g.configured}</p>}
       <GitHubConnect offered={oauth} busy={busy} onConnect={() => void connect()} />
