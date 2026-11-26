@@ -252,10 +252,12 @@ inclusive a pasta de configuração com os tokens. Impedir isso pede rodar o
 treino em container ou com outra conta do sistema, o que ainda não existe; por
 isso o servidor continua sendo para um grupo que confia entre si. As tarefas
 próprias (`user_tasks/`) seguem desligadas num servidor.
-*Não verificado:* só a classificação do dataset de exemplo foi treinada de
-verdade num processo próprio, na CPU; as outras quatro tarefas, a validação
-cruzada, as buscas, a comparação de modelos e as estratégias de grupo de
-verdade, e a GPU, não.
+*Verificado:* as cinco tarefas treinaram de verdade num processo próprio, na
+CPU, uma época no dataset de exemplo de cada uma (a detecção com o backend
+torchvision, sem pesos pré-treinados); são testes `slow`, rodados à mão no
+Windows e fora da CI.
+*Não verificado:* a detecção com Ultralytics, a validação cruzada, as buscas,
+a comparação de modelos e as estratégias de grupo de verdade, e a GPU.
 Decisão: ADR-248, ADR-251 e ADR-252.
 
 ## Ações que rodam na hora
