@@ -119,11 +119,15 @@ def _run_json(job: QueuedJob, run_dir: str | None) -> Path | None:
     A K-fold, a search or a comparison names no single run folder; the group
     ``run.json`` it writes last is the newest under the models folder.
     """
+    if job.models_dir is None:
+        return None
     if run_dir:
-        named = Path(run_dir) / RUN_FILENAME
-        if named.is_file():
+        # The folder may be named by the job's child process (ADR-248): it is
+        # believed only inside the models folder the job was given.
+        named = (Path(run_dir) / RUN_FILENAME).resolve()
+        if named.is_relative_to(job.models_dir.resolve()) and named.is_file():
             return named
-    if job.models_dir is None or job.started_at is None:
+    if job.started_at is None:
         return None
     newest: tuple[float, Path] | None = None
     for path in job.models_dir.rglob(RUN_FILENAME):
@@ -149,7 +153,10 @@ def _record(path: Path, entries: list[dict[str, Any]]) -> None:
     data[RUN_KEY] = [*(before if isinstance(before, list) else []), *entries]
     tmp = path.with_name(path.name + ".tmp")
     try:
-        tmp.write_text(dumps_strict(data), encoding="utf-8")
+        # The path is a run.json found inside the job's own models folder
+        # (`_run_json`); what the file held reaches the content, not the path.
+        text = dumps_strict(data)
+        tmp.write_text(text, encoding="utf-8")  # NOSONAR pythonsecurity:S2083
         tmp.replace(path)
     except OSError as exc:
         with contextlib.suppress(OSError):

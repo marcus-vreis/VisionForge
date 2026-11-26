@@ -33,6 +33,7 @@ from visionforge.gui.api import (
     upload_cleanup,
     upload_routes,
 )
+from visionforge.gui.api.run_queue import QueuedJob
 from visionforge.gui.server_mode import ServerMode, user_slug
 from visionforge.utils.messages import tr
 
@@ -470,3 +471,34 @@ def test_the_dataset_goes_after_a_run_in_the_child_process(
     assert run.json()["dataset_cleanup"] == [entry]
     if status == "failed":
         assert run.json()["error"] == tr("job.child_died", code=3)
+
+
+# ── the run folder a job names ───────────────────────────────────────────────
+
+
+async def _nothing() -> None:
+    """A job's coroutine that does nothing."""
+
+
+def test_a_run_folder_outside_the_models_folder_is_not_recorded_in(
+    tmp_path: Path,
+) -> None:
+    models = tmp_path / "models"
+    inside = models / "exp" / "run_1"
+    outside = tmp_path / "elsewhere"
+    for folder in (inside, outside):
+        folder.mkdir(parents=True)
+        (folder / "run.json").write_text("{}", encoding="utf-8")
+    job = QueuedJob(
+        run_id="r1",
+        label="exp",
+        task="classification",
+        strategy="simple",
+        start=_nothing,
+        models_dir=models,
+    )
+
+    assert upload_cleanup._run_json(job, str(inside)) == inside / "run.json"
+    # A child process names its own run folder: one outside is not believed.
+    assert upload_cleanup._run_json(job, str(outside)) is None
+    assert upload_cleanup._run_json(job, str(models / ".." / "elsewhere")) is None
