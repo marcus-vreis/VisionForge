@@ -85,9 +85,10 @@ def test_a_peeked_pipe_is_read_only_when_bytes_wait(
 def test_the_windows_peek_counts_waiting_bytes_and_sees_the_pipe_close(
     pipe: tuple[int, int],
 ) -> None:
-    assert sys.platform == "win32"  # narrows for mypy on Linux, where it is absent
     read_fd, write_fd = pipe
-    peek = job_worker._pipe_peek(read_fd)
+    # Looked up by name: the function exists only on Windows, and mypy checks
+    # this file for Linux too.
+    peek = getattr(job_worker, "_pipe_peek")(read_fd)  # noqa: B009
     assert peek() == 0
     os.write(write_fd, b"stop\n")
     assert peek() == 5
