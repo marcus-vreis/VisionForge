@@ -176,6 +176,8 @@ def _submit_job(
             profile=slug,
             resume_dir=resume_dir,
             profile_name=name,
+            # A server's local job trains in a child process (ADR-248).
+            isolated=fair and lane == LOCAL_LANE,
         ),
         lane,
         fair=fair,

@@ -858,6 +858,31 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "en": "Experiment failed: {error}",
     },
     "run.no_message": {"pt": "(sem mensagem)", "en": "(no message)"},
+    # A server job's child process (ADR-248).
+    "job.child_start": {
+        "pt": "Não foi possível iniciar o processo do treino: {error}",
+        "en": "Could not start the training's process: {error}",
+    },
+    "job.child_killed": {
+        "pt": (
+            "O treino não parou em {seconds} s depois do pedido e o processo "
+            "dele foi encerrado; o que já estava salvo na pasta do run ficou."
+        ),
+        "en": (
+            "The training did not stop within {seconds} s of the request and "
+            "its process was ended; what was already saved in the run folder stays."
+        ),
+    },
+    "job.child_died": {
+        "pt": (
+            "O processo do treino terminou (código {code}) sem dizer como o run "
+            "acabou; o log do servidor tem a saída dele."
+        ),
+        "en": (
+            "The training's process ended (code {code}) without saying how the "
+            "run ended; the server's log has its output."
+        ),
+    },
     "run.resuming_label": {
         "pt": "{name} (retomando)",
         "en": "{name} (resuming)",

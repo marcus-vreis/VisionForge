@@ -14,8 +14,9 @@
 > treinos ao Weights & Biases e ao Comet, com a própria chave. O Colab, o DVC
 > e o MLflow local não estão disponíveis, e a tela não os mostra. E ele é
 > para um **grupo que já confia entre
-> si**: o treino roda dentro do processo do servidor, sem isolamento entre as
-> pessoas. Não ofereça este servidor a desconhecidos.
+> si**: o treino roda num processo próprio, mas do mesmo usuário do sistema que
+> o servidor, sem isolamento de arquivos entre as pessoas. Não ofereça este
+> servidor a desconhecidos.
 
 Esta página sai do código atual (`gui/server_mode.py`) e das decisões ADR-212
 a ADR-227 e ADR-246. O que não foi testado está marcado como *não verificado*.
@@ -224,6 +225,29 @@ uma vez cada. Ela vale enquanto o processo está de pé; ao reiniciar o servidor
 a fila e a memória de quem rodou por último somem juntas. No uso local nada
 disso existe: a fila segue a ordem de envio e não há limite. `GET /api/session`
 informa o limite em `max_queued` (nulo no uso local). Decisão: ADR-245.
+
+### Cada treino num processo próprio
+
+Num servidor, um treino simples das cinco tarefas (inclusive retomado) roda
+num processo Python separado do servidor. Esse processo não recebe os tokens
+do ambiente (`HF_TOKEN`, `GITHUB_TOKEN`, a chave do Kaggle, nada com `TOKEN`,
+`KEY` ou `SECRET` no nome), procura a configuração do VisionForge numa pasta
+vazia e trabalha numa pasta temporária apagada no fim. Se ele morrer (falta de
+memória, erro de driver), só aquele run falha; o servidor e a fila seguem.
+Parar continua parando no fim da época, guardando o que o treino já fez; se o
+processo não parar em 10 minutos, ele é encerrado e o run aparece como falho.
+No W&B e no Comet, um treino de classificação num servidor chega inteiro no
+fim, não época por época.
+
+O que isso **não** faz: o processo é do mesmo usuário do sistema que roda o
+servidor, então ainda consegue abrir qualquer arquivo que esse usuário abre,
+inclusive a pasta de configuração com os tokens. Impedir isso pede rodar o
+treino em container ou com outra conta do sistema, o que ainda não existe; por
+isso o servidor continua sendo para um grupo que confia entre si. K-fold,
+buscas, comparações e as estratégias ainda rodam dentro do servidor.
+*Não verificado:* só a classificação do dataset de exemplo foi treinada de
+verdade num processo próprio, na CPU; as outras quatro tarefas e a GPU não.
+Decisão: ADR-248.
 
 ## Ações que rodam na hora
 

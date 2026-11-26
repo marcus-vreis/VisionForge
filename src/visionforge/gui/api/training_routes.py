@@ -390,8 +390,14 @@ async def _execute_block(
     """Run a standalone task's block in a background thread and record how it ended.
 
     ``report_section`` is the part of the block's report that names the run folder.
+    A server job runs the block in a child process instead (ADR-248).
     """
     state = _job_state(run_id)
+    if state.isolated:
+        await _execute_block_in_child(
+            block_cls, task, config, run_id, resume_dir, report_section
+        )
+        return
 
     loop = asyncio.get_running_loop()
     queue = state.log
@@ -423,19 +429,46 @@ async def _execute_block(
 
     except Exception as e:
         logger.exception("GUI: {} {} failed", task.capitalize(), run_id)
-        cls = type(e).__name__
-        msg = str(e) or tr(RUN_NO_MESSAGE_KEY)
-        state.run = {
-            "run_id": run_id,
-            "status": "failed",
-            "error": f"{cls}: {msg}",
-            "report": None,
-            "run_dir": None,
-        }
+        state.run = _failed_task_run(run_id, e)
 
     finally:
         if queue is not None:
             await queue.put(None)
+
+
+def _failed_task_run(run_id: str, error: Exception) -> dict[str, Any]:
+    """The run dict of a standalone-task job whose run raised ``error``."""
+    msg = str(error) or tr(RUN_NO_MESSAGE_KEY)
+    return {
+        "run_id": run_id,
+        "status": "failed",
+        "error": f"{type(error).__name__}: {msg}",
+        "report": None,
+        "run_dir": None,
+    }
+
+
+async def _execute_block_in_child(
+    block_cls: type[Any],
+    task: str,
+    config: Any,
+    run_id: str,
+    resume_dir: Path | None,
+    report_section: str,
+) -> None:
+    """Run a server job's block in a child process and record how it ended (ADR-248)."""
+    from visionforge.gui.api.job_process import child_spec, execute_in_child
+
+    state = _job_state(run_id)
+    logger.info("GUI: Starting {} {} ({}, child)", task, run_id, config.model.name)
+    try:
+        spec = child_spec(block_cls, config, resume_dir, report_section=report_section)
+        state.run = await execute_in_child(run_id, spec, state.log, state.token)
+    except Exception as e:
+        logger.exception("GUI: {} {} failed", task.capitalize(), run_id)
+        state.run = _failed_task_run(run_id, e)
+    finally:
+        await state.log.put(None)
 
 
 async def _execute_detection(
