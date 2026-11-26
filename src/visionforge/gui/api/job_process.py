@@ -192,8 +192,8 @@ def _pin(model: BaseModel, data: dict[str, Any], prefix: str) -> None:
             data[name] = str(value.expanduser().absolute())
 
 
-def import_path(obj: type[Any]) -> str:
-    """``module:QualName`` of a class, which the child imports by that name."""
+def import_path(obj: Callable[..., Any]) -> str:
+    """``module:QualName`` of a class or function, which the child imports by that name."""
     return f"{obj.__module__}:{obj.__qualname__}"
 
 
@@ -239,6 +239,8 @@ class ChildOutcome:
     error: str | None = None
     returncode: int | None = None
     killed: bool = False
+    # A strategy's call (ADR-252): what the function returned, as ``job_wire`` wrote it.
+    result: Any = None
 
     def run(self, run_id: str) -> dict[str, Any]:
         """The run dict ``/experiment/status`` and ``/experiment/result`` read."""
@@ -411,6 +413,7 @@ class ChildJob:
                 report=report if isinstance(report, dict) else {},
                 run_dir=end.get("run_dir"),
                 returncode=code,
+                result=end.get("result"),
             )
         if end is not None:
             error = str(end.get("error") or tr("run.no_message"))
@@ -430,7 +433,7 @@ async def run_in_child(
     *,
     grace: float = STOP_GRACE_S,
 ) -> ChildOutcome:
-    """Run one block in a child process from the event loop; see :class:`ChildJob`.
+    """Run one block or call in a child process from the event loop; see :class:`ChildJob`.
 
     If the awaiting task is cancelled (the server stops, the queue is reset) the
     child is killed rather than left training with nobody to read it.

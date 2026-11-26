@@ -231,8 +231,12 @@ informa o limite em `max_queued` (nulo no uso local). Decisão: ADR-245.
 Num servidor, um treino simples das cinco tarefas (inclusive retomado) roda
 num processo Python separado do servidor. Na classificação também a validação
 cruzada, as buscas (grid e random) e a comparação de modelos escolhidas no
-campo `block`: o job inteiro, com todos os folds, tentativas ou arquiteturas,
-roda num só processo. Esse processo não recebe os tokens do ambiente
+campo `block`, e as estratégias de grupo de todas as tarefas: comparação de
+modelos, sweep, o K-fold da regressão e da segmentação, réplicas e comparação
+replicada. O job inteiro, com todos os folds, tentativas, arquiteturas ou
+sementes, roda num só processo; o relatório, os arquivos de resumo e a entrada
+de grupo no Histórico são escritos pelo servidor quando ele termina, como
+antes. Esse processo não recebe os tokens do ambiente
 (`HF_TOKEN`, `GITHUB_TOKEN`, a chave do Kaggle, nada com `TOKEN`, `KEY` ou
 `SECRET` no nome), procura a configuração do VisionForge numa pasta
 vazia e trabalha numa pasta temporária apagada no fim. Se ele morrer (falta de
@@ -246,14 +250,13 @@ O que isso **não** faz: o processo é do mesmo usuário do sistema que roda o
 servidor, então ainda consegue abrir qualquer arquivo que esse usuário abre,
 inclusive a pasta de configuração com os tokens. Impedir isso pede rodar o
 treino em container ou com outra conta do sistema, o que ainda não existe; por
-isso o servidor continua sendo para um grupo que confia entre si. As
-estratégias que não passam pelo campo `block` da classificação (comparação,
-sweep, o K-fold das outras tarefas, réplicas e comparação replicada) ainda
-rodam dentro do servidor.
+isso o servidor continua sendo para um grupo que confia entre si. As tarefas
+próprias (`user_tasks/`) seguem desligadas num servidor.
 *Não verificado:* só a classificação do dataset de exemplo foi treinada de
 verdade num processo próprio, na CPU; as outras quatro tarefas, a validação
-cruzada, as buscas e a comparação de modelos de verdade, e a GPU, não.
-Decisão: ADR-248 e ADR-251.
+cruzada, as buscas, a comparação de modelos e as estratégias de grupo de
+verdade, e a GPU, não.
+Decisão: ADR-248, ADR-251 e ADR-252.
 
 ## Ações que rodam na hora
 

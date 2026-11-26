@@ -1,10 +1,12 @@
 """Group jobs: comparison, sweep, K-fold, replicates and paired comparison (#204).
 
 Each ``_start_*`` validates a request, names the job and hands it to the queue
-through ``submission._submit_job``; each ``_execute_*`` runs it in a worker
-thread, writes its report and History group (``core.run_groups``) and records
-how it ended in its own job's state (ADR-185). Nothing here holds state; the
-routes that call these live in ``strategy_routes.py``.
+through ``submission._submit_job``; each ``_execute_*`` calls its orchestrator
+through ``job_call.call_in_job`` (a worker thread, or a child process for a
+server job, ADR-252), then writes its report and History group
+(``core.run_groups``) in the server and records how it ended in its own job's
+state (ADR-185). Nothing here holds state; the routes that call these live in
+``strategy_routes.py``.
 
 A group is written under its config's ``output.models_dir``, or under the
 models folder of the profile that submitted it when the config names none
@@ -20,7 +22,7 @@ import asyncio
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import asdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 from fastapi import HTTPException
 from fastapi.exceptions import RequestValidationError
@@ -33,7 +35,7 @@ from visionforge.core.replicated_comparison import (
     run_replicated_comparison,
     validate_variants,
 )
-from visionforge.core.replicates import run_replicates
+from visionforge.core.replicates import ReplicateTrial, run_replicates
 from visionforge.core.run_groups import (
     finish_kfold,
     finish_replicated_comparison,
@@ -45,7 +47,7 @@ from visionforge.core.run_groups import (
     sweep_report,
     write_group_summary,
 )
-from visionforge.core.sweep import run_sweep, validate_sweep_space
+from visionforge.core.sweep import SweepTrial, run_sweep, validate_sweep_space
 from visionforge.core.task_runner import (
     TaskRunner,
     give_cancel_token,
@@ -56,6 +58,13 @@ from visionforge.gui.api import submission
 from visionforge.gui.api.config_scope import confine_axes, confine_config
 from visionforge.gui.api.dataset_scope import current_scope
 from visionforge.gui.api.execution import RUN_NO_MESSAGE_KEY, _job_state
+from visionforge.gui.api.job_call import (
+    ChildCallFailed,
+    RawConfig,
+    call_in_job,
+    kfold_report,
+    trials_of,
+)
 from visionforge.gui.api.profiles import Profile
 from visionforge.gui.api.schemas import (
     ComparisonRequest,
@@ -66,13 +75,16 @@ from visionforge.gui.api.schemas import (
     TaskCvRequest,
 )
 from visionforge.gui.api.submission import _task_label_from_config
+
+# The K-fold fronts, looked up here when a job starts so a test can replace them.
+from visionforge.gui.api.task_kfold import (
+    run_regression_cross_validation as run_regression_cross_validation,
+)
+from visionforge.gui.api.task_kfold import (
+    run_segmentation_cross_validation as run_segmentation_cross_validation,
+)
 from visionforge.gui.api.training_routes import _new_run_id
 from visionforge.utils.messages import tr
-from visionforge.utils.regression_config import RegressionConfig
-from visionforge.utils.segmentation_config import SegmentationConfig
-
-if TYPE_CHECKING:
-    from visionforge.blocks.regression_cv import CrossValidationReport
 
 # A comparison's strategy, report name and default job name.
 _COMPARISON = "comparison"
@@ -87,31 +99,6 @@ _Body = Callable[[_Progress, CancellationToken], Awaitable[tuple[dict[str, Any],
 # old names stay for the model comparison and the tests that use them.
 _sweep_report = sweep_report
 _write_advanced_summary = write_group_summary
-
-
-# The trainers import torch, so each K-fold front imports its task's module only
-# when a run starts (GUI-11, #202). They stay module attributes so a test can
-# replace them here.
-
-
-def run_regression_cross_validation(
-    config: RegressionConfig, **kwargs: Any
-) -> CrossValidationReport:
-    """K-fold CV for regression, importing its trainer only when a run starts."""
-    from visionforge.blocks.regression_cv import run_regression_cross_validation as run
-
-    return run(config, **kwargs)
-
-
-def run_segmentation_cross_validation(
-    config: SegmentationConfig, **kwargs: Any
-) -> CrossValidationReport:
-    """K-fold CV for segmentation, importing its trainer only when a run starts."""
-    from visionforge.blocks.segmentation_cv import (
-        run_segmentation_cross_validation as run,
-    )
-
-    return run(config, **kwargs)
 
 
 # ── submitting ─────────────────────────────────────────────────────────────
@@ -436,6 +423,10 @@ async def _run_group_job(
         report, ran = await body(_put_event, token)
         state.run = _ended_run(run_id, report, None)
         logger.success("GUI: {} {} completed ({}).", what, run_id, ran)
+    except ChildCallFailed as e:
+        # Already worded by the child, or the child's death or kill (ADR-252).
+        logger.error("GUI: {} {} failed: {}", what, run_id, e)
+        state.run = _ended_run(run_id, None, str(e))
     except Exception as e:
         logger.exception("GUI: {} {} failed", what, run_id)
         error = f"{type(e).__name__}: {e or tr(RUN_NO_MESSAGE_KEY)}"
@@ -454,20 +445,22 @@ async def _execute_comparison(
     *,
     models_dir: Path,
 ) -> None:
-    """Run a model comparison in a background thread and store the ranked report."""
+    """Run a model comparison and store the ranked report."""
 
     async def body(
         progress: _Progress, token: CancellationToken
     ) -> tuple[dict[str, Any], str]:
         # Each architecture streams as one unit, so the sheet shows which model
         # is training and its epochs instead of "preparing" until the end.
-        trials = await asyncio.to_thread(
+        trials = await call_in_job(
+            run_id,
             run_model_comparison,
             runner,
-            config_dict,
+            RawConfig(config_dict, runner),
             model_names,
             metric,
             progress_callback=progress,
+            decode=trials_of(ComparisonTrial),
         )
         stopped = job_was_stopped([t.status for t in trials], len(model_names), token)
         if not any(t.status == _SUCCESS for t in trials) and not stopped:
@@ -547,21 +540,23 @@ async def _execute_sweep(
     *,
     models_dir: Path,
 ) -> None:
-    """Run a hyperparameter sweep in a background thread and store the ranked report."""
+    """Run a hyperparameter sweep and store the ranked report."""
 
     async def body(
         progress: _Progress, token: CancellationToken
     ) -> tuple[dict[str, Any], str]:
-        trials = await asyncio.to_thread(
+        trials = await call_in_job(
+            run_id,
             run_sweep,
             runner,
-            base_config_dict,
+            RawConfig(base_config_dict, runner),
             req.search_space,
             mode=req.mode,
             metric=metric,
             n_trials=req.n_trials,
             seed=req.seed,
             progress_callback=progress,
+            decode=trials_of(SweepTrial),
         )
         report = finish_sweep(
             trials,
@@ -589,12 +584,13 @@ async def _execute_task_cv(
     *,
     models_dir: Path,
 ) -> None:
-    """Run a task's K-fold in a worker thread and store the fold report."""
+    """Run a task's K-fold and store the fold report."""
 
     async def body(
         progress: _Progress, token: CancellationToken
     ) -> tuple[dict[str, Any], str]:
-        cv = await asyncio.to_thread(
+        cv = await call_in_job(
+            run_id,
             cv_fn,
             config,
             n_folds=req.n_folds,
@@ -603,6 +599,7 @@ async def _execute_task_cv(
             select_on=req.select_on,
             progress_callback=progress,
             cancel_token=token,
+            decode=kfold_report,
         )
         # The validated config names the task (config.task), which the
         # request's raw dict may leave to the default.
@@ -636,10 +633,11 @@ async def _execute_replicated_comparison(
     async def body(
         progress: _Progress, token: CancellationToken
     ) -> tuple[dict[str, Any], str]:
-        raw = await asyncio.to_thread(
+        raw = await call_in_job(
+            run_id,
             run_replicated_comparison,
             runner,
-            base_config_dict,
+            RawConfig(base_config_dict, runner),
             req.variants,
             seeds,
             metric,
@@ -668,18 +666,20 @@ async def _execute_replicates(
     *,
     models_dir: Path,
 ) -> None:
-    """Run the replicate set in a background thread and store the aggregate report."""
+    """Run the replicate set and store the aggregate report."""
 
     async def body(
         progress: _Progress, token: CancellationToken
     ) -> tuple[dict[str, Any], str]:
-        trials = await asyncio.to_thread(
+        trials = await call_in_job(
+            run_id,
             run_replicates,
             runner,
-            base_config_dict,
+            RawConfig(base_config_dict, runner),
             seeds,
             metric,
             progress_callback=progress,
+            decode=trials_of(ReplicateTrial),
         )
         report = finish_replicates(
             trials,
