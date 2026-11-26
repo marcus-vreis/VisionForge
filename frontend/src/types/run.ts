@@ -13,6 +13,20 @@ export interface RunStatus {
   /** Client-side only: the status poll is not reaching the server. The run's
    *  `status` stays what it last was, since the training goes on there (ADR-133). */
   connection?: "reconnecting" | "lost";
+  /** The datasets the server deleted once the run ended (ADR-249). */
+  dataset_cleanup?: DatasetCleanup[];
+}
+
+/** A dataset of the person's own folder deleted after a run on a shared
+ *  server, because it was sent to go after its next run (ADR-249). */
+export interface DatasetCleanup {
+  dataset: string;
+  /** Relative to the person's profile folder, e.g. `datasets/beans`. */
+  path: string;
+  size_bytes: number;
+  at: string;
+  status: "deleted" | "failed";
+  error?: string | null;
 }
 
 export interface RunResponse {
@@ -93,6 +107,8 @@ export interface RunResult {
    *  with no mean. Absent from servers older than that; an error during the stop
    *  window is a failed run, never a stopped one. */
   stopped?: boolean;
+  /** The datasets the server deleted once the run ended (ADR-249). */
+  dataset_cleanup?: DatasetCleanup[];
   artifacts: {
     model?: string;
     graphics?: string[];

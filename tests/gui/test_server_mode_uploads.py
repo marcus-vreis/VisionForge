@@ -176,6 +176,7 @@ def test_a_zip_sent_in_parts_becomes_a_dataset_of_their_own(
         "name": "beans",
         "path": str(own / "beans"),
         "size_bytes": 3700,
+        "delete_after_run": False,
     }
     assert sorted(p.relative_to(own).as_posix() for p in own.rglob("*.jpg")) == [
         "beans/train/a/1.jpg",

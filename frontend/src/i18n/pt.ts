@@ -885,6 +885,16 @@ export const pt = {
     uploadCancel: "Cancelar envio",
     uploaded: (name: string) => `O dataset ${name} chegou e está na sua pasta.`,
     uploadFailed: "O envio parou. Retome para mandar só o que falta.",
+    deleteAfterRun: "Apagar depois do próximo treino",
+    deleteAfterRunHint:
+      "Quando o próximo treino que usa este dataset terminar, concluído, com falha ou parado, o servidor o apaga para liberar o seu espaço. Um treino que ainda espera por ele o mantém até terminar também.",
+    deleteAfterRunBadge: "apagado após o próximo treino",
+  },
+  datasetCleanup: {
+    deleted: (name: string, size: string) =>
+      `O dataset ${name} (${size}) foi apagado depois deste treino, como pedido no envio.`,
+    failed: (name: string, reason: string) =>
+      `Não foi possível apagar o dataset ${name} depois deste treino: ${reason}. Veja os seus datasets para apagá-lo.`,
   },
   datasetLab: {
     kicker: "// laboratório de datasets",

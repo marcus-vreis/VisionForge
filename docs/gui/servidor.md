@@ -331,9 +331,35 @@ datasets; ninguém mais o vê (para outra conta, a resposta é 404).
 Limites que o operador precisa conhecer: a extração roda dentro do pedido que
 conclui o envio e não conta em `--max-actions`; um proxy com tempo limite
 curto pode cortar a resposta de um `.zip` grande enquanto o servidor termina.
-Só `.zip` é aceito. **Ainda não existe** a remoção automática do dataset
-enviado ao fim do treino (prevista na fase 1 da ADR-212): ele fica na pasta
-até a pessoa apagá-lo.
+Só `.zip` é aceito.
+
+### Apagar depois do próximo treino
+
+Marque **Apagar depois do próximo treino** antes de escolher o arquivo para
+que o servidor apague o dataset quando o próximo treino que o usa terminar,
+concluído, com falha ou parado. Vem desmarcado: um dataset costuma servir a
+vários treinos, e mandar gigabytes de novo custa mais que o espaço. Na lista de
+**Meus datasets** um dataset marcado assim aparece com a etiqueta "apagado após
+o próximo treino" (ADR-249).
+
+- Uma estratégia (K-fold, busca, comparação, réplicas) conta como um treino só:
+  o dataset sai quando ela inteira termina.
+- Se outro treino seu que usa o mesmo dataset ainda estiver rodando ou na
+  fila, ele fica até o último desses terminar.
+- O treino diz o que foi apagado: uma linha no resultado e no Histórico
+  ("O dataset beans (3,0 GB) foi apagado depois deste treino…"), e a chave
+  `dataset_cleanup` no `run.json`, com a pasta relativa ao perfil
+  (`datasets/beans`), o tamanho, a hora e se deu certo. O log do servidor
+  registra o mesmo.
+- Se o sistema recusar apagar (um arquivo aberto, no Windows), o treino não
+  falha: a linha diz o motivo e o dataset continua na lista, marcado; o próximo
+  treino que o usar tenta de novo. Se a remoção parar no meio, sobra uma pasta
+  `.<nome>.deleting-…` na lista, que você apaga como qualquer outra.
+- A marca fica em `outputs/profiles/<conta>/delete_after_run/`, fora da pasta
+  de datasets: nenhum carregador a lê como dado. Apagar o dataset à mão também
+  tira a marca.
+- Um run treinado com o dataset continua no Histórico, mas as ações que releem
+  o dataset (como retomar o treino) deixam de funcionar para ele.
 
 ## Cota de disco
 

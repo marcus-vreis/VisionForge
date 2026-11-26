@@ -18,6 +18,8 @@ export interface DatasetUpload {
   parts: number;
   /** The parts that arrived, by number. */
   received: number[];
+  /** Deleted once the next run that uses it ends (ADR-249). */
+  delete_after_run?: boolean;
 }
 
 /** The dataset the server unpacked. */
@@ -25,6 +27,8 @@ export interface UploadedDataset {
   name: string;
   path: string;
   size_bytes: number;
+  /** Deleted once the next run that uses it ends (ADR-249). */
+  delete_after_run?: boolean;
 }
 
 export interface UploadCalls {

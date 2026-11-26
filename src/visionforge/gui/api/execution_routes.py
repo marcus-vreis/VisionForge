@@ -17,6 +17,7 @@ from fastapi.responses import StreamingResponse
 from visionforge.gui.api.dataset_scope import current_scope
 from visionforge.gui.api.execution import (
     _LANES,
+    _is_settling,
     _run_state,
     _sse_generator,
     latest_run_of,
@@ -121,11 +122,15 @@ async def get_status(run_id: str | None = None) -> RunStatus:
     if run is None:
         return RunStatus(status="idle", queued=queued)
 
+    if _is_settling(run["run_id"]):
+        # Ended, but its datasets are still being deleted (ADR-249).
+        return RunStatus(status="running", run_id=run["run_id"], queued=queued)
     return RunStatus(
         status=run["status"],
         run_id=run["run_id"],
         error=run.get("error"),
         queued=queued,
+        dataset_cleanup=run.get("dataset_cleanup") or [],
     )
 
 
@@ -213,6 +218,7 @@ async def get_result(run_id: str) -> RunResult:
 
     report = state.get("report") or {}
     stopped = _report_stopped(report)
+    cleanup = state.get("dataset_cleanup") or []
     if run_json_path and run_json_path.exists():
         data = json.loads(run_json_path.read_text(encoding="utf-8"))
         return RunResult(
@@ -222,6 +228,7 @@ async def get_result(run_id: str) -> RunResult:
             report=report,
             artifacts=data.get("artifacts", {}),
             stopped=stopped,
+            dataset_cleanup=cleanup,
         )
 
     return RunResult(
@@ -230,6 +237,7 @@ async def get_result(run_id: str) -> RunResult:
         report=report,
         artifacts={},
         stopped=stopped,
+        dataset_cleanup=cleanup,
     )
 
 

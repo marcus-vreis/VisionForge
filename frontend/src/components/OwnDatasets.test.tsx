@@ -65,6 +65,13 @@ describe("the person's own datasets on a shared server (ADR-227)", () => {
     expect(markup).toContain('data-quota="full"');
   });
 
+  it("marks a dataset that goes after its next training (ADR-249)", () => {
+    expect(view()).not.toContain(pt.ownDatasets.deleteAfterRunBadge);
+    const markup = view({ datasets: [APPLES, { ...BEANS, delete_after_run: true }] });
+    expect(markup.match(/data-delete-after-run/g)).toHaveLength(1);
+    expect(markup).toContain(pt.ownDatasets.deleteAfterRunBadge);
+  });
+
   it("says so while loading, when the folder is empty and when it cannot be read", () => {
     expect(view({ load: "loading", datasets: [] })).toContain(pt.ownDatasets.loading);
     expect(view({ datasets: [] })).toContain(pt.ownDatasets.empty);

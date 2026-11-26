@@ -20,6 +20,18 @@ from visionforge.gui.api.profiles import (
 )
 
 
+class DatasetCleanup(BaseModel):
+    """A dataset of the person's own folder deleted after this run (ADR-249)."""
+
+    dataset: str
+    # Relative to the person's profile folder, e.g. ``datasets/beans``.
+    path: str
+    size_bytes: int
+    at: str
+    status: Literal["deleted", "failed"]
+    error: str | None = None
+
+
 class RunStatus(BaseModel):
     """Current state of the experiment runner."""
 
@@ -29,6 +41,8 @@ class RunStatus(BaseModel):
     # How many submissions are waiting behind the active one (ADR-075). Zero
     # whenever nothing is queued, which is the only state that existed before.
     queued: int = 0
+    # The datasets deleted once the run ended (ADR-249).
+    dataset_cleanup: list[DatasetCleanup] = []
 
 
 class RunResponse(BaseModel):
@@ -255,6 +269,8 @@ class RunResult(BaseModel):
     # loop broke on the stop, or a multi-unit job with a unit cut or units left
     # unrun -- including one stopped before any unit finished.
     stopped: bool = False
+    # The datasets deleted once the run ended (ADR-249).
+    dataset_cleanup: list[DatasetCleanup] = []
 
 
 class DatasetInfo(BaseModel):
@@ -492,6 +508,8 @@ class RunDetail(BaseModel):
     # them (ADR-113).
     group_id: str | None = None
     group: dict[str, Any] | None = None
+    # The server deleted these datasets once the run ended (ADR-249).
+    dataset_cleanup: list[DatasetCleanup] = []
     # The task family, by the rule `_run_task` applies to run.json: a built-in
     # name or `custom:<key>`. Not `config.task`, which for classification holds
     # the problem type and which a researcher-defined task does not carry at

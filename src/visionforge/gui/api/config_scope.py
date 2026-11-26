@@ -21,11 +21,16 @@ name it offers is checked like the field itself. Paths, names inside the
 dataset, ``block`` and the search spaces themselves cannot be rewritten.
 
 With no scope bound (the local tool) neither does anything.
+
+Every config a server runs passes :func:`confine_config`, so it also notes the
+folders the config reads, for :func:`take_reads`: the job that request queues
+learns which of the person's own datasets it uses (ADR-249).
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
+from contextvars import ContextVar
 from enum import Enum
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import UnionType
@@ -108,6 +113,23 @@ _VALUES = (int, float, bool, str, type(None))
 _CONTAINERS = (list, tuple, Union, UnionType)
 
 
+# The folders the configs confined while serving this request read (ADR-249).
+_READS: ContextVar[tuple[Path, ...]] = ContextVar(
+    "visionforge_config_reads", default=()
+)
+
+
+def take_reads() -> tuple[Path, ...]:
+    """The resolved paths the configs confined in this request read; then none.
+
+    The request that queues a job takes them, so the queue knows which of the
+    person's own datasets the job uses. Empty on a local install.
+    """
+    reads = _READS.get()
+    _READS.set(())
+    return reads
+
+
 def closed_blocks() -> list[str]:
     """The values of classification's ``block`` a server refuses, for the screen."""
     from visionforge.utils.config import ExperimentConfig
@@ -135,12 +157,17 @@ def confine_config(config: BaseModel, profile: Profile) -> None:
     if isinstance(block, str) and block not in OPEN_BLOCKS:
         raise HTTPException(422, tr("server.config_block", block=block))
     own = profile_root(profile)
+    reads: list[Path] = []
     for field, value in _leaves(config, ""):
         problem = _problem(field, value, scope, own)
         if problem is not None:
             raise HTTPException(422, problem)
         if field in REWRITING and isinstance(value, Mapping):
             confine_axes(type(config), value)
+        read = _read_path(field, value)
+        if read is not None:
+            reads.append(read)
+    _READS.set((*_READS.get(), *reads))
 
 
 def confine_axes(config_type: type[BaseModel], axes: Mapping[str, object]) -> None:
@@ -229,6 +256,27 @@ def _leaves(model: BaseModel, prefix: str) -> Iterator[tuple[str, object]]:
             yield f"{prefix}{name}", value
 
 
+def _written(field: str) -> bool:
+    """True for a path the run writes: ``output.*`` and ``*.output*``."""
+    return field.startswith("output.") or field.rsplit(".", 1)[-1].startswith("output")
+
+
+def _read_path(field: str, value: object) -> Path | None:
+    """The resolved folder or file a path field makes the run read, if any.
+
+    A relative file the loader resolves inside the dataset folder adds nothing:
+    the dataset folder is already read.
+    """
+    if not isinstance(value, Path) or _written(field):
+        return None
+    if field in DATASET_FILES and not value.is_absolute():
+        return None
+    try:
+        return value.expanduser().resolve()
+    except (OSError, RuntimeError):
+        return None
+
+
 def _problem(field: str, value: object, scope: DatasetScope, own: Path) -> str | None:
     leaf = field.rsplit(".", 1)[-1]
     if isinstance(value, Path):
@@ -255,10 +303,7 @@ def _path_problem(
     except (OSError, RuntimeError):
         return tr("server.config_path", field=field)
     mine = resolved == own or resolved.is_relative_to(own)
-    written = field.startswith("output.") or field.rsplit(".", 1)[-1].startswith(
-        "output"
-    )
-    if mine or (not written and scope.holds(resolved)):
+    if mine or (not _written(field) and scope.holds(resolved)):
         return None
     return tr("server.config_path", field=field)
 
@@ -290,4 +335,5 @@ __all__ = [
     "confine_axes",
     "confine_config",
     "profile_root",
+    "take_reads",
 ]

@@ -190,7 +190,35 @@ export function OwnDatasetsView({
               }}
             >
               <div style={{ flex: "1 1 220px", minWidth: 0 }}>
-                <div style={{ color: "var(--vf-text)", overflowWrap: "anywhere" }}>{d.name}</div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    color: "var(--vf-text)",
+                    overflowWrap: "anywhere",
+                  }}
+                >
+                  <span>{d.name}</span>
+                  {d.delete_after_run && (
+                    <span
+                      data-delete-after-run
+                      style={{
+                        padding: "2px 9px",
+                        border: "1px solid var(--vf-panel-stroke)",
+                        borderRadius: 999,
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 11,
+                        letterSpacing: "0.12em",
+                        textTransform: "uppercase",
+                        color: "var(--vf-text-dim)",
+                      }}
+                    >
+                      {t.ownDatasets.deleteAfterRunBadge}
+                    </span>
+                  )}
+                </div>
                 <div
                   style={{
                     fontFamily: "var(--font-mono)",

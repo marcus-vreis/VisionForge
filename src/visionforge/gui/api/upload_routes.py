@@ -5,7 +5,9 @@ the sample dataset (ADR-219). These routes take a .zip from their browser:
 
 - ``POST /api/uploads`` declares the folder name, the file and its size. The
   size is checked against ``--max-upload-gb`` and the quota, and the archive's
-  file is made at that size at once, so the space counts from the start.
+  file is made at that size at once, so the space counts from the start. It
+  may ask ``delete_after_run``: the dataset goes after the run that uses it
+  (``upload_cleanup``, ADR-249).
 - ``PUT /api/uploads/{id}/parts/{n}`` writes part ``n`` (``PART_SIZE`` bytes,
   the last one shorter) at its place. Sending a part again rewrites the same
   bytes, so a broken connection is resumed by sending what is missing.
@@ -26,6 +28,7 @@ one. On a local install nobody has an own folder and every route answers 404.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import math
 import os
@@ -51,6 +54,7 @@ from visionforge.gui.api.http_responses import (
     VALIDATION_ERROR_CONTENT,
 )
 from visionforge.gui.api.own_datasets import OwnDataset
+from visionforge.gui.api.upload_cleanup import set_mark
 from visionforge.gui.disk_quota import folder_bytes, size_text
 from visionforge.gui.server_mode import USAGE, ServerMode, mode_of
 from visionforge.gui.upload_archive import ArchiveError, extract, inspect
@@ -91,6 +95,10 @@ class UploadStart(BaseModel):
     )
     filename: str = Field(min_length=1, max_length=255)
     size: int = Field(gt=0, description="The .zip's size in bytes.")
+    delete_after_run: bool = Field(
+        default=False,
+        description="Delete the dataset once the next run that uses it ends.",
+    )
 
 
 class UploadStatus(BaseModel):
@@ -103,6 +111,7 @@ class UploadStatus(BaseModel):
     part_size: int
     parts: int
     received: list[int]
+    delete_after_run: bool = False
 
 
 class UploadPart(BaseModel):
@@ -129,6 +138,7 @@ class Staged:
     size: int
     part_size: int
     folder: Path
+    delete_after_run: bool = False
 
     @property
     def parts(self) -> int:
@@ -179,8 +189,9 @@ def _read(folder: Path) -> Staged | None:
             size=int(raw["size"]),
             part_size=int(raw["part_size"]),
             folder=folder,
+            delete_after_run=raw.get("delete_after_run") is True,
         )
-    except (OSError, ValueError, KeyError, TypeError):
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return None
     if staged.id != folder.name or staged.size <= 0 or staged.part_size <= 0:
         return None
@@ -250,7 +261,20 @@ def _status(staged: Staged) -> UploadStatus:
         part_size=staged.part_size,
         parts=staged.parts,
         received=_received(staged),
+        delete_after_run=staged.delete_after_run,
     )
+
+
+def _write_record(staged: Staged) -> None:
+    record = {
+        "id": staged.id,
+        "name": staged.name,
+        "filename": staged.filename,
+        "size": staged.size,
+        "part_size": staged.part_size,
+        "delete_after_run": staged.delete_after_run,
+    }
+    (staged.folder / _RECORD).write_text(json.dumps(record), encoding="utf-8")
 
 
 def _create(staging: Path, req: UploadStart) -> Staged:
@@ -267,15 +291,9 @@ def _create(staging: Path, req: UploadStart) -> Staged:
         size=req.size,
         part_size=PART_SIZE,
         folder=folder,
+        delete_after_run=req.delete_after_run,
     )
-    record = {
-        "id": staged.id,
-        "name": staged.name,
-        "filename": staged.filename,
-        "size": staged.size,
-        "part_size": staged.part_size,
-    }
-    (folder / _RECORD).write_text(json.dumps(record), encoding="utf-8")
+    _write_record(staged)
     return staged
 
 
@@ -322,7 +340,8 @@ async def start_upload(req: UploadStart, request: Request) -> UploadStatus:
     """Open an upload of a .zip that will become ``name`` in the person's folder.
 
     The same name, file and size as an upload already open answers that one,
-    so a page that was reloaded resumes instead of starting over.
+    so a page that was reloaded resumes instead of starting over; it keeps the
+    ``delete_after_run`` this request asks.
 
     Raises:
         HTTPException: 404 on a local install; 422 for a name that is not one
@@ -353,6 +372,11 @@ async def start_upload(req: UploadStart, request: Request) -> UploadStatus:
         if staged.name != req.name:
             continue
         if staged.filename == req.filename and staged.size == req.size:
+            if staged.delete_after_run != req.delete_after_run:
+                staged = dataclasses.replace(
+                    staged, delete_after_run=req.delete_after_run
+                )
+                await asyncio.to_thread(_write_record, staged)
             return _status(staged)
         raise HTTPException(409, tr("upload.name_busy", name=req.name))
     if len(live) >= MAX_OPEN:
@@ -512,9 +536,21 @@ async def complete_upload(upload_id: str, request: Request) -> OwnDataset:
         _FINISHING.discard(upload_id)
     await asyncio.to_thread(_discard, staged.folder)
     USAGE.forget(own.parent)
-    logger.info("GUI: upload {} unpacked into {}", upload_id, target)
+    # A mark left by an earlier dataset of the same name is cleared too.
+    await asyncio.to_thread(set_mark, own, target.name, staged.delete_after_run)
+    logger.info(
+        "GUI: upload {} unpacked into {} (delete after run: {})",
+        upload_id,
+        target,
+        staged.delete_after_run,
+    )
     size = await asyncio.to_thread(folder_bytes, target)
-    return OwnDataset(name=target.name, path=str(target), size_bytes=size)
+    return OwnDataset(
+        name=target.name,
+        path=str(target),
+        size_bytes=size,
+        delete_after_run=staged.delete_after_run,
+    )
 
 
 @router.delete(

@@ -12,6 +12,7 @@ import {
 import { plannedUnits, unitPlan } from "../lib/unit-plan";
 import { STOPPED_COLOR, countUnits, unitState } from "../lib/unit-status";
 import type { MetricCI, RunResult } from "../types/run";
+import { DatasetCleanupNote } from "./DatasetCleanupNote";
 import { Lightbox } from "./Lightbox";
 import { Rich } from "./Rich";
 import { RunGroupDetail } from "./RunGroupDetail";
@@ -244,6 +245,8 @@ export function ResultsView({
           ×
         </button>
       </div>
+
+      <DatasetCleanupNote entries={result.dataset_cleanup} style={{ marginBottom: 22 }} />
 
       {/* Metrics grid */}
       {metricsEntries.length > 0 && (

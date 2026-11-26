@@ -27,12 +27,14 @@ from typing import Annotated, Any, Literal
 from fastapi import Header, HTTPException
 from loguru import logger
 
+from visionforge.gui.api.config_scope import take_reads
 from visionforge.gui.api.dataset_scope import current_scope
 from visionforge.gui.api.execution import _LANES, _stop_point
 from visionforge.gui.api.gpu_health import cuda_context_broken
 from visionforge.gui.api.profiles import DEFAULT_SLUG, PROFILE_HEADER, Profile
 from visionforge.gui.api.run_queue import LOCAL_LANE, QueuedJob, StopPoint
 from visionforge.gui.api.schemas import RunResponse
+from visionforge.gui.api.upload_cleanup import own_folders_read
 from visionforge.utils.config import ExperimentConfig
 from visionforge.utils.messages import current_lang, tr, using_lang
 
@@ -144,6 +146,9 @@ def _submit_job(
     ``profile`` is only the queue's label for whose folders the job writes into;
     the config handed to ``start`` was already scoped to it by the caller. With
     none, the job is the default profile's, labelled by its slug (ADR-114).
+
+    On a server the job also carries which of the person's own datasets its
+    config reads, as ``confine_config`` noted them (ADR-249).
     """
     if cuda_context_broken():
         # Every job would fail within a second, CPU ones included; say so now.
@@ -153,6 +158,8 @@ def _submit_job(
         (profile.slug, profile.name) if profile else (DEFAULT_SLUG, DEFAULT_SLUG)
     )
     lang = current_lang()
+    scope = current_scope()
+    reads = take_reads()
 
     async def start_in_lang() -> None:
         if lane == LOCAL_LANE:
@@ -176,6 +183,8 @@ def _submit_job(
             profile=slug,
             resume_dir=resume_dir,
             profile_name=name,
+            datasets=own_folders_read(reads, scope.own if scope is not None else None),
+            models_dir=profile.models_dir if profile is not None else None,
             # A server's local job trains in a child process (ADR-248).
             isolated=fair and lane == LOCAL_LANE,
         ),
