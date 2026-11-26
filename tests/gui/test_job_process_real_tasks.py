@@ -18,10 +18,11 @@ from typing import Any
 import pytest
 
 import visionforge
-from visionforge.gui.api import execution, training_routes
+import visionforge.gui.api.execution as execution
+import visionforge.gui.api.training_routes as training_routes
+import visionforge.utils.selftest as selftest
 from visionforge.gui.api.run_queue import QueuedJob
 from visionforge.gui.api.sample_dataset import create_sample_dataset
-from visionforge.utils import selftest
 from visionforge.utils.anomaly_config import AnomalyConfig
 from visionforge.utils.detection_config import DetectionConfig
 from visionforge.utils.regression_config import RegressionConfig
