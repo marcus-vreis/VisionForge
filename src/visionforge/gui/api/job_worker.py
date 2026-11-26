@@ -184,8 +184,13 @@ def _watch_stdin(
     timer.start()
 
 
-def _run_dir(block: Any, report: dict[str, Any], section: str | None) -> str | None:
+def _run_dir(block: Any, report: dict[str, Any], spec: dict[str, Any]) -> str | None:
     """The folder of the one model the block trained, as the executors read it."""
+    # A K-fold, a search or a comparison has no one folder (ADR-251), even
+    # when the block keeps the training result of its last model.
+    if not spec.get("single_model", True):
+        return None
+    section = spec.get("report_section")
     if section is not None:
         part = report.get(section)
         run_dir = part.get("run_dir") if isinstance(part, dict) else None
@@ -226,7 +231,7 @@ def run(spec: dict[str, Any], pipe: _Pipe, token: Any) -> None:
         block._resume_dir = Path(resume) if resume else None
         block.run()
         report = block.report()
-        run_dir = _run_dir(block, report, spec.get("report_section"))
+        run_dir = _run_dir(block, report, spec)
     except Exception as exc:  # noqa: BLE001 - the server records it as the run's error
         from loguru import logger
 

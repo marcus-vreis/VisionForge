@@ -204,6 +204,7 @@ def child_spec(
     *,
     report_section: str | None,
     spawn_hint: bool = False,
+    single_model: bool = True,
     grace: float = STOP_GRACE_S,
 ) -> dict[str, Any]:
     """What the child needs to run one block, as the first line it reads.
@@ -211,7 +212,9 @@ def child_spec(
     ``report_section`` names the part of the report that holds the run folder;
     None reads it from the block's training result (classification).
     ``spawn_hint`` words a DataLoader worker-spawn failure as the classification
-    executor does.
+    executor does. ``single_model`` False is a block that trains several models
+    (a K-fold, a search, a comparison): it has no one run folder, so none is
+    read, as in the thread (ADR-251).
     """
     return {
         "block": import_path(block_cls),
@@ -219,6 +222,7 @@ def child_spec(
         "config": pinned_config(config),
         "resume_dir": str(resume_dir.absolute()) if resume_dir else None,
         "report_section": report_section,
+        "single_model": single_model,
         "spawn_hint": spawn_hint,
         "lang": bound_lang(),
         "grace": grace,

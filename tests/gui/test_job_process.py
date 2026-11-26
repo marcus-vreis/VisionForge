@@ -602,29 +602,24 @@ def test_a_real_classification_trains_in_a_child_on_the_cpu(
 
 
 @pytest.mark.usefixtures("jobs")
-def test_a_strategy_and_a_local_job_keep_the_training_thread(
+def test_a_local_job_keeps_the_training_thread(
     fake: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # The four blocks of several models are checked in test_job_process_multi_model.
     monkeypatch.setattr(
-        execution,
-        "_block_types",
-        lambda: {"classification": fake.FakeBlock, "grid_search": fake.FakeBlock},
+        execution, "_block_types", lambda: {"classification": fake.FakeBlock}
     )
 
     async def no_child(*_: Any, **__: Any) -> None:
         raise AssertionError("this job must not start a child")
 
     monkeypatch.setattr(execution, "_execute_in_child", no_child)
-    for run_id, isolated, block in (
-        ("grid_1", True, "grid_search"),
-        ("local_1", False, "classification"),
-    ):
-        state = _start(run_id, isolated=isolated)
-        config = fake.FakeConfig(block=block, epochs=1)
-        asyncio.run(execution._execute_experiment(config, run_id))  # type: ignore[arg-type]
-        assert state.run["status"] == "completed", state.run["error"]
-        # The config object itself reached the block: its path was not pinned.
-        assert state.run["report"]["train"]["run_dir"] == "out"
+    state = _start("local_1", isolated=False)
+    config = fake.FakeConfig(epochs=1)
+    asyncio.run(execution._execute_experiment(config, "local_1"))  # type: ignore[arg-type]
+    assert state.run["status"] == "completed", state.run["error"]
+    # The config object itself reached the block: its path was not pinned.
+    assert state.run["report"]["train"]["run_dir"] == "out"
 
 
 def test_only_a_server_local_job_is_marked_for_a_child(

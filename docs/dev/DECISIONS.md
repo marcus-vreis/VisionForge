@@ -9598,3 +9598,34 @@ ships with the next release.
 - *Building the callback from the request's `Host` and scheme.* Wrong behind TLS termination (the scheme is lost), and it would trust a header to name an address sent to GitHub; the registered callback or an explicit `VISIONFORGE_PUBLIC_URL` is the operator's statement.
 - *A GitHub App instead of an OAuth App.* Narrower and per repository, with an installation on each repository and expiring user tokens to refresh: more for the operator to set up and more for the server to keep. A later decision can add it.
 - *Keeping the `state` in a cookie.* No server memory, but a cookie the proxy and the browser must carry across GitHub's redirect; keeping it server-side binds it to the profile without a signing key to manage.
+## ADR-251 — In server mode classification's K-fold, searches and model comparison run in the child process too
+
+**Date:** 2026-11-25
+**Status:** Accepted
+**Extends:** ADR-248 (a server job's training in a child process), ADR-212 (phase 1, first item: one process per job), ADR-111 (stop points), ADR-197 (task runs exported once they end)
+
+**Context:** ADR-248 moved one training of one model into a child Python and left classification's four blocks that train several models in one job in the server's thread (`execution._IN_THREAD_BLOCKS`: `cross_validation`, `grid_search`, `random_search`, `model_comparison`), saying each needed its own report check and test. Until they move, the same server job runs isolated or not depending on the `block` field, and the jobs that run longest (a K-fold, a sweep) share the server's memory, environment and fate.
+
+**Decision:**
+
+- In server mode (`JobState.isolated`, ADR-248) every classification job runs in the child, whatever `config.block` names. `_IN_THREAD_BLOCKS` is gone; a local install still runs every block in the thread.
+- What the thread does with these four besides `block.run()` and `block.report()`, and how the child keeps it:
+  - *Run folder.* The thread reads none (`_run_dir_of` answers only for `ClassificationBlock` and `TransferLearningBlock`): each fold, trial or architecture has its own, named in the report, and the group's `run.json` is written by the block. The spec gains `single_model` (`child_spec(..., single_model=False)`), set from `execution._MULTI_MODEL_BLOCKS`; the child then reports no folder even when the block keeps a last training result, so the run dict says `run_dir: null` as before and ADR-249's cleanup finds the `run.json` by time, as it did in the thread.
+  - *Report.* `block.report()` crosses as JSON. The four reports hold strings, numbers, booleans, None, lists and string-keyed dicts (fold, trial and architecture records), which JSON carries unchanged; a NaN crosses as `NaN` and back. The page reads the same `/experiment/result`.
+  - *Events.* The child pumps every event the block emits (`trial_start`, the inner epochs annotated with the unit, `trial_end`, the one terminal `end`) in order, as the thread did; the protocol did not change.
+  - *Stop.* A stop crosses as ADR-248's `stop` line; the block stops where it does in the thread (`fold`, `trial`, `model` in `_STOP_POINTS`): the unit in flight stops at its epoch boundary and no other starts. The grace and the kill are ADR-248's.
+  - *Trackers.* The thread hands tracker factories only to `ClassificationBlock`, so these four never fed W&B or Comet. The child path exports the finished `run.json` only for a single training (`single` in `_execute_in_child`), so they still do not.
+  - *Resume.* The thread sets `_resume_dir` on every block and these four never read it; the child sets it the same way, so nothing changes.
+  - *Errors.* A block that raises, including `report()` when every unit failed, is worded `Cls: message` with the paging-file hint, as in the thread (`spawn_hint=True` for every classification block).
+
+**Consequences:** on a server, no classification training runs in the server's thread any more; a crash or an OOM kill in the middle of a sweep fails that sweep only, and its memory is not the server's. The whole job is one child: one Python start and one import of the training stack per job, not per unit, and the units share the child's CUDA context as they shared the server's. The strategies of `strategies.py`, the standalone tasks' K-fold and the custom tasks still run in the thread.
+
+**Known limits:** a stop that arrives while a unit is starting (building its model, computing a fold's statistics) waits for that unit's first epoch boundary, as in the thread. A child killed past the grace takes the units it finished with it from the report (the run fails with `job.child_killed`), though their folders and `run.json` files stay on disk; in the thread a sweep that never stopped could not be killed at all.
+
+**Not verified:** the tests run each of the four kinds through `_execute_experiment` in a real child on Windows with fake blocks that subclass the real ones and train nothing (events, report, `run_dir`, files and no tracker export equal to the thread's; a stop honoured after the unit in flight; a child that dies mid-job), the same kinds locally in the thread, and the real block classes with a real `ExperimentConfig` whose missing section makes `setup` fail with the same error in the child and in the thread. No real K-fold, search or comparison trained in a child, no GPU, nothing on Linux or macOS, the page was not opened against such a run, and nothing ran behind a real login proxy.
+
+**Alternatives considered:**
+
+- *A child per fold, trial or architecture.* A crash would cost one unit instead of the job, but the block's loop, its stop between units and its group `run.json` would move into the server, and every unit would pay the Python start and the training stack import.
+- *Keep reading `_train_result` in the child and rely on these blocks not having one.* It holds today, and the first block that keeps its last training result would report that model's folder as the job's, which the thread never did; an explicit flag costs one field.
+- *Move them with the strategies of `strategies.py` in one change.* Those run through other executors and their own report sections; one slice each keeps the diffs reviewable.
