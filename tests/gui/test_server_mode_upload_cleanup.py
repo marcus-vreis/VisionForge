@@ -8,8 +8,12 @@ stand-in trainer that writes the run's ``run.json`` and ends when told.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import importlib
 import io
 import json
+import os
+import textwrap
 import threading
 import time
 import zipfile
@@ -20,6 +24,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge
 from visionforge.gui.api import (
     execution,
     routes,
@@ -29,6 +34,7 @@ from visionforge.gui.api import (
     upload_routes,
 )
 from visionforge.gui.server_mode import ServerMode, user_slug
+from visionforge.utils.messages import tr
 
 PROXY = "10.0.0.5"
 ANA = {"X-Forwarded-User": "ana@lab.org"}
@@ -102,6 +108,16 @@ def trainer() -> _Trainer:
 def client(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, trainer: _Trainer
 ) -> Iterator[TestClient]:
+    """The real app in server mode with the stand-in trainer in the thread."""
+    monkeypatch.setattr(execution, "_execute_experiment", trainer)
+    with _server(tmp_path, monkeypatch) as test_client:
+        yield test_client
+        with trainer.lock:
+            trainer.released.update(trainer.started)
+
+
+@contextlib.contextmanager
+def _server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     """The real app in server mode, one loop for every request, an empty queue."""
     from visionforge.gui.server import app
 
@@ -111,7 +127,6 @@ def client(
     monkeypatch.setattr(upload_routes, "PART_SIZE", 1024)
     monkeypatch.setattr(execution, "_JOB_STATES", {})
     monkeypatch.setattr(execution, "_latest_run_id", None)
-    monkeypatch.setattr(execution, "_execute_experiment", trainer)
     monkeypatch.setattr(submission, "cuda_context_broken", lambda: False)
     monkeypatch.setattr(submission, "_TRAINING_STACK", ())
     monkeypatch.setattr(
@@ -124,20 +139,20 @@ def client(
         enabled=True, trusted_proxies=[PROXY]
     )
     test_client = TestClient(app, base_url="http://localhost", client=(PROXY, 50000))
-    with test_client:
-        yield test_client
-        with trainer.lock:
-            trainer.released.update(trainer.started)
-    execution._LANES.reset()
-    if had:
-        app.state.server_mode = saved
-    else:
-        del app.state.server_mode
+    try:
+        with test_client:
+            yield test_client
+    finally:
+        execution._LANES.reset()
+        if had:
+            app.state.server_mode = saved
+        else:
+            del app.state.server_mode
 
 
 def _own(client: TestClient, tmp_path: Path, headers: dict[str, str]) -> Path:
     client.get("/api/profiles", headers=headers)  # makes the profile and its folder
-    slug = user_slug(headers["X-Forwarded-User"])
+    slug: str = user_slug(headers["X-Forwarded-User"])
     return (tmp_path / "profiles" / slug / "datasets").resolve()
 
 
@@ -190,18 +205,18 @@ def _submit(
     return str(response.json()["run_id"])
 
 
-def _wait(done: Callable[[], bool], what: str) -> None:
-    deadline = time.monotonic() + WAIT_S
+def _wait(done: Callable[[], bool], what: str, timeout: float = WAIT_S) -> None:
+    deadline = time.monotonic() + timeout
     while not done():
         assert time.monotonic() < deadline, what
         time.sleep(0.01)
 
 
-def _wait_ended(run_id: str) -> None:
+def _wait_ended(run_id: str, timeout: float = WAIT_S) -> None:
     def ended() -> bool:
         return all(job.run_id != run_id for job in execution._LANES.jobs())
 
-    _wait(ended, f"{run_id} never ended")
+    _wait(ended, f"{run_id} never ended", timeout)
 
 
 def _run_json(tmp_path: Path, headers: dict[str, str], name: str) -> dict[str, Any]:
@@ -365,3 +380,93 @@ def test_deleting_a_marked_dataset_by_hand_clears_its_mark(
     # A new dataset of that name sent to stay is not deleted by an old mark.
     _upload(client, ANA, "beans", delete_after_run=False)
     assert _listed(client, ANA) == {"beans": False}
+
+
+# ── the training in a child process (ADR-248) ───────────────────────────────
+
+CHILD_MODULE = "vf_fake_cleanup_block"
+CHILD_WAIT_S = 120.0
+
+_CHILD_SOURCE = textwrap.dedent(
+    '''
+    """A classification block for the cleanup tests, run by the job's child."""
+    import json
+    import os
+    from pathlib import Path
+    from types import SimpleNamespace
+
+
+    class FakeBlock:
+        def setup(self, config):
+            self.config = config
+            self._train_result = None
+
+        def run(self):
+            c = self.config
+            run_dir = Path(c.output.models_dir) / c.name / "child_run"
+            run_dir.mkdir(parents=True)
+            seen = sorted(
+                p.relative_to(c.data.base_dir).as_posix()
+                for p in Path(c.data.base_dir).rglob("*.jpg")
+            )
+            record = {"id": "child_run", "experiment": c.name, "seen": seen,
+                      "pid": os.getpid()}
+            (run_dir / "run.json").write_text(json.dumps(record), encoding="utf-8")
+            if c.name == "crash":
+                os._exit(3)  # dies mid-run: no end message, no run folder named
+            self._train_result = SimpleNamespace(model_path=run_dir / "best.pt")
+
+        def report(self):
+            return {}
+    '''
+)
+
+
+@pytest.fixture
+def child_client(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[TestClient]:
+    """The real app in server mode whose jobs train in a real child Python."""
+    blocks = tmp_path / "blocks"
+    blocks.mkdir()
+    (blocks / f"{CHILD_MODULE}.py").write_text(_CHILD_SOURCE, encoding="utf-8")
+    src = Path(visionforge.__file__).resolve().parents[1]
+    monkeypatch.syspath_prepend(str(blocks))
+    monkeypatch.setenv("PYTHONPATH", os.pathsep.join([str(src), str(blocks)]))
+    fake = importlib.import_module(CHILD_MODULE)
+    monkeypatch.setattr(
+        execution, "_block_types", lambda: {"classification": fake.FakeBlock}
+    )
+    with _server(tmp_path, monkeypatch) as test_client:
+        yield test_client
+
+
+@pytest.mark.parametrize(
+    ("name", "status"), [("exp", "completed"), ("crash", "failed")]
+)
+def test_the_dataset_goes_after_a_run_in_the_child_process(
+    child_client: TestClient, tmp_path: Path, name: str, status: str
+) -> None:
+    own = _own(child_client, tmp_path, ANA)
+    _upload(child_client, ANA, "beans", delete_after_run=True)
+
+    run_id = _submit(child_client, ANA, name, own / "beans")
+    _wait_ended(run_id, CHILD_WAIT_S)
+
+    record = _run_json(tmp_path, ANA, name)
+    # The child read the dataset, in a process other than this one.
+    assert record["seen"] == ["train/a/1.jpg", "train/b/2.jpg", "val/a/3.jpg"]
+    assert record["pid"] != os.getpid()
+    assert not (own / "beans").exists()
+    assert not upload_cleanup.is_marked(own, "beans")
+    [entry] = record["dataset_cleanup"]
+    assert (entry["dataset"], entry["status"], entry["error"]) == (
+        "beans",
+        "deleted",
+        None,
+    )
+    run = child_client.get(f"/api/experiment/status?run_id={run_id}", headers=ANA)
+    assert run.json()["status"] == status
+    assert run.json()["dataset_cleanup"] == [entry]
+    if status == "failed":
+        assert run.json()["error"] == tr("job.child_died", code=3)
