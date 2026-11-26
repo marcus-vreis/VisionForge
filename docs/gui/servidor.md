@@ -248,10 +248,11 @@ fim, não época por época.
 
 O que isso **não** faz: o processo é do mesmo usuário do sistema que roda o
 servidor, então ainda consegue abrir qualquer arquivo que esse usuário abre,
-inclusive a pasta de configuração com os tokens. Impedir isso pede rodar o
-treino em container ou com outra conta do sistema, o que ainda não existe; por
-isso o servidor continua sendo para um grupo que confia entre si. As tarefas
-próprias (`user_tasks/`) seguem desligadas num servidor.
+inclusive a pasta de configuração com os tokens. Impedir isso pede um sandbox
+na frente do processo (veja [Um sandbox na frente de cada
+treino](#um-sandbox-na-frente-de-cada-treino)); sem ele o servidor continua
+sendo para um grupo que confia entre si. As tarefas próprias (`user_tasks/`)
+seguem desligadas num servidor, com ou sem sandbox.
 *Verificado:* as cinco tarefas treinaram de verdade num processo próprio, na
 CPU, uma época no dataset de exemplo de cada uma (a detecção com o backend
 torchvision, sem pesos pré-treinados); são testes `slow`, rodados à mão no
@@ -259,6 +260,54 @@ Windows e fora da CI.
 *Não verificado:* a detecção com Ultralytics, a validação cruzada, as buscas,
 a comparação de modelos e as estratégias de grupo de verdade, e a GPU.
 Decisão: ADR-248, ADR-251 e ADR-252.
+
+### Um sandbox na frente de cada treino
+
+O operador pode pôr um comando seu na frente do processo de cada treino, na
+variável `VISIONFORGE_JOB_WRAPPER`. O VisionForge não isola nada sozinho: ele
+chama `<seu comando> <python> -m visionforge.gui.api.job_worker` e diz ao seu
+comando, em três variáveis, para que pastas aquele treino existe.
+
+| Variável | O que traz |
+| --- | --- |
+| `VISIONFORGE_JOB_WORKDIR` | A pasta temporária de trabalho do treino (leitura e escrita). |
+| `VISIONFORGE_JOB_WRITE` | A pasta de runs da pessoa, onde o treino grava. |
+| `VISIONFORGE_JOB_READ` | As pastas de datasets que a pessoa pode ler: a dela e as compartilhadas. |
+
+Nas duas últimas, várias pastas vêm separadas por `:` (no Windows, `;`).
+
+No Linux, `deploy/server/job-sandbox-bwrap.sh` é um exemplo pronto com o
+[bubblewrap](https://github.com/containers/bubblewrap) (`apt install
+bubblewrap`). Dentro dele o treino enxerga o sistema só para leitura, as três
+pastas acima e as que você listar; a pasta de configuração com os tokens, as
+pastas das outras pessoas e o resto do disco não existem lá dentro.
+
+```bash
+export VISIONFORGE_JOB_WRAPPER="/opt/visionforge/deploy/server/job-sandbox-bwrap.sh --ro /opt/visionforge --rw /srv/vf-cache"
+visionforge gui --server --trusted-proxy 172.30.42.10
+```
+
+- `--ro PASTA`: só leitura. Liste ao menos onde o VisionForge e o Python dele
+  estão instalados (o ambiente virtual).
+- `--rw PASTA`: leitura e escrita. Liste as pastas de cache dos pesos
+  pré-treinados (`HF_HOME`, `TORCH_HOME`), senão cada treino baixa de novo ou
+  falha ao gravar.
+- A rede e a GPU continuam disponíveis dentro do sandbox.
+
+Um comando que não existe na máquina impede o servidor de iniciar, e o log de
+início diz por qual programa os treinos passam. Se o seu comando trocar de
+usuário (`sudo -u`), ele precisa dar a esse usuário a pasta de trabalho e
+derrubar o treino quando for encerrado; um sandbox do mesmo usuário, como o do
+exemplo, não tem esses dois problemas.
+
+*Verificado:* o script de exemplo no Ubuntu 24.04 (WSL2, bubblewrap 0.9.0),
+como root e como usuário sem privilégio, com um processo de sondagem no lugar
+do treino: a pasta de configuração e a pasta de outra pessoa não existiam lá
+dentro, os datasets e o sistema estavam só para leitura, e a pasta de runs e a
+de trabalho aceitaram escrita.
+*Não verificado:* um treino de verdade dentro do sandbox (o ambiente Python
+montado só para leitura, os caches de pesos, a GPU), Docker, macOS e `sudo -u`.
+Decisão: ADR-254.
 
 ## Ações que rodam na hora
 
@@ -741,7 +790,8 @@ termina com um resumo (hash) do nome completo da conta, então `a.b@lab.org` e
 (veja [Cifrar os tokens por perfil](tokens.md#cifrar-os-tokens-por-perfil));
 sem ela são arquivos de texto na pasta de configuração do usuário do sistema
 que roda o servidor, e o servidor avisa disso no log ao iniciar. Com a chave,
-uma cópia dessa pasta não entrega os tokens. Quem administra a máquina, ou
+uma cópia dessa pasta não entrega os tokens, e cada painel de token mostra em
+qual dos dois casos o servidor está. Quem administra a máquina, ou
 roda código como o usuário do servidor, alcança a chave e consegue lê-los.
 *Não verificado:* a chave entregue por um secret do Docker num servidor de
 verdade; os testes definem a variável no próprio processo.

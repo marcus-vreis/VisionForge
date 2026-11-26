@@ -839,6 +839,9 @@ export const pt = {
     foldersTitle: "Neste servidor, o dataset precisa estar em uma destas pastas:",
     foldersTitleRun: "Neste servidor, as imagens precisam estar em uma destas pastas:",
     folderOwn: "sua pasta",
+    tokensEncrypted: "Este servidor guarda o token cifrado em disco.",
+    tokensPlain:
+      "Este servidor guarda o token em texto puro na pasta de configuração; quem administra o servidor pode lê-lo.",
     keyOnce: "Usada só neste download; o servidor não guarda a chave.",
     downloadFolder: "Nome da pasta",
     downloadTarget: "Vai para a sua pasta de datasets:",

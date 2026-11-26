@@ -808,6 +808,9 @@ export const en: Dict = {
     foldersTitle: "On this server, the dataset has to be in one of these folders:",
     foldersTitleRun: "On this server, the images have to be in one of these folders:",
     folderOwn: "your folder",
+    tokensEncrypted: "This server keeps the token encrypted on disk.",
+    tokensPlain:
+      "This server keeps the token as plain text in its config folder; whoever runs the server can read it.",
     keyOnce: "Used for this download only; the server does not keep the key.",
     downloadFolder: "Folder name",
     downloadTarget: "It goes into your dataset folder:",

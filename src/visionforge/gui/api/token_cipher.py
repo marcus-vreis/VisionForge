@@ -94,3 +94,11 @@ def token_cipher() -> TokenCipher | None:
             f"{KEY_ENV} must hold Fernet keys (32 url-safe base64 bytes each, "
             f"comma-separated); of the {len(names)} given, at least one is not."
         ) from None
+
+
+def tokens_encrypted() -> bool:
+    """Whether a token saved now is sealed: a usable key is in the environment."""
+    try:
+        return token_cipher() is not None
+    except TokenKeyError:
+        return False

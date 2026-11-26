@@ -6,6 +6,7 @@ import { BottomBar } from "../components/BottomBar";
 import { ProfileMenu } from "../components/ProfileMenu";
 import { SampleDatasetButton } from "../components/SampleDatasetButton";
 import { ServerFoldersNote } from "../components/ServerFoldersNote";
+import { TokenStorageNote } from "../components/TokenStorageNote";
 import { LanguageContext } from "../i18n/context";
 import { pt } from "../i18n/pt";
 import { offeredGuides } from "./guides";
@@ -94,6 +95,28 @@ describe("the GitHub connection (ADR-250)", () => {
       expect(parseSession({ ...SERVER, github_oauth: raw }).github_oauth).toBe(false);
     }
     expect(LOCAL_SESSION.github_oauth ?? false).toBe(false);
+  });
+});
+
+describe("how the server keeps a token (ADR-253)", () => {
+  it("is read from a shared server only when it says so", () => {
+    expect(parseSession({ ...SERVER, tokens_encrypted: true }).tokens_encrypted).toBe(true);
+    expect(parseSession({ ...SERVER, tokens_encrypted: false }).tokens_encrypted).toBe(false);
+    for (const raw of [undefined, null, "true", 1]) {
+      expect(parseSession({ ...SERVER, tokens_encrypted: raw }).tokens_encrypted).toBeUndefined();
+    }
+    expect(parseSession({ server_mode: false, tokens_encrypted: true }).tokens_encrypted).toBeUndefined();
+  });
+
+  it("is said beside the token field on a shared server, and nowhere else", () => {
+    setSession({ ...SERVER, tokens_encrypted: true });
+    expect(render(<TokenStorageNote />)).toContain(pt.server.tokensEncrypted);
+    setSession({ ...SERVER, tokens_encrypted: false });
+    expect(render(<TokenStorageNote />)).toContain(pt.server.tokensPlain);
+    setSession(SERVER);
+    expect(render(<TokenStorageNote />)).toBe("");
+    setSession(LOCAL_SESSION);
+    expect(render(<TokenStorageNote />)).toBe("");
   });
 });
 

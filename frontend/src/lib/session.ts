@@ -38,6 +38,9 @@ export interface Session {
   /** Whether "Conectar com GitHub" works here: the operator gave the server a
    *  GitHub OAuth App (ADR-250). Absent from an older server: no button. */
   github_oauth?: boolean;
+  /** Whether a saved token is encrypted on the server's disk (ADR-253).
+   *  Absent from a local install and from an older server: nothing is said. */
+  tokens_encrypted?: boolean;
 }
 
 export const LOCAL_SESSION: Session = {
@@ -135,6 +138,9 @@ export function parseSession(raw: unknown): Session {
     closed_blocks: strings(body.closed_blocks),
     quota: parseQuota(body.quota),
     github_oauth: body.github_oauth === true,
+    ...(typeof body.tokens_encrypted === "boolean"
+      ? { tokens_encrypted: body.tokens_encrypted }
+      : {}),
   };
 }
 

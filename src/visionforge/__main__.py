@@ -669,6 +669,7 @@ def _run_gui_command(args: argparse.Namespace, parser: argparse.ArgumentParser) 
 
         sys.exit(run_gui_check(args.host, args.port, smoke=args.smoke))
 
+    from visionforge.gui.api.job_wrapper import JobWrapperError, wrapper_command
     from visionforge.gui.api.token_cipher import TokenKeyError, token_cipher
     from visionforge.gui.server import start_server
     from visionforge.gui.server_mode import ServerMode, ServerModeError
@@ -676,6 +677,9 @@ def _run_gui_command(args: argparse.Namespace, parser: argparse.ArgumentParser) 
     try:
         # A key that cannot seal is refused here, before a person saves a token.
         token_cipher()
+        if args.server:
+            # A sandbox command that is not there would fail every job later.
+            wrapper_command()
         server_mode = ServerMode.from_options(
             enabled=args.server,
             trusted_proxies=args.trusted_proxy,
@@ -686,7 +690,7 @@ def _run_gui_command(args: argparse.Namespace, parser: argparse.ArgumentParser) 
             max_upload_gb=args.max_upload_gb,
             max_queued=args.max_queued,
         )
-    except (ServerModeError, TokenKeyError) as exc:
+    except (ServerModeError, TokenKeyError, JobWrapperError) as exc:
         parser.error(str(exc))
 
     # The updater relaunches with VISIONFORGE_NO_BROWSER rather than the flag:

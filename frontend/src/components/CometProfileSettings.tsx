@@ -8,6 +8,7 @@ import type { ProfileInfo } from "../lib/profile";
 import { TRACKER_FIELD as FIELD, TRACKER_HINT, TRACKER_LABEL } from "./trackerStyles";
 import { TrackerSwitch } from "./TrackerSwitch";
 import { CometIcon } from "./ui/BrandIcons";
+import { TokenStorageNote } from "./TokenStorageNote";
 
 const DEFAULTS: CometSettings = { enabled: false, project: "visionforge", workspace: "" };
 
@@ -65,6 +66,7 @@ export function CometProfileSettings({ profile, onSaved }: {
       <button type="button" style={{ alignSelf: "flex-start" }} disabled={busy || !changed || !project.trim()}
         onClick={() => void save({ project: project.trim(), workspace: workspace.trim() })}>{t.comet.saveTarget}</button>
       {keyStatus?.shared && <div role="alert">{t.comet.shared}</div>}
+      <TokenStorageNote />
       {keyStatus?.configured && <div>{t.comet.configured}</div>}
       <label style={TRACKER_LABEL}>{t.comet.token} <input type="password" autoComplete="new-password" value={token}
         disabled={busy} style={FIELD} onChange={(e) => setToken(e.target.value)} /></label>

@@ -9681,7 +9681,7 @@ ships with the next release.
 
 **Consequences:** a copy of the config folder without the key holds no usable token. Losing the key loses every saved token; each person pastes theirs again. `configured` now costs a file read and a decryption per panel load. The dataset providers' `credentials.json` and the Colab CLI login stay plain: both are off in server mode (ADR-212, ADR-219).
 
-**Known limits:** this protects the files, not the process. The key lives in the server's environment and memory; whoever runs code as the server's system user reads both (on Linux, `/proc/<pid>/environ`), and that includes a job's child until it runs under another account or in a container (ADR-248). A token nobody reads stays under the old key after a rotation; there is no command that re-seals every file. The GUI does not say whether tokens are encrypted; the server log and the FAQ do.
+**Known limits:** this protects the files, not the process. The key lives in the server's environment and memory; whoever runs code as the server's system user reads both (on Linux, `/proc/<pid>/environ`), and that includes a job's child until it runs under another account or in a container (ADR-248). A token nobody reads stays under the old key after a rotation; there is no command that re-seals every file. *Amended 2026-11-26:* the page now says it. `GET /api/session` carries `tokens_encrypted` (null on a local install) and each of the five token panels shows one line on a server: encrypted on disk, or plain text the operator can read.
 
 **Not verified:** the key delivered by a Docker or systemd secret on a real server; the tests set the variable in their own process. A rotation over many profiles. `cryptography` versions other than the installed 50.0.2.
 
@@ -9693,3 +9693,33 @@ ships with the next release.
 - *`--token-key-file`.* A second way to say the same thing; a secret mounted as a file is one `export VISIONFORGE_TOKEN_KEY="$(cat file)"` away.
 - *Refuse to start a server without a key.* It would break every phase 0 install on upgrade for a group that already trusts its members; a warning says it instead.
 - *AES-GCM with the binding as associated data.* Cleaner binding, but Fernet brings key rotation (`first seals, all open`) and a versioned token format with no nonce handling of ours to get wrong.
+
+## ADR-254 — A server job's child can start through the operator's sandbox command
+
+**Date:** 2026-11-26
+**Status:** Accepted
+**Extends:** ADR-212 (phase 1, first item: no read access to the config folder), ADR-248 (the child process), ADR-214 (each person's dataset folders), ADR-253 (tokens at rest)
+
+**Context:** ADR-248 gave each server job a process, an environment without tokens and a folder of its own, and said what it could not give: a child of the server's own system user opens every file that user can, the config folder and the other people's folders included. It left the answer to "a container or another account" and noted that either "can wrap this same child command later without changing the protocol". How to sandbox differs by host (bubblewrap, a rootless container, `systemd-run`, `sudo -u`), and none of them can be chosen from inside a Python package.
+
+**Decision:**
+
+- **One variable, the operator's command.** `VISIONFORGE_JOB_WRAPPER` holds a command line. The server splits it into words (`shlex`; on Windows without POSIX rules, quotes stripped) and puts them in front of the child's own command: `<wrapper words> <python> -m visionforge.gui.api.job_worker`. The wrapper inherits the child's pipes, so the protocol, the stop line and the events are unchanged. Unset, the command is what it was.
+- **The environment, like the token key and the GitHub OAuth App** (ADR-250, ADR-253): operator configuration that only a server reads. A local install starts no child and ignores it.
+- **The server tells the wrapper which folders the job is for,** in three variables added to the child's scrubbed environment only when a wrapper is set: `VISIONFORGE_JOB_WORKDIR` (the job's temporary working folder, read-write), `VISIONFORGE_JOB_WRITE` (the person's runs folder, `profile.models_dir`) and `VISIONFORGE_JOB_READ` (the dataset folders that person's request could read, own folder first, ADR-214), the last two joined with `os.pathsep`. `_submit_job` binds them in a context variable around the job's start (`job_wrapper.job_folders`), which `asyncio.to_thread` carries to the thread that starts the child, so no executor changed. The wrapper gets nothing else from the operator's environment: `child_env` still drops it, so its own options go on its command line.
+- **Refused at start, not at the first job.** `visionforge gui --server` exits with an argument error when the variable cannot be split or its first word is not a program on the machine, and logs which program jobs start through. A wrapper that disappears later fails that run with `job.child_start`; the server and the queue go on.
+- **A reference wrapper, `deploy/server/job-sandbox-bwrap.sh`** (bubblewrap, Linux): the system read-only, `--ro`/`--rw` folders the operator lists (the Python environment, the weight caches), the job's three places, a PID namespace that dies with the wrapper, the network and the NVIDIA device files kept. The runs folder is created outside the sandbox when it does not exist yet.
+- **Custom tasks and user-supplied checkpoints stay off.** The server cannot tell a wrapper that confines from `env` or `nice`. Opening them is a separate decision that needs a wrapper verified with a real training on a real server, and a switch the operator turns on knowingly.
+
+**Consequences:** an operator on Linux can keep a job's code away from the tokens, the other people's folders and the server's code today, with a script they can read. The kill of ADR-248 reaches only the wrapper process: the wrapper must take the job down with it (`--die-with-parent`, `setpriv --pdeathsig`), or the job ends by itself only when it reads the end of its input. A wrapper that changes the user (`sudo -u`) must also give that user the working folder, which the server creates with mode 0700, and cannot be killed by the server at all; a sandbox of the same user has neither problem, which is why the reference is bubblewrap. Datasets are read-only inside the reference sandbox, own folder included; a training does not write there.
+
+**Known limits:** the three variables are the whole contract; a job that needs another folder (a cache outside the listed ones) fails inside the sandbox with a permission error worded by the library that hit it. The network stays open in the reference wrapper. The server does not check what the wrapper does.
+
+**Not verified:** a real training inside the reference sandbox (the Python environment bound read-only, the weight caches, a GPU through the bound device files). The reference script was run on Ubuntu 24.04 under WSL2 with bubblewrap 0.9.0, as root and as `nobody`, around a probe process: the config folder and another person's folder did not exist inside, the datasets and the system were read-only, the runs folder (existing or new) and the working folder were writable, and stdin reached the probe. The tests run on Windows with a Python script as the wrapper: the command, the three variables, a stop through the wrapper, a wrapper that is gone, the folders a submitted job carries, the refusal at start. Nothing on macOS, in Docker, or with `sudo -u`.
+
+**Alternatives considered:**
+
+- *`--job-user`, the server switching account itself.* It needs the server to run as root or hold `CAP_SETUID`, and still leaves every person's folder readable by the one job account; a sandbox with mounts isolates people from each other as well.
+- *Calling bubblewrap from the package.* Linux only, and the binds (where the environment and the caches live, which devices) are the host's to say; a script the operator edits says them better than flags of ours.
+- *A CLI flag.* The value is a command line with its own quoting; inside another command line it is quoted twice. The environment is also where the other operator-only settings already are.
+- *Opening custom tasks when a wrapper is set.* The variable being set proves nothing about what it does.

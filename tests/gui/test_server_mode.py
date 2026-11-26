@@ -187,6 +187,7 @@ def test_a_local_install_reports_no_session(monkeypatch: pytest.MonkeyPatch) -> 
         "quota": None,
         "max_queued": None,
         "github_oauth": False,
+        "tokens_encrypted": None,
     }
 
 
