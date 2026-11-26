@@ -155,7 +155,8 @@ def test_the_call_crosses_with_its_runner_config_token_and_pump(
     kwargs = job_wire.load_value(spec["kwargs"], read)
 
     child_runner, config_dict, config = args
-    assert isinstance(child_runner, _Runner) and child_runner is not runner
+    assert isinstance(child_runner, _Runner)
+    assert child_runner is not runner
     assert child_runner._cancel_token is child_token
     # The dict is validated and every path pinned to the server's folder.
     assert config_dict == {"name": "c", "out": str(tmp_path / "out")}
