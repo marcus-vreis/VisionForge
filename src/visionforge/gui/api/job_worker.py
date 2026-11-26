@@ -2,11 +2,13 @@
 
 Started by :mod:`visionforge.gui.api.job_process`, never imported by the server.
 It reads one JSON line on stdin (the block to run, its config, the resume
-folder, the language), runs the block as the executors did in a thread, and
+folder, the language; or, for a strategy, ``"kind": "call"`` with a function
+and its arguments, ADR-252), runs it as the executors did in a thread, and
 writes one JSON object per line on a pipe of its own:
 
 - ``{"type": "event", "event": {...}}`` for each progress event, in order;
-- ``{"type": "job_end", "status": "ok", "report": {...}, "run_dir": ...}`` or
+- ``{"type": "job_end", "status": "ok", "report": {...}, "run_dir": ...}`` (a
+  call's has ``"result"``) or
   ``{"type": "job_end", "status": "error", "error": "Cls: message"}``, last.
 
 The process's own stdout is sent to stderr before anything else runs, so a
@@ -16,8 +18,9 @@ stops at its stop point (ADR-111). When stdin closes, the server is gone: the
 block is stopped the same way and the process exits by itself after the grace.
 On Windows stdin is peeked, never left with a read pending (see ``_Stdin``).
 
-The block and config classes are imported by the ``module:QualName`` the server
-sent; this script is reached only through the server's pipe.
+The block, config, function and runner classes are imported by the
+``module:QualName`` the server sent; this script is reached only through the
+server's pipe, and the server reads those names off its own objects.
 
 Windows starts DataLoader workers with ``spawn``, which imports this module
 again as ``__mp_main__``: nothing runs at import time (ADR-030).
@@ -214,11 +217,14 @@ def _error(exc: BaseException, spawn_hint: bool) -> str:
 
 
 def run(spec: dict[str, Any], pipe: _Pipe, token: Any) -> None:
-    """Run the block ``spec`` names and send its events and its end on ``pipe``."""
+    """Run the block or the call ``spec`` names; send its events and its end on ``pipe``."""
     from visionforge.utils.messages import set_lang
 
     if spec.get("lang"):
         set_lang(spec["lang"])
+    if spec.get("kind") == "call":
+        _call(spec, pipe, token)
+        return
     try:
         config = _load(spec["config_type"]).model_validate(spec["config"])
         block = _load(spec["block"])()
@@ -240,6 +246,31 @@ def run(spec: dict[str, Any], pipe: _Pipe, token: Any) -> None:
         pipe.send({"type": "job_end", "status": "error", "error": error})
         return
     pipe.send({"type": "job_end", "status": "ok", "report": report, "run_dir": run_dir})
+
+
+def _call(spec: dict[str, Any], pipe: _Pipe, token: Any) -> None:
+    """Call the strategy's function ``spec`` names and send its result (ADR-252)."""
+    from visionforge.gui.api.job_wire import child_arguments, dump_value, load_value
+
+    def progress(event: dict[str, Any]) -> None:
+        pipe.send({"type": "event", "event": event})
+
+    try:
+        read = child_arguments(_load, progress, token)
+        args = load_value(spec["args"], read)
+        kwargs = load_value(spec["kwargs"], read)
+        result = dump_value(_load(spec["function"])(*args, **kwargs))
+    except Exception as exc:  # noqa: BLE001 - the server records it as the run's error
+        from loguru import logger
+
+        from visionforge.utils.messages import tr
+
+        logger.exception("Job child: the call failed")
+        # Worded as strategies._run_group_job words an error in the thread.
+        error = f"{type(exc).__name__}: {exc or tr('run.no_message')}"
+        pipe.send({"type": "job_end", "status": "error", "error": error})
+        return
+    pipe.send({"type": "job_end", "status": "ok", "report": None, "result": result})
 
 
 def main() -> int:
