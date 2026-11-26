@@ -359,10 +359,10 @@ def _failed_run(run_id: str, error: Exception) -> dict[str, Any]:
     }
 
 
-# The values of ``config.block`` a server job still runs in the training thread:
-# the strategies that train several models in one job. The child process runs one
-# training of one model (ADR-248); these are its next step.
-_IN_THREAD_BLOCKS = frozenset(
+# The values of ``config.block`` that train several models in one job. The thread
+# reads no run folder for them (``_run_dir_of``) and hands them no trackers
+# (``_wire_block``); in a child they keep both rules (ADR-251).
+_MULTI_MODEL_BLOCKS = frozenset(
     {"cross_validation", "grid_search", "random_search", "model_comparison"}
 )
 
@@ -374,19 +374,25 @@ async def _execute_in_child(
     resume_dir: Path | None,
     trackers: tuple[TrackerFactory, ...],
 ) -> None:
-    """Run one classification training of a server job in a child process (ADR-248).
+    """Run a server job's classification block in a child process (ADR-248, ADR-251).
 
     The trackers stay here: they hold the person's tokens, which the child must
-    not have. The finished ``run.json`` is sent to them once the run completed,
-    as for the other tasks (ADR-197), instead of epoch by epoch.
+    not have. The finished ``run.json`` is sent to them once a single training
+    completed, as for the other tasks (ADR-197), instead of epoch by epoch.
     """
     from visionforge.gui.api.job_process import child_spec, execute_in_child
 
     state = _job_state(run_id)
+    single = config.block not in _MULTI_MODEL_BLOCKS
     logger.info("GUI: Starting experiment {} (block={}, child)", run_id, config.block)
     try:
         spec = child_spec(
-            block_cls, config, resume_dir, report_section=None, spawn_hint=True
+            block_cls,
+            config,
+            resume_dir,
+            report_section=None,
+            spawn_hint=True,
+            single_model=single,
         )
         state.run = await execute_in_child(run_id, spec, state.log, state.token)
     except Exception as e:
@@ -395,7 +401,7 @@ async def _execute_in_child(
     finally:
         await state.log.put(None)
     run_dir = state.run.get("run_dir")
-    if trackers and state.run.get("status") == "completed" and run_dir:
+    if single and trackers and state.run.get("status") == "completed" and run_dir:
         await asyncio.to_thread(export_run_record, trackers, Path(run_dir))
 
 
@@ -412,7 +418,7 @@ async def _execute_experiment(
     block_types = _block_types()
 
     state = _job_state(run_id)
-    if state.isolated and config.block not in _IN_THREAD_BLOCKS:
+    if state.isolated:
         block_cls = block_types.get(config.block, block_types["classification"])
         await _execute_in_child(block_cls, config, run_id, resume_dir, trackers)
         return

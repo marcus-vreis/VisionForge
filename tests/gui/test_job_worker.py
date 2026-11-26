@@ -252,6 +252,15 @@ def test_a_report_section_with_no_folder_gives_none() -> None:
     assert sent[-1]["run_dir"] is None
 
 
+def test_a_block_of_several_models_names_no_folder_even_with_a_result() -> None:
+    # The block keeps a training result and a report section with a folder;
+    # the thread reports neither for a K-fold, a search or a comparison.
+    for section in (None, "train"):
+        sent = _run(_spec(report_section=section, single_model=False))
+        assert sent[-1]["status"] == "ok"
+        assert sent[-1]["run_dir"] is None
+
+
 def test_an_error_without_a_message_is_worded_in_the_jobs_language() -> None:
     sent = _run(_spec(fail="empty", lang="en"))
     assert sent == [
