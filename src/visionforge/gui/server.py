@@ -27,6 +27,7 @@ from visionforge.gui.api.http_responses import (
     TAG_SPA,
     TAG_SYSTEM,
 )
+from visionforge.gui.api.job_wrapper import WRAPPER_ENV, wrapper_command
 from visionforge.gui.api.profiles import PROFILE_HEADER
 from visionforge.gui.api.routes import router as api_router
 from visionforge.gui.api.token_cipher import KEY_ENV, token_cipher, tokens_encrypted
@@ -318,6 +319,13 @@ def start_server(
                 "Server mode: the tokens people save are plain text in the "
                 "config folder; set {} to encrypt them",
                 KEY_ENV,
+            )
+        wrapper = wrapper_command()
+        if wrapper:
+            logger.info(
+                "Server mode: each job's process starts through {} ({})",
+                wrapper[0],
+                WRAPPER_ENV,
             )
         open_browser = False
     if token_cipher() is not None:

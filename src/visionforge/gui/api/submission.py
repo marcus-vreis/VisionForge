@@ -31,6 +31,7 @@ from visionforge.gui.api.config_scope import take_reads
 from visionforge.gui.api.dataset_scope import current_scope
 from visionforge.gui.api.execution import _LANES, _stop_point
 from visionforge.gui.api.gpu_health import cuda_context_broken
+from visionforge.gui.api.job_wrapper import JobFolders, job_folders
 from visionforge.gui.api.profiles import DEFAULT_SLUG, PROFILE_HEADER, Profile
 from visionforge.gui.api.run_queue import LOCAL_LANE, QueuedJob, StopPoint
 from visionforge.gui.api.schemas import RunResponse
@@ -160,6 +161,12 @@ def _submit_job(
     lang = current_lang()
     scope = current_scope()
     reads = take_reads()
+    # What a sandbox in front of the job's child may reach (ADR-254): the
+    # person's runs, and the dataset folders this request could read.
+    folders = JobFolders(
+        write=(profile.models_dir.absolute(),) if profile is not None else (),
+        read=scope.readable if scope is not None else (),
+    )
 
     async def start_in_lang() -> None:
         if lane == LOCAL_LANE:
@@ -169,7 +176,7 @@ def _submit_job(
         # The queue starts the job from its own task, long after this request's
         # language is gone; the messages the trainer writes (health warnings, the
         # paging-file hint) are for the person who pressed the button.
-        with using_lang(lang):
+        with using_lang(lang), job_folders(folders):
             await start()
 
     status = _LANES.submit(

@@ -47,6 +47,7 @@ from pydantic import BaseModel
 
 from visionforge.core.cancellation import CancellationToken
 from visionforge.gui.api.config_scope import DATASET_FILES
+from visionforge.gui.api.job_wrapper import wrapper_command, wrapper_env
 from visionforge.gui.api.run_events import RunEventLog
 from visionforge.utils.messages import bound_lang, tr
 
@@ -316,7 +317,8 @@ class ChildJob:
             home.mkdir()
             try:
                 proc = self._start(workdir, home)
-            except OSError as exc:
+            except (OSError, ValueError) as exc:
+                # ValueError: a wrapper that stopped being a command (ADR-254).
                 return ChildOutcome("failed", error=tr("job.child_start", error=exc))
             reader = threading.Thread(
                 target=self._relay.read, args=(proc.stdout,), daemon=True
@@ -340,11 +342,16 @@ class ChildJob:
 
     def _start(self, workdir: Path, home: Path) -> subprocess.Popen[bytes]:
         env = child_env(os.environ, home)
+        # The operator's sandbox command goes in front (ADR-254) and is told
+        # which folders this job is for; with none set the command is the same.
+        wrapper = wrapper_command()
+        if wrapper:
+            env.update(wrapper_env(workdir))
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
-        # The command is this Python and a module of this package; the spec
-        # goes on stdin, never on the command line.
+        # The command is this Python and a module of this package, behind words
+        # the operator wrote; the spec goes on stdin, never on the command line.
         proc = subprocess.Popen(  # noqa: S603
-            [sys.executable, "-m", WORKER_MODULE],
+            [*wrapper, sys.executable, "-m", WORKER_MODULE],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             cwd=workdir,
