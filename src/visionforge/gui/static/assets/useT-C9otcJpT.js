@@ -1,1 +1,0 @@
-import{i as e}from"./react-CpM7gLRQ.js";var t=e(),n=(0,t.createContext)(null);function r(){let e=(0,t.useContext)(n);if(!e)throw Error(`useI18n must be used inside <LanguageProvider>.`);return e}function i(){return r().t}export{i as n,n as r,r as t};

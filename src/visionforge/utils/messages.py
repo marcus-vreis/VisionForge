@@ -858,6 +858,31 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "en": "Experiment failed: {error}",
     },
     "run.no_message": {"pt": "(sem mensagem)", "en": "(no message)"},
+    # A server job's child process (ADR-248).
+    "job.child_start": {
+        "pt": "Não foi possível iniciar o processo do treino: {error}",
+        "en": "Could not start the training's process: {error}",
+    },
+    "job.child_killed": {
+        "pt": (
+            "O treino não parou em {seconds} s depois do pedido e o processo "
+            "dele foi encerrado; o que já estava salvo na pasta do run ficou."
+        ),
+        "en": (
+            "The training did not stop within {seconds} s of the request and "
+            "its process was ended; what was already saved in the run folder stays."
+        ),
+    },
+    "job.child_died": {
+        "pt": (
+            "O processo do treino terminou (código {code}) sem dizer como o run "
+            "acabou; o log do servidor tem a saída dele."
+        ),
+        "en": (
+            "The training's process ended (code {code}) without saying how the "
+            "run ended; the server's log has its output."
+        ),
+    },
     "run.resuming_label": {
         "pt": "{name} (retomando)",
         "en": "{name} (resuming)",
@@ -957,6 +982,14 @@ CATALOG: dict[str, dict[Lang, str]] = {
     "github.export_failed": {
         "pt": "O envio ao GitHub falhou. Confira a conexão e tente de novo.",
         "en": "The GitHub upload failed. Check the connection and try again.",
+    },
+    "github.oauth_off": {
+        "pt": "A conexão com o GitHub não está configurada neste servidor. Cole um token do GitHub.",
+        "en": "Connecting with GitHub is not set up on this server. Paste a GitHub token instead.",
+    },
+    "github.oauth_state_invalid": {
+        "pt": "Este pedido de conexão com o GitHub não vale mais: expirou, já foi usado ou é de outra conta. Comece de novo pelo botão Conectar com GitHub.",
+        "en": "This GitHub connection request is no longer valid: it expired, was already used or belongs to another account. Start again from the Connect with GitHub button.",
     },
     "dvc.request_invalid": {
         "pt": "Pedido inválido para o DVC.",

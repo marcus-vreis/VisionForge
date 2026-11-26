@@ -185,6 +185,8 @@ def _submit_job(
             profile_name=name,
             datasets=own_folders_read(reads, scope.own if scope is not None else None),
             models_dir=profile.models_dir if profile is not None else None,
+            # A server's local job trains in a child process (ADR-248).
+            isolated=fair and lane == LOCAL_LANE,
         ),
         lane,
         fair=fair,

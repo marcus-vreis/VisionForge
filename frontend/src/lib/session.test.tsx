@@ -46,6 +46,7 @@ const SERVER: Session = {
   ],
   closed_blocks: ["cross_validation", "grid_search", "random_search"],
   quota: null,
+  github_oauth: false,
 };
 
 const lang = { lang: "pt" as const, t: pt, locale: "pt-BR", setLang: () => {} };
@@ -81,6 +82,18 @@ describe("the disk quota (ADR-225)", () => {
     expect(gigabytes(1.5 * GIB, "pt-BR")).toBe("1,5 GB");
     expect(gigabytes(1.5 * GIB, "en-US")).toBe("1.5 GB");
     expect(gigabytes(0, "pt-BR")).toBe("0,0 GB");
+  });
+});
+
+describe("the GitHub connection (ADR-250)", () => {
+  it("is offered only when the server says so, locally or shared", () => {
+    expect(parseSession({ server_mode: false, github_oauth: true }).github_oauth).toBe(true);
+    expect(parseSession({ ...SERVER, github_oauth: true }).github_oauth).toBe(true);
+    for (const raw of [undefined, null, "true", 1, false]) {
+      expect(parseSession({ server_mode: false, github_oauth: raw }).github_oauth ?? false).toBe(false);
+      expect(parseSession({ ...SERVER, github_oauth: raw }).github_oauth).toBe(false);
+    }
+    expect(LOCAL_SESSION.github_oauth ?? false).toBe(false);
   });
 });
 

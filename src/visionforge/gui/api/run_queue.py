@@ -97,6 +97,9 @@ class QueuedJob:
     models_dir: Path | None = None
     # When the queue started it (``time.time()``); None while it waits.
     started_at: float | None = None
+    # A server's job: an executor that can run it in a child process does so
+    # (ADR-248). A local job keeps the training thread.
+    isolated: bool = False
 
     def describe(self) -> dict[str, Any]:
         """JSON-ready form for the queue endpoint (never includes the callable)."""

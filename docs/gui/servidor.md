@@ -14,8 +14,9 @@
 > treinos ao Weights & Biases e ao Comet, com a própria chave. O Colab, o DVC
 > e o MLflow local não estão disponíveis, e a tela não os mostra. E ele é
 > para um **grupo que já confia entre
-> si**: o treino roda dentro do processo do servidor, sem isolamento entre as
-> pessoas. Não ofereça este servidor a desconhecidos.
+> si**: o treino roda num processo próprio, mas do mesmo usuário do sistema que
+> o servidor, sem isolamento de arquivos entre as pessoas. Não ofereça este
+> servidor a desconhecidos.
 
 Esta página sai do código atual (`gui/server_mode.py`) e das decisões ADR-212
 a ADR-227 e ADR-246. O que não foi testado está marcado como *não verificado*.
@@ -224,6 +225,29 @@ uma vez cada. Ela vale enquanto o processo está de pé; ao reiniciar o servidor
 a fila e a memória de quem rodou por último somem juntas. No uso local nada
 disso existe: a fila segue a ordem de envio e não há limite. `GET /api/session`
 informa o limite em `max_queued` (nulo no uso local). Decisão: ADR-245.
+
+### Cada treino num processo próprio
+
+Num servidor, um treino simples das cinco tarefas (inclusive retomado) roda
+num processo Python separado do servidor. Esse processo não recebe os tokens
+do ambiente (`HF_TOKEN`, `GITHUB_TOKEN`, a chave do Kaggle, nada com `TOKEN`,
+`KEY` ou `SECRET` no nome), procura a configuração do VisionForge numa pasta
+vazia e trabalha numa pasta temporária apagada no fim. Se ele morrer (falta de
+memória, erro de driver), só aquele run falha; o servidor e a fila seguem.
+Parar continua parando no fim da época, guardando o que o treino já fez; se o
+processo não parar em 10 minutos, ele é encerrado e o run aparece como falho.
+No W&B e no Comet, um treino de classificação num servidor chega inteiro no
+fim, não época por época.
+
+O que isso **não** faz: o processo é do mesmo usuário do sistema que roda o
+servidor, então ainda consegue abrir qualquer arquivo que esse usuário abre,
+inclusive a pasta de configuração com os tokens. Impedir isso pede rodar o
+treino em container ou com outra conta do sistema, o que ainda não existe; por
+isso o servidor continua sendo para um grupo que confia entre si. K-fold,
+buscas, comparações e as estratégias ainda rodam dentro do servidor.
+*Não verificado:* só a classificação do dataset de exemplo foi treinada de
+verdade num processo próprio, na CPU; as outras quatro tarefas e a GPU não.
+Decisão: ADR-248.
 
 ## Ações que rodam na hora
 
@@ -595,6 +619,43 @@ O cartão em Markdown e o `run.json` do ZIP trazem os caminhos do servidor
 (a pasta do run, a do dataset). Quem publica o arquivo publica esses caminhos;
 os pacotes do Hub, do Zenodo e do GitHub levam um registro público, sem
 esses caminhos.
+
+### Conectar com GitHub (OAuth App do operador)
+
+Em vez de cada pessoa criar e colar um token do GitHub, o operador pode
+registrar um *OAuth App* do GitHub; o painel do GitHub passa a mostrar
+**Conectar com GitHub** e o token que volta fica salvo no perfil de quem
+entrou, no mesmo arquivo de um token colado (ADR-250).
+
+1. No GitHub: **Settings → Developer settings → OAuth Apps → New OAuth App**
+   (ou nas configurações da organização). *Homepage URL*: o endereço público
+   do VisionForge. *Authorization callback URL*:
+   `https://<nome público>/api/github/oauth/callback`.
+2. Gere um *client secret* e passe as credenciais **só pelo ambiente** do
+   processo (num contêiner, `environment:` do compose ou um arquivo `.env`
+   fora do git; nunca na linha de comando):
+
+   | Variável | Para que serve |
+   | --- | --- |
+   | `VISIONFORGE_GITHUB_CLIENT_ID` | O *Client ID* do app. |
+   | `VISIONFORGE_GITHUB_CLIENT_SECRET` | O *client secret*. Nunca vai para o log nem para a página. |
+   | `VISIONFORGE_PUBLIC_URL` | Opcional. O endereço público (`https://visionforge.meulab.org`). Atrás do proxy o VisionForge não sabe o próprio endereço: sem esta variável ele não manda `redirect_uri` e o GitHub usa o callback cadastrado. |
+
+3. A volta do GitHub (`/api/github/oauth/callback`) é uma navegação comum do
+   navegador, então passa pelo proxy de login como qualquer página: o cookie
+   de sessão do oauth2-proxy ou do Authelia vai junto (`SameSite=Lax` basta).
+   Não abra essa rota sem login no proxy.
+
+O pedido vale 10 minutos e uma vez só, e só para a pessoa que o abriu: se
+outra conta chegar ao callback com ele, a resposta é 400 e nenhum token é
+salvo. O app pede o escopo `repo`, porque o envio exige repositório privado e
+`public_repo` não alcança nenhum; isso dá ao token escrita em todos os
+repositórios da pessoa. Quem quiser um token restrito a um repositório
+continua colando um fine-grained. Sem as duas variáveis do app, o botão não
+aparece e as rotas respondem 404.
+
+*Não verificado:* nenhum OAuth App real foi autorizado; o fluxo foi testado
+com o GitHub simulado na camada HTTP.
 
 ## Pôr um dataset no servidor
 

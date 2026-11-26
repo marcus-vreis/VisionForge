@@ -20,6 +20,7 @@ from visionforge import __version__
 from visionforge.gui.api.config_scope import closed_blocks
 from visionforge.gui.api.dataset_scope import current_scope
 from visionforge.gui.api.error_messages import validation_error_handler
+from visionforge.gui.api.github_oauth import oauth_app
 from visionforge.gui.api.http_responses import (
     NOT_FOUND_TEXT,
     OPENAPI_TAGS,
@@ -177,6 +178,9 @@ async def session(request: Request) -> dict[str, Any]:
         # How many jobs each person may have waiting or running
         # (``--max-queued``, ADR-245); null on a local install.
         "max_queued": mode.max_queued if mode.enabled else None,
+        # Whether "Conectar com GitHub" works here: the operator gave the
+        # server a GitHub OAuth App in the environment (ADR-250).
+        "github_oauth": oauth_app() is not None,
     }
 
 
