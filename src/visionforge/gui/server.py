@@ -29,6 +29,7 @@ from visionforge.gui.api.http_responses import (
 )
 from visionforge.gui.api.profiles import PROFILE_HEADER
 from visionforge.gui.api.routes import router as api_router
+from visionforge.gui.api.token_cipher import KEY_ENV, token_cipher
 from visionforge.gui.security import (
     HostOriginGuard,
     HostPolicy,
@@ -309,7 +310,15 @@ def start_server(
                 "Server mode: each person's folder may hold {} bytes",
                 app.state.server_mode.quota_bytes,
             )
+        if token_cipher() is None:
+            logger.warning(
+                "Server mode: the tokens people save are plain text in the "
+                "config folder; set {} to encrypt them",
+                KEY_ENV,
+            )
         open_browser = False
+    if token_cipher() is not None:
+        logger.info("Saved tokens are encrypted with the key in {}", KEY_ENV)
     logger.info(
         "Starting VisionForge GUI at http://{}:{}", host, port
     )  # NOSONAR python:S5332 - local server URL

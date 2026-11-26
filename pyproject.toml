@@ -114,6 +114,9 @@ roboflow = []
 kaggle = []
 huggingface = []
 hub = ["huggingface-hub>=1.16.1,<3"]
+# Server mode: encrypts the saved tokens when VISIONFORGE_TOKEN_KEY is set
+# (ADR-253). The local tool does not need it.
+server = ["cryptography>=44"]
 
 dev = [
     "pytest>=8.0",
@@ -127,6 +130,7 @@ dev = [
     "pre-commit>=4.0",
     "bump-my-version>=0.24",
     "types-PyYAML>=6.0",
+    "cryptography>=44",      # the `server` extra, so the suite tests ADR-253
 ]
 
 # Scripts will be added once the referenced modules exist:

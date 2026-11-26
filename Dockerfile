@@ -55,7 +55,7 @@ FROM ${BASE_IMAGE} AS runtime
 # GPU, and then fails at the first kernel launch.
 ARG CUDA_TAG=cu128
 ARG VARIANT=gpu
-ARG EXTRAS=detection,timm,optuna,tensorboard
+ARG EXTRAS=detection,timm,optuna,tensorboard,server
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \

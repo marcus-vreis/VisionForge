@@ -19,6 +19,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import Response
 from fastapi.routing import APIRoute
+from loguru import logger
 from pydantic import BaseModel, SecretStr
 
 from visionforge.gui.api.folder_opener import is_loopback_host
@@ -27,6 +28,7 @@ from visionforge.gui.api.http_responses import (
     VALIDATION_ERROR_CONTENT,
 )
 from visionforge.gui.api.profiles import PROFILE_HEADER, Profile
+from visionforge.gui.api.token_cipher import KEY_ENV, is_sealed, token_cipher
 from visionforge.gui.server_mode import mode_of
 from visionforge.utils.credentials import config_dir
 from visionforge.utils.messages import tr
@@ -104,27 +106,66 @@ def valid_token(value: str) -> bool:
 def write_token(service: Service, profile: Profile, value: str) -> None:
     """Replace ``service``'s token for ``profile`` atomically, in a private folder.
 
-    The caller checks ``value`` with :func:`valid_token` first.
+    The caller checks ``value`` with :func:`valid_token` first. With
+    ``VISIONFORGE_TOKEN_KEY`` set the file holds ciphertext (ADR-253).
     """
     target = token_file(service, profile)
+    cipher = token_cipher()
+    body = value if cipher is None else cipher.seal(_binding(service, target), value)
     target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     with NamedTemporaryFile(dir=target.parent, delete=False) as tmp:
         path = Path(tmp.name)
     try:
         # The file name is a SHA-256 hex digest under a fixed folder, and the
         # temporary file sits beside it: no request text reaches the path.
-        path.write_text(value, encoding="utf-8")  # NOSONAR pythonsecurity:S2083
+        path.write_text(body, encoding="utf-8")  # NOSONAR pythonsecurity:S2083
         path.replace(target)
     finally:
         path.unlink(missing_ok=True)
 
 
+def _binding(service: Service, target: Path) -> str:
+    """What a sealed token is tied to: its service and its own file name."""
+    return f"{service}/{target.name}"
+
+
 def read_token(service: Service, profile: Profile) -> str | None:
-    """The saved token, or ``None`` when the profile has none."""
+    """The saved token, or ``None`` when the profile has none the server can read.
+
+    A plain file read while a key is set, or one sealed with a key that is no
+    longer the first, is rewritten under the current key (ADR-253).
+    """
+    target = token_file(service, profile)
     try:
-        return token_file(service, profile).read_text(encoding="utf-8")
+        text = target.read_text(encoding="utf-8")
     except FileNotFoundError:
         return None
+    cipher = token_cipher()
+    if not is_sealed(text):
+        if cipher is not None:
+            write_token(service, profile, text)
+        return text
+    if cipher is None:
+        logger.warning(
+            "The {} token of profile {} is encrypted and {} is not set",
+            service,
+            profile.slug,
+            KEY_ENV,
+        )
+        return None
+    opened = cipher.unseal(_binding(service, target), text)
+    if opened is None:
+        logger.warning(
+            "No key in {} opens the {} token of profile {}",
+            KEY_ENV,
+            service,
+            profile.slug,
+        )
+        return None
+    value, current = opened
+    if not current:
+        write_token(service, profile, value)
+    return value
 
 
 def add_token_routes(
@@ -136,7 +177,8 @@ def add_token_routes(
 
     def token_state(request: Request, header: str | None) -> dict[str, bool]:
         return {
-            "configured": token_file(service, resolve(header)).is_file(),
+            # A file no key opens is not a token the profile can use.
+            "configured": read_token(service, resolve(header)) is not None,
             # Server mode is shared even when its login proxy binds to loopback.
             "shared": mode_of(request.app).enabled
             or not is_loopback_host(getattr(request.app.state, "bind_host", None)),
