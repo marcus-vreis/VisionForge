@@ -96,6 +96,22 @@ def test_a_plain_token_is_sealed_the_first_time_it_is_read_with_a_key(
     assert read_token("hub", ana) == TOKEN
 
 
+def test_a_read_still_answers_when_the_file_cannot_be_rewritten(
+    ana: Profile, monkeypatch: pytest.MonkeyPatch, warnings: list[str]
+) -> None:
+    write_token("hub", ana, TOKEN)
+    monkeypatch.setenv(KEY_ENV, _new_key())
+
+    def refuse(*_: object) -> None:
+        raise PermissionError("held by another read")
+
+    monkeypatch.setattr(profile_tokens, "write_token", refuse)
+    assert read_token("hub", ana) == TOKEN
+    assert _body(ana) == TOKEN
+    assert any("PermissionError" in line for line in warnings)
+    assert not any(TOKEN in line for line in warnings)
+
+
 def test_a_sealed_token_is_not_read_without_the_key(
     ana: Profile, monkeypatch: pytest.MonkeyPatch, warnings: list[str]
 ) -> None:

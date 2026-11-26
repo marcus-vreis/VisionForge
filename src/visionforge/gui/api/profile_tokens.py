@@ -143,7 +143,7 @@ def read_token(service: Service, profile: Profile) -> str | None:
     cipher = token_cipher()
     if not is_sealed(text):
         if cipher is not None:
-            write_token(service, profile, text)
+            _reseal(service, profile, text)
         return text
     if cipher is None:
         logger.warning(
@@ -164,8 +164,25 @@ def read_token(service: Service, profile: Profile) -> str | None:
         return None
     value, current = opened
     if not current:
-        write_token(service, profile, value)
+        _reseal(service, profile, value)
     return value
+
+
+def _reseal(service: Service, profile: Profile, value: str) -> None:
+    """Rewrite a token under the current key; a read never fails for it.
+
+    Two reads of the same file may rewrite it together, and on Windows the
+    second replace is refused while the first holds the file.
+    """
+    try:
+        write_token(service, profile, value)
+    except OSError as exc:
+        logger.warning(
+            "Could not rewrite the {} token of profile {} encrypted: {}",
+            service,
+            profile.slug,
+            type(exc).__name__,
+        )
 
 
 def add_token_routes(
