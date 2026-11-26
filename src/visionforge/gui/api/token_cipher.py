@@ -37,7 +37,8 @@ class TokenCipher:
 
     def seal(self, binding: str, value: str) -> str:
         """``value`` as a sealed file body that only opens under ``binding``."""
-        sealed = self.keys[0].encrypt(f"{binding}\0{value}".encode())
+        # Typed here: where ``cryptography`` is not installed mypy sees Any.
+        sealed: bytes = self.keys[0].encrypt(f"{binding}\0{value}".encode())
         return SEALED_PREFIX + sealed.decode("ascii")
 
     def unseal(self, binding: str, text: str) -> tuple[str, bool] | None:
