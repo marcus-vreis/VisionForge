@@ -594,6 +594,43 @@ O cartão em Markdown e o `run.json` do ZIP trazem os caminhos do servidor
 os pacotes do Hub, do Zenodo e do GitHub levam um registro público, sem
 esses caminhos.
 
+### Conectar com GitHub (OAuth App do operador)
+
+Em vez de cada pessoa criar e colar um token do GitHub, o operador pode
+registrar um *OAuth App* do GitHub; o painel do GitHub passa a mostrar
+**Conectar com GitHub** e o token que volta fica salvo no perfil de quem
+entrou, no mesmo arquivo de um token colado (ADR-250).
+
+1. No GitHub: **Settings → Developer settings → OAuth Apps → New OAuth App**
+   (ou nas configurações da organização). *Homepage URL*: o endereço público
+   do VisionForge. *Authorization callback URL*:
+   `https://<nome público>/api/github/oauth/callback`.
+2. Gere um *client secret* e passe as credenciais **só pelo ambiente** do
+   processo (num contêiner, `environment:` do compose ou um arquivo `.env`
+   fora do git; nunca na linha de comando):
+
+   | Variável | Para que serve |
+   | --- | --- |
+   | `VISIONFORGE_GITHUB_CLIENT_ID` | O *Client ID* do app. |
+   | `VISIONFORGE_GITHUB_CLIENT_SECRET` | O *client secret*. Nunca vai para o log nem para a página. |
+   | `VISIONFORGE_PUBLIC_URL` | Opcional. O endereço público (`https://visionforge.meulab.org`). Atrás do proxy o VisionForge não sabe o próprio endereço: sem esta variável ele não manda `redirect_uri` e o GitHub usa o callback cadastrado. |
+
+3. A volta do GitHub (`/api/github/oauth/callback`) é uma navegação comum do
+   navegador, então passa pelo proxy de login como qualquer página: o cookie
+   de sessão do oauth2-proxy ou do Authelia vai junto (`SameSite=Lax` basta).
+   Não abra essa rota sem login no proxy.
+
+O pedido vale 10 minutos e uma vez só, e só para a pessoa que o abriu: se
+outra conta chegar ao callback com ele, a resposta é 400 e nenhum token é
+salvo. O app pede o escopo `repo`, porque o envio exige repositório privado e
+`public_repo` não alcança nenhum; isso dá ao token escrita em todos os
+repositórios da pessoa. Quem quiser um token restrito a um repositório
+continua colando um fine-grained. Sem as duas variáveis do app, o botão não
+aparece e as rotas respondem 404.
+
+*Não verificado:* nenhum OAuth App real foi autorizado; o fluxo foi testado
+com o GitHub simulado na camada HTTP.
+
 ## Pôr um dataset no servidor
 
 Há quatro caminhos:

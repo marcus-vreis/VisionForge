@@ -170,8 +170,11 @@ def _client(app: Any, host: str = PROXY) -> TestClient:
     return TestClient(app, base_url="http://localhost", client=(host, 50000))
 
 
-def test_a_local_install_reports_no_session() -> None:
+def test_a_local_install_reports_no_session(monkeypatch: pytest.MonkeyPatch) -> None:
     from visionforge.gui.server import app
+
+    monkeypatch.delenv("VISIONFORGE_GITHUB_CLIENT_ID", raising=False)
+    monkeypatch.delenv("VISIONFORGE_GITHUB_CLIENT_SECRET", raising=False)
 
     body = TestClient(app, base_url="http://localhost").get("/api/session").json()
     assert body == {
@@ -183,6 +186,7 @@ def test_a_local_install_reports_no_session() -> None:
         "closed_blocks": [],
         "quota": None,
         "max_queued": None,
+        "github_oauth": False,
     }
 
 

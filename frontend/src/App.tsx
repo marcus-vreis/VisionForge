@@ -122,6 +122,11 @@ import { resultsOnTab } from "./lib/results-tab";
 import { TaskHero } from "./components/TaskHero";
 import { TrainingOverlay } from "./components/TrainingOverlay";
 import { useExperiment } from "./hooks/useExperiment";
+import {
+  clearGitHubOAuthResult,
+  gitHubOAuthNotice,
+  peekGitHubOAuthResult,
+} from "./lib/github-oauth";
 import { useRunMotionPause } from "./hooks/useRunMotionPause";
 import type { QueuedJobInfo, RunResponse } from "./types/run";
 import type { JsonSchema } from "./types/schema";
@@ -263,7 +268,12 @@ export default function App() {
   // The task the followed run belongs to, which may not be the open tab.
   const [runTaskKey, setRunTaskKey] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [queueNotice, setQueueNotice] = useState<string | null>(null);
+  // The one-line notice above the bottom bar. A page that came back from
+  // "Conectar com GitHub" opens with the outcome there (ADR-250).
+  const [queueNotice, setQueueNotice] = useState<string | null>(() =>
+    gitHubOAuthNotice(peekGitHubOAuthResult(), t.github),
+  );
+  useEffect(() => clearGitHubOAuthResult(), []);
   const queuedMeta = useRef(new Map<string, RunMeta>());
   const [resultsVisible, setResultsVisible] = useState(false);
   const [schema, setSchema] = useState<JsonSchema | null>(null);
