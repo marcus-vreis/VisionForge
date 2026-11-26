@@ -669,10 +669,13 @@ def _run_gui_command(args: argparse.Namespace, parser: argparse.ArgumentParser) 
 
         sys.exit(run_gui_check(args.host, args.port, smoke=args.smoke))
 
+    from visionforge.gui.api.token_cipher import TokenKeyError, token_cipher
     from visionforge.gui.server import start_server
     from visionforge.gui.server_mode import ServerMode, ServerModeError
 
     try:
+        # A key that cannot seal is refused here, before a person saves a token.
+        token_cipher()
         server_mode = ServerMode.from_options(
             enabled=args.server,
             trusted_proxies=args.trusted_proxy,
@@ -683,7 +686,7 @@ def _run_gui_command(args: argparse.Namespace, parser: argparse.ArgumentParser) 
             max_upload_gb=args.max_upload_gb,
             max_queued=args.max_queued,
         )
-    except ServerModeError as exc:
+    except (ServerModeError, TokenKeyError) as exc:
         parser.error(str(exc))
 
     # The updater relaunches with VISIONFORGE_NO_BROWSER rather than the flag:

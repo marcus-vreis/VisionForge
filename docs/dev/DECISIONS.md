@@ -9659,3 +9659,37 @@ ships with the next release.
 - *Pickle the arguments and the result.* One line of code, and a pickle from the child would run code in the server when read, and one from the server would let anything that reaches the pipe name what the child runs; JSON with a closed set of tags cannot.
 - *Name the function by a key in a fixed table instead of `module:QualName`.* Safer against a forged spec, but the spec only ever comes from the server's own pipe (ADR-248), and the tests replace the orchestrators the way the routes look them up.
 - *Leave the K-fold fronts in `strategies.py`.* The child would import `strategies.py`, and with it FastAPI and the server's routes, for every K-fold job.
+
+## ADR-253 — Saved tokens are encrypted at rest when the operator gives a key
+
+**Date:** 2026-11-26
+**Status:** Accepted
+**Extends:** ADR-212 (phase 1: tokens encrypted at rest), ADR-171/172/174/175/200 (one token file per profile and service), ADR-250 (operator secrets come from the environment), ADR-248 (the child's scrubbed environment)
+
+**Context:** the Hugging Face, W&B, Comet, Zenodo and GitHub tokens of a profile are text files under the config folder (`<service>-tokens/<sha256>`). On a server that folder holds every person's publishing tokens, and anything that copies it (a backup, a disk image, a synced drive) copies them all. ADR-212 lists encryption at rest in phase 1. The standard library has no authenticated cipher.
+
+**Decision:**
+
+- **The key is the operator's and comes from the environment:** `VISIONFORGE_TOKEN_KEY`, a Fernet key, like the GitHub OAuth secret (ADR-250). Never a flag (a command line shows in the process list) and never a file VisionForge writes beside the tokens (a key stored with what it locks protects nothing). The child of a job does not receive it: its name carries `TOKEN` and `KEY`, which `child_env` drops.
+- **Opt-in, in either mode.** Without the variable nothing changes. With it, `write_token` writes `vf-fernet-v1:` followed by the Fernet token (AES-128-CBC with HMAC-SHA256, `cryptography`), and `read_token` opens it. The cipher is read from the environment on each call (`token_cipher.token_cipher`), with no state in the process.
+- **`cryptography` is the new `server` extra,** imported only when the variable is set; the local install does not grow. The `dev` extra and the Docker image carry it.
+- **A sealed file is bound to its place.** What is encrypted is `"<service>/<file name>\0<token>"`; a file copied onto another profile's or another service's name does not open. Fernet has no associated data, so the binding is inside the plaintext and checked after decryption.
+- **Migration is on read.** A plain file read while a key is set is rewritten sealed and its token returned, so turning the key on needs no command. The panel's `GET /token` reads the token to answer `configured`, which also migrates it.
+- **Rotation.** Several keys separated by commas: the first seals, every one opens, and a token opened by a later key is rewritten under the first.
+- **What cannot be opened is no token.** A sealed file with no key set, or with no key that opens it, or tampered with, reads as `None` with a warning that names the service and the profile and never the content; `configured` is false and the person saves again, which replaces the file.
+- **A key that cannot work stops the start.** `visionforge gui` checks the variable before `start_server`: a value that is not a Fernet key, or the variable set without `cryptography` installed, is an argument error whose message does not carry the key. In server mode with no key the server logs a warning that saved tokens are plain text.
+
+**Consequences:** a copy of the config folder without the key holds no usable token. Losing the key loses every saved token; each person pastes theirs again. `configured` now costs a file read and a decryption per panel load. The dataset providers' `credentials.json` and the Colab CLI login stay plain: both are off in server mode (ADR-212, ADR-219).
+
+**Known limits:** this protects the files, not the process. The key lives in the server's environment and memory; whoever runs code as the server's system user reads both (on Linux, `/proc/<pid>/environ`), and that includes a job's child until it runs under another account or in a container (ADR-248). A token nobody reads stays under the old key after a rotation; there is no command that re-seals every file. The GUI does not say whether tokens are encrypted; the server log and the FAQ do.
+
+**Not verified:** the key delivered by a Docker or systemd secret on a real server; the tests set the variable in their own process. A rotation over many profiles. `cryptography` versions other than the installed 50.0.2.
+
+**Alternatives considered:**
+
+- *A key VisionForge generates and stores in the config folder.* Zero setup, and every backup of the folder carries the key with the ciphertext.
+- *The OS keyring (`keyring`).* Right for a desktop; a headless server or a container has no keyring service.
+- *A key derived from each person's login.* The proxy gives a name, not a secret (ADR-213); a key derived from the name is derivable by anyone.
+- *`--token-key-file`.* A second way to say the same thing; a secret mounted as a file is one `export VISIONFORGE_TOKEN_KEY="$(cat file)"` away.
+- *Refuse to start a server without a key.* It would break every phase 0 install on upgrade for a group that already trusts its members; a warning says it instead.
+- *AES-GCM with the binding as associated data.* Cleaner binding, but Fernet brings key rotation (`first seals, all open`) and a versioned token format with no nonce handling of ours to get wrong.

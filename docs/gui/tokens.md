@@ -35,7 +35,11 @@ troca essa pasta (útil para isolar testes ou apontar para outro disco).
 
 ## Texto puro e permissões
 
-Nenhum desses arquivos é criptografado.
+Por padrão nenhum desses arquivos é criptografado. Os tokens por perfil
+(`<serviço>-tokens/<sha256>`) passam a ser gravados cifrados quando a variável
+`VISIONFORGE_TOKEN_KEY` está definida (veja [Cifrar os tokens por
+perfil](#cifrar-os-tokens-por-perfil)); `credentials.json` e o login do Colab
+continuam em texto puro.
 
 - **Linux e macOS:** `credentials.json` recebe `chmod 600` (só o dono lê e
   escreve). A pasta `<serviço>-tokens/` é criada com modo `700` e o token é
@@ -45,11 +49,47 @@ Nenhum desses arquivos é criptografado.
 - Nunca copie `~/.visionforge/` para um repositório git, um drive sincronizado
   ou um backup compartilhado.
 
+## Cifrar os tokens por perfil
+
+Pensado para o [modo servidor](servidor.md), mas vale também no uso local.
+
+1. Instale o extra: `pip install "visionforge-studio[server]"` (traz o pacote
+   `cryptography`).
+2. Gere uma chave, uma vez:
+   `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
+3. Entregue a chave ao servidor na variável `VISIONFORGE_TOKEN_KEY` (um
+   *secret* do Docker ou do systemd, não a linha de comando) e inicie o
+   VisionForge.
+
+O que muda:
+
+- Um token salvo depois disso fica cifrado no arquivo (Fernet: AES-128-CBC com
+  HMAC-SHA256). O arquivo começa com `vf-fernet-v1:`.
+- Um token que já estava em texto puro é cifrado na primeira vez em que é lido
+  (ao abrir o painel ou ao enviar).
+- O arquivo cifrado só abre no lugar onde foi gravado: copiado para o arquivo
+  de outro perfil ou de outro serviço, não abre.
+- **Trocar a chave:** ponha a nova primeiro e a antiga depois, separadas por
+  vírgula (`NOVA,ANTIGA`). Cada token é regravado com a nova quando for lido;
+  um token que ninguém leu continua preso à antiga, então só a retire quando
+  todos tiverem sido usados ou salvos de novo.
+- **Sem a chave** (variável removida, ou chave perdida) os tokens cifrados não
+  abrem: o painel mostra "sem token" e cada pessoa salva o seu de novo. Não há
+  como recuperar.
+- Uma chave malformada, ou a variável definida sem o pacote `cryptography`
+  instalado, impede o servidor de iniciar e a mensagem diz qual dos dois.
+
+O que isso protege: uma cópia da pasta de configuração (backup, imagem de
+disco, drive sincronizado) sem a chave. O que **não** protege: quem lê o
+ambiente do processo do servidor, ou é o mesmo usuário do sistema que o roda,
+alcança a chave e os arquivos.
+
 ## Variáveis de ambiente
 
 | Variável | Uso |
 |---|---|
 | `VISIONFORGE_HOME` | pasta base das credenciais, no lugar de `~/.visionforge/` |
+| `VISIONFORGE_TOKEN_KEY` | chave (ou chaves, separadas por vírgula) que cifra os tokens por perfil; sem ela ficam em texto puro |
 | `KAGGLE_API_TOKEN` | token do Kaggle. Se já estiver definida, vale ela; senão a chave salva é copiada para ela, no processo do servidor. O cliente do Kaggle também aceita `~/.kaggle/access_token` |
 | `HF_TOKEN` e `HUGGING_FACE_HUB_TOKEN` | o cliente do Hugging Face as usa quando o download não leva token. O VisionForge não as lê; só as inclui entre os segredos mascarados nas mensagens de erro |
 
